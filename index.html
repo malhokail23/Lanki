@@ -2501,6 +2501,25 @@ function clearMonthTxns(){
   else{S.txnCache[ym]=[];}
   // M3: Remove dangling matched pairs for deleted transactions
   S.matchedPairs=(S.matchedPairs||[]).filter(p=>!deletedIds.has(p.outId)&&!deletedIds.has(p.inId));
+  // Clear guardFail flags for the affected account(s) and month
+  if(accOverride){
+    const mk=accOverride+'_'+ym;
+    if(S.monthlyBal[mk]){
+      delete S.monthlyBal[mk].guardFail;
+      delete S.monthlyBal[mk].guardDiff;
+      delete S.monthlyBal[mk].guardCalc;
+    }
+  }else{
+    // Clear all accounts for this month
+    S.accounts.forEach(a=>{
+      const mk=a.id+'_'+ym;
+      if(S.monthlyBal[mk]){
+        delete S.monthlyBal[mk].guardFail;
+        delete S.monthlyBal[mk].guardDiff;
+        delete S.monthlyBal[mk].guardCalc;
+      }
+    });
+  }
   schedTxn(ym);sched();render();
   toast(`Cleared ${count} transaction${count!==1?'s':''} for ${fmtYM(ym)}.`);
 }
