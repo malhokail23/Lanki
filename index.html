@@ -2762,8 +2762,11 @@ function closeCatM(){document.getElementById('cat-modal').classList.remove('acti
 // ─── UNCATEGORIZED ───
 function rPendingMatches(){
   return`
-  <div style="font-size:16px;font-weight:500;margin-bottom:4px">Pending Transfer Matches</div>
-  <div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:1.25rem">Internal transfers between your accounts. Match them to avoid double-counting in reports.</div>
+  <div class="fg jb" style="margin-bottom:4px;flex-wrap:wrap;gap:8px">
+    <div style="font-size:16px;font-weight:500">Pending Transfer Matches</div>
+    <button class="btn btn-sm" onclick="rescanAllTransfers()">↻ Re-scan all transfers</button>
+  </div>
+  <div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:1.25rem">Internal transfers between your accounts. Match them to avoid double-counting in reports. Use Re-scan if both sides were imported before the auto-matcher ran.</div>
   ${rTransferMatching()}`;
 }
 async function rUncat(){
@@ -5341,6 +5344,44 @@ async function saveReimbCategory(){
     closeReimbCatModal();
     toast('Category updated');
   }catch{toast('Failed to update',false);}
+}
+
+
+function rescanAllTransfers(){
+  const allT=allTxns();
+  const unmatched=allT.filter(t=>t.type==='transfer'&&!isMatched(t.id));
+  if(!unmatched.length){toast('No unmatched transfers found');return;}
+  let matched=0;
+  unmatched.forEach(t=>{
+    if(isMatched(t.id))return; // may have been matched in this loop
+    const tDir=txDir(t);
+    const tDate=new Date(t.date);
+    const match=allT.find(other=>{
+      if(other.id===t.id)return false;
+      if(isMatched(other.id))return false;
+      if(other.type!=='transfer')return false;
+      if(other.accountId===t.accountId)return false;
+      if(Math.abs(other.amount-t.amount)>0.01)return false;
+      if(txDir(other)===tDir)return false;
+      const dayDiff=Math.abs((tDate-new Date(other.date))/(1000*60*60*24));
+      return dayDiff<=3;
+    });
+    if(match){
+      const outTxn=tDir==='out'?t:match;
+      const inTxn=tDir==='in'?t:match;
+      S.matchedPairs.push({
+        id:'mp_'+uid(),
+        outId:outTxn.id,inId:inTxn.id,
+        amount:t.amount,date:t.date,
+        outAccId:outTxn.accountId,inAccId:inTxn.accountId,
+        matchedAt:new Date().toISOString(),
+        confirmedBy:'auto'
+      });
+      matched++;
+    }
+  });
+  if(matched>0){sched();render();toast(`Found and matched ${matched} transfer pair${matched!==1?'s':''} ✓`);}
+  else toast('No new matches found — import the other account statements first');
 }
 
 initAuth();
