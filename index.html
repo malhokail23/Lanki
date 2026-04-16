@@ -2632,7 +2632,18 @@ async function doImport(){
     const dir=(t.direction?t.direction.toLowerCase().trim():null)||(txnType==='income'?'in':'out');
     // C4: Deduplication — skip if a matching transaction already exists
     const amt=Math.abs(parseFloat(t.amount)||0);
-    const isDup=txns.some(x=>x.date===t.date&&Math.abs(x.amount-amt)<0.01&&(x.description||'').trim().toLowerCase()===(cleanDesc||'').toLowerCase()&&(x.accountId||null)===(ai||null));
+    // Dedup: date + amount + description + accountId
+    // If both have notes with different refs, treat as distinct transactions
+    const notesSig=(t.notes||'').trim().toLowerCase();
+    isDup=txns.some(x=>{
+      if(x.date!==t.date)return false;
+      if(Math.abs(x.amount-amt)>=0.01)return false;
+      if((x.description||'').trim().toLowerCase()!==(cleanDesc||'').toLowerCase())return false;
+      if((x.accountId||null)!==(ai||null))return false;
+      const xNotes=(x.notes||'').trim().toLowerCase();
+      if(notesSig&&xNotes&&notesSig!==xNotes)return false;
+      return true;
+    });
     if(isDup)continue;
     txns.push({id:uid(),date:t.date,description:cleanDesc,raw_description:rawDesc,amount:amt,type:txnType,direction:dir,mainCatId:mid,subCatId:sid,accountId:ai,debtId:di,notes:(t.notes||'').trim(),flagged:!!t.flagged,ruleApplied:ruleApplied||false});
     added++;
