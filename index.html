@@ -2276,7 +2276,8 @@ function isMatched(txnId){
 function runTransferMatching(newTxns, preExistingIds){
   const allT=allTxns();
   // Only match genuinely new transfers (not ones that existed before this import run)
-  const newTransfers=newTxns.filter(t=>(t.type==='transfer'||t.type==='external_transfer')&&(!preExistingIds||!preExistingIds.has(t.id)));
+  // Only match internal transfers — external_transfer goes to people outside your accounts, no matching credit exists
+  const newTransfers=newTxns.filter(t=>t.type==='transfer'&&(!preExistingIds||!preExistingIds.has(t.id)));
 
   newTransfers.forEach(t=>{
     if(isMatched(t.id))return;
@@ -2287,13 +2288,13 @@ function runTransferMatching(newTxns, preExistingIds){
     const match=allT.find(other=>{
       if(other.id===t.id)return false;
       if(isMatched(other.id))return false;
-      if((other.type!=='transfer'&&other.type!=='external_transfer'))return false;
+      if(other.type!=='transfer')return false; // only internal transfers can be matched
       if(other.accountId===t.accountId)return false; // must be different account
       if(Math.abs(other.amount-t.amount)>0.01)return false; // same amount
       if(txDir(other)===tDir)return false; // must be opposite direction
       const oDate=new Date(other.date);
       const dayDiff=Math.abs((tDate-oDate)/(1000*60*60*24));
-      return dayDiff<=2;
+      return dayDiff<=3; // ±3 days covers cross-bank SARIE and weekend settlement
     });
 
     if(match){
@@ -2316,9 +2317,11 @@ function runTransferMatching(newTxns, preExistingIds){
 
 // Get all unmatched transfers (pending match)
 function getPendingTransfers(){
+  // Only internal transfers can be pending — external_transfer is a one-way flow, never matched
   return allTxns().filter(t=>{
-    if(t.type!=='transfer'&&t.type!=='external_transfer')return false;
+    if(t.type!=='transfer')return false;
     if(isMatched(t.id))return false;
+    if(t.transferDismissed)return false;
     return true;
   });
 }
@@ -2366,6 +2369,7 @@ function rTransferMatching(){
       <td style="font-size:var(--fs-xs)">${acc?.name||'--'} ${ob(acc?.owner)}</td>
       <td class="${dir==='out'?'c-bad':'c-ok'}" style="text-align:right;font-weight:500;white-space:nowrap">${dir==='out'?'-':'+'}${fmtP(t.amount)}</td>
       <td><span class="badge" style="background:#FEF3C7;color:#92400E">Pending</span></td>
+      <td style="font-size:11px;color:var(--text3)">Other account not yet imported</td>
       <td><button class="btn btn-xs" onclick="showMatchPicker('${t.id}')">Match manually</button>
           <button class="btn btn-xs btn-d" onclick="dismissTransfer('${t.id}','${ym}')">Dismiss</button></td>
     </tr>`;}).join(''):`<tr><td colspan="6" class="empty">&#10003; No pending unmatched transfers</td></tr>`;
@@ -2388,7 +2392,7 @@ function rTransferMatching(){
 
   <div class="slbl" style="margin-top:.5rem">Pending Matches (${pending.length})</div>
   <div class="card"><div class="tbl-wrap"><table>
-    <thead><tr><th>Date</th><th>Description</th><th>Account</th><th style="text-align:right">Amount</th><th>Status</th><th></th></tr></thead>
+    <thead><tr><th>Date</th><th>Description</th><th>Account</th><th style="text-align:right">Amount</th><th>Status</th><th>Note</th><th></th></tr></thead>
     <tbody>${pendRows}</tbody>
   </table></div></div>
 
