@@ -5230,40 +5230,56 @@ async function doChangePassphrase(){
 // ─── REIMBURSEMENT CATEGORY PICKER ───
 function openReimbCatPicker(sid, currentHint){
   document.getElementById('reimb-cat-sid').value=sid;
-  // Populate main category dropdown from S.categories
+
+  // Populate main category dropdown from MAIN_CATS (expense types only)
   const mainSel=document.getElementById('reimb-cat-main');
   mainSel.innerHTML='';
-  (S.categories||[]).filter(mc=>mc.type==='expense'||mc.type==='transfer').forEach(mc=>{
+  MAIN_CATS.filter(mc=>!S.deletedCats?.includes(mc.id)&&(mc.type==='expense'||mc.type==='transfer'||mc.type==='investment')).forEach(mc=>{
     const opt=document.createElement('option');
     opt.value=mc.id;opt.textContent=mc.name;
     mainSel.appendChild(opt);
   });
-  // Default selection based on current hint
-  const rc=REIMB_CATS.find(r=>r.hint===currentHint);
-  if(rc&&mainSel.querySelector(`option[value="${rc.mid}"]`)){
+
+  // Suggested: pre-select based on the hint submitted by the person
+  const rc=REIMB_CATS.find(r=>r.hint===currentHint)||REIMB_CATS[REIMB_CATS.length-1];
+  if(mainSel.querySelector(`option[value="${rc.mid}"]`)){
     mainSel.value=rc.mid;
   }
-  onReimbMainCatChange();
-  // Set sub-cat default
-  if(rc){
-    setTimeout(()=>{
-      const subSel=document.getElementById('reimb-cat-sub');
-      if(subSel.querySelector(`option[value="${rc.sid}"]`))subSel.value=rc.sid;
-    },50);
+
+  // Show suggestion badge
+  const suggestEl=document.getElementById('reimb-cat-suggest');
+  if(suggestEl){
+    suggestEl.textContent=`Suggested based on submission: ${rc.label}`;
+    suggestEl.style.display='block';
   }
-  const modal=document.getElementById('reimb-cat-modal');
-  modal.style.display='flex';
+
+  // Populate sub-cats filtered by selected main cat, then pre-select suggested
+  populateReimbSubCats(rc.sid);
+
+  document.getElementById('reimb-cat-modal').style.display='flex';
 }
 
-function onReimbMainCatChange(){
+function populateReimbSubCats(preselectSid){
   const mainId=document.getElementById('reimb-cat-main').value;
   const subSel=document.getElementById('reimb-cat-sub');
   subSel.innerHTML='<option value="">-- No sub-category --</option>';
-  (S.subCategories||[]).filter(sc=>!sc.deleted).forEach(sc=>{
+  // Filter SUB_CATS to those suggested for this main cat, then all others
+  const suggested=SUB_CATS.filter(sc=>!S.deletedSubs?.includes(sc.id)&&sc.suggestedFor?.includes(mainId));
+  const others=SUB_CATS.filter(sc=>!S.deletedSubs?.includes(sc.id)&&!sc.suggestedFor?.includes(mainId));
+  // If no suggestedFor data, show all
+  const toShow=(suggested.length?suggested:others.length?others:SUB_CATS.filter(sc=>!S.deletedSubs?.includes(sc.id)));
+  toShow.forEach(sc=>{
     const opt=document.createElement('option');
     opt.value=sc.id;opt.textContent=sc.name;
     subSel.appendChild(opt);
   });
+  if(preselectSid&&subSel.querySelector(`option[value="${preselectSid}"]`)){
+    subSel.value=preselectSid;
+  }
+}
+
+function onReimbMainCatChange(){
+  populateReimbSubCats(null);
 }
 
 function closeReimbCatModal(){
@@ -5275,15 +5291,14 @@ async function saveReimbCategory(){
   const mainId=document.getElementById('reimb-cat-main').value;
   const subId=document.getElementById('reimb-cat-sub').value;
   if(!mainId){toast('Select a category',false);return;}
-  // Find matching hint or store custom IDs
   const mc=getMC(mainId);
-  const sc=subId?(S.subCategories||[]).find(s=>s.id===subId):null;
+  const sc=subId?getSC(subId):null;
   try{
     await fetch(`${SB}/rest/v1/pending_submissions?id=eq.${sid}`,{
       method:'PATCH',
       headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json'},
       body:JSON.stringify({
-        category_hint:mainId,  // store mainCatId as hint
+        category_hint:mainId,
         sub_category_id:subId||null,
         category_label:(mc?.name||mainId)+(sc?' / '+sc.name:'')
       })
@@ -5352,7 +5367,8 @@ initAuth();
 <div id="reimb-cat-modal" style="display:none;position:fixed;inset:0;z-index:2000;background:rgba(2,23,81,.35);align-items:center;justify-content:center">
   <div style="background:#fff;border-radius:var(--r);padding:1.5rem;width:100%;max-width:400px;box-shadow:0 8px 40px rgba(2,23,81,.15);margin:1rem">
     <div style="font-size:15px;font-weight:600;color:var(--midnight);margin-bottom:4px">Edit Category</div>
-    <div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:1rem">Select the main category and sub-category for this submission.</div>
+    <div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:8px">Select the main category and sub-category for this submission.</div>
+    <div id="reimb-cat-suggest" style="display:none;font-size:11px;font-weight:600;color:var(--electric);background:color-mix(in srgb,var(--electric) 8%,white);padding:5px 10px;border-radius:var(--rsm);margin-bottom:10px"></div>
     <input type="hidden" id="reimb-cat-sid">
     <div style="margin-bottom:10px">
       <label class="lbl">Category</label>
