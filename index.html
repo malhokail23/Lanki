@@ -5052,19 +5052,23 @@ async function rReimbursements(){
     approvedByName[s.submitter_name].total=Math.round((approvedByName[s.submitter_name].total+parseFloat(s.amount))*100)/100;
   });
   const grandTotal=Object.values(approvedByName).reduce((s,v)=>s+v.total,0);
-  const pendRows=pending.length?pending.map(s=>`
-    <tr>
+  const pendRows=pending.length?pending.map(s=>{
+    const catLabel=REIMB_CATS.find(r=>r.hint===s.category_hint)?.label||s.category_hint;
+    return`<tr>
       <td style="color:var(--text3);font-size:var(--fs-xs);white-space:nowrap">${s.submitted_at?s.submitted_at.substr(0,10):''}</td>
       <td style="font-size:var(--fs-xs);font-weight:500">${h(s.submitter_name)}</td>
       <td>${h(s.description)}</td>
-      <td style="font-size:var(--fs-xs)">${REIMB_CATS.find(r=>r.hint===s.category_hint)?.label||s.category_hint}</td>
+      <td style="font-size:var(--fs-xs)">
+        <span id="reimb-cat-label-${s.id}" style="margin-right:4px">${s.category_label||catLabel}</span>
+        <button class="btn btn-xs" onclick="openReimbCatPicker('${s.id}','${s.category_hint}')" title="Change category">✎</button>
+      </td>
       <td style="font-size:11px;color:var(--text3)">${h(s.notes||'--')}</td>
       <td style="text-align:right;font-weight:500;white-space:nowrap">${fmtP(s.amount)}</td>
       <td style="white-space:nowrap">
         <button class="btn btn-xs btn-p" onclick="approveSubmission('${s.id}')">Approve</button>
         <button class="btn btn-xs btn-d" onclick="dismissSubmission('${s.id}')">Dismiss</button>
       </td>
-    </tr>`).join(''):`<tr><td colspan="7" class="empty">No pending submissions</td></tr>`;
+    </tr>`;}).join(''):`<tr><td colspan="7" class="empty">No pending submissions</td></tr>`;
   const approvedCards=Object.entries(approvedByName).length?
     Object.entries(approvedByName).map(([name,{items,total}])=>`
     <div class="card card-bordered" style="margin-bottom:.75rem">
@@ -5078,7 +5082,7 @@ async function rReimbursements(){
       ${items.map(s=>`<div class="fg jb" style="font-size:var(--fs-xs);padding:5px 0;border-bottom:1px solid var(--bg2)">
         <span style="color:var(--text3);white-space:nowrap;margin-right:8px">${s.submitted_at?s.submitted_at.substr(0,10):''}</span>
         <span style="flex:1">${h(s.description)}</span>
-        <span style="margin-left:8px;color:var(--text3);font-size:11px">${REIMB_CATS.find(r=>r.hint===s.category_hint)?.label||''}</span>
+        <span style="margin-left:8px;color:var(--text3);font-size:11px">${s.category_label||REIMB_CATS.find(r=>r.hint===s.category_hint)?.label||''}</span>
         <span style="margin-left:8px;font-weight:500;white-space:nowrap">${fmtP(s.amount)}</span>
       </div>`).join('')}
       <div style="font-size:var(--fs-xxs);color:var(--info);margin-top:8px;padding:6px 10px;background:#EFF6FF;border-radius:var(--rsm)">
@@ -5222,6 +5226,74 @@ async function doChangePassphrase(){
   }
 }
 
+
+// ─── REIMBURSEMENT CATEGORY PICKER ───
+function openReimbCatPicker(sid, currentHint){
+  document.getElementById('reimb-cat-sid').value=sid;
+  // Populate main category dropdown from S.categories
+  const mainSel=document.getElementById('reimb-cat-main');
+  mainSel.innerHTML='';
+  (S.categories||[]).filter(mc=>mc.type==='expense'||mc.type==='transfer').forEach(mc=>{
+    const opt=document.createElement('option');
+    opt.value=mc.id;opt.textContent=mc.name;
+    mainSel.appendChild(opt);
+  });
+  // Default selection based on current hint
+  const rc=REIMB_CATS.find(r=>r.hint===currentHint);
+  if(rc&&mainSel.querySelector(`option[value="${rc.mid}"]`)){
+    mainSel.value=rc.mid;
+  }
+  onReimbMainCatChange();
+  // Set sub-cat default
+  if(rc){
+    setTimeout(()=>{
+      const subSel=document.getElementById('reimb-cat-sub');
+      if(subSel.querySelector(`option[value="${rc.sid}"]`))subSel.value=rc.sid;
+    },50);
+  }
+  const modal=document.getElementById('reimb-cat-modal');
+  modal.style.display='flex';
+}
+
+function onReimbMainCatChange(){
+  const mainId=document.getElementById('reimb-cat-main').value;
+  const subSel=document.getElementById('reimb-cat-sub');
+  subSel.innerHTML='<option value="">-- No sub-category --</option>';
+  (S.subCategories||[]).filter(sc=>!sc.deleted).forEach(sc=>{
+    const opt=document.createElement('option');
+    opt.value=sc.id;opt.textContent=sc.name;
+    subSel.appendChild(opt);
+  });
+}
+
+function closeReimbCatModal(){
+  document.getElementById('reimb-cat-modal').style.display='none';
+}
+
+async function saveReimbCategory(){
+  const sid=document.getElementById('reimb-cat-sid').value;
+  const mainId=document.getElementById('reimb-cat-main').value;
+  const subId=document.getElementById('reimb-cat-sub').value;
+  if(!mainId){toast('Select a category',false);return;}
+  // Find matching hint or store custom IDs
+  const mc=getMC(mainId);
+  const sc=subId?(S.subCategories||[]).find(s=>s.id===subId):null;
+  try{
+    await fetch(`${SB}/rest/v1/pending_submissions?id=eq.${sid}`,{
+      method:'PATCH',
+      headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json'},
+      body:JSON.stringify({
+        category_hint:mainId,  // store mainCatId as hint
+        sub_category_id:subId||null,
+        category_label:(mc?.name||mainId)+(sc?' / '+sc.name:'')
+      })
+    });
+    await loadSubmissions();render();
+    closeReimbCatModal();
+    toast('Category updated');
+  }catch{toast('Failed to update',false);}
+}
+
 initAuth();
 </script>
 
@@ -5272,6 +5344,27 @@ initAuth();
     <div class="fg">
       <button class="btn btn-p f1" onclick="saveEditTxn()">Save Changes</button>
       <button class="btn" onclick="closeEditTxn()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Reimbursement Category Picker Modal -->
+<div id="reimb-cat-modal" style="display:none;position:fixed;inset:0;z-index:2000;background:rgba(2,23,81,.35);align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:var(--r);padding:1.5rem;width:100%;max-width:400px;box-shadow:0 8px 40px rgba(2,23,81,.15);margin:1rem">
+    <div style="font-size:15px;font-weight:600;color:var(--midnight);margin-bottom:4px">Edit Category</div>
+    <div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:1rem">Select the main category and sub-category for this submission.</div>
+    <input type="hidden" id="reimb-cat-sid">
+    <div style="margin-bottom:10px">
+      <label class="lbl">Category</label>
+      <select id="reimb-cat-main" onchange="onReimbMainCatChange()" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--rsm);font-size:var(--fs-xs);background:#fff;color:var(--text)"></select>
+    </div>
+    <div style="margin-bottom:1rem">
+      <label class="lbl">Sub-category</label>
+      <select id="reimb-cat-sub" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--rsm);font-size:var(--fs-xs);background:#fff;color:var(--text)"></select>
+    </div>
+    <div class="fg" style="gap:8px">
+      <button class="btn btn-p" onclick="saveReimbCategory()" style="flex:1">Save</button>
+      <button class="btn" onclick="closeReimbCatModal()" style="flex:1">Cancel</button>
     </div>
   </div>
 </div>
