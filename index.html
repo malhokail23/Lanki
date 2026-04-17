@@ -1067,7 +1067,7 @@ const TAB_TO_GROUP={txbank:'transactions',txcards:'transactions',income:'recurri
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='3.0a';
+const VERSION='3.0b';
 let sKey=null,saveTimer=null,pinCb=null,catCb=null,activeGroup=null;
 
 // ─── CRYPTO ───
@@ -1452,6 +1452,9 @@ async function loadAllTxnRows(){
     else if(d.txns?.length){S.txnCache[ym]=d.txns;}
   });
   await Promise.all(loads);
+  // V3.0 #15: anchor S.month to last transaction month after load
+  const last=lastTxnMonth();
+  if(last)S.month=last;
 }
 
 async function saveTxnRow(ym,txns){
@@ -1556,6 +1559,129 @@ function closeGroup(){
   document.querySelectorAll('.nav-dd').forEach(dd=>{dd.classList.remove('open');dd.style.cssText='';dd.innerHTML=dd.id==='nav-dropdown'?'':dd.innerHTML;});
   document.querySelectorAll('.nav-arrow').forEach(a=>a.style.transform='');
 }
+// V3.0 #20: Category drill-down from Spending by Category chart
+let _catDrill=null; // { catId, startMonth, endMonth }
+function openCatDrill(catId, startMonth, endMonth){
+  _catDrill={catId, startMonth, endMonth};
+  S.tab='catdrill';
+  render();
+}
+function closeCatDrill(){
+  _catDrill=null;
+  S.tab='overview';
+  render();
+}
+
+async function rCatDrill(){
+  if(!_catDrill)return '<div class="empty" style="padding:2rem">No category selected</div>';
+  const {catId, startMonth, endMonth}=_catDrill;
+  const mc=getMC(catId);
+  if(!mc)return '<div class="empty" style="padding:2rem">Category not found</div>';
+
+  // Collect all expense transactions in category across the period
+  const months=mRange(startMonth, endMonth);
+  const all=months.flatMap(m=>(S.txnCache[m]||[]).filter(t=>
+    t.mainCatId===catId && t.type==='expense' && txDir(t)==='out'
+  ));
+
+  // Apply search + sub-cat filters (state kept on _catDrill)
+  if(!_catDrill.search)_catDrill.search='';
+  if(!_catDrill.subFilter)_catDrill.subFilter='';
+  if(!_catDrill.sortCol)_catDrill.sortCol='date';
+  if(!_catDrill.sortDir)_catDrill.sortDir='desc';
+
+  const q=_catDrill.search.toLowerCase().trim();
+  const subF=_catDrill.subFilter;
+  let rows=all.filter(t=>{
+    if(subF && t.subCatId!==subF)return false;
+    if(q){
+      const d=(t.description||'').toLowerCase();
+      const a=String(t.amount||'');
+      return d.includes(q) || a.includes(q);
+    }
+    return true;
+  });
+
+  // Sort
+  const dir=_catDrill.sortDir==='asc'?1:-1;
+  rows.sort((a,b)=>{
+    let va,vb;
+    if(_catDrill.sortCol==='date'){va=a.date||'';vb=b.date||'';}
+    else if(_catDrill.sortCol==='desc'){va=(a.description||'').toLowerCase();vb=(b.description||'').toLowerCase();}
+    else if(_catDrill.sortCol==='amount'){va=(txDir(a)==='out'?-1:1)*(a.amount||0);vb=(txDir(b)==='out'?-1:1)*(b.amount||0);}
+    else if(_catDrill.sortCol==='sub'){va=(getSC(a.subCatId)?.name||'').toLowerCase();vb=(getSC(b.subCatId)?.name||'').toLowerCase();}
+    else if(_catDrill.sortCol==='acc'){va=(S.accounts.find(x=>x.id===a.accountId)?.name||'').toLowerCase();vb=(S.accounts.find(x=>x.id===b.accountId)?.name||'').toLowerCase();}
+    if(va<vb)return -1*dir; if(va>vb)return 1*dir; return 0;
+  });
+
+  const total=rows.reduce((s,t)=>s+t.amount,0);
+  const accName=id=>S.accounts.find(a=>a.id===id)?.name||'Unassigned';
+
+  // Sub-cats present in data for filter dropdown
+  const subsPresent=[...new Set(all.map(t=>t.subCatId).filter(Boolean))];
+  const subOpts=subsPresent.map(sid=>{const sc=getSC(sid);return sc?`<option value="${sid}" ${subF===sid?'selected':''}>${h(sc.name)}</option>`:'';}).join('');
+
+  const periodLbl=startMonth===endMonth?fmtYM(startMonth):(fmtYM(startMonth)+' – '+fmtYM(endMonth));
+  const arr=col=>_catDrill.sortCol===col?(_catDrill.sortDir==='asc'?' ↑':' ↓'):'';
+
+  return `<div class="fg jb" style="margin-bottom:1rem;flex-wrap:wrap;gap:10px">
+    <div>
+      <div class="fg" style="gap:10px;align-items:center;flex-wrap:wrap">
+        <button class="btn btn-sm" onclick="closeCatDrill()">← Back to Overview</button>
+        <div style="font-size:19px;font-weight:500">${h(mc.name)}</div>
+      </div>
+      <div style="font-size:var(--fs-xs);color:var(--text3);margin-top:4px">${periodLbl} · ${rows.length} transaction${rows.length!==1?'s':''} · Total: ${fmtP(total)}</div>
+    </div>
+  </div>
+
+  <div class="card card-bordered" style="margin-bottom:10px;padding:10px 14px">
+    <div class="fg" style="gap:8px;flex-wrap:wrap;align-items:center">
+      <input type="text" placeholder="Search description or amount…" value="${h(_catDrill.search)}" oninput="_catDrill.search=this.value;render()" style="flex:1;min-width:200px">
+      <select onchange="_catDrill.subFilter=this.value;render()" style="min-width:180px">
+        <option value="">All sub-categories</option>
+        ${subOpts}
+      </select>
+    </div>
+  </div>
+
+  <div class="card card-bordered" style="padding:0;overflow:hidden">
+    <div style="overflow-x:auto">
+    <table class="txtab" style="width:100%;border-collapse:collapse;min-width:700px">
+      <thead>
+        <tr style="background:var(--bg2);border-bottom:1px solid var(--border)">
+          <th style="padding:10px 12px;text-align:left;font-size:var(--fs-xxs);text-transform:uppercase;letter-spacing:.06em;color:var(--text3);cursor:pointer" onclick="sortCatDrill('date')">Date${arr('date')}</th>
+          <th style="padding:10px 12px;text-align:left;font-size:var(--fs-xxs);text-transform:uppercase;letter-spacing:.06em;color:var(--text3);cursor:pointer" onclick="sortCatDrill('desc')">Description${arr('desc')}</th>
+          <th style="padding:10px 12px;text-align:left;font-size:var(--fs-xxs);text-transform:uppercase;letter-spacing:.06em;color:var(--text3);cursor:pointer" onclick="sortCatDrill('sub')">Sub-category${arr('sub')}</th>
+          <th style="padding:10px 12px;text-align:left;font-size:var(--fs-xxs);text-transform:uppercase;letter-spacing:.06em;color:var(--text3);cursor:pointer" onclick="sortCatDrill('acc')">Account${arr('acc')}</th>
+          <th style="padding:10px 12px;text-align:right;font-size:var(--fs-xxs);text-transform:uppercase;letter-spacing:.06em;color:var(--text3);cursor:pointer" onclick="sortCatDrill('amount')">Amount${arr('amount')}</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.length?rows.map(t=>`<tr style="border-bottom:1px solid var(--bg3)">
+          <td style="padding:10px 12px;font-size:var(--fs-xs);color:var(--text3);white-space:nowrap">${toDD(t.date)}</td>
+          <td style="padding:10px 12px;font-size:var(--fs-xs)">${h(t.description||'')}</td>
+          <td style="padding:10px 12px;font-size:var(--fs-xxs);color:var(--text2)">${h(getSC(t.subCatId)?.name||'—')}</td>
+          <td style="padding:10px 12px;font-size:var(--fs-xxs);color:var(--text2)">${h(accName(t.accountId))}</td>
+          <td style="padding:10px 12px;font-size:var(--fs-xs);font-weight:500;text-align:right;white-space:nowrap" class="c-bad">−${fmtP(t.amount)}</td>
+        </tr>`).join(''):'<tr><td colspan="5" style="padding:2rem;text-align:center;color:var(--text3);font-size:var(--fs-xs)">No transactions match the filter</td></tr>'}
+      </tbody>
+      ${rows.length?`<tfoot>
+        <tr style="background:var(--bg2);border-top:2px solid var(--border)">
+          <td colspan="4" style="padding:10px 12px;font-size:var(--fs-xs);font-weight:500">Total</td>
+          <td style="padding:10px 12px;font-size:var(--fs-xs);font-weight:600;text-align:right" class="c-bad">−${fmtP(total)}</td>
+        </tr>
+      </tfoot>`:''}
+    </table>
+    </div>
+  </div>`;
+}
+
+function sortCatDrill(col){
+  if(_catDrill.sortCol===col){_catDrill.sortDir=_catDrill.sortDir==='asc'?'desc':'asc';}
+  else{_catDrill.sortCol=col;_catDrill.sortDir='desc';}
+  render();
+}
+
 function sw(tab){
   // Reset bulk selection when switching tabs
   if(BulkMode){BulkMode=false;BulkSelected.clear();}
@@ -1618,19 +1744,40 @@ async function refreshData(){
   }
 }
 function prevM(){
-  const step={'month':1,'3m':3,'6m':6,'12m':12,'ytd':1,'all':1}[S.ovPeriod]||1;
-  S.month=addM(S.month,-step);render();
+  // V3.0 #17: All-time disables navigation (one-time view)
+  if(S.ovPeriod==='all')return;
+  // V3.0 #16: always step by 1 month regardless of period size, clamp to earliest transaction
+  const first=firstTxnMonth();
+  const proposed=addM(S.month,-1);
+  S.month=proposed<first?first:proposed;
+  render();
 }
 function nextM(){
-  const step={'month':1,'3m':3,'6m':6,'12m':12,'ytd':1,'all':1}[S.ovPeriod]||1;
-  const proposed=addM(S.month,step);
-  // Don't go beyond current month
-  const now=getYM(new Date());
-  S.month=proposed>now?now:proposed;
+  // V3.0 #17: All-time disables navigation
+  if(S.ovPeriod==='all')return;
+  // V3.0 #15 + #16: step by 1 month, clamp to last transaction month (not today's date)
+  const last=lastTxnMonth();
+  const proposed=addM(S.month,1);
+  S.month=proposed>last?last:proposed;
   render();
 }
 function setDO(id){S.dashOwner=id;render();}
-function setOvP(p){S.ovPeriod=p;render();}
+function lastTxnMonth(){
+  const keys=Object.keys(S.txnCache||{}).filter(k=>(S.txnCache[k]||[]).length>0);
+  if(!keys.length)return getYM(new Date());
+  return keys.sort().pop();
+}
+function firstTxnMonth(){
+  const keys=Object.keys(S.txnCache||{}).filter(k=>(S.txnCache[k]||[]).length>0);
+  if(!keys.length)return getYM(new Date());
+  return keys.sort()[0];
+}
+function setOvP(p){
+  S.ovPeriod=p;
+  // V3.0 #15: reset anchor to last transaction month when switching period
+  S.month=lastTxnMonth();
+  render();
+}
 let _rendering=false,_renderPending=false;
 async function render(){
   if(_rendering){_renderPending=true;return;}
@@ -1660,6 +1807,7 @@ async function render(){
   else if(t==='rules')el.innerHTML=rMerchantRules();
   else if(t==='insights')el.innerHTML=rUsageInsights();
   else if(t==='settings')el.innerHTML=rSettings();
+  else if(t==='catdrill')el.innerHTML=await rCatDrill();
   // Restore search focus after re-render (independent of tab dispatch)
   if(hadSearchFocus){
     const newSearch=document.querySelector('#page-content input[type="text"][placeholder="Search..."]');
@@ -1688,9 +1836,12 @@ async function rOv(){
     const janOfYear=anchor.substr(0,4)+'-01';
     months=mRange(janOfYear,anchor);
   }
-  else{// all time
-    const keys=Object.keys(S.txnCache).filter(k=>S.txnCache[k]?.length).sort();
-    months=keys.length?mRange(keys[0],anchor):[anchor];
+  else{// all time — V3.0 #17: capped at 24 months ending at last transaction
+    const last=lastTxnMonth();
+    const earliest=addM(last,-23); // 24 months inclusive
+    const firstAvail=firstTxnMonth();
+    const start=earliest<firstAvail?firstAvail:earliest;
+    months=mRange(start,last);
   }
   const prevMonths=months.map(m=>addM(m,-1));
   const allT=months.flatMap(m=>S.txnCache[m]||[]);
@@ -1819,12 +1970,16 @@ async function rOv(){
   // Bills matching for overview
   const thisTx=S.txnCache[S.month]||[];
   function billStatus(b){
+    // V3.0 #26: three-state status — Paid / Pending issuance / Unpaid
     const matched=thisTx.find(t=>matchBill(t,b));
     if(matched)return{status:'Paid',amount:matched.amount};
-    const today=new Date();const expDay=parseInt(b.expectedDay)||15;
-    if(today.getDate()>expDay+5)return{status:'Overdue',amount:null};
-    if(today.getDate()>expDay)return{status:'Due',amount:null};
-    return{status:'Due',amount:null};
+    const today=new Date();
+    const expDay=parseInt(b.expectedDay)||15;
+    // Compare against expected day for the CURRENT calendar month (today's day)
+    // If we haven't reached the expected day yet → Pending issuance
+    // If we're past the expected day with no match → Unpaid
+    if(today.getDate()<=expDay)return{status:'Pending issuance',amount:null};
+    return{status:'Unpaid',amount:null};
   }
   function matchBill(t,b){
     const desc=(t.description||'').toLowerCase();
@@ -1836,7 +1991,7 @@ async function rOv(){
   }
   const billHtml=S.bills.slice(0,5).map(b=>{
     const{status,amount}=billStatus(b);
-    const pc=status==='Paid'?'ppaid':status==='Overdue'?'pov':'pdue';
+    const pc=status==='Paid'?'ppaid':status==='Unpaid'?'pov':'pdue'; // V3.0 #26: Unpaid uses red pill
     return`<div class="brow">
       <div><div style="font-size:var(--fs-xs);font-weight:500">${h(b.name)}</div><div style="font-size:11px;color:var(--text3)">Day ${b.expectedDay||'?'} · ${b.paymentType||'Variable'}</div></div>
       <div class="fg" style="gap:8px">
@@ -1914,7 +2069,7 @@ async function rOv(){
     const lastPay=(d.payments||[]).slice(-1)[0];
     if(!lastPay||lastPay.date<addM(now,-1)){alerts.push({level:'info',icon:'$',text:`${d.name} — no payment recorded this month`,sub:`Monthly installment: ${fmt(d.installment)}`,action:"sw('debts')"});}
   });
-  S.bills.filter(b=>billStatus(b).status==='Overdue').forEach(b=>alerts.push({level:'crit',icon:'!',text:`${b.name} is overdue`,sub:`Expected: day ${b.expectedDay||'?'}`,action:"sw('bills')"}));
+  S.bills.filter(b=>billStatus(b).status==='Unpaid').forEach(b=>alerts.push({level:'crit',icon:'!',text:`${b.name} is unpaid`,sub:`Expected: day ${b.expectedDay||'?'}`,action:"sw('bills')"}));
   // Backup reminder
   if(!S.settings.lastBackup)alerts.push({level:'info',icon:'↓',text:'No backup has been taken yet',sub:'Export a backup from Settings to protect your data',action:"sw('settings')"});
   else{
@@ -1946,11 +2101,11 @@ async function rOv(){
     <div class="fg" style="gap:8px;flex-wrap:wrap;align-items:center">
       <div class="fg" style="gap:4px;flex-wrap:wrap">${pbtns}</div>
       <div class="fg" style="gap:6px;align-items:center">
-        <button class="mnav" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;border:1px solid var(--border);background:var(--bg);cursor:pointer;border-radius:var(--rsm)" onclick="prevM()">&#8592;</button>
+        <button class="mnav" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;border:1px solid var(--border);background:var(--bg);cursor:${S.ovPeriod==='all'?'not-allowed':'pointer'};opacity:${S.ovPeriod==='all'?'.4':'1'};border-radius:var(--rsm)" onclick="prevM()" ${S.ovPeriod==='all'?'disabled':''}>&#8592;</button>
         <div style="font-size:var(--fs-sm);font-weight:500;white-space:nowrap;min-width:160px;text-align:center">
           ${months.length===1?fmtYM(months[0]):(fmtYM(months[0])+' &ndash; '+fmtYM(months[months.length-1]))}
         </div>
-        <button class="mnav" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;border:1px solid var(--border);background:var(--bg);cursor:pointer;border-radius:var(--rsm)" onclick="nextM()">&#8594;</button>
+        <button class="mnav" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;border:1px solid var(--border);background:var(--bg);cursor:${S.ovPeriod==='all'?'not-allowed':(S.month>=lastTxnMonth()?'not-allowed':'pointer')};opacity:${S.ovPeriod==='all'||S.month>=lastTxnMonth()?'.4':'1'};border-radius:var(--rsm)" onclick="nextM()" ${S.ovPeriod==='all'||S.month>=lastTxnMonth()?'disabled':''}>&#8594;</button>
       </div>
     </div>
   </div>
@@ -2012,16 +2167,45 @@ async function rOv(){
       </div>
     </div>
   </div>
-  ${(foodSubs.groceries+foodSubs.delivery+foodSubs.dining)>0?`
-  <div class="card card-bordered" style="margin-top:10px">
-    <div class="ctitle">Food &amp; Dining Breakdown</div>
-    <div class="csub">Helps identify where your food budget is going</div>
-    <div class="g3-fixed" style="margin-top:6px">
-      <div><div class="klbl">Groceries</div><div style="font-size:17px;font-weight:500">${fmtP(foodSubs.groceries)}</div></div>
-      <div><div class="klbl">Food Delivery</div><div style="font-size:17px;font-weight:500">${fmtP(foodSubs.delivery)}</div></div>
-      <div><div class="klbl">Dining Out</div><div style="font-size:17px;font-weight:500">${fmtP(foodSubs.dining)}</div></div>
-    </div>
-  </div>`:''}
+  ${(()=>{
+    // V3.0 #22: Top 3 Categories Breakdown (excludes debt + finance & banking)
+    const EXCLUDED=['cat_main_debt','cat_main_finance'];
+    const catTotals={};
+    tx.filter(t=>txDir(t)==='out'&&t.type==='expense'&&t.mainCatId&&!EXCLUDED.includes(t.mainCatId)).forEach(t=>{
+      if(!catTotals[t.mainCatId])catTotals[t.mainCatId]={amount:0,subs:{}};
+      catTotals[t.mainCatId].amount+=t.amount;
+      const sid=t.subCatId||'_uncat';
+      if(!catTotals[t.mainCatId].subs[sid])catTotals[t.mainCatId].subs[sid]=0;
+      catTotals[t.mainCatId].subs[sid]+=t.amount;
+    });
+    const top3=Object.entries(catTotals).sort((a,b)=>b[1].amount-a[1].amount).slice(0,3);
+    if(!top3.length)return '';
+    return `<div class="card card-bordered" style="margin-top:10px">
+      <div class="ctitle">Top 3 Categories Breakdown</div>
+      <div class="csub">Top sub-categories under each main category (excludes Debt and Finance & Banking)</div>
+      <div class="g3-fixed" style="margin-top:10px">
+        ${top3.map(([cid,{amount,subs}])=>{
+          const mc=getMC(cid);
+          const topSubs=Object.entries(subs).sort((a,b)=>b[1]-a[1]).slice(0,4);
+          return `<div style="padding:10px 12px;background:var(--bg2);border-radius:var(--rsm)">
+            <div class="fg jb" style="margin-bottom:6px">
+              <div style="font-size:var(--fs-xs);font-weight:600;color:var(--text)">${h(mc?.name||'—')}</div>
+              <div style="font-size:var(--fs-xs);font-weight:500" class="c-bad">${fmtP(amount)}</div>
+            </div>
+            ${topSubs.map(([sid,amt])=>{
+              const sc=sid==='_uncat'?null:getSC(sid);
+              const lbl=sc?.name||'Uncategorized';
+              const pct=amount>0?Math.round(amt/amount*100):0;
+              return `<div class="fg jb" style="padding:3px 0;font-size:var(--fs-xxs);color:var(--text2)">
+                <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-right:8px">${h(lbl)}</span>
+                <span style="white-space:nowrap;color:var(--text3)">${fmtP(amt)} · ${pct}%</span>
+              </div>`;
+            }).join('')}
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  })()}
 
   <!-- S4: DEBT & OBLIGATIONS -->
   <div class="slbl">Debt &amp; Obligations</div>
@@ -2052,38 +2236,45 @@ async function rOv(){
     </div>
   </div>
 
-  <!-- S5: INCOME TRACKING -->
+  <!-- S5: INCOME TRACKING (V3.0 #23 — Received by sub-category, no Expected) -->
   <div class="slbl">Income Tracking</div>
-  <div class="card card-bordered">
-    <div class="g2" style="margin-bottom:0">
-      <div>
-        <div class="ctitle">Expected vs Received This Month</div>
-        ${S.income.filter(i=>i.status==='active'&&i.frequency==='Monthly').map(i=>{
-          // M2: match per source using keyword if available, otherwise all income
-          const kw=(i.keyword||i.source||'').toLowerCase().trim();
-          const monthInc=(S.txnCache[S.month]||[]).filter(t=>t.type==='income'&&txDir(t)==='in');
-          const received=kw
-            ?monthInc.filter(t=>(t.description||'').toLowerCase().includes(kw)||(t.raw_description||'').toLowerCase().includes(kw)).reduce((s,t)=>s+t.amount,0)
-            :monthInc.reduce((s,t)=>s+t.amount,0);
-          const pct=i.amount>0?Math.min(100,Math.round(received/i.amount*100)):0;
-          const col=pct>=100?'c-ok':pct>=50?'c-warn':'c-bad';
-          return`<div style="padding:5px 0;border-bottom:1px solid var(--bg3)">
-            <div class="fg jb">
-              <span style="font-size:var(--fs-xs)">${h(i.name)}</span>
-              <span style="font-size:var(--fs-xs);font-weight:500" class="${col}">${fmtP(received)} / ${fmtP(i.amount)}</span>
-            </div>
-            <div style="height:3px;background:var(--bg3);border-radius:2px;margin-top:3px"><div style="height:3px;background:${pct>=100?'var(--ok)':pct>=50?'var(--warn)':'var(--bad)'};border-radius:2px;width:${pct}%"></div></div>
-          </div>`;}).join('')||'<div style="font-size:var(--fs-xs);color:var(--text3);padding:8px 0">No income sources defined. Add them in the Income tab.</div>'}
-      </div>
-      <div>
-        <div class="g3-fixed">
-          <div><div class="klbl">Expected</div><div style="font-size:16px;font-weight:500">${fmtP(S.income.filter(i=>i.status==='active'&&i.frequency==='Monthly').reduce((s,i)=>s+i.amount,0))}</div></div>
-          <div><div class="klbl">Received</div><div style="font-size:16px;font-weight:500 c-ok">${fmtP((S.txnCache[S.month]||[]).filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0))}</div></div>
-          <div><div class="klbl">Total Invested</div><div style="font-size:16px;font-weight:500" class="c-inv">${fmtP(inv)}</div></div>
+  ${(()=>{
+    const periodInc=tx.filter(t=>t.type==='income'&&txDir(t)==='in');
+    const totalRec=periodInc.reduce((s,t)=>s+t.amount,0);
+    // Breakdown by sub-category (fallback: main cat name if no sub)
+    const bySub={};
+    periodInc.forEach(t=>{
+      const sc=getSC(t.subCatId);
+      const key=sc?sc.name:(getMC(t.mainCatId)?.name||'Other Income');
+      if(!bySub[key])bySub[key]=0;
+      bySub[key]+=t.amount;
+    });
+    const subRows=Object.entries(bySub).sort((a,b)=>b[1]-a[1]);
+    return `<div class="card card-bordered">
+      <div class="g2" style="margin-bottom:0">
+        <div>
+          <div class="ctitle">Received Income This Period</div>
+          <div class="csub">Breakdown by sub-category from imported statements</div>
+          ${subRows.length?subRows.map(([name,amt])=>{
+            const pct=totalRec>0?Math.round(amt/totalRec*100):0;
+            return `<div style="padding:6px 0;border-bottom:1px solid var(--bg3)">
+              <div class="fg jb">
+                <span style="font-size:var(--fs-xs)">${h(name)}</span>
+                <span style="font-size:var(--fs-xs);font-weight:500" class="c-ok">${fmtP(amt)} · ${pct}%</span>
+              </div>
+              <div style="height:3px;background:var(--bg3);border-radius:2px;margin-top:3px"><div style="height:3px;background:var(--ok);border-radius:2px;width:${pct}%"></div></div>
+            </div>`;
+          }).join(''):'<div style="font-size:var(--fs-xs);color:var(--text3);padding:8px 0">No income in this period.</div>'}
+        </div>
+        <div>
+          <div class="g2">
+            <div><div class="klbl">Total Received</div><div style="font-size:18px;font-weight:500" class="c-ok">${fmtP(totalRec)}</div><div style="font-size:11px;color:var(--text3);margin-top:2px">${periodInc.length} transaction${periodInc.length!==1?'s':''}</div></div>
+            <div><div class="klbl">Total Invested</div><div style="font-size:18px;font-weight:500" class="c-inv">${fmtP(inv)}</div><div style="font-size:11px;color:var(--text3);margin-top:2px">${totalRec>0?Math.round(inv/totalRec*100):0}% of income</div></div>
+          </div>
         </div>
       </div>
-    </div>
-  </div>
+    </div>`;
+  })()}
 
   <!-- S6: BILLS, SUBS & STAFF -->
   <div class="slbl">Bills, Subscriptions &amp; Staff</div>
