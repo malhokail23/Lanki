@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
 <title>Lanki Platform</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='4' y='4' width='24' height='6' rx='2' fill='%23021751'/%3E%3Crect x='4' y='13' width='16' height='6' rx='2' fill='%23021751'/%3E%3Crect x='4' y='22' width='20' height='6' rx='2' fill='%23021751'/%3E%3C/svg%3E">
 <meta name="application-name" content="Lanki Platform">
@@ -331,12 +331,13 @@ body{font-family:var(--font);background:var(--feather);color:var(--text);min-hei
 /* Burger button — top bar on mobile */
 .burger-bar{
   display:none;
-  position:fixed;top:0;left:0;right:0;height:48px;
-  background:rgba(255,255,255,.96);
-  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  position:fixed;top:0;left:0;right:0;height:52px;
+  background:rgba(243,241,239,.96);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
   border-bottom:1px solid var(--border);
   align-items:center;justify-content:space-between;
   padding:0 16px;z-index:600;
+  padding-top:env(safe-area-inset-top,0);
 }
 .burger-bar .bar-title{
   font-size:14px;font-weight:700;color:var(--midnight);
@@ -386,9 +387,9 @@ body{font-family:var(--font);background:var(--feather);color:var(--text);min-hei
   .burger-bar{display:flex;}
 
   /* Content pushed down below burger bar */
-  .app-content{padding-top:48px;}
+  .app-content{padding-top:52px;}
   .pg{
-    padding:.75rem .75rem 2rem;
+    padding:.85rem .9rem 2.5rem;
     margin-left:0;
   }
 
@@ -397,12 +398,13 @@ body{font-family:var(--font);background:var(--feather);color:var(--text);min-hei
   .nav-dd{display:none;}
   .nav-dd.open{display:flex;}
 
-  /* Nav items full width */
+  /* Better touch targets for nav */
   .nav-item{
     width:100%;text-align:left;
-    font-size:13px;padding:10px 16px;
+    font-size:13px;padding:11px 16px;
     border-left:none!important;
     border-right:none;
+    min-height:44px;
   }
   .nav-item.active{
     border-left:3px solid var(--midnight)!important;
@@ -410,6 +412,22 @@ body{font-family:var(--font);background:var(--feather);color:var(--text);min-hei
   }
   .nav-arrow{display:inline-block;}
   .nav-badge{position:static;}
+
+  /* Better button touch targets */
+  .btn{min-height:40px;}
+  .btn-sm{min-height:36px;}
+
+  /* Prevent text overflow in category names */
+  .ctag{max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
+  /* Period buttons wrap gracefully */
+  .pbtn{padding:6px 12px;font-size:11px;}
+
+  /* Modal full-width on mobile */
+  .md{width:96%;padding:1.25rem;}
+
+  /* Wider sidebar on mobile for readability */
+  .nav{width:280px;}
 }
 
 /* ── PAGE (defined in nav section above) ─────────────── */
@@ -426,15 +444,16 @@ body{font-family:var(--font);background:var(--feather);color:var(--text);min-hei
 }
 .ctitle{font-size:var(--fs-sm);font-weight:600;color:var(--text);margin-bottom:2px;letter-spacing:-.01em}
 .csub{font-size:var(--fs-xxs);color:var(--text3);margin-bottom:10px;line-height:1.55}
-.g2{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px}
+.g2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
 .g3{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
 .g3-fixed{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
 @media(max-width:700px){.g3-fixed{grid-template-columns:repeat(2,1fr)}.g2,.g3{grid-template-columns:1fr}}
+@media(max-width:360px){.g3-fixed{grid-template-columns:1fr}}
 
 /* ── KPI CARDS ────────────────────────────────────────── */
 .kgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:1rem}
-@media(max-width:640px){.kgrid{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:380px){.kgrid{grid-template-columns:1fr}}
+@media(max-width:640px){.kgrid{grid-template-columns:repeat(2,1fr);gap:8px}}
+@media(max-width:360px){.kgrid{grid-template-columns:1fr}}
 .kpi{
   background:var(--bg);border:1px solid var(--border);
   border-radius:var(--r);padding:.9rem 1rem;
@@ -530,7 +549,8 @@ th{
 }
 td{padding:9px 10px;border-bottom:1px solid var(--bg2);vertical-align:middle}
 tr:last-child td{border-bottom:none}
-tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto}
+tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+@media(max-width:768px){th,td{padding:8px 8px}}
 
 /* ── PROGRESS ─────────────────────────────────────────── */
 .pb{height:5px;background:var(--bg3);border-radius:3px;overflow:hidden;margin-top:4px}
@@ -627,9 +647,10 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto}
 .prow:last-child{border-bottom:none}
 .dmeta{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:12px}
 .slbl{
-  font-size:10px;font-weight:700;color:var(--text3);
-  text-transform:uppercase;letter-spacing:.08em;
-  margin-bottom:6px;margin-top:1.5rem;
+  font-size:11px;font-weight:500;color:var(--charcoal);
+  letter-spacing:.01em;
+  margin-bottom:8px;margin-top:1.75rem;
+  padding-bottom:6px;border-bottom:1px solid var(--border);
 }
 .shint{font-size:var(--fs-xxs);color:var(--text3);margin-bottom:10px;line-height:1.6}
 .fbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem;align-items:center}
@@ -970,18 +991,17 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto}
         </div>
       </div>
     </div>
-    <!-- V3.0 #10: Flat nav — no redundant section label for single-child groups -->
+    <!-- V3.1: Restructured nav — meaningful groups, no label-item redundancy -->
     <button class="nav-item active" data-tab="overview" onclick="sw('overview')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg> Overview</button>
 
-    <div class="nav-section-label">Transactions</div>
+    <div class="nav-section-label">Activity</div>
     <button class="nav-item nav-group" data-group="transactions" onclick="toggleGroup('transactions')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg> Transactions <span class="nav-arrow" id="arr-transactions">&#8250;</span></button>
     <div id="nav-dd-transactions" class="nav-dd">
       <button onclick="sw('txbank')">Bank Accounts</button>
       <button onclick="sw('txcards')">Cards</button>
-      <button onclick="sw('aiupload')">✦ AI Upload</button>
+      <button onclick="sw('aiupload')">AI Upload</button>
     </div>
 
-    <div class="nav-section-label">Recurring</div>
     <button class="nav-item nav-group" data-group="recurring" onclick="toggleGroup('recurring')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg> Recurring <span class="nav-arrow" id="arr-recurring">&#8250;</span></button>
     <div id="nav-dd-recurring" class="nav-dd">
       <button onclick="sw('income')">Income</button>
@@ -989,29 +1009,25 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto}
       <button onclick="sw('subscriptions')">Subscriptions</button>
     </div>
 
-    <div class="nav-section-label">Household</div>
-    <button class="nav-item nav-group" data-group="peopleassets" onclick="toggleGroup('peopleassets')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Household <span class="nav-arrow" id="arr-peopleassets">&#8250;</span></button>
-    <div id="nav-dd-peopleassets" class="nav-dd">
-      <button onclick="sw('staff')">Staff</button>
-      <button onclick="sw('accounts')">Accounts &amp; Cards</button>
-    </div>
-
-    <div class="nav-section-label">Commitments</div>
-    <button class="nav-item nav-group" data-group="commitments" onclick="toggleGroup('commitments')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> Commitments <span class="nav-arrow" id="arr-commitments">&#8250;</span></button>
-    <div id="nav-dd-commitments" class="nav-dd">
-      <button onclick="sw('debts')">Debts</button>
-      <button onclick="sw('goals')">Goals</button>
-    </div>
-
-    <div class="nav-section-label">Review</div>
-    <button class="nav-item nav-group" data-group="review" onclick="toggleGroup('review')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg> Review <span class="nav-badge" id="uncat-badge" style="display:none">0</span> <span class="nav-arrow" id="arr-review">&#8250;</span></button>
-    <div id="nav-dd-review" class="nav-dd">
+    <button class="nav-item nav-group" data-group="inbox" onclick="toggleGroup('inbox')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg> Inbox <span class="nav-badge" id="uncat-badge" style="display:none">0</span> <span class="nav-arrow" id="arr-inbox">&#8250;</span></button>
+    <div id="nav-dd-inbox" class="nav-dd">
       <button onclick="sw('uncat')">Uncategorized</button>
       <button onclick="sw('transfers')">Pending Matches</button>
       <button onclick="sw('reimbursements')">Reimbursements</button>
       <button onclick="sw('rules')">Merchant Rules</button>
       <button onclick="sw('insights')">Usage Insights</button>
     </div>
+
+    <div class="nav-section-label">Accounts</div>
+    <button class="nav-item nav-group" data-group="accounts" onclick="toggleGroup('accounts')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> Accounts &amp; Cards <span class="nav-arrow" id="arr-accounts">&#8250;</span></button>
+    <div id="nav-dd-accounts" class="nav-dd">
+      <button onclick="sw('accounts')">Accounts &amp; Cards</button>
+      <button onclick="sw('debts')">Debts</button>
+      <button onclick="sw('goals')">Goals</button>
+    </div>
+
+    <div class="nav-section-label">Household</div>
+    <button class="nav-item" data-tab="staff" onclick="sw('staff')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Staff</button>
 
     <button class="nav-item" data-tab="settings" onclick="sw('settings')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Settings</button>
     <div class="nav-utils">
@@ -1099,18 +1115,17 @@ const SADAD_CODES={"001": "STC", "002": "Saudi Electricity Company (SEC)", "003"
 const NAV_GROUPS={
   transactions:{tabs:['txbank','txcards','aiupload'],labels:{txbank:'Bank Accounts',txcards:'Cards',aiupload:'AI Upload'}},
   recurring:{tabs:['income','bills','subscriptions'],labels:{income:'Income',bills:'Bills',subscriptions:'Subscriptions'}},
-  peopleassets:{tabs:['staff','accounts'],labels:{staff:'Household Staff',accounts:'Accounts'}},
-  commitments:{tabs:['debts','goals'],labels:{debts:'Debts',goals:'Goals'}},
-  review:{tabs:['uncat','transfers','reimbursements','rules','insights'],labels:{uncat:'Uncategorized',transfers:'Pending Matches',reimbursements:'Reimbursements',rules:'Merchant Rules',insights:'Usage Insights'}},
+  inbox:{tabs:['uncat','transfers','reimbursements','rules','insights'],labels:{uncat:'Uncategorized',transfers:'Pending Matches',reimbursements:'Reimbursements',rules:'Merchant Rules',insights:'Usage Insights'}},
+  accounts:{tabs:['accounts','debts','goals'],labels:{accounts:'Accounts & Cards',debts:'Debts',goals:'Goals'}},
 };
-const TAB_TO_GROUP={txbank:'transactions',txcards:'transactions',aiupload:'transactions',income:'recurring',bills:'recurring',subscriptions:'recurring',staff:'peopleassets',accounts:'peopleassets',debts:'commitments',goals:'commitments',uncat:'review',transfers:'review',reimbursements:'review',rules:'review',insights:'review'};
+const TAB_TO_GROUP={txbank:'transactions',txcards:'transactions',aiupload:'transactions',income:'recurring',bills:'recurring',subscriptions:'recurring',accounts:'accounts',debts:'accounts',goals:'accounts',uncat:'inbox',transfers:'inbox',reimbursements:'inbox',rules:'inbox',insights:'inbox',staff:'',settings:''};
 
 
 // ─── CONSTANTS ───
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='3.0e';
+const VERSION='3.1';
 let sKey=null,saveTimer=null,pinCb=null,catCb=null,activeGroup=null;
 
 // ─── CRYPTO ───
@@ -2132,9 +2147,9 @@ async function rOv(){
   const fcNet=mInc30-fcOut;
   const fcastHtml=`
     <div class="kpi" style="padding:.9rem 1rem">
-      <div class="klbl">Expected Monthly Income</div>
+      <div class="klbl">Expected Income</div>
       <div style="font-size:18px;font-weight:500" class="c-ok">${fmtP(mInc30)}</div>
-      <div style="font-size:11px;color:var(--text3);margin-top:4px">From ${S.income.filter(i=>i.status==='active').length} active source${S.income.filter(i=>i.status==='active').length!==1?'s':''}</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px">${S.income.filter(i=>i.status==='active').length} active source${S.income.filter(i=>i.status==='active').length!==1?'s':''}</div>
     </div>
     <div class="kpi" style="padding:.9rem 1rem">
       <div class="klbl">Scheduled Outflows</div>
@@ -2142,9 +2157,9 @@ async function rOv(){
       <div style="font-size:11px;color:var(--text3);margin-top:4px">Debt ${fmtP(mDebt30)} · Bills ${fmtP(mBills30)} · Staff ${fmtP(mStaff30)} · Subs ${fmtP(mSubs30)}</div>
     </div>
     <div class="kpi" style="padding:.9rem 1rem">
-      <div class="klbl">Net Projected</div>
+      <div class="klbl">Projected Net</div>
       <div style="font-size:18px;font-weight:500" class="${fcNet>=0?'c-ok':'c-bad'}">${fmtSP(fcNet,true)}</div>
-      <div style="font-size:11px;color:var(--text3);margin-top:4px">Variable spending not included</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px">Excl. variable spending</div>
     </div>`;
 
   // Alerts
@@ -2183,7 +2198,7 @@ async function rOv(){
   <div class="fg jb" style="margin-bottom:1.25rem;flex-wrap:wrap;gap:10px">
     <div>
       <div style="font-size:19px;font-weight:500">Financial Overview</div>
-      <div style="font-size:var(--fs-xs);color:var(--text3);margin-top:2px">Spending &amp; Income Engine · ${n} month${n!==1?'s':''} of data</div>
+      <div style="font-size:var(--fs-xs);color:var(--text3);margin-top:2px">Cash Flow Engine · ${n} month${n!==1?'s':''} of data</div>
     </div>
     <div class="fg" style="gap:8px;flex-wrap:wrap;align-items:center">
       <div class="fg" style="gap:4px;flex-wrap:wrap">${pbtns}</div>
@@ -2198,24 +2213,22 @@ async function rOv(){
   </div>
 
   <!-- S1: FINANCIAL PULSE -->
-  <div class="slbl" style="margin-top:0">Financial Pulse</div>
-  <div class="shint">Key metrics for the selected period. All figures from imported statements only.</div>
+  <div class="slbl" style="margin-top:0">Summary</div>
   <div class="kgrid">
-    <div class="kpi"><div class="klbl">Total Income</div><div class="kval c-ok">${fmtP(inc)}</div><div class="ksub">Excludes internal transfers</div></div>
-    <div class="kpi"><div class="klbl">Total Expenses</div><div class="kval c-bad">${fmtP(exp+ext)}</div><div class="ksub">Includes external transfers</div></div>
-    <div class="kpi"><div class="klbl">Net Cash Flow</div><div class="kval ${net>=0?'c-ok':'c-bad'}">${fmtSP(net,true)}</div><div class="ksub">Your true surplus or deficit</div></div>
+    <div class="kpi"><div class="klbl">Income</div><div class="kval c-ok">${fmtP(inc)}</div><div class="ksub">Excl. transfers</div></div>
+    <div class="kpi"><div class="klbl">Expenses</div><div class="kval c-bad">${fmtP(exp+ext)}</div><div class="ksub">Incl. external transfers</div></div>
+    <div class="kpi"><div class="klbl">Net Flow</div><div class="kval ${net>=0?'c-ok':'c-bad'}">${fmtSP(net,true)}</div><div class="ksub">Surplus or deficit</div></div>
     <div class="kpi"><div class="klbl">Savings Rate</div><div class="kval ${srCol}">${sr}%</div><div class="ksub">Target: ${tgt}% or above</div></div>
-    <div class="kpi"><div class="klbl">Total Debt Remaining</div><div class="kval c-warn">${fmtP(td)}</div><div class="ksub">${actDebts.length} active debt${actDebts.length!==1?'s':''}</div></div>
-    <div class="kpi"><div class="klbl">Debt-to-Income (DTI)</div><div class="kval ${dtiCol}">${dti}%</div><div class="ksub">Monthly debt vs monthly income${dti>40?' · Above 40% threshold':''}</div></div>
-    <div class="kpi"><div class="klbl">Total Cash Position</div><div class="kval ${aggHasData?(aggClosing>=aggOpening?'c-ok':'c-warn'):'c-mut'}">${aggHasData?fmtP(aggClosing):'--'}</div><div class="ksub">${aggHasData?`Opening: ${fmtP(aggOpening)} &middot; Net change: ${aggClosing>=aggOpening?'+':''}${fmtS(aggClosing-aggOpening)}`:'Add opening/closing balances at import'}</div></div>
+    <div class="kpi"><div class="klbl">Debt Remaining</div><div class="kval c-warn">${fmtP(td)}</div><div class="ksub">${actDebts.length} active debt${actDebts.length!==1?'s':''}</div></div>
+    <div class="kpi"><div class="klbl">Debt-to-Income</div><div class="kval ${dtiCol}">${dti}%</div><div class="ksub">Monthly obligations vs income${dti>40?' · Above 40% threshold':''}</div></div>
+    <div class="kpi"><div class="klbl">Cash Position</div><div class="kval ${aggHasData?(aggClosing>=aggOpening?'c-ok':'c-warn'):'c-mut'}">${aggHasData?fmtP(aggClosing):'--'}</div><div class="ksub">${aggHasData?`Opening: ${fmtP(aggOpening)} &middot; Net: ${aggClosing>=aggOpening?'+':''}${fmtS(aggClosing-aggOpening)}`:'Add opening balances to track'}</div></div>
     <div class="kpi"><div class="klbl">Emergency Buffer</div><div class="kval ${ebRatio===null?'c-mut':ebRatio>=3?'c-ok':ebRatio>=1?'c-warn':'c-bad'}">${ebRatio!==null?ebRatio+' mo':'--'}</div><div class="ksub">${ebRatio===null?'Set opening balances to track':ebRatio>=3?'Healthy — 3+ months covered':ebRatio>=1?'Below target':'Critical — less than 1 month'}</div></div>
   </div>
 
   <!-- S2: CASH FLOW CHART -->
   <div class="slbl">Cash Flow</div>
-  <div class="shint">Income vs expenses vs investments month by month. Red-outlined bars indicate deficit months.</div>
+  <div class="shint">By month — deficit months outlined in red.</div>
   <div class="card card-bordered" style="padding-bottom:1.25rem">
-    <div class="ctitle">Income vs Expenses vs Investments</div>
     <div class="fg" style="gap:14px;flex-wrap:wrap;margin-bottom:10px;font-size:11px;color:var(--text2)">
       <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#1D9E75;margin-right:4px;vertical-align:middle"></span>Income</span>
       <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#E24B4A;margin-right:4px;vertical-align:middle"></span>Expenses</span>
@@ -2225,31 +2238,30 @@ async function rOv(){
   </div>
 
   <!-- S3: SPENDING INTELLIGENCE -->
-  <div class="slbl">Spending Intelligence</div>
+  <div class="slbl">Spending</div>
   <div class="g2" style="margin-bottom:0">
     <div class="card card-bordered">
-      <div class="fg jb" style="align-items:center;margin-bottom:4px">
-        <div class="ctitle" style="margin-bottom:0">Spending by Category</div>
-        <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3);cursor:pointer;font-weight:400;margin:0">
+      <div class="fg jb" style="align-items:center;margin-bottom:8px">
+        <div class="ctitle" style="margin-bottom:0">By Category</div>
+        <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text3);cursor:pointer;font-weight:400;margin:0;white-space:nowrap">
           <input type="checkbox" id="ov-exclude-debt" ${S.ovExcludeDebt!==false?'checked':''} onchange="S.ovExcludeDebt=this.checked;sched();render()" style="margin:0">
-          Exclude debt payments
+          Excl. Debt
         </label>
       </div>
-      <div class="csub">Click any row to view transactions</div>
       ${catRows||'<div class="empty" style="padding:1rem">No expenses yet</div>'}
     </div>
     <div>
       <div class="card card-bordered" style="margin-bottom:10px">
         <div class="ctitle">Burn Rate</div>
         <div class="fg jb" style="margin-top:6px">
-          <div><div style="font-size:11px;color:var(--text3)">This period avg</div><div style="font-size:18px;font-weight:500">${fmt(burnThis)}<span style="font-size:11px;color:var(--text3)">/day</span></div></div>
+          <div><div style="font-size:11px;color:var(--text3)">Daily average</div><div style="font-size:18px;font-weight:500">${fmt(burnThis)}<span style="font-size:11px;color:var(--text3)">/day</span></div></div>
           ${burnPrev>0?`<div style="text-align:right"><div style="font-size:11px;color:var(--text3)">vs prior period</div><div style="font-size:15px;font-weight:500;${burnDiff>0?'color:var(--bad)':'color:var(--ok)'}">${burnDiff>0?'↑':'↓'}${Math.abs(burnDiff)}%</div></div>`:''}
         </div>
       </div>
       <div class="card card-bordered" style="margin-bottom:10px">
-        <div class="ctitle">Month-over-Month Change</div>
+        <div class="ctitle">vs Last Month</div>
         <div style="margin-top:6px">
-          ${momDiff!==null?`<div style="font-size:24px;font-weight:500;${momDiff>0?'color:var(--bad)':'color:var(--ok)'}">${momDiff>0?'+':''}${momDiff}%</div><div style="font-size:var(--fs-xxs);color:var(--text3);margin-top:3px">vs last month</div>`:'<div style="font-size:var(--fs-xs);color:var(--text3)">Not enough data yet</div>'}
+          ${momDiff!==null?`<div style="font-size:24px;font-weight:500;${momDiff>0?'color:var(--bad)':'color:var(--ok)'}">${momDiff>0?'+':''}${momDiff}%</div>`:'<div style="font-size:var(--fs-xs);color:var(--text3)">Not enough data yet</div>'}
         </div>
       </div>
     </div>
@@ -2268,8 +2280,8 @@ async function rOv(){
     const top3=Object.entries(catTotals).sort((a,b)=>b[1].amount-a[1].amount).slice(0,3);
     if(!top3.length)return '';
     return `<div class="card card-bordered" style="margin-top:10px">
-      <div class="ctitle">Top 3 Categories Breakdown</div>
-      <div class="csub">Top sub-categories under each main category (excludes Debt and Finance & Banking)</div>
+      <div class="ctitle">Top Spending Categories</div>
+      <div class="csub">Top sub-categories by spend — excl. debt and banking</div>
       <div class="g3-fixed" style="margin-top:10px">
         ${top3.map(([cid,{amount,subs}])=>{
           const mc=getMC(cid);
@@ -2298,7 +2310,7 @@ async function rOv(){
   <div class="slbl">Debt &amp; Obligations</div>
   <div class="g2">
     <div class="card card-bordered">
-      <div class="ctitle">Debt Overview</div>
+      <div class="ctitle">Debt Summary</div>
       <div class="csub">Total remaining: ${fmtP(td)} · Monthly obligations: ${fmtP(monthlyDebt)}</div>
       ${dHtml}
       ${actDebts.length>4?`<div style="font-size:var(--fs-xs);color:var(--info);cursor:pointer;margin-top:6px" onclick="sw('debts')">View all debts →</div>`:''}
@@ -2311,12 +2323,12 @@ async function rOv(){
           <div style="height:8px;background:var(--bg3);border-radius:4px;overflow:hidden;margin:8px 0">
             <div style="width:${Math.min(100,dti)}%;height:100%;background:${dti<30?'var(--ok)':dti<=40?'var(--warn)':'var(--bad)'};border-radius:4px"></div>
           </div>
-          <div style="font-size:11px;color:var(--text3)">${dti<30?'Healthy — below 30%':dti<=40?'Caution — between 30% and 40%':'Critical — above 40%'}</div>
-          <div style="font-size:11px;color:var(--text3);margin-top:4px">Monthly debt payments: ${fmtP(monthlyDebt)}</div>
+          <div style="font-size:11px;color:var(--text3)">${dti<30?'Healthy — below 30%':dti<=40?'Caution — 30–40% range':'Critical — above 40%'}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:4px">Monthly obligations: ${fmtP(monthlyDebt)}</div>
         </div>
       </div>
       <div class="card card-bordered">
-        <div class="ctitle">Savings Rate Trend</div>
+        <div class="ctitle">Savings Trend</div>
         <div class="fg" style="gap:12px;margin-top:8px;align-items:flex-end">${srBars}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:6px">Target: ${tgt}%</div>
       </div>
@@ -2324,7 +2336,7 @@ async function rOv(){
   </div>
 
   <!-- S5: INCOME TRACKING (V3.0 #23 — Received by sub-category, no Expected) -->
-  <div class="slbl">Income Tracking</div>
+  <div class="slbl">Income</div>
   ${(()=>{
     const periodInc=tx.filter(t=>t.type==='income'&&txDir(t)==='in');
     const totalRec=periodInc.reduce((s,t)=>s+t.amount,0);
@@ -2340,8 +2352,8 @@ async function rOv(){
     return `<div class="card card-bordered">
       <div class="g2" style="margin-bottom:0">
         <div>
-          <div class="ctitle">Received Income This Period</div>
-          <div class="csub">Breakdown by sub-category from imported statements</div>
+          <div class="ctitle">Income Received</div>
+          <div class="csub">By source</div>
           ${subRows.length?subRows.map(([name,amt])=>{
             const pct=totalRec>0?Math.round(amt/totalRec*100):0;
             return `<div style="padding:6px 0;border-bottom:1px solid var(--bg3)">
@@ -2364,22 +2376,20 @@ async function rOv(){
   })()}
 
   <!-- S6: BILLS, SUBS & STAFF -->
-  <div class="slbl">Bills, Subscriptions &amp; Staff</div>
+  <div class="slbl">Fixed Costs</div>
   <div class="g3">
     <div class="card card-bordered">
-      <div class="ctitle">Household Bills</div>
-      <div class="csub">Current month</div>
+      <div class="ctitle">Bills</div>
       ${billHtml}
       ${S.bills.length>5?`<div style="font-size:var(--fs-xs);color:var(--info);cursor:pointer;margin-top:6px" onclick="sw('bills')">View all →</div>`:''}
     </div>
     <div class="card card-bordered">
       <div class="ctitle">Subscriptions</div>
-      <div class="csub">Confirmed recurring charges</div>
       ${(()=>{const confirmed=allTxns().filter(t=>t.isSub);const cMap={};confirmed.forEach(t=>{const k=(t.description||'').toLowerCase().trim().substr(0,30);if(!cMap[k]){cMap[k]={desc:t.description,txns:[]};}cMap[k].txns.push(t);});S.subs.forEach(s=>{const k=(s.name||'').toLowerCase().trim().substr(0,30);if(!cMap[k])cMap[k]={desc:s.name,txns:[],notes:s.notes};});const rows=Object.entries(cMap).slice(0,5).map(([k,{desc,txns}])=>{const sorted=txns.slice().sort((a,b)=>b.date.localeCompare(a.date));const avg=sorted.length?sorted.reduce((s,t)=>s+t.amount,0)/sorted.length:0;return`<div class="brow"><div><div style="font-size:var(--fs-xs);font-weight:500">${h(desc)}</div></div><span style="font-size:var(--fs-xs);font-weight:500">${fmtP(avg)}</span></div>`;}).join('');return rows||'<div style="font-size:var(--fs-xs);color:var(--text3);padding:8px 0">No confirmed subscriptions yet.</div>';})()}
     </div>
     <div class="card card-bordered">
-      <div class="ctitle">Household Staff</div>
-      <div class="csub">Current month — after advance deductions</div>
+      <div class="ctitle">Staff</div>
+      <div class="csub">After advance deductions</div>
       ${fStaff.map(st=>{
         // H4/L8: Use advThisMonth() — single correct implementation, advThisMonthOv dead code removed
         const ded=advThisMonth(st);
@@ -2390,7 +2400,7 @@ async function rOv(){
   </div>
 
   <!-- S7: GOALS -->
-  <div class="slbl">Active Goals</div>
+  <div class="slbl">Goals</div>
   <div class="card card-bordered">
     ${gHtml}
     ${fGoals.filter(g=>g.status==='active').length>3?`<div style="font-size:var(--fs-xs);color:var(--info);cursor:pointer;margin-top:6px" onclick="sw('goals')">View all →</div>`:''}
@@ -2399,8 +2409,8 @@ async function rOv(){
   <!-- S8: EXTERNAL TRANSFERS -->
   ${ext>0?`<div class="slbl">External Transfers</div>
   <div class="card card-bordered">
-    <div class="ctitle">Outbound Transfers to External Parties</div>
-    <div class="csub">Total this period: ${fmtP(ext)}</div>
+    <div class="ctitle">External Transfers</div>
+    <div class="csub">This period: ${fmtP(ext)}</div>
     ${extRows}
   </div>`:''}
 
@@ -2415,7 +2425,7 @@ async function rOv(){
     <div class="card card-bordered" style="cursor:pointer" onclick="sw('reimbursements')">
       <div class="fg jb" style="flex-wrap:wrap;gap:12px">
         <div>
-          <div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:4px">${approvedSubs.length} approved item${approvedSubs.length!==1?'s':''} awaiting payment</div>
+          <div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:4px">${approvedSubs.length} approved item${approvedSubs.length!==1?'s':''} pending payment</div>
           <div style="font-size:22px;font-weight:700;color:var(--warn)">${fmtP(grand)}</div>
         </div>
         <div style="display:flex;flex-direction:column;gap:4px">
@@ -2427,27 +2437,27 @@ async function rOv(){
   })()}
 
   <!-- S9: CASH FLOW FORECAST -->
-  <div class="slbl">Cash Flow Forecast</div>
-  <div class="shint">Based on scheduled income, debt installments, bills, and staff salaries. Variable spending not included.</div>
+  <div class="slbl">Forecast</div>
+  <div class="shint">Committed income and outflows only. Variable spending excluded.</div>
   <div class="g3-fixed">${fcastHtml}</div>
 
   <!-- S10: ALERTS -->
-  <div class="slbl" style="margin-top:1.25rem">Alerts &amp; Action Items</div>
+  <div class="slbl" style="margin-top:1.25rem">Alerts</div>
   <div class="card card-bordered" style="padding:.75rem 1.25rem">
     ${alertHtml}
   </div>
 
   <!-- AI INSIGHTS -->
-  <div class="slbl" style="margin-top:1.5rem">AI Financial Insights</div>
-  <div class="shint">Powered by Claude. Analyzes your aggregated financial data — no transaction descriptions or personal details are sent.</div>
+  <div class="slbl" style="margin-top:1.5rem">Intelligence</div>
+  <div class="shint">Powered by Claude — aggregated data only, no transaction details.</div>
   <div class="card card-bordered" id="ai-insights-card">
     <div id="ai-insights-content">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
         <div>
-          <div class="ctitle">Get AI Analysis</div>
-          <div class="csub">Click to generate personalized observations and recommendations based on your imported data.</div>
+          <div class="ctitle">AI Analysis</div>
+          <div class="csub">Generate insights from your financial data.</div>
         </div>
-        <button class="btn btn-p" id="ai-gen-btn" onclick="generateAIInsights()">&#10024; Generate Insights</button>
+        <button class="btn btn-p" id="ai-gen-btn" onclick="generateAIInsights()">Generate Insights</button>
       </div>
     </div>
   </div>`;
