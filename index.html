@@ -2593,7 +2593,7 @@ function rTransferMatching(){
       <td><div style="font-size:var(--fs-xs);font-weight:500">${h(t.description)}</div></td>
       <td style="font-size:var(--fs-xs)">${acc?.name||'--'} ${ob(acc?.owner)}</td>
       <td class="${dir==='out'?'c-bad':'c-ok'}" style="text-align:right;font-weight:500;white-space:nowrap">${dir==='out'?'-':'+'}${fmtP(t.amount)}</td>
-      <td><span class="badge" style="background:#FEF3C7;color:#92400E">Pending</span></td>
+      <td><span class="badge" style="background:#FEF3C7;color:#92400E">Pending</span><div style="font-size:10px;color:var(--text3);margin-top:2px">Other account not yet imported</div></td>
       <td><button class="btn btn-xs" onclick="showMatchPicker('${t.id}')">Match manually</button>
           <button class="btn btn-xs btn-d" onclick="dismissTransfer('${t.id}','${ym}')">Dismiss</button></td>
     </tr>`;}).join(''):`<tr><td colspan="6" class="empty">&#10003; No pending unmatched transfers</td></tr>`;
@@ -2614,7 +2614,10 @@ function rTransferMatching(){
   <div class="slbl" style="margin-top:1.5rem">Transfer Matching</div>
   <div class="shint">Internal transfers between your own accounts are matched so they do not inflate Total In / Total Out. Unmatched transfers appear below until the other side is imported.</div>
 
-  <div class="slbl" style="margin-top:.5rem">Pending Matches (${pending.length})</div>
+  <div class="fg jb" style="align-items:center;margin-top:.5rem;margin-bottom:4px">
+    <div class="slbl" style="margin:0">Pending Matches (${pending.length})</div>
+    <button class="btn btn-sm" onclick="rescanAllTransfers()">↻ Auto-match all</button>
+  </div>
   <div class="card"><div class="tbl-wrap"><table>
     <thead><tr><th>Date</th><th>Description</th><th>Account</th><th style="text-align:right">Amount</th><th>Status</th><th></th></tr></thead>
     <tbody>${pendRows}</tbody>
@@ -3002,6 +3005,46 @@ function confirmCat(){
 function closeCatM(){document.getElementById('cat-modal').classList.remove('active');catCb=null;}
 
 // ─── UNCATEGORIZED ───
+
+// V2.1: Re-scan all transfers across all months and attempt auto-matching
+function rescanAllTransfers(){
+  const allT=allTxns().filter(t=>t.type==='transfer'&&!isMatched(t.id)&&!t.transferDismissed);
+  let matched=0;
+  for(const t of allT){
+    if(isMatched(t.id))continue;
+    const dir=txDir(t);
+    const candidates=allTxns().filter(c=>
+      c.id!==t.id &&
+      c.type==='transfer' &&
+      c.accountId!==t.accountId &&
+      txDir(c)!==dir &&
+      Math.abs(c.amount-t.amount)<0.01 &&
+      !isMatched(c.id)
+    ).sort((a,b)=>{
+      const da=Math.abs(new Date(a.date)-new Date(t.date));
+      const db=Math.abs(new Date(b.date)-new Date(t.date));
+      return da-db;
+    });
+    const best=candidates.find(c=>{
+      const dayDiff=Math.abs(new Date(c.date)-new Date(t.date))/(1000*60*60*24);
+      return dayDiff<=3;
+    });
+    if(best){
+      const outT=dir==='out'?t:best;
+      const inT=dir==='in'?t:best;
+      S.matchedPairs.push({
+        id:'mp_'+Date.now()+'_'+Math.random().toString(36).substr(2,5),
+        outId:outT.id, inId:inT.id,
+        outAccId:outT.accountId, inAccId:inT.accountId,
+        amount:t.amount, date:outT.date, confirmedBy:'auto'
+      });
+      matched++;
+    }
+  }
+  if(matched>0){sched();render();toast(`Auto-matched ${matched} transfer pair${matched!==1?'s':''}`);}
+  else toast('No new matches found');
+}
+
 function rPendingMatches(){
   return`
   <div style="font-size:16px;font-weight:500;margin-bottom:4px">Pending Transfer Matches</div>
