@@ -808,6 +808,9 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto}
     <div style="font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--text3);font-weight:500">Intelligence for the family that builds.</div>
   </div>
   <div class="auth-form">
+    <div id="ul-id-wrap" style="margin-bottom:8px">
+      <input type="text" id="ul-id" class="auth-inp" placeholder="Email or username (optional)" autocomplete="username" autocorrect="off" autocapitalize="none" spellcheck="false" onkeydown="if(event.key==='Enter')document.getElementById('ul-p').focus()" style="margin-bottom:0">
+    </div>
     <div class="pw-wrap" style="margin-bottom:4px">
       <input type="password" id="ul-p" class="auth-inp" placeholder="Passphrase" autocomplete="current-password" autocorrect="off" autocapitalize="none" spellcheck="false" onkeydown="if(event.key==='Enter')doUnlock()" style="margin-bottom:0">
       <button class="pw-toggle" onclick="tpw('ul-p',this)" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button>
@@ -1105,7 +1108,7 @@ const TAB_TO_GROUP={txbank:'transactions',txcards:'transactions',income:'recurri
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='3.0c';
+const VERSION='3.0d';
 let sKey=null,saveTimer=null,pinCb=null,catCb=null,activeGroup=null;
 
 // ─── CRYPTO ───
@@ -1239,6 +1242,8 @@ async function doSetup(){
 async function doUnlock(){
   const p=document.getElementById('ul-p').value,err=document.getElementById('ul-err'),btn=document.getElementById('ul-btn');
   if(!p){err.textContent='Enter your passphrase';return;}
+  // D Build A: if identifier configured, check it — but passphrase alone still works as fallback
+  // (Build B will make identifier mandatory)
   // Check lockout
   const mins=isLockedOut();
   if(mins>0){err.textContent=`Too many failed attempts. Try again in ${mins} minute${mins!==1?'s':''}.`;return;}
@@ -1251,7 +1256,22 @@ async function doUnlock(){
     // Success — clear fail state and start activity timer
     clearFailState();
     resetActivityTimer();
-    sKey=key;await loadS(d);showModules();
+    sKey=key;await loadS(d);
+    // D Build A: if email/username configured, validate identifier field
+    // Passphrase alone still works (Build B will make this mandatory)
+    const idVal=(document.getElementById('ul-id')?.value||'').trim().toLowerCase();
+    const cfgEmail=(S.settings.email||'').toLowerCase();
+    const cfgUser=(S.settings.username||'').toLowerCase();
+    if((cfgEmail||cfgUser)&&idVal){
+      if(idVal!==cfgEmail&&idVal!==cfgUser){
+        sKey=null;S.accounts=[];S.txnCache={};
+        const state=recordFailedAttempt();
+        const rem=_MAX_ATTEMPTS-state.count;
+        err.textContent='Email or username does not match.'+(rem>0?' '+rem+' attempt'+(rem!==1?'s':'')+' remaining.':'');
+        btn.disabled=false;btn.textContent='Unlock →';return;
+      }
+    }
+showModules();
   }catch(e){
     const state=recordFailedAttempt();
     const remaining=_MAX_ATTEMPTS-state.count;
@@ -4220,7 +4240,17 @@ function rSettings(){
   }else if(SP==='security'){
     pageContent=`<div class="settings-page-title">Security</div>
     <div class="settings-section">
-      <div class="settings-section-label">Passphrase</div>
+      <div class="settings-section-label">Identity</div>
+      <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Email</div><div class="settings-row-sub">${S.settings.email?S.settings.email:'Not set — passphrase only'}</div></div><div class="settings-row-ctrl"><button class="btn btn-sm" onclick="toggleIdPanel()">Edit</button></div></div>
+      <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Username</div><div class="settings-row-sub">${S.settings.username?S.settings.username:'Not set'}</div></div></div>
+      <div id="id-panel" style="display:none;margin-bottom:16px;padding:14px;background:var(--bg2);border-radius:var(--rmd);border:1px solid var(--border)">
+        <div style="margin-bottom:8px"><label class="lbl">Email</label><input type="email" id="id-email" placeholder="your@email.com" value="${S.settings.email||''}" autocomplete="email"></div>
+        <div style="margin-bottom:8px"><label class="lbl">Username</label><input type="text" id="id-username" placeholder="e.g. mohammad" value="${S.settings.username||''}" autocomplete="username" autocorrect="off" autocapitalize="none"></div>
+        <div id="id-err" style="font-size:var(--fs-xs);color:var(--bad);margin-bottom:8px"></div>
+        <div style="display:flex;gap:8px"><button class="btn btn-p" onclick="saveIdentity()">Save</button><button class="btn" onclick="toggleIdPanel()">Cancel</button></div>
+      </div>
+      ${S.settings.recoveryCode?'':''}
+      <div class="settings-section-label" style="margin-top:12px">Passphrase</div>
       <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Change Passphrase</div><div class="settings-row-sub">Re-encrypts the entire vault with a new key.</div></div><div class="settings-row-ctrl"><button class="btn btn-sm" onclick="toggleCP()">Change</button></div></div>
       <div id="cp-panel" style="display:none;margin-top:12px;padding:14px;background:var(--bg2);border-radius:var(--rmd);border:1px solid var(--border)">
         <div style="margin-bottom:8px"><label class="lbl">Current passphrase</label><div class="pw-wrap"><input type="password" id="cp-cur" class="auth-inp" style="margin:0" placeholder="Current passphrase" autocomplete="current-password"><button class="pw-toggle" onclick="tpw('cp-cur',this)" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
@@ -5725,6 +5755,49 @@ function pickDate(dmy){
 
 // Call initDateInputs after every render
 const _origRender=null; // patched below in initAuth
+
+
+// ─── IDENTITY MANAGEMENT (Phase D Build A) ───
+function toggleIdPanel(){
+  const p=document.getElementById('id-panel');
+  if(p)p.style.display=p.style.display==='none'?'block':'none';
+}
+
+async function saveIdentity(){
+  const email=document.getElementById('id-email')?.value.trim()||'';
+  const username=document.getElementById('id-username')?.value.trim()||'';
+  const errEl=document.getElementById('id-err');
+  if(errEl)errEl.textContent='';
+
+  // Validate email format if provided
+  if(email&&!/^[^@]+@[^@]+\.[^@]+$/.test(email)){
+    if(errEl)errEl.textContent='Enter a valid email address.';return;
+  }
+
+  const isFirstEmail=!S.settings.email&&email;
+  S.settings.email=email;
+  S.settings.username=username;
+
+  // Generate recovery code on first email set
+  if(isFirstEmail){
+    const raw=Array.from(crypto.getRandomValues(new Uint8Array(10))).map(b=>b.toString(16).padStart(2,'0')).join('').toUpperCase().substr(0,16);
+    // Store hash only
+    const enc=new TextEncoder();
+    const hb=await crypto.subtle.digest('SHA-256',enc.encode(raw));
+    S.settings.recoveryCodeHash=Array.from(new Uint8Array(hb)).map(b=>b.toString(16).padStart(2,'0')).join('');
+    // Show once
+    alert('Your recovery code (save this somewhere safe — shown once only):\n\n' + raw.match(/.{4}/g).join('-'));
+  }
+
+  sched();
+  toggleIdPanel();
+  render();
+  toast('Identity updated');
+
+  // Update the identifier field visibility on unlock screen
+  const w=document.getElementById('ul-id-wrap');
+  if(w)w.style.display=(email||username)?'block':'none';
+}
 
 // Set version labels dynamically
 document.querySelectorAll('.version-label').forEach(el=>el.textContent='VERSION '+VERSION.toUpperCase());
