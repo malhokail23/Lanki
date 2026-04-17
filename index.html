@@ -102,54 +102,72 @@ body{font-family:var(--font);background:var(--feather);color:var(--text);min-hei
 /* ── AUTH SCREENS ─────────────────────────────────────── */
 .auth-screen{
   display:none;position:fixed;inset:0;
-  background:var(--feather); /* Feather White per brand */
+  background:var(--feather);
   z-index:1000;flex-direction:column;
-  align-items:center;justify-content:center;padding:2rem;
+  align-items:center;justify-content:center;
+  padding:2rem 1.5rem;
 }
 .auth-screen.active{display:flex}
 
-.auth-logo{
-  font-family:var(--font);font-size:28px;font-weight:600;
-  letter-spacing:-.04em;color:var(--midnight);margin-bottom:4px;text-align:center;
+/* Logo block shared across all auth screens */
+.auth-brand{
+  display:flex;flex-direction:column;align-items:center;
+  gap:10px;margin-bottom:8px;
 }
-.auth-logo em{color:var(--electric);font-style:normal;font-weight:400}
-.auth-sub{
-  font-size:11px;color:var(--text3);
-  letter-spacing:.16em;text-transform:uppercase;
-  margin-bottom:2.5rem;text-align:center;
+.auth-wordmark{
+  font-size:28px;font-weight:600;
+  letter-spacing:-.04em;color:var(--midnight);line-height:1;
 }
-.auth-form{width:100%;max-width:340px}
+.auth-tagline{
+  font-size:10px;letter-spacing:.2em;text-transform:uppercase;
+  color:var(--text3);font-weight:400;margin-top:2px;
+}
+.auth-subtitle{
+  font-size:13px;color:var(--text3);
+  text-align:center;margin-bottom:1.75rem;
+  letter-spacing:-.01em;
+}
+.auth-form{width:100%;max-width:320px}
 .auth-err{font-size:var(--fs-xs);color:var(--bad);min-height:18px;margin:6px 0;text-align:center}
 .auth-inp{
   width:100%;
-  background:var(--bg2);
-  border:1px solid var(--border);
+  background:var(--bg);
+  border:1.5px solid var(--border);
   color:var(--text);padding:13px 44px 13px 14px;
   border-radius:var(--r);font-family:var(--font);
-  font-size:var(--fs);display:block;outline:none;margin-bottom:10px;
-  transition:border-color .15s,background .15s;
+  font-size:var(--fs);display:block;outline:none;
+  transition:border-color .15s,box-shadow .15s;
 }
-.auth-inp:focus{border-color:var(--midnight);box-shadow:0 0 0 3px rgba(2,23,81,.08);background:var(--bg)}
+.auth-inp:focus{border-color:var(--midnight);box-shadow:0 0 0 3px rgba(2,23,81,.08);}
 .auth-inp::placeholder{color:var(--text3)}
-.pw-wrap{position:relative;margin-bottom:0}
+/* Suppress browser autofill background tint */
+.auth-inp:-webkit-autofill,
+.auth-inp:-webkit-autofill:hover,
+.auth-inp:-webkit-autofill:focus{
+  -webkit-box-shadow:0 0 0 40px var(--bg) inset !important;
+  -webkit-text-fill-color:var(--text) !important;
+  border-color:var(--border) !important;
+}
+.pw-wrap{position:relative;margin-bottom:8px}
 .pw-toggle{
   position:absolute;right:12px;top:50%;transform:translateY(-50%);
   background:none;border:none;color:var(--text3);cursor:pointer;
   font-size:14px;padding:4px;
 }
 .auth-btn{
-  width:100%;background:var(--electric);color:#fff; /* Electric Blue — brand action */
-  border:none;padding:13px;border-radius:var(--r);
-  font-family:var(--font);font-size:var(--fs);font-weight:700;
-  cursor:pointer;transition:opacity .15s;margin-top:4px;letter-spacing:-.01em;
+  width:100%;background:var(--electric);color:#fff;
+  border:none;padding:14px;border-radius:var(--r);
+  font-family:var(--font);font-size:var(--fs);font-weight:600;
+  cursor:pointer;transition:opacity .15s;
+  margin-top:10px;letter-spacing:-.01em;
 }
 .auth-btn:hover{opacity:.9}.auth-btn:disabled{opacity:.3;cursor:not-allowed}
 .auth-hint{font-size:var(--fs-xxs);color:var(--text3);margin-top:14px;text-align:center;line-height:1.7}
 .auth-spin{
-  width:24px;height:24px;
+  width:22px;height:22px;
   border:2px solid var(--border);
   border-top-color:var(--midnight);
-  border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 14px;
+  border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 10px;
 }
 .auth-ltxt{font-size:var(--fs-xs);color:var(--text3);text-align:center}
 
@@ -199,7 +217,7 @@ body{font-family:var(--font);background:var(--feather);color:var(--text);min-hei
 .mod-badge{font-size:10px;font-weight:600;padding:3px 9px;border-radius:10px;letter-spacing:.02em}
 .mb-active{background:#E8F5EC;color:#1A6B3C}
 .mb-soon{background:var(--bg3);color:var(--text3)}
-.mod-lock-icon{position:absolute;top:14px;right:14px;font-size:14px;color:var(--text3)}
+.mod-lock-icon{position:absolute;top:14px;right:14px;color:var(--text3);display:flex;align-items:center;justify-content:center;}
 
 /* ── ENGINE OVERLAY ───────────────────────────────────── */
 .eng-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:850;align-items:center;justify-content:center}
@@ -734,8 +752,8 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overfl
   .card{padding:.85rem .9rem}
 
   /* Auth */
-  .auth-logo{font-size:26px}
-  .auth-inp{font-size:16px} /* prevent iOS zoom */
+  .auth-wordmark{font-size:24px;}
+  .auth-inp{font-size:16px;} /* prevent iOS zoom */
 
   /* Module selector */
   .mod-grid{grid-template-columns:1fr}
@@ -758,7 +776,7 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overfl
   .mod-screen-inner{justify-content:flex-start;padding:.5rem 0 2rem;}
   .mod-grid{grid-template-columns:1fr;gap:10px;}
   .mod-card{padding:1rem 1.1rem;}
-  .auth-logo{font-size:26px;}
+  .auth-wordmark{font-size:24px;}
 }
 
 /* Ensure tap targets are always usable */
@@ -775,69 +793,61 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overfl
 
 
 <div id="s-loading" class="auth-screen active">
-  <div style="font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--text3);margin-bottom:16px">Intelligence for the family that builds.</div>
-  <svg width="40" height="33" viewBox="0 0 40 33" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-bottom:12px">
-    <rect y="0" width="40" height="8" rx="2" fill="#021751"/>
-    <rect y="12.5" width="26" height="8" rx="2" fill="#021751"/>
-    <rect y="25" width="34" height="8" rx="2" fill="#021751"/>
-  </svg>
-  <div class="auth-logo">lanki <em>platform</em></div>
-  <div style="font-size:10px;color:var(--text3);margin-top:5px;letter-spacing:.1em" class="version-label">VERSION</div>
-  <div class="auth-spin" style="margin-top:1.5rem"></div>
-  <div class="auth-ltxt" id="load-msg">Connecting to vault...</div>
+  <div class="auth-brand" style="margin-bottom:2rem">
+    <svg width="36" height="30" viewBox="0 0 40 33" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect y="0" width="40" height="8" rx="2" fill="#021751"/>
+      <rect y="12.5" width="26" height="8" rx="2" fill="#021751"/>
+      <rect y="25" width="34" height="8" rx="2" fill="#021751"/>
+    </svg>
+    <div class="auth-wordmark">lanki</div>
+    <div class="auth-tagline">Intelligence for the family that builds.</div>
+  </div>
+  <div class="auth-spin"></div>
+  <div class="auth-ltxt" id="load-msg">Connecting to vault…</div>
 </div>
 
 <div id="s-setup" class="auth-screen">
-  <div style="margin-bottom:1.5rem;text-align:center">
-    <div style="font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--text3);margin-bottom:12px">Intelligence for the family that builds.</div>
-    <div style="display:flex;flex-direction:column;align-items:center;gap:8px">
-      <svg width="40" height="33" viewBox="0 0 40 33" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect y="0" width="40" height="8" rx="2" fill="#021751"/>
-        <rect y="12.5" width="26" height="8" rx="2" fill="#021751"/>
-        <rect y="25" width="34" height="8" rx="2" fill="#021751"/>
-      </svg>
-      <div class="auth-logo">lanki <em>platform</em></div>
-    </div>
-    <div style="font-size:10px;color:var(--text3);margin-top:5px;letter-spacing:.1em" class="version-label">VERSION</div>
+  <div class="auth-brand" style="margin-bottom:2rem">
+    <svg width="36" height="30" viewBox="0 0 40 33" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect y="0" width="40" height="8" rx="2" fill="#021751"/>
+      <rect y="12.5" width="26" height="8" rx="2" fill="#021751"/>
+      <rect y="25" width="34" height="8" rx="2" fill="#021751"/>
+    </svg>
+    <div class="auth-wordmark">lanki</div>
+    <div class="auth-tagline">Intelligence for the family that builds.</div>
   </div>
-  <div class="auth-sub">Create your secure vault</div>
+  <div class="auth-subtitle">Create your secure vault</div>
   <div class="auth-form">
-    <div class="pw-wrap" style="margin-bottom:10px">
-      <input type="password" id="su-p1" class="auth-inp" placeholder="Choose a strong passphrase (min 12 chars)" autocomplete="new-password" autocorrect="off" autocapitalize="none" spellcheck="false" style="margin-bottom:0">
+    <div class="pw-wrap">
+      <input type="password" id="su-p1" class="auth-inp" placeholder="Choose a strong passphrase (min 12 chars)" autocomplete="new-password" autocorrect="off" autocapitalize="none" spellcheck="false">
       <button class="pw-toggle" onclick="tpw('su-p1',this)" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button>
     </div>
-    <div class="pw-wrap" style="margin-bottom:4px">
-      <input type="password" id="su-p2" class="auth-inp" placeholder="Confirm passphrase" autocomplete="new-password" autocorrect="off" autocapitalize="none" spellcheck="false" onkeydown="if(event.key==='Enter')doSetup()" style="margin-bottom:0">
+    <div class="pw-wrap">
+      <input type="password" id="su-p2" class="auth-inp" placeholder="Confirm passphrase" autocomplete="new-password" autocorrect="off" autocapitalize="none" spellcheck="false" onkeydown="if(event.key==='Enter')doSetup()">
       <button class="pw-toggle" onclick="tpw('su-p2',this)" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button>
     </div>
     <div class="auth-err" id="su-err"></div>
-    <button class="auth-btn" id="su-btn" onclick="doSetup()">Create Vault &#8594;</button>
+    <button class="auth-btn" id="su-btn" onclick="doSetup()">Create Vault →</button>
     <div class="auth-hint">Encrypted with AES-256 before leaving this browser.<br>This passphrase cannot be recovered if lost.</div>
   </div>
 </div>
 
 <div id="s-unlock" class="auth-screen">
-  <div style="margin-bottom:2rem;text-align:center">
-    <!-- Logo -->
-    <div style="display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:16px">
-      <svg width="48" height="40" viewBox="0 0 40 33" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect y="0" width="40" height="8" rx="2" fill="#021751"/>
-        <rect y="12.5" width="26" height="8" rx="2" fill="#021751"/>
-        <rect y="25" width="34" height="8" rx="2" fill="#021751"/>
-      </svg>
-      <div style="font-size:26px;font-weight:500;letter-spacing:-.04em;color:var(--midnight);line-height:1">lanki</div>
-    </div>
-    <!-- Version -->
-    <div style="font-size:10px;color:var(--text3);letter-spacing:.1em;margin-bottom:10px" class="version-label">VERSION</div>
-    <!-- Tagline -->
-    <div style="font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--text3);font-weight:500">Intelligence for the family that builds.</div>
+  <div class="auth-brand" style="margin-bottom:2.5rem">
+    <svg width="36" height="30" viewBox="0 0 40 33" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect y="0" width="40" height="8" rx="2" fill="#021751"/>
+      <rect y="12.5" width="26" height="8" rx="2" fill="#021751"/>
+      <rect y="25" width="34" height="8" rx="2" fill="#021751"/>
+    </svg>
+    <div class="auth-wordmark">lanki</div>
+    <div class="auth-tagline">Intelligence for the family that builds.</div>
   </div>
   <div class="auth-form">
     <div id="ul-id-wrap" style="margin-bottom:8px">
-      <input type="text" id="ul-id" class="auth-inp" placeholder="Email or username (optional)" autocomplete="username" autocorrect="off" autocapitalize="none" spellcheck="false" onkeydown="if(event.key==='Enter')document.getElementById('ul-p').focus()" style="margin-bottom:0">
+      <input type="text" id="ul-id" class="auth-inp" placeholder="Email or username (optional)" autocomplete="username" autocorrect="off" autocapitalize="none" spellcheck="false" onkeydown="if(event.key==='Enter')document.getElementById('ul-p').focus()">
     </div>
-    <div class="pw-wrap" style="margin-bottom:4px">
-      <input type="password" id="ul-p" class="auth-inp" placeholder="Passphrase" autocomplete="current-password" autocorrect="off" autocapitalize="none" spellcheck="false" onkeydown="if(event.key==='Enter')doUnlock()" style="margin-bottom:0">
+    <div class="pw-wrap">
+      <input type="password" id="ul-p" class="auth-inp" placeholder="Passphrase" autocomplete="current-password" autocorrect="off" autocapitalize="none" spellcheck="false" onkeydown="if(event.key==='Enter')doUnlock()">
       <button class="pw-toggle" onclick="tpw('ul-p',this)" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button>
     </div>
     <div class="auth-err" id="ul-err"></div>
@@ -848,73 +858,129 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overfl
 <!-- MODULE SELECTOR -->
 <div id="s-modules" class="mod-screen">
   <div class="mod-screen-inner">
-  <div style="text-align:center;margin-bottom:0">
-    <div style="font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--text3);margin-bottom:12px">Intelligence for the family that builds.</div>
-    <div style="display:flex;flex-direction:column;align-items:center;gap:8px">
+
+  <!-- LOGO BLOCK -->
+  <div style="text-align:center;margin-bottom:2.5rem">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:10px">
       <svg width="40" height="33" viewBox="0 0 40 33" fill="none" xmlns="http://www.w3.org/2000/svg">
         <rect y="0" width="40" height="8" rx="2" fill="#021751"/>
         <rect y="12.5" width="26" height="8" rx="2" fill="#021751"/>
         <rect y="25" width="34" height="8" rx="2" fill="#021751"/>
       </svg>
-      <div class="auth-logo">lanki <em>platform</em></div>
+      <div style="font-size:28px;font-weight:600;letter-spacing:-.04em;color:var(--midnight);line-height:1">lanki</div>
+      <div style="font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--text3);font-weight:400">Intelligence for the family that builds.</div>
     </div>
-    <div class="auth-sub" style="margin-bottom:0;margin-top:6px">Select an engine to begin</div>
   </div>
 
   <!-- CAPITAL OS GROUP -->
-  <div style="width:100%;max-width:900px;margin-top:2rem">
-    <div style="font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--charcoal);font-weight:700;margin-bottom:10px;padding:0 2px">💰 Capital OS</div>
+  <div style="width:100%;max-width:900px;margin-bottom:1.75rem">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;padding:0 2px">
+      <div style="width:8px;height:8px;border-radius:2px;background:var(--powderblue);flex-shrink:0"></div>
+      <div style="font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--charcoal)">Capital OS</div>
+    </div>
     <div class="mod-grid" style="margin-top:0">
+
+      <!-- Cash Flow Engine — Active -->
       <div class="mod-card active-mod" onclick="enterEngine('spending')">
-        <div class="mod-icon" style="background:rgba(163,188,215,.15)">📊</div>
-        <div class="mod-name">Cash Flow Engine</div>
+        <div class="mod-icon" style="background:rgba(163,188,215,.15)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0077C1" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>
+          </svg>
+        </div>
+        <div class="mod-name">Cash Flow</div>
         <div class="mod-desc">Transactions, cash flow, debts, goals, bills, subscriptions, and household staff.</div>
         <span class="mod-badge mb-active">Active</span>
       </div>
+
+      <!-- Portfolio Engine — Locked -->
       <div class="mod-card locked">
-        <div class="mod-lock-icon">&#128274;</div>
-        <div class="mod-icon" style="background:rgba(163,188,215,.1)">📈</div>
-        <div class="mod-name">Portfolio Engine</div>
+        <div class="mod-lock-icon">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        </div>
+        <div class="mod-icon" style="background:rgba(163,188,215,.1)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#A3BCD7" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>
+          </svg>
+        </div>
+        <div class="mod-name">Portfolio</div>
         <div class="mod-desc">Investment portfolio, strategic asset allocation, P&amp;L, and performance tracking.</div>
         <span class="mod-badge mb-soon">Coming Soon</span>
       </div>
+
+      <!-- Capital Intelligence — Locked -->
       <div class="mod-card locked">
-        <div class="mod-lock-icon">&#128274;</div>
-        <div class="mod-icon" style="background:rgba(163,188,215,.1)">🧠</div>
+        <div class="mod-lock-icon">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        </div>
+        <div class="mod-icon" style="background:rgba(163,188,215,.1)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#A3BCD7" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+        </div>
         <div class="mod-name">Capital Intelligence</div>
         <div class="mod-desc">Unified financial dashboard synthesizing data from Cash Flow and Portfolio engines.</div>
         <span class="mod-badge mb-soon">Coming Soon</span>
       </div>
+
     </div>
   </div>
 
   <!-- HEALTH OS GROUP -->
-  <div style="width:100%;max-width:900px;margin-top:1.5rem">
-    <div style="font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--charcoal);font-weight:700;margin-bottom:10px;padding:0 2px">🫀 Health OS</div>
+  <div style="width:100%;max-width:900px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;padding:0 2px">
+      <div style="width:8px;height:8px;border-radius:2px;background:var(--teal);flex-shrink:0"></div>
+      <div style="font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--charcoal)">Health OS</div>
+    </div>
     <div class="mod-grid" style="margin-top:0">
+
+      <!-- Medical Engine — Locked -->
       <div class="mod-card locked">
-        <div class="mod-lock-icon">&#128274;</div>
-        <div class="mod-icon" style="background:rgba(201,142,139,.12)">🩺</div>
-        <div class="mod-name">Medical Engine</div>
+        <div class="mod-lock-icon">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        </div>
+        <div class="mod-icon" style="background:rgba(143,169,163,.12)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8FA9A3" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+          </svg>
+        </div>
+        <div class="mod-name">Medical</div>
         <div class="mod-desc">Medical reports, lab results, hospital records, prescriptions, and health history.</div>
         <span class="mod-badge mb-soon">Coming Soon</span>
       </div>
+
+      <!-- Biometrics Engine — Locked -->
       <div class="mod-card locked">
-        <div class="mod-lock-icon">&#128274;</div>
-        <div class="mod-icon" style="background:rgba(201,142,139,.1)">⌚</div>
-        <div class="mod-name">Biometrics Engine</div>
+        <div class="mod-lock-icon">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        </div>
+        <div class="mod-icon" style="background:rgba(143,169,163,.1)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8FA9A3" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+          </svg>
+        </div>
+        <div class="mod-name">Biometrics</div>
         <div class="mod-desc">Whoop, Withings, and wearable device data — sleep, HRV, activity, and body metrics.</div>
         <span class="mod-badge mb-soon">Coming Soon</span>
       </div>
+
+      <!-- Health Intelligence — Locked -->
       <div class="mod-card locked">
-        <div class="mod-lock-icon">&#128274;</div>
-        <div class="mod-icon" style="background:rgba(201,142,139,.1)">💡</div>
+        <div class="mod-lock-icon">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        </div>
+        <div class="mod-icon" style="background:rgba(143,169,163,.1)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8FA9A3" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+        </div>
         <div class="mod-name">Health Intelligence</div>
         <div class="mod-desc">Unified health dashboard synthesizing data from Medical and Biometrics engines.</div>
         <span class="mod-badge mb-soon">Coming Soon</span>
       </div>
+
     </div>
   </div>
+
   </div><!-- /mod-screen-inner -->
 </div>
 
@@ -922,40 +988,46 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overfl
 <div class="eng-overlay" id="eng-overlay" onclick="if(event.target===this)closeEngOverlay()">
   <div class="md" style="max-width:640px">
     <div class="mdtitle">Switch Engine</div>
-    <div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);margin:12px 0 6px">💰 Capital OS</div>
+    <div style="display:flex;align-items:center;gap:7px;margin:14px 0 8px">
+      <div style="width:7px;height:7px;border-radius:1.5px;background:var(--powderblue);flex-shrink:0"></div>
+      <div style="font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--charcoal)">Capital OS</div>
+    </div>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
       <div class="mod-card active-mod" onclick="closeEngOverlay()" style="padding:.9rem;cursor:pointer">
-        <div style="font-size:16px;margin-bottom:5px">📊</div>
-        <div style="font-size:12px;font-weight:600">Cash Flow Engine</div>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0077C1" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:6px"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+        <div style="font-size:12px;font-weight:600">Cash Flow</div>
         <div style="font-size:10px;color:var(--ok);margin-top:3px">&#10003; Active</div>
       </div>
       <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:.9rem;opacity:.5">
-        <div style="font-size:16px;margin-bottom:5px">📈</div>
-        <div style="font-size:12px;font-weight:600">Portfolio Engine</div>
-        <div style="font-size:10px;color:var(--text3);margin-top:3px">&#128274; Coming Soon</div>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#A3BCD7" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:6px"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+        <div style="font-size:12px;font-weight:600">Portfolio</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:3px">Coming Soon</div>
       </div>
       <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:.9rem;opacity:.5">
-        <div style="font-size:16px;margin-bottom:5px">🧠</div>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#A3BCD7" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:6px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
         <div style="font-size:12px;font-weight:600">Capital Intelligence</div>
-        <div style="font-size:10px;color:var(--text3);margin-top:3px">&#128274; Coming Soon</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:3px">Coming Soon</div>
       </div>
     </div>
-    <div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);margin-bottom:6px">🫀 Health OS</div>
+    <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px">
+      <div style="width:7px;height:7px;border-radius:1.5px;background:var(--teal);flex-shrink:0"></div>
+      <div style="font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--charcoal)">Health OS</div>
+    </div>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
       <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:.9rem;opacity:.5">
-        <div style="font-size:16px;margin-bottom:5px">🩺</div>
-        <div style="font-size:12px;font-weight:600">Medical Engine</div>
-        <div style="font-size:10px;color:var(--text3);margin-top:3px">&#128274; Coming Soon</div>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8FA9A3" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:6px"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        <div style="font-size:12px;font-weight:600">Medical</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:3px">Coming Soon</div>
       </div>
       <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:.9rem;opacity:.5">
-        <div style="font-size:16px;margin-bottom:5px">⌚</div>
-        <div style="font-size:12px;font-weight:600">Biometrics Engine</div>
-        <div style="font-size:10px;color:var(--text3);margin-top:3px">&#128274; Coming Soon</div>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8FA9A3" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:6px"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        <div style="font-size:12px;font-weight:600">Biometrics</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:3px">Coming Soon</div>
       </div>
       <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:.9rem;opacity:.5">
-        <div style="font-size:16px;margin-bottom:5px">💡</div>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8FA9A3" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:6px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
         <div style="font-size:12px;font-weight:600">Health Intelligence</div>
-        <div style="font-size:10px;color:var(--text3);margin-top:3px">&#128274; Coming Soon</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:3px">Coming Soon</div>
       </div>
     </div>
     <button class="btn btn-sm" style="width:100%;margin-top:14px" onclick="closeEngOverlay()">Cancel</button>
@@ -966,7 +1038,7 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overfl
   <!-- Burger top bar (mobile only) -->
   <div class="burger-bar" id="burger-bar">
     <div class="bar-title">
-      <span>🌿</span>
+      <svg width="16" height="13" viewBox="0 0 40 33" fill="none" xmlns="http://www.w3.org/2000/svg"><rect y="0" width="40" height="8" rx="2" fill="#021751"/><rect y="12.5" width="26" height="8" rx="2" fill="#021751"/><rect y="25" width="34" height="8" rx="2" fill="#021751"/></svg>
       <span id="mob-page-title">Overview</span>
     </div>
     <button class="burger-btn" id="burger-btn" onclick="toggleSidebar()" aria-label="Menu">
@@ -1041,7 +1113,7 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overfl
         <button class="nav-btn" style="width:auto;padding:3px 8px" id="refresh-btn" onclick="refreshData()" title="Refresh">&#8635;</button>
       </div>
       <button class="nav-btn" id="priv-btn" onclick="togglePrivacy()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg> Hide values</button>
-      <button class="nav-btn nav-lock" onclick="lockApp()">&#128274; Lock vault</button>
+      <button class="nav-btn nav-lock" onclick="lockApp()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Lock vault</button>
       <button class="nav-btn" onclick="document.getElementById('eng-overlay').classList.add('active')">&#9783; Switch engine</button>
     </div>
   </nav>
