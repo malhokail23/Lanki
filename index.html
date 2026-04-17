@@ -589,6 +589,37 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto}
 .spill:hover{background:var(--bg2)}
 .spill.sel{background:var(--midnight);color:#fff;border-color:var(--midnight)}
 .plog{max-height:150px;overflow-y:auto}
+/* Date input calendar */
+.date-inp-wrap{position:relative;display:flex;gap:4px;align-items:center}
+.cal-btn{flex-shrink:0;width:28px;height:32px;border:1px solid var(--border);background:var(--bg2);border-radius:var(--rsm);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text2);font-size:12px;}
+.cal-btn:hover{background:var(--bg3)}
+.cal-popup{animation:calIn .1s ease}
+@keyframes calIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+.cal-day{text-align:center;padding:4px 2px;font-size:12px;cursor:pointer;border-radius:3px;line-height:1.4}
+.cal-day:hover{background:var(--bg3)}
+.cal-today{font-weight:600;color:var(--electric)}
+.cal-sel{background:var(--midnight);color:var(--feather)!important;border-radius:3px}
+
+/* Settings sub-pages layout */
+.settings-layout{display:grid;grid-template-columns:180px 1fr;gap:0;min-height:400px}
+@media(max-width:700px){.settings-layout{grid-template-columns:1fr;}}
+.settings-sidebar{border-right:1px solid var(--border);padding-right:16px;display:flex;flex-direction:column;gap:2px}
+.settings-content{padding-left:24px}
+.settings-nav-btn{display:flex;align-items:center;gap:8px;padding:8px 10px;border:none;background:none;border-radius:var(--rsm);cursor:pointer;font-size:13px;font-weight:500;color:var(--text2);font-family:var(--font);width:100%;text-align:left;transition:all .12s}
+.settings-nav-btn:hover{background:var(--bg2);color:var(--text)}
+.settings-nav-active{background:color-mix(in srgb,var(--electric) 8%,transparent)!important;color:var(--midnight)!important;font-weight:600!important}
+.settings-nav-icon{display:flex;align-items:center;flex-shrink:0;opacity:.7}
+.settings-page-title{font-size:18px;font-weight:500;margin-bottom:20px;color:var(--text)}
+.settings-section{margin-bottom:24px;padding-bottom:24px;border-bottom:1px solid var(--border)}
+.settings-section:last-child{border-bottom:none}
+.settings-section-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:12px}
+.settings-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 0;border-bottom:1px solid var(--bg3)}
+.settings-row:last-child{border-bottom:none}
+.settings-row-label{flex:1}
+.settings-row-title{font-size:var(--fs-xs);font-weight:500;color:var(--text)}
+.settings-row-sub{font-size:11px;color:var(--text3);margin-top:2px;line-height:1.5}
+.settings-row-ctrl{flex-shrink:0}
+
 .prow{
   display:flex;justify-content:space-between;align-items:center;
   padding:5px 0;border-bottom:1px solid var(--bg2);font-size:var(--fs-xs);
@@ -761,26 +792,28 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto}
 </div>
 
 <div id="s-unlock" class="auth-screen">
-  <div style="margin-bottom:1.5rem;text-align:center">
-    <div style="font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--text3);margin-bottom:12px">Intelligence for the family that builds.</div>
-    <div style="display:flex;flex-direction:column;align-items:center;gap:8px">
-      <svg width="40" height="33" viewBox="0 0 40 33" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <div style="margin-bottom:2rem;text-align:center">
+    <!-- Logo -->
+    <div style="display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:16px">
+      <svg width="48" height="40" viewBox="0 0 40 33" fill="none" xmlns="http://www.w3.org/2000/svg">
         <rect y="0" width="40" height="8" rx="2" fill="#021751"/>
         <rect y="12.5" width="26" height="8" rx="2" fill="#021751"/>
         <rect y="25" width="34" height="8" rx="2" fill="#021751"/>
       </svg>
-      <div class="auth-logo">lanki <em>platform</em></div>
+      <div style="font-size:26px;font-weight:500;letter-spacing:-.04em;color:var(--midnight);line-height:1">lanki</div>
     </div>
-    <div style="font-size:10px;color:var(--text3);margin-top:5px;letter-spacing:.1em" class="version-label">VERSION</div>
+    <!-- Version -->
+    <div style="font-size:10px;color:var(--text3);letter-spacing:.1em;margin-bottom:10px" class="version-label">VERSION</div>
+    <!-- Tagline -->
+    <div style="font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--text3);font-weight:500">Intelligence for the family that builds.</div>
   </div>
-  <div class="auth-sub">Enter your passphrase</div>
   <div class="auth-form">
     <div class="pw-wrap" style="margin-bottom:4px">
-      <input type="password" id="ul-p" class="auth-inp" placeholder="Your passphrase" autocomplete="current-password" autocorrect="off" autocapitalize="none" spellcheck="false" onkeydown="if(event.key==='Enter')doUnlock()" style="margin-bottom:0">
+      <input type="password" id="ul-p" class="auth-inp" placeholder="Passphrase" autocomplete="current-password" autocorrect="off" autocapitalize="none" spellcheck="false" onkeydown="if(event.key==='Enter')doUnlock()" style="margin-bottom:0">
       <button class="pw-toggle" onclick="tpw('ul-p',this)" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button>
     </div>
     <div class="auth-err" id="ul-err"></div>
-    <button class="auth-btn" id="ul-btn" onclick="doUnlock()">Unlock &#8594;</button>
+    <button class="auth-btn" id="ul-btn" onclick="doUnlock()">Unlock →</button>
   </div>
 </div>
 
@@ -934,35 +967,40 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto}
         </div>
       </div>
     </div>
-    <div class="nav-section-label">Main</div>
-    <button class="nav-item active" data-tab="overview" onclick="sw('overview')"><span class="nav-icon">⊞</span>Overview</button>
+    <!-- V3.0 #10: Flat nav — no redundant section label for single-child groups -->
+    <button class="nav-item active" data-tab="overview" onclick="sw('overview')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg> Overview</button>
+
     <div class="nav-section-label">Transactions</div>
-    <button class="nav-item nav-group" data-group="transactions" onclick="toggleGroup('transactions')"><span class="nav-icon">⇅</span>Transactions <span class="nav-arrow" id="arr-transactions">&#8250;</span></button>
+    <button class="nav-item nav-group" data-group="transactions" onclick="toggleGroup('transactions')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg> Transactions <span class="nav-arrow" id="arr-transactions">&#8250;</span></button>
     <div id="nav-dd-transactions" class="nav-dd">
       <button onclick="sw('txbank')">Bank Accounts</button>
       <button onclick="sw('txcards')">Cards</button>
     </div>
+
     <div class="nav-section-label">Recurring</div>
-    <button class="nav-item nav-group" data-group="recurring" onclick="toggleGroup('recurring')"><span class="nav-icon">⟳</span>Recurring <span class="nav-arrow" id="arr-recurring">&#8250;</span></button>
+    <button class="nav-item nav-group" data-group="recurring" onclick="toggleGroup('recurring')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg> Recurring <span class="nav-arrow" id="arr-recurring">&#8250;</span></button>
     <div id="nav-dd-recurring" class="nav-dd">
       <button onclick="sw('income')">Income</button>
       <button onclick="sw('bills')">Bills</button>
       <button onclick="sw('subscriptions')">Subscriptions</button>
     </div>
-    <div class="nav-section-label">People &amp; Assets</div>
-    <button class="nav-item nav-group" data-group="peopleassets" onclick="toggleGroup('peopleassets')"><span class="nav-icon">👤</span>People &amp; Assets <span class="nav-arrow" id="arr-peopleassets">&#8250;</span></button>
+
+    <div class="nav-section-label">Household</div>
+    <button class="nav-item nav-group" data-group="peopleassets" onclick="toggleGroup('peopleassets')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Household <span class="nav-arrow" id="arr-peopleassets">&#8250;</span></button>
     <div id="nav-dd-peopleassets" class="nav-dd">
-      <button onclick="sw('staff')">Household Staff</button>
+      <button onclick="sw('staff')">Staff</button>
       <button onclick="sw('accounts')">Accounts &amp; Cards</button>
     </div>
+
     <div class="nav-section-label">Commitments</div>
-    <button class="nav-item nav-group" data-group="commitments" onclick="toggleGroup('commitments')"><span class="nav-icon">◈</span>Commitments <span class="nav-arrow" id="arr-commitments">&#8250;</span></button>
+    <button class="nav-item nav-group" data-group="commitments" onclick="toggleGroup('commitments')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> Commitments <span class="nav-arrow" id="arr-commitments">&#8250;</span></button>
     <div id="nav-dd-commitments" class="nav-dd">
       <button onclick="sw('debts')">Debts</button>
       <button onclick="sw('goals')">Goals</button>
     </div>
+
     <div class="nav-section-label">Review</div>
-    <button class="nav-item nav-group" data-group="review" onclick="toggleGroup('review')"><span class="nav-icon">◎</span>Review <span class="nav-badge" id="uncat-badge" style="display:none">0</span> <span class="nav-arrow" id="arr-review">&#8250;</span></button>
+    <button class="nav-item nav-group" data-group="review" onclick="toggleGroup('review')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg> Review <span class="nav-badge" id="uncat-badge" style="display:none">0</span> <span class="nav-arrow" id="arr-review">&#8250;</span></button>
     <div id="nav-dd-review" class="nav-dd">
       <button onclick="sw('uncat')">Uncategorized</button>
       <button onclick="sw('transfers')">Pending Matches</button>
@@ -970,8 +1008,8 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto}
       <button onclick="sw('rules')">Merchant Rules</button>
       <button onclick="sw('insights')">Usage Insights</button>
     </div>
-    <div class="nav-section-label">System</div>
-    <button class="nav-item" data-tab="settings" onclick="sw('settings')"><span class="nav-icon">⚙</span>Settings</button>
+
+    <button class="nav-item" data-tab="settings" onclick="sw('settings')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Settings</button>
     <div class="nav-utils">
       <div class="nav-save-row">
         <span style="font-size:11px;transition:color .3s;font-weight:500" id="save-st"></span>
@@ -1067,7 +1105,7 @@ const TAB_TO_GROUP={txbank:'transactions',txcards:'transactions',income:'recurri
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='3.0b';
+const VERSION='3.0c';
 let sKey=null,saveTimer=null,pinCb=null,catCb=null,activeGroup=null;
 
 // ─── CRYPTO ───
@@ -1818,6 +1856,8 @@ async function render(){
   if(_renderPending){_renderPending=false;render();}
   // Restore bulk bar visibility after render
   if(BulkMode)updateBulkBar();
+  // V3.0 #4: init date inputs
+  setTimeout(initDateInputs,0);
 }
 
 
@@ -1969,10 +2009,12 @@ async function rOv(){
 
   // Bills matching for overview
   const thisTx=S.txnCache[S.month]||[];
+  const _usedBillTxns=new Set(); // V3.0 #24: consumption lock
   function billStatus(b){
     // V3.0 #26: three-state status — Paid / Pending issuance / Unpaid
-    const matched=thisTx.find(t=>matchBill(t,b));
-    if(matched)return{status:'Paid',amount:matched.amount};
+    // V3.0 #24: consumption lock — each transaction can only match one bill
+    const matched=thisTx.find(t=>!_usedBillTxns.has(t.id)&&matchBill(t,b));
+    if(matched){_usedBillTxns.add(matched.id);return{status:'Paid',amount:matched.amount};}
     const today=new Date();
     const expDay=parseInt(b.expectedDay)||15;
     // Compare against expected day for the CURRENT calendar month (today's day)
@@ -1982,11 +2024,21 @@ async function rOv(){
     return{status:'Unpaid',amount:null};
   }
   function matchBill(t,b){
+    // V3.0 #24: only expense-type transactions can match bills
+    // Exception: transfer type is allowed only if accountNo or sadadCode matches exactly
+    const isExpense=t.type==='expense';
+    const isTransfer=t.type==='transfer';
+    if(!isExpense&&!isTransfer)return false;
     const desc=(t.description||'').toLowerCase();
-    if(b.accountNo&&desc.includes(b.accountNo.toLowerCase()))return true;
-    if(b.sadadCode&&desc.includes(b.sadadCode))return true;
-    if(b.provider&&desc.includes(b.provider.toLowerCase().split(' ')[0]))return true;
-    if(b.name&&desc.includes(b.name.toLowerCase().split(' ')[0]))return true;
+    // High-confidence: account number or Sadad code — allowed even for transfers
+    if(b.accountNo&&b.accountNo.length>3&&desc.includes(b.accountNo.toLowerCase()))return true;
+    if(b.sadadCode&&b.sadadCode.length>3&&desc.includes(b.sadadCode.toLowerCase()))return true;
+    // Medium/low confidence: name matching — only for expense type
+    if(!isExpense)return false;
+    // Full provider name match (not just first word)
+    if(b.provider&&b.provider.trim().length>3&&desc.includes(b.provider.toLowerCase().trim()))return true;
+    // Full bill name match (not just first word)
+    if(b.name&&b.name.trim().length>3&&desc.includes(b.name.toLowerCase().trim()))return true;
     return false;
   }
   const billHtml=S.bills.slice(0,5).map(b=>{
@@ -2027,11 +2079,23 @@ async function rOv(){
 
   // External transfers
   const extTx=tx.filter(t=>t.type==='external_transfer'&&txDir(t)!=='in'); // only outbound
-  const extMap={};extTx.forEach(t=>{const k=t.description||'Unknown';extMap[k]=(extMap[k]||0)+t.amount;});
-  const extRows=Object.entries(extMap).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([name,amt])=>`
+  // V3.0 #25: Merge by first+last word (handles middle names — "Norah Abdullah Aldakhil" = "Norah Aldakhil")
+  function extNormKey(desc){
+    if(!desc)return'Unknown';
+    const words=desc.trim().split(/\s+/).filter(Boolean);
+    if(words.length<=1)return desc.trim().toLowerCase(); // single-word = exact match
+    return(words[0]+' '+words[words.length-1]).toLowerCase();
+  }
+  const extMerged={}; // key → { displayName, amount }
+  extTx.forEach(t=>{
+    const k=extNormKey(t.description||'');
+    if(!extMerged[k]){extMerged[k]={displayName:t.description||'Unknown',amount:0};}
+    extMerged[k].amount+=t.amount;
+  });
+  const extRows=Object.values(extMerged).sort((a,b)=>b.amount-a.amount).slice(0,5).map(({displayName,amount})=>`
     <div class="fg jb" style="padding:6px 0;border-bottom:1px solid var(--bg3)">
-      <div style="font-size:var(--fs-xs)">${h(name)}</div>
-      <div style="font-size:var(--fs-xs);font-weight:500" class="c-ext">${fmtP(amt)}</div>
+      <div style="font-size:var(--fs-xs)">${h(displayName)}</div>
+      <div style="font-size:var(--fs-xs);font-weight:500" class="c-ext">${fmtP(amount)}</div>
     </div>`).join('')||'<div style="font-size:var(--fs-xs);color:var(--text3);padding:6px 0">No external transfers in this period.</div>';
 
   // Forecast: next 30/60/90 days
@@ -2380,7 +2444,8 @@ function buildCharts(){
 
 
 // ─── TRANSACTIONS ───
-let TF={type:'',mc:'',acc:'',q:'',sortCol:'',sortDir:1,txnAcc:'',txnTab:'bank'};
+let TF={type:'',mc:'',acc:'',q:'',sub:'',allMonths:false,sortCol:'',sortDir:1,txnAcc:'',txnTab:'bank'}; // V3.0 #6
+let SP='preferences'; // current settings sub-page
 async function delTxn(id,ym){
   const ymk=ym||S.month;
   if(!S.txnCache[ymk])return;
@@ -3545,8 +3610,8 @@ function rStaff(){
       <div><label class="lbl">Weekend rule</label><select id="sf-wend"><option value="">None</option><option value="shift">Shift to Thursday</option></select></div>
     </div>
     <div class="fr" style="margin-top:8px">
-      <div><label class="lbl">Contract start (DD/MM/YYYY)</label><input type="text" id="sf-start" placeholder="DD/MM/YYYY"></div>
-      <div><label class="lbl">Contract end (optional)</label><input type="text" id="sf-end" placeholder="DD/MM/YYYY"></div>
+      <div><label class="lbl">Contract start (DD/MM/YYYY)</label><div class="date-inp-wrap"><input type="text" id="sf-start" class="date-inp" placeholder="DD/MM/YYYY" maxlength="10"><button type="button" class="cal-btn" onclick="openCal('sf-start')" title="Pick date">📅</button></div></div>
+      <div><label class="lbl">Contract end (optional)</label><div class="date-inp-wrap"><input type="text" id="sf-end" class="date-inp" placeholder="DD/MM/YYYY" maxlength="10"><button type="button" class="cal-btn" onclick="openCal('sf-end')" title="Pick date">📅</button></div></div>
     </div>
     <div style="margin-top:8px"><label class="lbl">Notes</label><textarea id="sf-notes" style="min-height:60px" placeholder="Visa status, contact, etc."></textarea></div>
     <div class="fg" style="margin-top:10px"><button class="btn btn-p" id="stf-sbtn" onclick="addStaff()">Add</button><button class="btn" onclick="tp('addstf-panel');editStaffId=null">Cancel</button></div>
@@ -3901,7 +3966,7 @@ function rDebts(){
       <div class="plog">${pl}</div>
       ${d.status==='active'?`<div class="fg" style="margin-top:12px;flex-wrap:wrap;gap:6px">
         ${isCC?'':`<input type="number" id="dp-${d.id}" placeholder="Amount" style="width:120px;flex-shrink:0" min="0" step="0.01">
-        <input type="text" id="dd-${d.id}" placeholder="DD/MM/YYYY" style="width:130px;flex-shrink:0">
+        <div class="date-inp-wrap"><input type="text" id="dd-${d.id}" class="date-inp" placeholder="DD/MM/YYYY" maxlength="10" style="min-width:110px"><button type="button" class="cal-btn" onclick="openCal('dd-${d.id}')" title="Pick date">📅</button></div>
         <button class="btn btn-sm btn-p" onclick="recDP('${d.id}')">Record Payment</button>`}
         <button class="btn btn-sm" onclick="openEditDebt('${d.id}')">Edit</button>
         <button class="btn btn-sm" onclick="togDebt('${d.id}')">Mark Settled</button>
@@ -3935,7 +4000,7 @@ function rDebts(){
       <div class="fr3">
         <div><label class="lbl">Credit Limit (SAR)</label><input type="number" id="db-limit" min="0" step="0.01" placeholder="e.g. 60000"></div>
         <div><label class="lbl">Opening Balance as of Date (SAR)</label><input type="number" id="db-opening" min="0" step="0.01" placeholder="Balance owed on the as-of date"></div>
-        <div><label class="lbl">Balance as of (DD/MM/YYYY)</label><input type="text" id="db-cc-asof" placeholder="DD/MM/YYYY"></div>
+        <div><label class="lbl">Balance as of (DD/MM/YYYY)</label><div class="date-inp-wrap"><input type="text" id="db-cc-asof" class="date-inp" placeholder="DD/MM/YYYY" maxlength="10"><button type="button" class="cal-btn" onclick="openCal('db-cc-asof')" title="Pick date">📅</button></div></div>
       </div>
       <div class="fr3" style="margin-top:8px">
         <div><label class="lbl">Linked Card Account</label><select id="db-linked-acc"><option value="">-- Select card account --</option></select></div>
@@ -3954,9 +4019,9 @@ function rDebts(){
       <div><label class="lbl">Duration (months)</label><input type="number" id="db-dur" min="1"></div>
     </div>
     <div class="fr3" style="margin-top:8px">
-      <div><label class="lbl">Contract Start (DD/MM/YYYY)</label><input type="text" id="db-start" placeholder="DD/MM/YYYY"></div>
-      <div><label class="lbl">End Date (DD/MM/YYYY)</label><input type="text" id="db-end" placeholder="DD/MM/YYYY"></div>
-      <div><label class="lbl">Balance as of (DD/MM/YYYY)</label><input type="text" id="db-asof" placeholder="DD/MM/YYYY"></div>
+      <div><label class="lbl">Contract Start (DD/MM/YYYY)</label><div class="date-inp-wrap"><input type="text" id="db-start" class="date-inp" placeholder="DD/MM/YYYY" maxlength="10"><button type="button" class="cal-btn" onclick="openCal('db-start')" title="Pick date">📅</button></div></div>
+      <div><label class="lbl">End Date (DD/MM/YYYY)</label><div class="date-inp-wrap"><input type="text" id="db-end" class="date-inp" placeholder="DD/MM/YYYY" maxlength="10"><button type="button" class="cal-btn" onclick="openCal('db-end')" title="Pick date">📅</button></div></div>
+      <div><label class="lbl">Balance as of (DD/MM/YYYY)</label><div class="date-inp-wrap"><input type="text" id="db-asof" class="date-inp" placeholder="DD/MM/YYYY" maxlength="10"><button type="button" class="cal-btn" onclick="openCal('db-asof')" title="Pick date">📅</button></div></div>
     </div>
     </div>
     <div class="fr3" style="margin-top:8px">
@@ -4105,7 +4170,7 @@ function rGoals(){
     </div>
     <div class="fr3" style="margin-top:8px">
       <div><label class="lbl">Target (SAR)</label><input type="number" id="gl-tgt" min="0" step="0.01"></div>
-      <div><label class="lbl">Deadline (DD/MM/YYYY)</label><input type="text" id="gl-dl" placeholder="DD/MM/YYYY"></div>
+      <div><label class="lbl">Deadline (DD/MM/YYYY)</label><div class="date-inp-wrap"><input type="text" id="gl-dl" class="date-inp" placeholder="DD/MM/YYYY" maxlength="10"><button type="button" class="cal-btn" onclick="openCal('gl-dl')" title="Pick date">📅</button></div></div>
       <div><label class="lbl">Owner</label><select id="gl-own">${oSel()}</select></div>
     </div>
     <div style="margin-top:8px"><label class="lbl">Notes</label><input type="text" id="gl-notes" placeholder="Strategy or context"></div>
@@ -4120,129 +4185,80 @@ function delGoal(id){S.goals=S.goals.filter(x=>x.id!==id);sched();render();}
 
 // --- SETTINGS ---
 function rSettings(){
-  const oRows=S.owners.map((o,i)=>`<div class="fg" style="gap:8px;margin-bottom:8px;align-items:center"><div class="dot" style="background:${oc(i)}"></div><div style="flex:1;font-size:var(--fs-sm);font-weight:500">${h(o.name)}</div><div style="font-size:var(--fs-xxs);font-family:monospace;color:var(--text3)">${o.id}</div><button class="btn btn-xs btn-d" onclick="delOwner('${o.id}')">Remove</button></div>`).join('');
-
-  const mcRows=MAIN_CATS.map(m=>`<div class="fg" style="gap:8px;margin-bottom:6px;align-items:center"><div class="dot" style="background:${m.color||'#888'}"></div><div style="flex:1;font-size:var(--fs-sm)">${m.name}</div><div style="font-size:var(--fs-xxs);font-family:monospace;color:var(--text3);min-width:130px">${m.id}</div><button class="btn btn-xs btn-d" onclick="delMainCat('${m.id}')">&#10005;</button></div>`).join('');
-  const scRows=SUB_CATS.map(s=>`<div class="fg" style="gap:8px;margin-bottom:4px;align-items:center;font-size:var(--fs-xs)"><div style="flex:1">${s.name}</div><div style="font-family:monospace;color:var(--text3);font-size:var(--fs-xxs);min-width:180px">${s.id}</div><button class="btn btn-xs btn-d" onclick="delSubCat('${s.id}')">&#10005;</button></div>`).join('');
-  return`
-  <div class="g2">
-    <div>
-      <div class="card">
-        <div class="chdr">Preferences</div>
-        <div class="fr" style="margin-bottom:10px">
-          <div><label class="lbl">Monthly Savings &amp; Investment Target (%)</label><input type="number" id="pref-tgt" value="${S.settings.savingsTarget||20}" min="0.01" max="100" step="0.01" onchange="S.settings.savingsTarget=Math.round((parseFloat(this.value)||20)*100)/100;sched();toast('Savings target updated')"></div>
-          <div><label class="lbl">Display Currency</label><select onchange="S.settings.currency=this.value;sched();toast('Currency updated')"><option value="SAR" ${S.settings.currency==='SAR'?'selected':''}>SAR</option><option value="USD" ${S.settings.currency==='USD'?'selected':''}>USD</option><option value="EUR" ${S.settings.currency==='EUR'?'selected':''}>EUR</option></select></div>
-        </div>
-        <label class="lbl">Backup Reminder Frequency</label>
-        <select onchange="S.settings.backupReminderMonths=parseInt(this.value);sched();toast('Backup reminder updated')">
-          <option value="1" ${(S.settings.backupReminderMonths||2)===1?'selected':''}>Every month</option>
-          <option value="2" ${(S.settings.backupReminderMonths||2)===2?'selected':''}>Every 2 months</option>
-          <option value="3" ${(S.settings.backupReminderMonths||2)===3?'selected':''}>Every 3 months</option>
-        </select>
-        ${S.settings.lastBackup?`<div style="font-size:11px;color:var(--text3);margin-top:6px">Last backup: ${toDD(S.settings.lastBackup.substr(0,10))}</div>`:'<div style="font-size:11px;color:var(--bad);margin-top:6px">No backup taken yet</div>'}
-      </div>
-      <div class="card">
-        <div class="chdr">Reimbursement Submitters</div>
-        <div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:10px;line-height:1.6">Each person gets a unique 4-digit PIN to submit expenses via the shared page. Share their PIN privately.</div>
-        ${(S.submitters||[]).map((sub,si)=>`
-          <div class="fg jb" style="gap:8px;margin-bottom:8px;align-items:center">
-            <div style="flex:1;font-size:var(--fs-sm);font-weight:500">${h(sub.name)}</div>
-            <div style="font-size:11px;font-family:monospace;color:var(--text3);background:var(--bg2);padding:2px 8px;border-radius:var(--rsm)">PIN: ••••</div>
-            <button class="btn btn-xs btn-d" onclick="delSubmitter(${si})">Remove</button>
-          </div>`).join('')||'<div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:10px">No submitters added yet.</div>'}
-        <div class="div"></div>
-        <div class="chdr">Add submitter</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end">
-          <div><label class="lbl">Name</label><input type="text" id="sub-name" placeholder="e.g. Noura"></div>
-          <div><label class="lbl">PIN (4 digits)</label><input type="text" id="sub-pin" placeholder="e.g. 1234" maxlength="4" pattern="[0-9]{4}"></div>
-          <button class="btn btn-p" onclick="addSubmitter()">Add</button>
-        </div>
-        <div style="font-size:var(--fs-xxs);color:var(--text3);margin-top:6px">Submit page: <a href="submitexpense.html" target="_blank" style="color:var(--info)">submitexpense.html</a></div>
-      </div>
-
-      <div class="card">
-        <div class="chdr">Owners</div>
-        ${oRows}
-        <div class="div"></div>
-        <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end">
-          <div><label class="lbl">Add owner</label><input type="text" id="new-own" placeholder="e.g. Noura"></div>
-          <button class="btn btn-p" onclick="addOwner()">Add</button>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="chdr">Data</div>
-        <div class="fgv">
-          <button class="btn" onclick="doRefExport()">&#8595; Export reference file (.txt)</button>
-          <button class="btn" onclick="doBackup()">&#8595; Export full backup (.json)</button>
-          <button class="btn" onclick="tp('restore-panel')">&#8593; Restore from backup</button>
-          <button class="btn" onclick="tp('change-pass-panel')">&#128274; Change passphrase</button>
-        </div>
-        <div id="change-pass-panel" class="panel" style="margin-top:10px">
-          <div class="chdr">Change Passphrase</div>
-          <div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:10px;line-height:1.6">Enter your current passphrase to confirm, then set a new one. Your data will be re-encrypted immediately.</div>
-          <div style="margin-bottom:8px">
-            <label class="lbl">Current passphrase</label>
-            <div style="position:relative">
-              <input type="password" id="cp-current" placeholder="Your current passphrase" autocomplete="current-password" autocorrect="off" autocapitalize="none" spellcheck="false">
-            </div>
-          </div>
-          <div style="margin-bottom:8px">
-            <label class="lbl">New passphrase (min 12 characters)</label>
-            <input type="password" id="cp-new1" placeholder="New passphrase" autocomplete="new-password" autocorrect="off" autocapitalize="none" spellcheck="false">
-          </div>
-          <div style="margin-bottom:10px">
-            <label class="lbl">Confirm new passphrase</label>
-            <input type="password" id="cp-new2" placeholder="Confirm new passphrase" autocomplete="new-password" autocorrect="off" autocapitalize="none" spellcheck="false">
-          </div>
-          <div id="cp-err" style="color:var(--bad);font-size:var(--fs-xs);min-height:18px;margin-bottom:8px"></div>
-          <div class="fg">
-            <button class="btn btn-p" id="cp-btn" onclick="doChangePassphrase()">Change passphrase</button>
-            <button class="btn" onclick="tp('change-pass-panel')">Cancel</button>
-          </div>
-        </div>
-        <div id="restore-panel" class="panel" style="margin-top:10px">
-          <label class="lbl">Paste backup JSON</label>
-          <textarea id="restore-json" style="min-height:80px"></textarea>
-          <div class="fg" style="margin-top:8px"><button class="btn btn-p" onclick="doRestore()">Restore</button><button class="btn" onclick="tp('restore-panel')">Cancel</button></div>
-        </div>
-      </div>
-      <div class="card" style="border-color:#FCA5A5">
-        <div class="chdr" style="color:var(--bad)">Destructive Actions</div>
-        <div style="font-size:var(--fs-xs);color:var(--text2);margin-bottom:12px;line-height:1.6">Permanently deletes all data. Cannot be undone.</div>
-        <div class="fg" style="gap:8px;flex-wrap:wrap">
-          <button class="btn btn-d" onclick="execClearTxns()">Reset Transactions Only</button>
-          <button class="btn btn-d" onclick="document.getElementById('del-modal').classList.add('active')">Reset Everything</button>
-        </div>
+  const SETTINGS_PAGES=[
+    {id:'preferences',label:'Preferences',icon:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>'},
+    {id:'household',label:'Household',icon:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>'},
+    {id:'security',label:'Security',icon:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>'},
+    {id:'data',label:'Data',icon:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>'},
+    {id:'about',label:'About',icon:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>'},
+  ];
+  const subNav=SETTINGS_PAGES.map(p=>`<button onclick="SP='${p.id}';render()" class="settings-nav-btn ${SP===p.id?'settings-nav-active':''}">${p.icon} ${p.label}</button>`).join('');
+  let pageContent='';
+  if(SP==='preferences'){
+    pageContent=`<div class="settings-page-title">Preferences</div>
+    <div class="settings-section">
+      <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Savings &amp; Investment Target</div><div class="settings-row-sub">Monthly target as a percentage of income</div></div><div class="settings-row-ctrl"><div style="display:flex;align-items:center;gap:6px"><input type="number" id="pref-tgt" value="${S.settings.savingsTarget||20}" min="0.01" max="100" step="0.01" style="width:80px" onchange="S.settings.savingsTarget=Math.round((parseFloat(this.value)||20)*100)/100;sched();toast('Savings target updated')"><span style="font-size:var(--fs-xs);color:var(--text3)">%</span></div></div></div>
+      <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Display Currency</div><div class="settings-row-sub">Primary currency for all figures</div></div><div class="settings-row-ctrl"><select onchange="S.settings.currency=this.value;sched();toast('Currency updated')"><option value="SAR" ${!S.settings.currency||S.settings.currency==='SAR'?'selected':''}>SAR</option><option value="USD" ${S.settings.currency==='USD'?'selected':''}>USD</option><option value="EUR" ${S.settings.currency==='EUR'?'selected':''}>EUR</option></select></div></div>
+      <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Backup Reminder</div><div class="settings-row-sub">${S.settings.lastBackup?'Last backup: '+toDD(S.settings.lastBackup.substr(0,10)):'No backup taken yet'}</div></div><div class="settings-row-ctrl"><select onchange="S.settings.backupReminderMonths=parseInt(this.value);sched();toast('Backup reminder updated')"><option value="1" ${(S.settings.backupReminderMonths||2)===1?'selected':''}>Every month</option><option value="2" ${(S.settings.backupReminderMonths||2)===2?'selected':''}>Every 2 months</option><option value="3" ${(S.settings.backupReminderMonths||2)===3?'selected':''}>Every 3 months</option></select></div></div>
+    </div>`;
+  }else if(SP==='household'){
+    const oRows=S.owners.map((o,i)=>`<div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">${h(o.name)}</div><div class="settings-row-sub" style="font-family:monospace">${o.id}</div></div><div class="settings-row-ctrl"><button class="btn btn-xs btn-d" onclick="delOwner('${o.id}')">Remove</button></div></div>`).join('');
+    const subRows=(S.submitters||[]).map((sub,si)=>`<div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">${h(sub.name)}</div><div class="settings-row-sub">PIN: ••••</div></div><div class="settings-row-ctrl"><button class="btn btn-xs btn-d" onclick="delSubmitter(${si})">Remove</button></div></div>`).join('');
+    pageContent=`<div class="settings-page-title">Household</div>
+    <div class="settings-section">
+      <div class="settings-section-label">Household Members</div>
+      <div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:12px">People you track finances for.</div>
+      ${oRows||'<div style="font-size:var(--fs-xs);color:var(--text3);padding:8px 0">No members yet.</div>'}
+      <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end;margin-top:12px"><div><label class="lbl">Name</label><input type="text" id="ow-name" placeholder="e.g. Noura"></div><button class="btn btn-p" onclick="addOwner()">Add</button></div>
+    </div>
+    <div class="settings-section">
+      <div class="settings-section-label">Reimbursement Submitters</div>
+      <div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:12px">Each person gets a 4-digit PIN to submit expenses via lanki.app/submit.html.</div>
+      ${subRows||'<div style="font-size:var(--fs-xs);color:var(--text3);padding:8px 0">No submitters yet.</div>'}
+      <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;margin-top:12px"><div><label class="lbl">Name</label><input type="text" id="sub-name" placeholder="e.g. Noura"></div><div><label class="lbl">PIN (4 digits)</label><input type="text" id="sub-pin" placeholder="1234" maxlength="4"></div><button class="btn btn-p" onclick="addSubmitter()">Add</button></div>
+    </div>`;
+  }else if(SP==='security'){
+    pageContent=`<div class="settings-page-title">Security</div>
+    <div class="settings-section">
+      <div class="settings-section-label">Passphrase</div>
+      <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Change Passphrase</div><div class="settings-row-sub">Re-encrypts the entire vault with a new key.</div></div><div class="settings-row-ctrl"><button class="btn btn-sm" onclick="toggleCP()">Change</button></div></div>
+      <div id="cp-panel" style="display:none;margin-top:12px;padding:14px;background:var(--bg2);border-radius:var(--rmd);border:1px solid var(--border)">
+        <div style="margin-bottom:8px"><label class="lbl">Current passphrase</label><div class="pw-wrap"><input type="password" id="cp-cur" class="auth-inp" style="margin:0" placeholder="Current passphrase" autocomplete="current-password"><button class="pw-toggle" onclick="tpw('cp-cur',this)" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
+        <div style="margin-bottom:8px"><label class="lbl">New passphrase</label><div class="pw-wrap"><input type="password" id="cp-new" class="auth-inp" style="margin:0" placeholder="Min 12 characters" autocomplete="new-password"><button class="pw-toggle" onclick="tpw('cp-new',this)" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
+        <div style="margin-bottom:12px"><label class="lbl">Confirm new passphrase</label><div class="pw-wrap"><input type="password" id="cp-con" class="auth-inp" style="margin:0" placeholder="Repeat new passphrase" autocomplete="new-password"><button class="pw-toggle" onclick="tpw('cp-con',this)" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
+        <div id="cp-err" style="font-size:var(--fs-xs);color:var(--bad);margin-bottom:8px"></div>
+        <div style="display:flex;gap:8px"><button class="btn btn-p" id="cp-btn" onclick="doChangePassphrase()">Update</button><button class="btn" onclick="toggleCP()">Cancel</button></div>
       </div>
     </div>
-    <div>
-      <div class="card">
-        <div class="chdr">Main Categories (${MAIN_CATS.length})</div>
-        <div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:10px">Deletable. Transactions using a deleted category will show as Uncategorized.</div>
-        <div style="max-height:280px;overflow-y:auto;margin-bottom:10px">${mcRows}</div>
-        <div class="div"></div>
-        <div class="chdr">Add main category</div>
-        <div style="display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:end">
-          <div><label class="lbl">Name</label><input type="text" id="cm-name" placeholder="e.g. Zakat & Charity"></div>
-          <div><label class="lbl">Color</label><input type="color" id="cm-color" value="#7F77DD" style="height:36px;width:50px;padding:2px"></div>
-          <button class="btn btn-p" style="height:36px" onclick="addMainCat()">Add</button>
-        </div>
-      </div>
-      <div class="card">
-        <div class="chdr">Sub-Categories (${SUB_CATS.length})</div>
-        <div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:10px">Independent flat list. Any sub can pair with any main category.</div>
-        <div style="max-height:300px;overflow-y:auto;margin-bottom:10px">${scRows}</div>
-        <div class="div"></div>
-        <div class="chdr">Add sub-category</div>
-        <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end">
-          <div><label class="lbl">Name</label><input type="text" id="cs-name" placeholder="e.g. Hobby Supplies"></div>
-          <button class="btn btn-p" style="height:36px" onclick="addSubCat()">Add</button>
-        </div>
-      </div>
+    <div class="settings-section">
+      <div class="settings-section-label">Session</div>
+      <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Auto-lock</div><div class="settings-row-sub">30 minutes of inactivity</div></div><div class="settings-row-ctrl"><span class="badge b-tr">Active</span></div></div>
+      <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Failed attempt lockout</div><div class="settings-row-sub">5 attempts → 15-minute lockout</div></div><div class="settings-row-ctrl"><span class="badge b-tr">Active</span></div></div>
+    </div>`;
+  }else if(SP==='data'){
+    pageContent=`<div class="settings-page-title">Data</div>
+    <div class="settings-section">
+      <div class="settings-section-label">Backup &amp; Restore</div>
+      <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Export backup</div><div class="settings-row-sub">Downloads an encrypted JSON backup</div></div><div class="settings-row-ctrl"><button class="btn btn-sm btn-p" onclick="doExport()">Export</button></div></div>
+      <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Import backup</div><div class="settings-row-sub">Restore from a backup file</div></div><div class="settings-row-ctrl"><button class="btn btn-sm" onclick="document.getElementById('imp-backup-file')?.click()">Import</button><input type="file" id="imp-backup-file" accept=".json" style="display:none" onchange="doImportBackup(this)"></div></div>
     </div>
-  </div>`;
+    <div class="settings-section">
+      <div class="settings-section-label" style="color:var(--bad)">Danger Zone</div>
+      <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Clear all transactions</div><div class="settings-row-sub">Removes imported data. Vault and settings preserved.</div></div><div class="settings-row-ctrl"><button class="btn btn-sm btn-d" onclick="doReset('txns')">Clear transactions</button></div></div>
+      <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Reset everything</div><div class="settings-row-sub">Deletes all data and the vault. Cannot be undone.</div></div><div class="settings-row-ctrl"><button class="btn btn-sm btn-d" onclick="doReset('all')">Reset vault</button></div></div>
+    </div>`;
+  }else{
+    pageContent=`<div class="settings-page-title">About</div>
+    <div class="settings-section">
+      <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Platform</div></div><div class="settings-row-ctrl" style="font-size:var(--fs-xs)">Lanki Capital OS</div></div>
+      <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Version</div></div><div class="settings-row-ctrl" style="font-size:var(--fs-xs);font-family:monospace">${VERSION}</div></div>
+      <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Submit page</div></div><div class="settings-row-ctrl"><a href="/submit.html" target="_blank" style="font-size:var(--fs-xs);color:var(--electric)">lanki.app/submit.html →</a></div></div>
+    </div>`;
+  }
+  return`<div class="settings-layout"><div class="settings-sidebar"><div style="font-size:16px;font-weight:500;padding:0 0 16px 0">Settings</div>${subNav}</div><div class="settings-content">${pageContent}</div></div>`;
 }
+function toggleCP(){const p=document.getElementById('cp-panel');if(p)p.style.display=p.style.display==='none'?'block':'none';}
+
 function addOwner(){const n=document.getElementById('new-own').value.trim();if(!n){toast('Name required',false);return;}const id='owner_'+n.toLowerCase().replace(/[^a-z0-9]/g,'_')+'_'+Math.random().toString(36).substr(2,4);S.owners.push({id,name:n});sched();render();toast('Owner added');}
 function delOwner(id){S.owners=S.owners.filter(x=>x.id!==id);sched();render();}
 function delRule(m){S.rules=S.rules.filter(r=>r.m!==m);sched();render();}
@@ -4693,10 +4709,13 @@ async function rTxBank(){
   const txns=S.txnCache[S.month]||[];
   const bankTxns=txns.filter(t=>!t.accountId||bankAccs.some(a=>a.id===t.accountId));
   const scopedAcc=TF.txnAcc&&bankAccs.some(a=>a.id===TF.txnAcc)?TF.txnAcc:null;
-  let fl=scopedAcc?bankTxns.filter(t=>t.accountId===scopedAcc):[...bankTxns];
+  // V3.0 #6: allMonths mode reads all months, not just S.month
+  const bankSource=TF.allMonths?Object.values(S.txnCache).flat().filter(t=>{const acc=S.accounts.find(a=>a.id===t.accountId);return acc&&acc.accountClass!=='credit_card'&&acc.type!=='credit_card'&&acc.type!=='charge_card';}):bankTxns;
+  let fl=scopedAcc?bankSource.filter(t=>t.accountId===scopedAcc):[...bankSource];
   if(TF.type)fl=fl.filter(t=>t.type===TF.type);
   if(TF.mc)fl=fl.filter(t=>t.mainCatId===TF.mc);
-  if(TF.q){const q=TF.q.toLowerCase();fl=fl.filter(t=>(t.description||'').toLowerCase().includes(q)||(t.raw_description||'').toLowerCase().includes(q));}
+  if(TF.sub)fl=fl.filter(t=>t.subCatId===TF.sub);
+  if(TF.q){const q=TF.q.toLowerCase().trim();fl=fl.filter(t=>(t.description||'').toLowerCase().includes(q)||(t.raw_description||'').toLowerCase().includes(q)||String(t.amount||'').includes(q));}
   // Sorting
   if(TF.sortCol){fl.sort((a,b)=>{
     let va,vb;
@@ -4736,10 +4755,13 @@ async function rTxCards(){
   const txns=S.txnCache[S.month]||[];
   const cardTxns=txns.filter(t=>cardAccs.some(a=>a.id===t.accountId));
   const scopedAcc=TF.txnAcc&&cardAccs.some(a=>a.id===TF.txnAcc)?TF.txnAcc:null;
-  let fl=scopedAcc?cardTxns.filter(t=>t.accountId===scopedAcc):[...cardTxns];
+  // V3.0 #6: allMonths mode
+  const cardSource=TF.allMonths?Object.values(S.txnCache).flat().filter(t=>{const acc=S.accounts.find(a=>a.id===t.accountId);return acc&&(acc.type==='credit_card'||acc.type==='charge_card');}):cardTxns;
+  let fl=scopedAcc?cardSource.filter(t=>t.accountId===scopedAcc):[...cardSource];
   if(TF.type)fl=fl.filter(t=>t.type===TF.type);
   if(TF.mc)fl=fl.filter(t=>t.mainCatId===TF.mc);
-  if(TF.q){const q=TF.q.toLowerCase();fl=fl.filter(t=>(t.description||'').toLowerCase().includes(q)||(t.raw_description||'').toLowerCase().includes(q));}
+  if(TF.sub)fl=fl.filter(t=>t.subCatId===TF.sub);
+  if(TF.q){const q=TF.q.toLowerCase().trim();fl=fl.filter(t=>(t.description||'').toLowerCase().includes(q)||(t.raw_description||'').toLowerCase().includes(q)||String(t.amount||'').includes(q));}
   if(TF.sortCol){fl.sort((a,b)=>{
     let va,vb;
     if(TF.sortCol==='date'){va=a.date||'';vb=b.date||'';}
@@ -4796,8 +4818,8 @@ function buildTxFilters(){
     <button class="btn btn-xs btn-p" onclick="applyBulkCategory()">Assign Category</button>
   </div>
   <div class="fg" style="gap:8px;flex-wrap:wrap;margin-bottom:1rem">
-    <input type="text" placeholder="Search..." value="${TF.q||''}" oninput="TF.q=this.value;render()" style="flex:1;min-width:160px">
-    <select onchange="TF.type=this.value;render()" style="flex:1;min-width:140px">
+    <input type="text" placeholder="Search description or amount…" value="${TF.q||''}" oninput="TF.q=this.value;render()" style="flex:1;min-width:180px">
+    <select onchange="TF.type=this.value;render()" style="min-width:140px">
       <option value="" ${!TF.type?'selected':''}>All Types</option>
       <option value="income" ${TF.type==='income'?'selected':''}>Income</option>
       <option value="expense" ${TF.type==='expense'?'selected':''}>Expense</option>
@@ -4805,11 +4827,19 @@ function buildTxFilters(){
       <option value="investment" ${TF.type==='investment'?'selected':''}>Investment</option>
       <option value="external_transfer" ${TF.type==='external_transfer'?'selected':''}>External Transfer</option>
     </select>
-    <select onchange="TF.mc=this.value;render()" style="flex:1;min-width:180px">
+    <select onchange="TF.mc=this.value;TF.sub='';render()" style="min-width:160px">
       <option value="" ${!TF.mc?'selected':''}>All Categories</option>
       ${MAIN_CATS.map(m=>`<option value="${m.id}" ${TF.mc===m.id?'selected':''}>${m.name}</option>`).join('')}
     </select>
-    <button class="btn btn-sm" onclick="TF.type='';TF.mc='';TF.q='';TF.sortCol='';TF.sortDir=1;render()">Clear</button>
+    <select onchange="TF.sub=this.value;render()" style="min-width:160px" id="tf-sub-sel">
+      <option value="">All Sub-categories</option>
+      ${(TF.mc?SUB_CATS.filter(s=>s.mainCatId===TF.mc||!s.mainCatId):SUB_CATS).sort((a,b)=>a.name.localeCompare(b.name)).map(s=>`<option value="${s.id}" ${TF.sub===s.id?'selected':''}>${h(s.name)}</option>`).join('')}
+    </select>
+    <label style="display:flex;align-items:center;gap:5px;font-size:var(--fs-xs);white-space:nowrap;cursor:pointer">
+      <input type="checkbox" ${TF.allMonths?'checked':''} onchange="TF.allMonths=this.checked;render()" style="margin:0">
+      All months
+    </label>
+    <button class="btn btn-sm" onclick="TF.type='';TF.mc='';TF.sub='';TF.q='';TF.allMonths=false;TF.sortCol='';TF.sortDir=1;render()">Clear</button>
   </div>`;
 }
 
@@ -4842,7 +4872,7 @@ function buildAddPanel(){
   <div id="atxn-panel" class="panel">
     <div class="chdr">Add Transaction Manually</div>
     <div class="fr" style="margin-bottom:8px">
-      <div><label class="lbl">Date (DD/MM/YYYY)</label><input type="text" id="nt-d" placeholder="DD/MM/YYYY"></div>
+      <div><label class="lbl">Date (DD/MM/YYYY)</label><div class="date-inp-wrap"><input type="text" id="nt-d" class="date-inp" placeholder="DD/MM/YYYY" maxlength="10"><button type="button" class="cal-btn" onclick="openCal('nt-d')" title="Pick date">📅</button></div></div>
       <div><label class="lbl">Amount (SAR)</label><input type="number" id="nt-a" placeholder="0.00" min="0" step="0.01"></div>
     </div>
     <div style="margin-bottom:8px"><label class="lbl">Description</label><input type="text" id="nt-ds" placeholder="Merchant or payee name"></div>
@@ -5588,6 +5618,110 @@ function dedupDebtPayments(debtId){
   else toast('No duplicate payments found');
 }
 
+
+// ─── DATE INPUT COMPONENT (V3.0 #4) ───
+// Auto-formats DD/MM/YYYY as user types, shows calendar picker on button click
+
+function initDateInputs(){
+  // Apply to all inputs with class 'date-inp'
+  document.querySelectorAll('.date-inp').forEach(el=>{
+    if(el._dateInited)return;
+    el._dateInited=true;
+    el.addEventListener('input',function(){autoSlashDate(this);});
+    el.addEventListener('keydown',function(e){
+      if(e.key==='Backspace'){
+        // Allow normal backspace but strip trailing slash for clean deletion
+        const v=this.value;
+        if(v.endsWith('/')){e.preventDefault();this.value=v.slice(0,-1);}
+      }
+    });
+  });
+}
+
+function autoSlashDate(el){
+  let v=el.value.replace(/[^0-9]/g,''); // strip non-digits
+  if(v.length>8)v=v.substr(0,8);
+  let out='';
+  if(v.length>=1)out=v.substr(0,Math.min(2,v.length));
+  if(v.length>2)out+='/'+v.substr(2,Math.min(2,v.length-2));
+  if(v.length>4)out+='/'+v.substr(4,Math.min(4,v.length-4));
+  if(el.value!==out){
+    const pos=el.selectionStart;
+    el.value=out;
+    // Adjust cursor: skip over slashes
+    const newPos=out.length===3&&pos===2?3:out.length===6&&pos===5?6:Math.min(pos,out.length);
+    try{el.setSelectionRange(newPos,newPos);}catch(e){}
+  }
+}
+
+let _calTarget=null; // which input to fill
+function openCal(inputId){
+  _calTarget=inputId;
+  const el=document.getElementById(inputId);
+  const existing=document.getElementById('cal-popup');
+  if(existing)existing.remove();
+  // Parse current value to set initial month
+  let year=new Date().getFullYear(),month=new Date().getMonth();
+  if(el?.value&&el.value.length===10){
+    const p=el.value.split('/');
+    if(p.length===3){year=parseInt(p[2]);month=parseInt(p[1])-1;}
+  }
+  renderCal(year,month);
+}
+
+function renderCal(year,month){
+  const existing=document.getElementById('cal-popup');
+  if(existing)existing.remove();
+  const today=new Date();
+  const el=document.getElementById(_calTarget);
+  if(!el)return;
+  const rect=el.getBoundingClientRect();
+  const days=['Su','Mo','Tu','We','Th','Fr','Sa'];
+  const firstDay=new Date(year,month,1).getDay();
+  const daysInMonth=new Date(year,month+1,0).getDate();
+  const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  let cells='';
+  for(let i=0;i<firstDay;i++)cells+=`<div></div>`;
+  for(let d=1;d<=daysInMonth;d++){
+    const iso=`${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const dmy=`${String(d).padStart(2,'0')}/${String(month+1).padStart(2,'0')}/${year}`;
+    const isToday=d===today.getDate()&&month===today.getMonth()&&year===today.getFullYear();
+    const cur=el?.value;
+    const isSel=cur===dmy;
+    cells+=`<div class="cal-day${isToday?' cal-today':''}${isSel?' cal-sel':''}" onclick="pickDate('${dmy}')">${d}</div>`;
+  }
+  const pop=document.createElement('div');
+  pop.id='cal-popup';
+  pop.className='cal-popup';
+  pop.style.cssText=`position:fixed;top:${Math.min(rect.bottom+4,window.innerHeight-300)}px;left:${Math.max(4,Math.min(rect.left,window.innerWidth-240))}px;z-index:9999;background:var(--bg);border:1px solid var(--border);border-radius:var(--rmd);box-shadow:0 8px 24px rgba(0,0,0,.12);width:230px;padding:10px;`;
+  pop.innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <button onclick="renderCal(${month===0?year-1:year},${month===0?11:month-1})" style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--text2)">‹</button>
+      <div style="font-size:13px;font-weight:500">${MONTHS[month]} ${year}</div>
+      <button onclick="renderCal(${month===11?year+1:year},${month===11?0:month+1})" style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--text2)">›</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px">
+      ${days.map(d=>`<div style="text-align:center;font-size:10px;color:var(--text3);padding:2px 0">${d}</div>`).join('')}
+      ${cells}
+    </div>
+    <button onclick="document.getElementById('cal-popup')?.remove()" style="width:100%;margin-top:4px;padding:4px;background:none;border:1px solid var(--border);border-radius:var(--rsm);cursor:pointer;font-size:11px;color:var(--text3)">Close</button>`;
+  document.body.appendChild(pop);
+  // Close on outside click
+  setTimeout(()=>{
+    function closeCal(e){if(!pop.contains(e.target)&&e.target.id!==_calTarget){pop.remove();document.removeEventListener('click',closeCal);}}
+    document.addEventListener('click',closeCal);
+  },50);
+}
+
+function pickDate(dmy){
+  const el=document.getElementById(_calTarget);
+  if(el){el.value=dmy;el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));}
+  document.getElementById('cal-popup')?.remove();
+}
+
+// Call initDateInputs after every render
+const _origRender=null; // patched below in initAuth
+
 // Set version labels dynamically
 document.querySelectorAll('.version-label').forEach(el=>el.textContent='VERSION '+VERSION.toUpperCase());
 initAuth();
@@ -5600,7 +5734,7 @@ initAuth();
     <input type="hidden" id="etxn-id">
     <input type="hidden" id="etxn-ym">
     <div class="fr" style="margin-bottom:8px">
-      <div><label class="lbl">Date (DD/MM/YYYY)</label><input type="text" id="etxn-date" placeholder="DD/MM/YYYY"></div>
+      <div><label class="lbl">Date (DD/MM/YYYY)</label><div class="date-inp-wrap"><input type="text" id="etxn-date" class="date-inp" placeholder="DD/MM/YYYY" maxlength="10"><button type="button" class="cal-btn" onclick="openCal('etxn-date')" title="Pick date">📅</button></div></div>
       <div><label class="lbl">Amount (SAR)</label><input type="number" id="etxn-amount" min="0" step="0.01"></div>
     </div>
     <div style="margin-bottom:8px"><label class="lbl">Description</label><input type="text" id="etxn-desc"></div>
