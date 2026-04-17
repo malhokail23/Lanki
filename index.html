@@ -89,10 +89,15 @@ html{zoom:1.1}
 *{box-sizing:border-box;margin:0;padding:0}
 ::selection{background:rgba(0,119,193,.15);color:var(--midnight);} /* Electric Blue tint */
 ::-moz-selection{background:rgba(2,23,81,.15);color:var(--midnight);}
-html{overflow-x:hidden}
-body{font-family:var(--font);background:var(--feather);color:var(--text);min-height:100vh;font-size:var(--fs);-webkit-font-smoothing:antialiased;overflow-x:hidden} /* Feather White per brand */
+html{overflow-x:hidden;height:100%}
+body{font-family:var(--font);background:var(--feather);color:var(--text);min-height:100%;font-size:var(--fs);-webkit-font-smoothing:antialiased;overflow-x:hidden} /* Feather White per brand */
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes fi{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+@keyframes dotPulse{0%,80%,100%{opacity:.2;transform:scale(.8)}40%{opacity:1;transform:scale(1)}}
+.ai-dots{display:inline-flex;align-items:center;gap:5px;vertical-align:middle}
+.ai-dots span{width:5px;height:5px;background:currentColor;border-radius:50%;animation:dotPulse 1.4s ease-in-out infinite;opacity:.2}
+.ai-dots span:nth-child(2){animation-delay:.2s}
+.ai-dots span:nth-child(3){animation-delay:.4s}
 
 /* ── AUTH SCREENS ─────────────────────────────────────── */
 .auth-screen{
@@ -212,7 +217,6 @@ body{font-family:var(--font);background:var(--feather);color:var(--text);min-hei
 .app-content{
   flex:1;min-width:0;
   display:flex;flex-direction:column;
-  min-height:100vh;
   overflow-x:hidden;
   margin-left:200px; /* offset for fixed left sidebar */
 }
@@ -5795,7 +5799,7 @@ function rAIUpload(){
     ${_aiState.error?`<div style="color:var(--bad);font-size:var(--fs-xs);padding:8px;background:#FEE2E2;border-radius:var(--rsm);margin-bottom:10px">${h(_aiState.error)}</div>`:''}
 
     <button class="btn btn-p" onclick="runAIExtract()" ${_aiState.loading?'disabled':''} style="min-width:200px">
-      ${_aiState.loading?'<span style="opacity:.7">Extracting… this may take 15-30 seconds</span>':'✦ Extract with AI'}
+      ${_aiState.loading?'<span class="ai-dots"><span></span><span></span><span></span></span>':'Extract with AI'}
     </button>
   </div>
 
