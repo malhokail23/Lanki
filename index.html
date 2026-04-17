@@ -2494,12 +2494,25 @@ async function rOv(){
     <div class="card card-bordered">
       <div class="ctitle">Staff</div>
       <div class="csub">After advance deductions</div>
-      ${fStaff.map(st=>{
+      ${fStaff.map((st,si)=>{
         // H4/L8: Use advThisMonth() — single correct implementation, advThisMonthOv dead code removed
         const ded=advThisMonth(st);
-        return`<div class="brow"><div><div style="font-size:var(--fs-xs);font-weight:500">${h(st.name)}</div><div style="font-size:11px;color:var(--text3)">${st.role}</div></div><span style="font-size:var(--fs-xs);font-weight:500">${fmtP(st.salary-ded)}</span></div>`;
+        const net=st.salary-ded;
+        // Paid detection: look for a cat_main_staff transaction close to net salary this period
+        const paid=tx.some(t=>t.mainCatId==='cat_main_staff'&&t.type==='expense'&&Math.abs(t.amount-net)<net*0.15+50);
+        const isLast=si===fStaff.length-1;
+        return`<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0${isLast?'':';border-bottom:1px solid var(--bg2)'}">
+          <div>
+            <div style="font-size:var(--fs-xs);font-weight:500">${h(st.name)}</div>
+            <div style="font-size:11px;color:var(--text3)">${st.role}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:9px;font-weight:600;padding:2px 7px;border-radius:100px;letter-spacing:.03em;${paid?'background:#E8F5EC;color:#1A6B3C':'background:#FEE2E2;color:#9B2020'}">${paid?'Paid':'Unpaid'}</span>
+            <span style="font-size:var(--fs-xs);font-weight:500;font-variant-numeric:tabular-nums">${fmtP(net)}</span>
+          </div>
+        </div>`;
       }).join('')||'<div style="font-size:var(--fs-xs);color:var(--text3);padding:8px 0">No staff profiles defined.</div>'}
-      ${fStaff.length?`<div style="font-size:11px;color:var(--text3);margin-top:6px;padding-top:6px;border-top:1px solid var(--bg3)">Staff cost: ${fmtP(fStaff.reduce((s,st)=>s+st.salary,0))} · ${exp>0?Math.round(fStaff.reduce((s,st)=>s+st.salary,0)/exp*100)+'% of expenses':'--'}</div>`:''}
+      ${fStaff.length?`<div style="font-size:11px;color:var(--text3);margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">Staff cost: ${fmtP(fStaff.reduce((s,st)=>s+st.salary,0))} · ${exp>0?Math.round(fStaff.reduce((s,st)=>s+st.salary,0)/exp*100)+'% of expenses':'--'}</div>`:''}
     </div>
   </div>
 
