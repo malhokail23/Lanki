@@ -5812,7 +5812,7 @@ async function runAIExtract(){
       method:'POST',
       headers:{
         'Content-Type':'application/json',
-        'Authorization':'Bearer '+SK  // Supabase publishable key — required by Edge Function auth
+        'Authorization':'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRnZWZzcHBraWpycnZvdGdnZW9tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4MzYyOTAsImV4cCI6MjA5MTQxMjI5MH0._MWK5XL_CQAV3ybEWPv1UrArPb-Enu6FZognyImSYzg'  // Supabase anon JWT — required by Edge Function auth
       },
       body:JSON.stringify({
         fileData:_aiState.fileData,
