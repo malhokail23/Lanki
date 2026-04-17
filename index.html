@@ -19,6 +19,9 @@
               Cool Sand #C9B9A3   · Muted Coral #D9A59A
               Feather White #F3F1EF · Charcoal Fog #707070
 ──────────────────────────────────────────────────────────── */
+/* V3.0: Global +10% scaling per brief #3 */
+html{zoom:1.1}
+
 :root{
   /* ── Lanki Brand Tokens v2.0 ── */
   --font:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Helvetica,Arial,sans-serif;
@@ -745,11 +748,11 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto}
   <div class="auth-form">
     <div class="pw-wrap" style="margin-bottom:10px">
       <input type="password" id="su-p1" class="auth-inp" placeholder="Choose a strong passphrase (min 12 chars)" autocomplete="new-password" autocorrect="off" autocapitalize="none" spellcheck="false" style="margin-bottom:0">
-      <button class="pw-toggle" onclick="tpw('su-p1',this)" type="button">&#128065;</button>
+      <button class="pw-toggle" onclick="tpw('su-p1',this)" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button>
     </div>
     <div class="pw-wrap" style="margin-bottom:4px">
       <input type="password" id="su-p2" class="auth-inp" placeholder="Confirm passphrase" autocomplete="new-password" autocorrect="off" autocapitalize="none" spellcheck="false" onkeydown="if(event.key==='Enter')doSetup()" style="margin-bottom:0">
-      <button class="pw-toggle" onclick="tpw('su-p2',this)" type="button">&#128065;</button>
+      <button class="pw-toggle" onclick="tpw('su-p2',this)" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button>
     </div>
     <div class="auth-err" id="su-err"></div>
     <button class="auth-btn" id="su-btn" onclick="doSetup()">Create Vault &#8594;</button>
@@ -774,7 +777,7 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto}
   <div class="auth-form">
     <div class="pw-wrap" style="margin-bottom:4px">
       <input type="password" id="ul-p" class="auth-inp" placeholder="Your passphrase" autocomplete="current-password" autocorrect="off" autocapitalize="none" spellcheck="false" onkeydown="if(event.key==='Enter')doUnlock()" style="margin-bottom:0">
-      <button class="pw-toggle" onclick="tpw('ul-p',this)" type="button">&#128065;</button>
+      <button class="pw-toggle" onclick="tpw('ul-p',this)" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button>
     </div>
     <div class="auth-err" id="ul-err"></div>
     <button class="auth-btn" id="ul-btn" onclick="doUnlock()">Unlock &#8594;</button>
@@ -930,7 +933,6 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto}
           <div style="font-size:9px;color:var(--powderblue);font-weight:600;letter-spacing:.06em;text-transform:uppercase;margin-top:1px">Capital OS</div>
         </div>
       </div>
-      <div class="badge">v2.1</div>
     </div>
     <div class="nav-section-label">Main</div>
     <button class="nav-item active" data-tab="overview" onclick="sw('overview')"><span class="nav-icon">⊞</span>Overview</button>
@@ -975,7 +977,7 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto}
         <span style="font-size:11px;transition:color .3s;font-weight:500" id="save-st"></span>
         <button class="nav-btn" style="width:auto;padding:3px 8px" id="refresh-btn" onclick="refreshData()" title="Refresh">&#8635;</button>
       </div>
-      <button class="nav-btn" id="priv-btn" onclick="togglePrivacy()">&#128065; Hide values</button>
+      <button class="nav-btn" id="priv-btn" onclick="togglePrivacy()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg> Hide values</button>
       <button class="nav-btn nav-lock" onclick="lockApp()">&#128274; Lock vault</button>
       <button class="nav-btn" onclick="document.getElementById('eng-overlay').classList.add('active')">&#9783; Switch engine</button>
     </div>
@@ -1015,7 +1017,7 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto}
     <div class="mddesc" id="pinm-desc">Enter your passphrase to continue.</div>
     <div class="pw-wrap" style="margin-bottom:10px">
       <input type="password" id="pinm-p" class="auth-inp" style="margin-bottom:0;background:var(--bg2)" placeholder="Your passphrase" autocorrect="off" autocapitalize="none" spellcheck="false" onkeydown="if(event.key==='Enter')confirmPin()">
-      <button class="pw-toggle" onclick="tpw('pinm-p',this)" type="button">&#128065;</button>
+      <button class="pw-toggle" onclick="tpw('pinm-p',this)" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button>
     </div>
     <div class="auth-err" id="pinm-err"></div>
     <div class="fg">
@@ -1058,14 +1060,14 @@ const NAV_GROUPS={
   commitments:{tabs:['debts','goals'],labels:{debts:'Debts',goals:'Goals'}},
   review:{tabs:['uncat','transfers','reimbursements','rules','insights'],labels:{uncat:'Uncategorized',transfers:'Pending Matches',reimbursements:'Reimbursements',rules:'Merchant Rules',insights:'Usage Insights'}},
 };
-const TAB_TO_GROUP={txbank:'transactions',txcards:'transactions',income:'recurring',bills:'recurring',subscriptions:'recurring',staff:'peopleassets',accounts:'peopleassets',debts:'commitments',goals:'commitments',uncat:'review',transfers:'review',rules:'review',insights:'review'};
+const TAB_TO_GROUP={txbank:'transactions',txcards:'transactions',income:'recurring',bills:'recurring',subscriptions:'recurring',staff:'peopleassets',accounts:'peopleassets',debts:'commitments',goals:'commitments',uncat:'review',transfers:'review',reimbursements:'review',rules:'review',insights:'review'};
 
 
 // ─── CONSTANTS ───
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='2.1';
+const VERSION='3.0a';
 let sKey=null,saveTimer=null,pinCb=null,catCb=null,activeGroup=null;
 
 // ─── CRYPTO ───
@@ -1089,13 +1091,15 @@ async function dec(key,obj){
 
 // ─── SUPABASE ───
 async function sbGet(id){
-  try{
-    const c=new AbortController();const t=setTimeout(()=>c.abort(),10000);
-    const r=await fetch(`${SB}/rest/v1/dashboard_data?id=eq.${id}&select=payload`,{headers:{'apikey':SK,'Authorization':'Bearer '+SK},signal:c.signal});
-    clearTimeout(t);const d=await r.json();
-    if(!d?.length||!d[0]?.payload)return null;
-    return JSON.parse(d[0].payload);
-  }catch{return null;}
+  const ctrl=new AbortController();const t=setTimeout(()=>ctrl.abort(),10000);
+  // Do NOT catch here — let network errors propagate so initAuth can distinguish
+  // missing vault (null) from connection failure (thrown error)
+  const r=await fetch(`${SB}/rest/v1/dashboard_data?id=eq.${id}&select=payload`,{headers:{'apikey':SK,'Authorization':'Bearer '+SK},signal:ctrl.signal});
+  clearTimeout(t);
+  if(!r.ok)throw new Error('Supabase error: '+r.status);
+  const d=await r.json();
+  if(!d?.length||!d[0]?.payload)return null; // row not found = null
+  try{return JSON.parse(d[0].payload);}catch{throw new Error('Vault data corrupted');}
 }
 async function sbPut(id,payload){
   const r=await fetch(`${SB}/rest/v1/dashboard_data`,{method:'POST',headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({id,payload:JSON.stringify(payload),updated_at:new Date().toISOString()})});
@@ -1111,7 +1115,7 @@ function showModules(){['s-loading','s-setup','s-unlock'].forEach(s=>document.ge
 function showApp(){['s-loading','s-setup','s-unlock','s-modules'].forEach(s=>document.getElementById(s)?.classList.remove('active'));document.getElementById('app').classList.add('active');}
 function enterEngine(name){if(name==='spending'){document.getElementById('s-modules').classList.remove('active');showApp();sw('overview');loadSubmissions();resetActivityTimer();}};
 function closeEngOverlay(){document.getElementById('eng-overlay').classList.remove('active');}
-function tpw(id,btn){const el=document.getElementById(id);if(!el)return;el.type=el.type==='password'?'text':'password';btn.innerHTML=el.type==='password'?'&#128065;':'&#128064;';}
+function tpw(id,btn){const el=document.getElementById(id);if(!el)return;el.type=el.type==='password'?'text':'password';btn.innerHTML=el.type==='password'?'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>':'<svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M9.88 9.88a3 3 0 1 0 4.24 4.24\"/><path d=\"M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68\"/><path d=\"M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61\"/><line x1=\"2\" y1=\"2\" x2=\"22\" y2=\"22\"/></svg>';}
 function setLd(m){const e=document.getElementById('load-msg');if(e)e.textContent=m;}
 
 // ─── SECURITY: Rate limiting ───
@@ -1161,9 +1165,19 @@ async function initAuth(){
   showAuth('s-loading');setLd('Connecting to vault...');
   try{
     const d=await sbGet('phase1');
-    if(!d||!d.salt){showAuth('s-setup');setTimeout(()=>document.getElementById('su-p1')?.focus(),100);return;}
+    if(d===null){
+      // null = fetch succeeded but no row found — genuine new vault
+      showAuth('s-setup');setTimeout(()=>document.getElementById('su-p1')?.focus(),100);return;
+    }
+    if(!d.salt){
+      // Row exists but malformed — do not show setup
+      setLd('Vault data appears corrupted. Contact support before proceeding.');return;
+    }
     showAuth('s-unlock');setTimeout(()=>document.getElementById('ul-p')?.focus(),100);
-  }catch(e){setLd('Connection failed. Reload to retry.');}
+  }catch(e){
+    // Network or fetch error — never show setup screen
+    setLd('Connection failed. Reload to retry. Do not create a new vault.');
+  }
 }
 async function doSetup(){
   const p1=document.getElementById('su-p1').value,p2=document.getElementById('su-p2').value;
@@ -1283,7 +1297,7 @@ async function execClear(){
 // ─── DATE UTILS ───
 function toDD(iso){if(!iso||iso.includes('/'))return iso||''; // L3: guard pre-formatted input
   const[y,m,d]=iso.split('-');return`${(d||'').padStart(2,'0')}/${(m||'').padStart(2,'0')}/${y||''}`;}
-function fromDD(dmy){if(!dmy||!dmy.includes('/'))return dmy||'';const p=dmy.split('/');if(p.length===3&&p[2].length===4)return`${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;return dmy;}
+function fromDD(dmy){if(!dmy||!dmy.includes('/'))return dmy||'';const p=dmy.split('/');if(p.length===3){const yr=p[2].length===2?'20'+p[2]:p[2];return`${yr}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;}return dmy;}
 function getYM(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
 function fmtYM(ym){if(!ym)return'';const[y,m]=ym.split('-');const mn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return mn[parseInt(m)-1]+' '+y;}
 function addM(ym,n){const[y,m]=ym.split('-').map(Number);const d=new Date(y,m-1+n,1);return getYM(d);}
@@ -1314,7 +1328,7 @@ function setSS(m,type){
 }
 function ob(oid){const i=S.owners.findIndex(o=>o.id===oid);const o=S.owners[i];if(!o)return'';const c=oc(i);return`<span style="font-size:11px;font-weight:500;padding:2px 7px;border-radius:8px;background:${c}22;color:${c}">${o.name}</span>`;}
 function oSel(sel){const def=sel!==undefined?sel:(S.owners[0]?.id||'');return S.owners.map(o=>`<option value="${o.id}" ${o.id===def?'selected':''}>${o.name}</option>`).join('');}
-function togglePrivacy(){S.privacy=!S.privacy;const b=document.getElementById('priv-btn');if(b)b.innerHTML=S.privacy?'&#128065; Show':'&#128065; Hide';render();}
+function togglePrivacy(){S.privacy=!S.privacy;const b=document.getElementById('priv-btn');if(b)b.innerHTML=S.privacy?'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg> Show':'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg> Hide';render();}
 function tp(id){const el=document.getElementById(id);if(el)el.classList.toggle('open');}
 function getMC(id){if(S.deletedCats&&S.deletedCats.includes(id))return undefined;return MAIN_CATS.find(c=>c.id===id);}
 function getSC(id){if(S.deletedSubs&&S.deletedSubs.includes(id))return undefined;return SUB_CATS.find(c=>c.id===id);}
@@ -1458,12 +1472,14 @@ async function saveState(){
     const d=await sbGet('phase1');
     const e=await enc(sKey,getMainP());
     await sbPut('phase1',{...d,encData:e});
-    // Sync submitter hashes to public row (no PINs, only hashes — submit page reads this)
-    if(S.submitters&&S.submitters.length){
-      const pubSubs={submitters:S.submitters.map(s=>({name:s.name,pinHash:s.pinHash}))};
-      await sbPut('submitters_public',pubSubs); // sbPut handles JSON.stringify internally
-    }
     setSS('Saved ✓','ok');setTimeout(()=>setSS(''),2500);
+    // Sync submitter hashes in separate try — failure here does not affect core data
+    if(S.submitters&&S.submitters.length){
+      try{
+        const pubSubs={submitters:S.submitters.map(s=>({name:s.name,pinHash:s.pinHash}))};
+        await sbPut('submitters_public',pubSubs);
+      }catch(e){console.warn('Submitters public sync failed:',e);}
+    }
   }catch(e){setSS('Save failed ✗','err');setTimeout(()=>setSS(''),6000);console.error(e);}
 }
 
@@ -1723,8 +1739,10 @@ async function rOv(){
 
   // Prev period metrics for burn rate
   const prevExp=pTx.filter(t=>txDir(t)==='out'&&t.type==='expense').reduce((s,t)=>s+t.amount,0);
-  const daysThis=new Date().getDate();
-  const daysInMonth=new Date(new Date().getFullYear(),new Date().getMonth()+1,0).getDate();
+  // Use days elapsed in the viewed month, not today's calendar day
+  const isCurrentMonth=S.month===getYM(new Date());
+  const daysThis=isCurrentMonth?new Date().getDate():new Date(S.month.split('-')[0],S.month.split('-')[1],0).getDate();
+  const daysInMonth=new Date(S.month.split('-')[0],S.month.split('-')[1],0).getDate();
   const burnThis=n===1?exp/Math.max(daysThis,1):(exp/(n*30.4));
   const burnPrev=prevExp/(n*30.4)||0;
   const burnDiff=burnPrev>0?Math.round((burnThis-burnPrev)/burnPrev*100):0;
@@ -1734,9 +1752,10 @@ async function rOv(){
   const lastMonthExp=(S.txnCache[addM(S.month,-1)]||[]).filter(t=>txDir(t)==='out'&&t.type==='expense').reduce((s,t)=>s+t.amount,0);
   const momDiff=lastMonthExp>0?Math.round((thisMonthExp-lastMonthExp)/lastMonthExp*100):null;
 
-  // Spending by category
+  // Spending by category — V3.0 #19: exclude debt payments by default
+  const excludeDebt=S.ovExcludeDebt!==false; // default true
   const bc={};
-  tx.filter(t=>txDir(t)==='out'&&t.type==='expense'&&t.mainCatId&&getMC(t.mainCatId)).forEach(t=>{
+  tx.filter(t=>txDir(t)==='out'&&t.type==='expense'&&t.mainCatId&&getMC(t.mainCatId)&&(!excludeDebt||!t.debtId)).forEach(t=>{
     const col=CAT_COLORS[t.mainCatId]||'#888';const name=getMC(t.mainCatId)?.name||'Other';
     bc[name]={amount:(bc[name]?.amount||0)+t.amount,color:col,id:t.mainCatId};
   });
@@ -1757,7 +1776,7 @@ async function rOv(){
     const sub=t.subCatId;
     if(['sub_groceries','sub_supermarket','sub_wholesale'].includes(sub))foodSubs.groceries+=t.amount;
     else if(['sub_food_delivery','sub_meal_kits'].includes(sub))foodSubs.delivery+=t.amount;
-    else if(['sub_dining','sub_fine_dining','sub_fast_food','sub_cafe','sub_coffee','sub_bakery','sub_catering','sub_restaurant'].includes(sub))foodSubs.dining+=t.amount;
+    else if(['sub_dining','sub_fine_dining','sub_fast_food','sub_coffee','sub_bakery','sub_catering'].includes(sub))foodSubs.dining+=t.amount;
   });
 
   // Top 3 this month vs last month
@@ -1789,7 +1808,7 @@ async function rOv(){
     const paid=(d.original||0)-(d.remaining||0);const p=d.original>0?Math.min(100,Math.round(paid/d.original*100)):0;
     let projDate='--';
     if(d.endDate)projDate=toDD(d.endDate);
-    else if(d.installment>0)projDate=toDD(addM(now,Math.ceil((d.remaining||0)/d.installment))+'- 01');
+    else if(d.installment>0)projDate=toDD(addM(now,Math.ceil((d.remaining||0)/d.installment))+'-01');
     return`<div style="margin-bottom:12px">
       <div class="fg jb" style="flex-wrap:wrap;gap:4px"><div style="font-size:var(--fs-xs);font-weight:500">${h(d.name)}</div><span class="pill pdue">Active</span></div>
       <div style="font-size:11px;color:var(--text3);margin-bottom:3px">${h(d.lender||'')}${d.profitRate?' · '+d.profitRate+'%':''}${d.endDate?' · ends '+toDD(d.endDate):' · proj. free: '+projDate}</div>
@@ -1852,7 +1871,7 @@ async function rOv(){
     </div>`;}).join('');
 
   // External transfers
-  const extTx=tx.filter(t=>t.type==='external_transfer');
+  const extTx=tx.filter(t=>t.type==='external_transfer'&&txDir(t)!=='in'); // only outbound
   const extMap={};extTx.forEach(t=>{const k=t.description||'Unknown';extMap[k]=(extMap[k]||0)+t.amount;});
   const extRows=Object.entries(extMap).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([name,amt])=>`
     <div class="fg jb" style="padding:6px 0;border-bottom:1px solid var(--bg3)">
@@ -1863,10 +1882,11 @@ async function rOv(){
   // Forecast: next 30/60/90 days
   // M5: Single honest forecast — ym param was unused causing 3 identical columns
   const mInc30=S.income.filter(i=>i.status==='active').reduce((s,i)=>s+(i.frequency==='Monthly'?i.amount:0),0);
-  const mDebt30=fDebts.filter(d=>d.status==='active').reduce((s,d)=>s+(d.installment||0),0);
+  const mDebt30=fDebts.filter(d=>d.status==='active').reduce((s,d)=>s+(d.type==='credit_card'?(d.minPayment||0):(d.installment||0)),0); // CC uses minPayment, loans use installment
   const mBills30=S.bills.reduce((s,b)=>s+(b.billingCycle==='Monthly'?b.fixedAmount||0:0),0);
+  const mSubs30=(S.subs||[]).filter(sub=>sub.status==='active').reduce((s,sub)=>s+(sub.amount||0),0);
   const mStaff30=fStaff.reduce((s,st)=>s+(st.salary||0),0);
-  const fcOut=mDebt30+mBills30+mStaff30;
+  const fcOut=mDebt30+mBills30+mStaff30+mSubs30;
   const fcNet=mInc30-fcOut;
   const fcastHtml=`
     <div class="kpi" style="padding:.9rem 1rem">
@@ -1877,7 +1897,7 @@ async function rOv(){
     <div class="kpi" style="padding:.9rem 1rem">
       <div class="klbl">Scheduled Outflows</div>
       <div style="font-size:18px;font-weight:500" class="c-bad">${fmtP(fcOut)}</div>
-      <div style="font-size:11px;color:var(--text3);margin-top:4px">Debt ${fmtP(mDebt30)} · Bills ${fmtP(mBills30)} · Staff ${fmtP(mStaff30)}</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px">Debt ${fmtP(mDebt30)} · Bills ${fmtP(mBills30)} · Staff ${fmtP(mStaff30)} · Subs ${fmtP(mSubs30)}</div>
     </div>
     <div class="kpi" style="padding:.9rem 1rem">
       <div class="klbl">Net Projected</div>
@@ -1966,7 +1986,13 @@ async function rOv(){
   <div class="slbl">Spending Intelligence</div>
   <div class="g2" style="margin-bottom:0">
     <div class="card card-bordered">
-      <div class="ctitle">Spending by Category</div>
+      <div class="fg jb" style="align-items:center;margin-bottom:4px">
+        <div class="ctitle" style="margin-bottom:0">Spending by Category</div>
+        <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3);cursor:pointer;font-weight:400;margin:0">
+          <input type="checkbox" id="ov-exclude-debt" ${S.ovExcludeDebt!==false?'checked':''} onchange="S.ovExcludeDebt=this.checked;sched();render()" style="margin:0">
+          Exclude debt payments
+        </label>
+      </div>
       <div class="csub">Click any row to view transactions</div>
       ${catRows||'<div class="empty" style="padding:1rem">No expenses yet</div>'}
     </div>
@@ -1983,10 +2009,6 @@ async function rOv(){
         <div style="margin-top:6px">
           ${momDiff!==null?`<div style="font-size:24px;font-weight:500;${momDiff>0?'color:var(--bad)':'color:var(--ok)'}">${momDiff>0?'+':''}${momDiff}%</div><div style="font-size:var(--fs-xxs);color:var(--text3);margin-top:3px">vs last month</div>`:'<div style="font-size:var(--fs-xs);color:var(--text3)">Not enough data yet</div>'}
         </div>
-      </div>
-      <div class="card card-bordered">
-        <div class="ctitle">Top 3 Categories — This Period</div>
-        <div style="margin-top:6px">${top3||'<div class="empty" style="padding:.5rem 0">No data</div>'}</div>
       </div>
     </div>
   </div>
@@ -2172,7 +2194,9 @@ async function delTxn(id,ym){
   const ymk=ym||S.month;
   if(!S.txnCache[ymk])return;
   S.txnCache[ymk]=S.txnCache[ymk].filter(t=>t.id!==id);
-  schedTxn(ymk);render();
+  // Remove dangling matched pairs referencing the deleted transaction
+  S.matchedPairs=(S.matchedPairs||[]).filter(p=>p.outId!==id&&p.inId!==id);
+  schedTxn(ymk);sched();render();
 }
 async function mkSub(id,ym){
   const ymk=ym||S.month;
@@ -2217,6 +2241,18 @@ function openCPEditTxn(){
     document.getElementById('etxn-sc').value=s||'';
     const mc=getMC(m),sc=getSC(s);
     document.getElementById('etxn-cat-label').textContent=(mc?.name||'--')+(sc?' / '+sc.name:'');
+    // V3.0 #18: auto-set type when sub-category drives it
+    const typeEl=document.getElementById('etxn-type');
+    if(typeEl){
+      if(s==='sub_internal_transfer'){typeEl.value='transfer';autoDir('transfer','etxn-dir');}
+      else if(s==='sub_external_transfer'){typeEl.value='external_transfer';autoDir('external_transfer','etxn-dir');}
+      else if(mc){
+        if(mc.type==='income'){typeEl.value='income';autoDir('income','etxn-dir');}
+        else if(mc.type==='investment'){typeEl.value='investment';autoDir('investment','etxn-dir');}
+        else if(mc.type==='transfer'){typeEl.value='transfer';autoDir('transfer','etxn-dir');}
+        else if(mc.type==='expense'){typeEl.value='expense';autoDir('expense','etxn-dir');}
+      }
+    }
   };
   document.getElementById('cat-modal').classList.add('active');
 }
@@ -2276,8 +2312,7 @@ function isMatched(txnId){
 function runTransferMatching(newTxns, preExistingIds){
   const allT=allTxns();
   // Only match genuinely new transfers (not ones that existed before this import run)
-  // Only match internal transfers — external_transfer goes to people outside your accounts, no matching credit exists
-  const newTransfers=newTxns.filter(t=>t.type==='transfer'&&(!preExistingIds||!preExistingIds.has(t.id)));
+  const newTransfers=newTxns.filter(t=>(t.type==='transfer'||t.type==='external_transfer')&&(!preExistingIds||!preExistingIds.has(t.id)));
 
   newTransfers.forEach(t=>{
     if(isMatched(t.id))return;
@@ -2288,13 +2323,13 @@ function runTransferMatching(newTxns, preExistingIds){
     const match=allT.find(other=>{
       if(other.id===t.id)return false;
       if(isMatched(other.id))return false;
-      if(other.type!=='transfer')return false; // only internal transfers can be matched
+      if((other.type!=='transfer'&&other.type!=='external_transfer'))return false;
       if(other.accountId===t.accountId)return false; // must be different account
       if(Math.abs(other.amount-t.amount)>0.01)return false; // same amount
       if(txDir(other)===tDir)return false; // must be opposite direction
       const oDate=new Date(other.date);
       const dayDiff=Math.abs((tDate-oDate)/(1000*60*60*24));
-      return dayDiff<=3; // ±3 days covers cross-bank SARIE and weekend settlement
+      return dayDiff<=2;
     });
 
     if(match){
@@ -2317,9 +2352,8 @@ function runTransferMatching(newTxns, preExistingIds){
 
 // Get all unmatched transfers (pending match)
 function getPendingTransfers(){
-  // Only internal transfers can be pending — external_transfer is a one-way flow, never matched
   return allTxns().filter(t=>{
-    if(t.type!=='transfer')return false;
+    if(t.type!=='transfer')return false; // external_transfer is one-way, never matched
     if(isMatched(t.id))return false;
     if(t.transferDismissed)return false;
     return true;
@@ -2369,7 +2403,6 @@ function rTransferMatching(){
       <td style="font-size:var(--fs-xs)">${acc?.name||'--'} ${ob(acc?.owner)}</td>
       <td class="${dir==='out'?'c-bad':'c-ok'}" style="text-align:right;font-weight:500;white-space:nowrap">${dir==='out'?'-':'+'}${fmtP(t.amount)}</td>
       <td><span class="badge" style="background:#FEF3C7;color:#92400E">Pending</span></td>
-      <td style="font-size:11px;color:var(--text3)">Other account not yet imported</td>
       <td><button class="btn btn-xs" onclick="showMatchPicker('${t.id}')">Match manually</button>
           <button class="btn btn-xs btn-d" onclick="dismissTransfer('${t.id}','${ym}')">Dismiss</button></td>
     </tr>`;}).join(''):`<tr><td colspan="6" class="empty">&#10003; No pending unmatched transfers</td></tr>`;
@@ -2392,7 +2425,7 @@ function rTransferMatching(){
 
   <div class="slbl" style="margin-top:.5rem">Pending Matches (${pending.length})</div>
   <div class="card"><div class="tbl-wrap"><table>
-    <thead><tr><th>Date</th><th>Description</th><th>Account</th><th style="text-align:right">Amount</th><th>Status</th><th>Note</th><th></th></tr></thead>
+    <thead><tr><th>Date</th><th>Description</th><th>Account</th><th style="text-align:right">Amount</th><th>Status</th><th></th></tr></thead>
     <tbody>${pendRows}</tbody>
   </table></div></div>
 
@@ -2503,25 +2536,29 @@ function clearMonthTxns(){
   const deletedIds=new Set(toDelete.map(t=>t.id));
   if(accOverride){S.txnCache[ym]=(S.txnCache[ym]||[]).filter(t=>t.accountId!==accOverride);}
   else{S.txnCache[ym]=[];}
-  // M3: Remove dangling matched pairs for deleted transactions
+  // Remove dangling matched pairs for deleted transactions
   S.matchedPairs=(S.matchedPairs||[]).filter(p=>!deletedIds.has(p.outId)&&!deletedIds.has(p.inId));
+
+  // Auto-clear debt payments imported from this month — prevents duplicates on re-import
+  S.debts.forEach(d=>{
+    if(!d.payments)return;
+    const before=d.payments.length;
+    d.payments=d.payments.filter(p=>{
+      if(p.source!=='import')return true; // keep manually recorded payments always
+      const payYm=p.date?p.date.substr(0,7):null;
+      return payYm!==ym; // remove import payments from the cleared month
+    });
+    if(d.payments.length!==before)recalcDebtRemaining(d);
+  });
+
   // Clear guardFail flags for the affected account(s) and month
   if(accOverride){
     const mk=accOverride+'_'+ym;
-    if(S.monthlyBal[mk]){
-      delete S.monthlyBal[mk].guardFail;
-      delete S.monthlyBal[mk].guardDiff;
-      delete S.monthlyBal[mk].guardCalc;
-    }
+    if(S.monthlyBal[mk]){delete S.monthlyBal[mk].guardFail;delete S.monthlyBal[mk].guardDiff;delete S.monthlyBal[mk].guardCalc;}
   }else{
-    // Clear all accounts for this month
     S.accounts.forEach(a=>{
       const mk=a.id+'_'+ym;
-      if(S.monthlyBal[mk]){
-        delete S.monthlyBal[mk].guardFail;
-        delete S.monthlyBal[mk].guardDiff;
-        delete S.monthlyBal[mk].guardCalc;
-      }
+      if(S.monthlyBal[mk]){delete S.monthlyBal[mk].guardFail;delete S.monthlyBal[mk].guardDiff;delete S.monthlyBal[mk].guardCalc;}
     });
   }
   schedTxn(ym);sched();render();
@@ -2541,9 +2578,25 @@ function openNTCat(){
     const mcEl=document.getElementById('nt-mc');
     const scEl=document.getElementById('nt-sc');
     const lbl=document.getElementById('nt-cat-label');
+    const typeEl=document.getElementById('nt-type');
     if(mcEl)mcEl.value=m||'';
     if(scEl)scEl.value=s||'';
     if(lbl){const mc=getMC(m),sc=getSC(s);lbl.textContent=(mc?.name||'--')+(sc?' / '+sc.name:'');}
+    // V3.0 #18: auto-set type when sub-category drives it
+    if(typeEl){
+      if(s==='sub_internal_transfer'){typeEl.value='transfer';autoDir('transfer','nt-dir');}
+      else if(s==='sub_external_transfer'){typeEl.value='external_transfer';autoDir('external_transfer','nt-dir');}
+      else if(m){
+        // Sync type from main category when not a transfer sub
+        const mc=getMC(m);
+        if(mc){
+          if(mc.type==='income'){typeEl.value='income';autoDir('income','nt-dir');}
+          else if(mc.type==='investment'){typeEl.value='investment';autoDir('investment','nt-dir');}
+          else if(mc.type==='transfer'&&s!=='sub_external_transfer'){typeEl.value='transfer';autoDir('transfer','nt-dir');}
+          else if(mc.type==='expense'){typeEl.value='expense';autoDir('expense','nt-dir');}
+        }
+      }
+    }
   };
   document.getElementById('cat-modal').classList.add('active');
 }
@@ -2636,20 +2689,18 @@ async function doImport(){
     const dir=(t.direction?t.direction.toLowerCase().trim():null)||(txnType==='income'?'in':'out');
     // C4: Deduplication — skip if a matching transaction already exists
     const amt=Math.abs(parseFloat(t.amount)||0);
-    // Dedup: date + amount + description + accountId
-    // If both have notes with different refs, treat as distinct transactions
-    const notesSig=(t.notes||'').trim().toLowerCase();
-    isDup=txns.some(x=>{
-      if(x.date!==t.date)return false;
-      if(Math.abs(x.amount-amt)>=0.01)return false;
-      if((x.description||'').trim().toLowerCase()!==(cleanDesc||'').toLowerCase())return false;
-      if((x.accountId||null)!==(ai||null))return false;
-      const xNotes=(x.notes||'').trim().toLowerCase();
-      if(notesSig&&xNotes&&notesSig!==xNotes)return false;
-      return true;
-    });
+    const isDup=txns.some(x=>x.date===t.date&&Math.abs(x.amount-amt)<0.01&&(x.description||'').trim().toLowerCase()===(cleanDesc||'').toLowerCase()&&(x.accountId||null)===(ai||null));
     if(isDup)continue;
-    txns.push({id:uid(),date:t.date,description:cleanDesc,raw_description:rawDesc,amount:amt,type:txnType,direction:dir,mainCatId:mid,subCatId:sid,accountId:ai,debtId:di,notes:(t.notes||'').trim(),flagged:!!t.flagged,ruleApplied:ruleApplied||false});
+    const txnItem={id:uid(),date:t.date,description:cleanDesc,raw_description:rawDesc,amount:amt,type:txnType,direction:dir,mainCatId:mid,subCatId:sid,accountId:ai,debtId:di,notes:(t.notes||'').trim(),flagged:!!t.flagged,ruleApplied:ruleApplied||false};
+    // Route to correct month bucket based on transaction date, not statement month
+    const txnYm=t.date?t.date.substr(0,7):ym;
+    if(txnYm!==ym){
+      if(!S.txnCache[txnYm])S.txnCache[txnYm]=[];
+      S.txnCache[txnYm].push(txnItem);
+      schedTxn(txnYm);
+    }else{
+      txns.push(txnItem);
+    }
     added++;
     if(di&&txnType==='expense'){applyDP(di,amt,t.date,'import',cleanDesc);dapp++;}
   }
@@ -2762,11 +2813,8 @@ function closeCatM(){document.getElementById('cat-modal').classList.remove('acti
 // ─── UNCATEGORIZED ───
 function rPendingMatches(){
   return`
-  <div class="fg jb" style="margin-bottom:4px;flex-wrap:wrap;gap:8px">
-    <div style="font-size:16px;font-weight:500">Pending Transfer Matches</div>
-    <button class="btn btn-sm" onclick="rescanAllTransfers()">↻ Re-scan all transfers</button>
-  </div>
-  <div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:1.25rem">Internal transfers between your accounts. Match them to avoid double-counting in reports. Use Re-scan if both sides were imported before the auto-matcher ran.</div>
+  <div style="font-size:16px;font-weight:500;margin-bottom:4px">Pending Transfer Matches</div>
+  <div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:1.25rem">Internal transfers between your accounts. Match them to avoid double-counting in reports.</div>
   ${rTransferMatching()}`;
 }
 async function rUncat(){
@@ -2780,7 +2828,7 @@ async function rUncat(){
       <td style="color:var(--text3);font-size:var(--fs-xs);white-space:nowrap">${toDD(t.date)}</td>
       <td>${h(t.description)}</td>
       <td style="font-size:var(--fs-xs)">${acc?.name||'--'}</td>
-      <td style="text-align:right;font-weight:500" class="c-bad">-${fmtP(t.amount)}</td>
+      <td style="text-align:right;font-weight:500" class="${t.type==='income'?'c-ok':'c-bad'}">${t.type==='income'?'+':'−'}${fmtP(t.amount)}</td>
       <td><button class="btn btn-xs btn-p" onclick="openCP('${t.id}','${ym}','','')">Assign</button><button class="btn btn-xs" onclick="openEditTxn('${t.id}','${ym}')">Edit</button></td>
     </tr>`;}).join(''):`<tr><td colspan="5" class="empty">&#10003; No uncategorized transactions</td></tr>`;
   const fRows=flagged.length?flagged.map(t=>{
@@ -3019,7 +3067,7 @@ function rInc(){
     </div>
     <div class="fr" style="margin-top:8px">
       <div><label class="lbl">Statement keyword (for matching)</label><input type="text" id="ii-kw" placeholder="e.g. MASIC, PAYROLL — matches against descriptions"></div>
-      <div><label class="lbl">Notes</label><input type="text" id="ii-notes2" placeholder="Optional context"></div>
+      <div><!-- ii-notes2 removed: duplicate notes field -->
     </div>
     <div class="fg" style="margin-top:10px"><button class="btn btn-p" id="ii-sbtn" onclick="addInc()">Add</button><button class="btn" onclick="tp('addinc-panel');editIncId=null">Cancel</button></div>
   </div>
@@ -3567,7 +3615,7 @@ function rDebts(){
     const paid=isCC?(d.openingBalance||0)-liveBalance:((d.original||0)-(d.remaining||0));
     const denom=isCC?(d.openingBalance||0):(d.original||0);
     const p=denom>0?Math.min(100,Math.round(Math.max(0,paid)/denom*100)):0;
-    const pl=(d.payments||[]).slice().reverse().map(x=>`<div class="prow"><span style="color:var(--text3)">${toDD(x.date)}</span><span style="font-size:var(--fs-xxs)">${x.source==='import'?'<span style="color:var(--info)">[stmt]</span> ':''} ${h(x.notes||'')}</span><span class="c-bad">-${fmtP(x.amount)}</span></div>`).join('')||'<div style="font-size:var(--fs-xs);color:var(--text3);padding:6px 0">No payments recorded yet.</div>';
+    const pl=(d.payments||[]).slice().reverse().map(x=>`<div class="prow"><span style="color:var(--text3);flex-shrink:0">${toDD(x.date)}</span><span style="font-size:var(--fs-xxs);flex:1;margin:0 8px">${x.source==='import'?'<span style="color:var(--info)">[stmt]</span> ':''} ${h(x.notes||'')}</span><span class="c-bad" style="flex-shrink:0">-${fmtP(x.amount)}</span><button class="btn btn-xs btn-d" style="margin-left:8px;padding:1px 6px;font-size:10px;flex-shrink:0" onclick="delDebtPayment('${d.id}','${x.id||(x.date+(x.amount))}')" title="Remove this payment">✕</button></div>`).join('')||'<div style="font-size:var(--fs-xs);color:var(--text3);padding:6px 0">No payments recorded yet.</div>';
     return`<div class="card" style="${d.status==='settled'?'opacity:.6':''}">
       <div class="fg jb" style="flex-wrap:wrap;gap:8px">
         <div>
@@ -3612,7 +3660,10 @@ function rDebts(){
       `}
       ${d.notes?`<div style="font-size:var(--fs-xs);color:var(--text3);margin-top:6px">${h(d.notes)}</div>`:''}
       <div class="div" style="margin:10px 0 8px"></div>
-      <div class="chdr" style="margin-bottom:6px">Payment history</div>
+      <div class="fg jb" style="margin-bottom:6px;align-items:center">
+        <div class="chdr" style="margin-bottom:0">Payment history</div>
+        <button class="btn btn-xs" onclick="dedupDebtPayments('${d.id}')" style="font-size:10px;padding:2px 8px">Remove duplicates</button>
+      </div>
       <div class="plog">${pl}</div>
       ${d.status==='active'?`<div class="fg" style="margin-top:12px;flex-wrap:wrap;gap:6px">
         ${isCC?'':`<input type="number" id="dp-${d.id}" placeholder="Amount" style="width:120px;flex-shrink:0" min="0" step="0.01">
@@ -3845,7 +3896,7 @@ function rSettings(){
       <div class="card">
         <div class="chdr">Preferences</div>
         <div class="fr" style="margin-bottom:10px">
-          <div><label class="lbl">Monthly Savings &amp; Investment Target (%)</label><input type="number" id="pref-tgt" value="${S.settings.savingsTarget||20}" min="1" max="100" onchange="S.settings.savingsTarget=parseInt(this.value)||20;sched();toast('Savings target updated')"></div>
+          <div><label class="lbl">Monthly Savings &amp; Investment Target (%)</label><input type="number" id="pref-tgt" value="${S.settings.savingsTarget||20}" min="0.01" max="100" step="0.01" onchange="S.settings.savingsTarget=Math.round((parseFloat(this.value)||20)*100)/100;sched();toast('Savings target updated')"></div>
           <div><label class="lbl">Display Currency</label><select onchange="S.settings.currency=this.value;sched();toast('Currency updated')"><option value="SAR" ${S.settings.currency==='SAR'?'selected':''}>SAR</option><option value="USD" ${S.settings.currency==='USD'?'selected':''}>USD</option><option value="EUR" ${S.settings.currency==='EUR'?'selected':''}>EUR</option></select></div>
         </div>
         <label class="lbl">Backup Reminder Frequency</label>
@@ -3872,7 +3923,7 @@ function rSettings(){
           <div><label class="lbl">PIN (4 digits)</label><input type="text" id="sub-pin" placeholder="e.g. 1234" maxlength="4" pattern="[0-9]{4}"></div>
           <button class="btn btn-p" onclick="addSubmitter()">Add</button>
         </div>
-        <div style="font-size:var(--fs-xxs);color:var(--text3);margin-top:6px">Submit page: <a href="submit.html" target="_blank" style="color:var(--info)">submit.html</a></div>
+        <div style="font-size:var(--fs-xxs);color:var(--text3);margin-top:6px">Submit page: <a href="submitexpense.html" target="_blank" style="color:var(--info)">submitexpense.html</a></div>
       </div>
 
       <div class="card">
@@ -4417,7 +4468,7 @@ async function rTxBank(){
     let va,vb;
     if(TF.sortCol==='date'){va=a.date||'';vb=b.date||'';}
     else if(TF.sortCol==='desc'){va=(a.description||'').toLowerCase();vb=(b.description||'').toLowerCase();}
-    else if(TF.sortCol==='amount'){va=a.amount||0;vb=b.amount||0;}
+    else if(TF.sortCol==='amount'){va=(txDir(a)==='out'?-1:1)*(a.amount||0);vb=(txDir(b)==='out'?-1:1)*(b.amount||0);}
     else if(TF.sortCol==='cat'){va=(getMC(a.mainCatId)?.name||'').toLowerCase();vb=(getMC(b.mainCatId)?.name||'').toLowerCase();}
     else if(TF.sortCol==='type'){va=a.type||'';vb=b.type||'';}
     else if(TF.sortCol==='acc'){va=(S.accounts.find(x=>x.id===a.accountId)?.name||'').toLowerCase();vb=(S.accounts.find(x=>x.id===b.accountId)?.name||'').toLowerCase();}
@@ -4459,7 +4510,7 @@ async function rTxCards(){
     let va,vb;
     if(TF.sortCol==='date'){va=a.date||'';vb=b.date||'';}
     else if(TF.sortCol==='desc'){va=(a.description||'').toLowerCase();vb=(b.description||'').toLowerCase();}
-    else if(TF.sortCol==='amount'){va=a.amount||0;vb=b.amount||0;}
+    else if(TF.sortCol==='amount'){va=(txDir(a)==='out'?-1:1)*(a.amount||0);vb=(txDir(b)==='out'?-1:1)*(b.amount||0);}
     else if(TF.sortCol==='cat'){va=(getMC(a.mainCatId)?.name||'').toLowerCase();vb=(getMC(b.mainCatId)?.name||'').toLowerCase();}
     else if(TF.sortCol==='type'){va=a.type||'';vb=b.type||'';}
     if(va<vb)return -TF.sortDir;if(va>vb)return TF.sortDir;return 0;
@@ -4565,6 +4616,7 @@ function buildAddPanel(){
       <div><label class="lbl">Type</label><select id="nt-type" onchange="autoDir(this.value,'nt-dir')"><option value="expense">Expense</option><option value="income">Income</option><option value="transfer">Transfer</option><option value="investment">Investment</option><option value="external_transfer">External Transfer</option></select></div>
       <div><label class="lbl">Direction</label><select id="nt-dir"><option value="out">Debit</option><option value="in">Credit</option></select></div>
     </div>
+    <script>setTimeout(()=>{const t=document.getElementById('nt-type');if(t)autoDir(t.value,'nt-dir');},0);</script>
     <div class="fr" style="margin-bottom:8px">
       <div><label class="lbl">Account</label><select id="nt-acc"><option value="">-- Unassigned --</option>${S.accounts.map(a=>`<option value="${a.id}">${a.name}</option>`).join('')}</select></div>
       <div><label class="lbl">Linked Debt</label><select id="nt-debt"><option value="">-- None --</option>${S.debts.filter(d=>d.status==='active').map(d=>`<option value="${d.id}">${d.name}</option>`).join('')}</select></div>
@@ -5041,8 +5093,12 @@ async function checkReimbursementMatch(importedTxns){
   });
   for(const [name,subs] of Object.entries(bySubmitter)){
     const total=Math.round(subs.reduce((s,x)=>s+parseFloat(x.amount),0)*100)/100;
-    const match=importedTxns.find(t=>t.type==='external_transfer'&&Math.abs(t.amount-total)<0.01);
-    if(match)await markReimbursementPaid(name,subs,match,total);
+    const matches=importedTxns.filter(t=>t.type==='external_transfer'&&Math.abs(t.amount-total)<0.01);
+    if(matches.length===1){
+      await markReimbursementPaid(name,subs,matches[0],total);
+    }else if(matches.length>1){
+      toast(`Multiple transfers match SAR ${total.toFixed(2)} for ${name} — go to Reimbursements to match manually`,false);
+    }
   }
 }
 
@@ -5059,6 +5115,13 @@ async function markReimbursementPaid(name,subs,paymentTxn,total){
     });
   }
   if(!S.txnCache[ym])S.txnCache[ym]=[];
+
+  // Remove the original external_transfer to prevent double-counting:
+  // net = inc - exp - ext - inv. The individual expense lines below replace it.
+  S.txnCache[ym]=S.txnCache[ym].filter(t=>t.id!==paymentTxn.id);
+  // Also remove from matchedPairs if it was matched
+  S.matchedPairs=(S.matchedPairs||[]).filter(p=>p.outId!==paymentTxn.id&&p.inId!==paymentTxn.id);
+
   subs.forEach(s=>{
     const rc=REIMB_CATS.find(r=>r.hint===s.category_hint)||REIMB_CATS[REIMB_CATS.length-1];
     S.txnCache[ym].push({
@@ -5089,23 +5152,19 @@ async function rReimbursements(){
     approvedByName[s.submitter_name].total=Math.round((approvedByName[s.submitter_name].total+parseFloat(s.amount))*100)/100;
   });
   const grandTotal=Object.values(approvedByName).reduce((s,v)=>s+v.total,0);
-  const pendRows=pending.length?pending.map(s=>{
-    const catLabel=REIMB_CATS.find(r=>r.hint===s.category_hint)?.label||s.category_hint;
-    return`<tr>
+  const pendRows=pending.length?pending.map(s=>`
+    <tr>
       <td style="color:var(--text3);font-size:var(--fs-xs);white-space:nowrap">${s.submitted_at?s.submitted_at.substr(0,10):''}</td>
       <td style="font-size:var(--fs-xs);font-weight:500">${h(s.submitter_name)}</td>
       <td>${h(s.description)}</td>
-      <td style="font-size:var(--fs-xs)">
-        <span id="reimb-cat-label-${s.id}" style="margin-right:4px">${s.category_label||catLabel}</span>
-        <button class="btn btn-xs" onclick="openReimbCatPicker('${s.id}','${s.category_hint}')" title="Change category">✎</button>
-      </td>
+      <td style="font-size:var(--fs-xs)">${REIMB_CATS.find(r=>r.hint===s.category_hint)?.label||s.category_hint}</td>
       <td style="font-size:11px;color:var(--text3)">${h(s.notes||'--')}</td>
       <td style="text-align:right;font-weight:500;white-space:nowrap">${fmtP(s.amount)}</td>
       <td style="white-space:nowrap">
         <button class="btn btn-xs btn-p" onclick="approveSubmission('${s.id}')">Approve</button>
         <button class="btn btn-xs btn-d" onclick="dismissSubmission('${s.id}')">Dismiss</button>
       </td>
-    </tr>`;}).join(''):`<tr><td colspan="7" class="empty">No pending submissions</td></tr>`;
+    </tr>`).join(''):`<tr><td colspan="7" class="empty">No pending submissions</td></tr>`;
   const approvedCards=Object.entries(approvedByName).length?
     Object.entries(approvedByName).map(([name,{items,total}])=>`
     <div class="card card-bordered" style="margin-bottom:.75rem">
@@ -5119,7 +5178,7 @@ async function rReimbursements(){
       ${items.map(s=>`<div class="fg jb" style="font-size:var(--fs-xs);padding:5px 0;border-bottom:1px solid var(--bg2)">
         <span style="color:var(--text3);white-space:nowrap;margin-right:8px">${s.submitted_at?s.submitted_at.substr(0,10):''}</span>
         <span style="flex:1">${h(s.description)}</span>
-        <span style="margin-left:8px;color:var(--text3);font-size:11px">${s.category_label||REIMB_CATS.find(r=>r.hint===s.category_hint)?.label||''}</span>
+        <span style="margin-left:8px;color:var(--text3);font-size:11px">${REIMB_CATS.find(r=>r.hint===s.category_hint)?.label||''}</span>
         <span style="margin-left:8px;font-weight:500;white-space:nowrap">${fmtP(s.amount)}</span>
       </div>`).join('')}
       <div style="font-size:var(--fs-xxs);color:var(--info);margin-top:8px;padding:6px 10px;background:#EFF6FF;border-radius:var(--rsm)">
@@ -5142,7 +5201,7 @@ async function rReimbursements(){
       <div style="font-size:16px;font-weight:500">Reimbursements</div>
       <div style="font-size:var(--fs-xs);color:var(--text3);margin-top:2px">Submitted via the Lanki Reimbursement page. Approve items, then import the matching bank transfer to auto-record.</div>
     </div>
-    <a href="submit.html" target="_blank" class="btn btn-sm">Open Submit Page ↗</a>
+    <a href="submitexpense.html" target="_blank" class="btn btn-sm">Open Submit Page ↗</a>
   </div>
   ${grandTotal>0?`
   <div class="card" style="background:color-mix(in srgb,var(--warn) 6%,white);border:1px solid color-mix(in srgb,var(--warn) 20%,transparent);margin-bottom:1.25rem">
@@ -5242,16 +5301,16 @@ async function doChangePassphrase(){
     // Save with new salt and new encrypted data
     await sbPut('phase1',{...d,salt:newSalt,ver:newVer,encData:newEncData});
 
-    // Re-encrypt all monthly txn rows
+    // Update in-memory key FIRST — saveTxnRow reads sKey
+    sKey=newKey;
+
+    // Re-encrypt all monthly txn rows with new key
     const months=Object.keys(S.txnCache||{});
     for(const ym of months){
       if(S.txnCache[ym]?.length){
         await saveTxnRow(ym,S.txnCache[ym]);
       }
     }
-
-    // Update in-memory key
-    sKey=newKey;
 
     // Clear form
     ['cp-current','cp-new1','cp-new2'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
@@ -5264,124 +5323,36 @@ async function doChangePassphrase(){
 }
 
 
-// ─── REIMBURSEMENT CATEGORY PICKER ───
-function openReimbCatPicker(sid, currentHint){
-  document.getElementById('reimb-cat-sid').value=sid;
+// ─── DEBT PAYMENT MANAGEMENT ───
+function delDebtPayment(debtId, paymentRef){
+  const d=S.debts.find(x=>x.id===debtId);if(!d)return;
+  const idx=d.payments.findIndex(p=>(p.id||p.date+p.amount)===paymentRef);
+  if(idx<0)return;
+  d.payments.splice(idx,1);
+  recalcDebtRemaining(d);
+  sched();render();toast('Payment removed');
+}
 
-  // Populate main category dropdown from MAIN_CATS (expense types only)
-  const mainSel=document.getElementById('reimb-cat-main');
-  mainSel.innerHTML='';
-  MAIN_CATS.filter(mc=>!S.deletedCats?.includes(mc.id)&&(mc.type==='expense'||mc.type==='transfer'||mc.type==='investment')).forEach(mc=>{
-    const opt=document.createElement('option');
-    opt.value=mc.id;opt.textContent=mc.name;
-    mainSel.appendChild(opt);
+function recalcDebtRemaining(d){
+  if(d.type==='credit_card')return;
+  const totalPaid=(d.payments||[]).reduce((s,p)=>s+p.amount,0);
+  d.remaining=Math.max(0,(d.original||0)-totalPaid);
+  if(d.remaining<=0)d.status='settled';
+  else if(d.status==='settled')d.status='active';
+}
+
+function dedupDebtPayments(debtId){
+  const d=S.debts.find(x=>x.id===debtId);if(!d||!d.payments)return;
+  const seen=new Set();
+  const before=d.payments.length;
+  d.payments=d.payments.filter(p=>{
+    const key=p.date+'_'+parseFloat(p.amount).toFixed(2);
+    if(seen.has(key))return false;
+    seen.add(key);return true;
   });
-
-  // Suggested: pre-select based on the hint submitted by the person
-  const rc=REIMB_CATS.find(r=>r.hint===currentHint)||REIMB_CATS[REIMB_CATS.length-1];
-  if(mainSel.querySelector(`option[value="${rc.mid}"]`)){
-    mainSel.value=rc.mid;
-  }
-
-  // Show suggestion badge
-  const suggestEl=document.getElementById('reimb-cat-suggest');
-  if(suggestEl){
-    suggestEl.textContent=`Suggested based on submission: ${rc.label}`;
-    suggestEl.style.display='block';
-  }
-
-  // Populate sub-cats filtered by selected main cat, then pre-select suggested
-  populateReimbSubCats(rc.sid);
-
-  document.getElementById('reimb-cat-modal').style.display='flex';
-}
-
-function populateReimbSubCats(preselectSid){
-  const mainId=document.getElementById('reimb-cat-main').value;
-  const subSel=document.getElementById('reimb-cat-sub');
-  subSel.innerHTML='<option value="">-- No sub-category --</option>';
-  // Filter SUB_CATS to those suggested for this main cat, then all others
-  const suggested=SUB_CATS.filter(sc=>!S.deletedSubs?.includes(sc.id)&&sc.suggestedFor?.includes(mainId));
-  const others=SUB_CATS.filter(sc=>!S.deletedSubs?.includes(sc.id)&&!sc.suggestedFor?.includes(mainId));
-  // If no suggestedFor data, show all
-  const toShow=(suggested.length?suggested:others.length?others:SUB_CATS.filter(sc=>!S.deletedSubs?.includes(sc.id)));
-  toShow.forEach(sc=>{
-    const opt=document.createElement('option');
-    opt.value=sc.id;opt.textContent=sc.name;
-    subSel.appendChild(opt);
-  });
-  if(preselectSid&&subSel.querySelector(`option[value="${preselectSid}"]`)){
-    subSel.value=preselectSid;
-  }
-}
-
-function onReimbMainCatChange(){
-  populateReimbSubCats(null);
-}
-
-function closeReimbCatModal(){
-  document.getElementById('reimb-cat-modal').style.display='none';
-}
-
-async function saveReimbCategory(){
-  const sid=document.getElementById('reimb-cat-sid').value;
-  const mainId=document.getElementById('reimb-cat-main').value;
-  const subId=document.getElementById('reimb-cat-sub').value;
-  if(!mainId){toast('Select a category',false);return;}
-  const mc=getMC(mainId);
-  const sc=subId?getSC(subId):null;
-  try{
-    await fetch(`${SB}/rest/v1/pending_submissions?id=eq.${sid}`,{
-      method:'PATCH',
-      headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json'},
-      body:JSON.stringify({
-        category_hint:mainId,
-        sub_category_id:subId||null,
-        category_label:(mc?.name||mainId)+(sc?' / '+sc.name:'')
-      })
-    });
-    await loadSubmissions();render();
-    closeReimbCatModal();
-    toast('Category updated');
-  }catch{toast('Failed to update',false);}
-}
-
-
-function rescanAllTransfers(){
-  const allT=allTxns();
-  const unmatched=allT.filter(t=>t.type==='transfer'&&!isMatched(t.id));
-  if(!unmatched.length){toast('No unmatched transfers found');return;}
-  let matched=0;
-  unmatched.forEach(t=>{
-    if(isMatched(t.id))return; // may have been matched in this loop
-    const tDir=txDir(t);
-    const tDate=new Date(t.date);
-    const match=allT.find(other=>{
-      if(other.id===t.id)return false;
-      if(isMatched(other.id))return false;
-      if(other.type!=='transfer')return false;
-      if(other.accountId===t.accountId)return false;
-      if(Math.abs(other.amount-t.amount)>0.01)return false;
-      if(txDir(other)===tDir)return false;
-      const dayDiff=Math.abs((tDate-new Date(other.date))/(1000*60*60*24));
-      return dayDiff<=3;
-    });
-    if(match){
-      const outTxn=tDir==='out'?t:match;
-      const inTxn=tDir==='in'?t:match;
-      S.matchedPairs.push({
-        id:'mp_'+uid(),
-        outId:outTxn.id,inId:inTxn.id,
-        amount:t.amount,date:t.date,
-        outAccId:outTxn.accountId,inAccId:inTxn.accountId,
-        matchedAt:new Date().toISOString(),
-        confirmedBy:'auto'
-      });
-      matched++;
-    }
-  });
-  if(matched>0){sched();render();toast(`Found and matched ${matched} transfer pair${matched!==1?'s':''} ✓`);}
-  else toast('No new matches found — import the other account statements first');
+  const removed=before-d.payments.length;
+  if(removed>0){recalcDebtRemaining(d);sched();render();toast(`Removed ${removed} duplicate payment${removed!==1?'s':''}`);}
+  else toast('No duplicate payments found');
 }
 
 initAuth();
@@ -5434,28 +5405,6 @@ initAuth();
     <div class="fg">
       <button class="btn btn-p f1" onclick="saveEditTxn()">Save Changes</button>
       <button class="btn" onclick="closeEditTxn()">Cancel</button>
-    </div>
-  </div>
-</div>
-
-<!-- Reimbursement Category Picker Modal -->
-<div id="reimb-cat-modal" style="display:none;position:fixed;inset:0;z-index:2000;background:rgba(2,23,81,.35);align-items:center;justify-content:center">
-  <div style="background:#fff;border-radius:var(--r);padding:1.5rem;width:100%;max-width:400px;box-shadow:0 8px 40px rgba(2,23,81,.15);margin:1rem">
-    <div style="font-size:15px;font-weight:600;color:var(--midnight);margin-bottom:4px">Edit Category</div>
-    <div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:8px">Select the main category and sub-category for this submission.</div>
-    <div id="reimb-cat-suggest" style="display:none;font-size:11px;font-weight:600;color:var(--electric);background:color-mix(in srgb,var(--electric) 8%,white);padding:5px 10px;border-radius:var(--rsm);margin-bottom:10px"></div>
-    <input type="hidden" id="reimb-cat-sid">
-    <div style="margin-bottom:10px">
-      <label class="lbl">Category</label>
-      <select id="reimb-cat-main" onchange="onReimbMainCatChange()" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--rsm);font-size:var(--fs-xs);background:#fff;color:var(--text)"></select>
-    </div>
-    <div style="margin-bottom:1rem">
-      <label class="lbl">Sub-category</label>
-      <select id="reimb-cat-sub" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--rsm);font-size:var(--fs-xs);background:#fff;color:var(--text)"></select>
-    </div>
-    <div class="fg" style="gap:8px">
-      <button class="btn btn-p" onclick="saveReimbCategory()" style="flex:1">Save</button>
-      <button class="btn" onclick="closeReimbCatModal()" style="flex:1">Cancel</button>
     </div>
   </div>
 </div>
