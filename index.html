@@ -1825,7 +1825,7 @@ async function render(){
   updateBadge();
   const el=document.getElementById('page-content');if(!el)return;
   // Save search state before re-render to restore cursor position (Fix 2)
-  const searchEl=document.querySelector('#page-content input[type="text"][placeholder="Search..."]');
+  const searchEl=document.querySelector('#page-content input[type="text"][placeholder="Search description or amount…"]');
   const hadSearchFocus=searchEl&&document.activeElement===searchEl;
   const searchVal=searchEl?searchEl.value:null;
   const t=S.tab;
@@ -1848,7 +1848,7 @@ async function render(){
   else if(t==='catdrill')el.innerHTML=await rCatDrill();
   // Restore search focus after re-render (independent of tab dispatch)
   if(hadSearchFocus){
-    const newSearch=document.querySelector('#page-content input[type="text"][placeholder="Search..."]');
+    const newSearch=document.querySelector('#page-content input[type="text"][placeholder="Search description or amount…"]');
     if(newSearch){newSearch.focus();if(searchVal!==null){newSearch.value=searchVal;newSearch.setSelectionRange(searchVal.length,searchVal.length);}}
   }
   if(t==='overview')setTimeout(buildCharts,120);
@@ -4817,7 +4817,7 @@ function buildTxFilters(){
     <div style="flex:1"></div>
     <button class="btn btn-xs btn-p" onclick="applyBulkCategory()">Assign Category</button>
   </div>
-  <div class="fg" style="gap:8px;flex-wrap:wrap;margin-bottom:1rem">
+  <div class="fg" style="gap:8px;flex-wrap:nowrap;align-items:center;margin-bottom:1rem;overflow-x:auto">
     <input type="text" placeholder="Search description or amount…" value="${TF.q||''}" oninput="TF.q=this.value;render()" style="flex:1;min-width:180px">
     <select onchange="TF.type=this.value;render()" style="min-width:140px">
       <option value="" ${!TF.type?'selected':''}>All Types</option>
@@ -5639,19 +5639,23 @@ function initDateInputs(){
 }
 
 function autoSlashDate(el){
-  let v=el.value.replace(/[^0-9]/g,''); // strip non-digits
-  if(v.length>8)v=v.substr(0,8);
-  let out='';
-  if(v.length>=1)out=v.substr(0,Math.min(2,v.length));
-  if(v.length>2)out+='/'+v.substr(2,Math.min(2,v.length-2));
-  if(v.length>4)out+='/'+v.substr(4,Math.min(4,v.length-4));
-  if(el.value!==out){
-    const pos=el.selectionStart;
-    el.value=out;
-    // Adjust cursor: skip over slashes
-    const newPos=out.length===3&&pos===2?3:out.length===6&&pos===5?6:Math.min(pos,out.length);
-    try{el.setSelectionRange(newPos,newPos);}catch(e){}
+  // Strip all non-digits, cap at 8
+  const raw=el.value.replace(/[^0-9]/g,'').substr(0,8);
+  // Build DD/MM/YYYY
+  let out=raw.substr(0,2);
+  if(raw.length>2)out+='/'+raw.substr(2,2);
+  if(raw.length>4)out+='/'+raw.substr(4);
+  if(el.value===out)return;
+  // Preserve cursor: count digits before cursor in old value, then re-position in new
+  const digitsBeforeCursor=(el.value.substr(0,el.selectionStart).replace(/[^0-9]/g,'')).length;
+  el.value=out;
+  let newPos=0,seen=0;
+  for(let i=0;i<out.length;i++){
+    if(out[i]!=='/')seen++;
+    if(seen===digitsBeforeCursor){newPos=i+1;break;}
   }
+  if(seen<digitsBeforeCursor)newPos=out.length;
+  try{el.setSelectionRange(newPos,newPos);}catch(e){}
 }
 
 let _calTarget=null; // which input to fill
