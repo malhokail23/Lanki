@@ -726,7 +726,7 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto}
     <rect y="25" width="34" height="8" rx="2" fill="#021751"/>
   </svg>
   <div class="auth-logo">lanki <em>platform</em></div>
-  <div style="font-size:10px;color:var(--text3);margin-top:5px;letter-spacing:.1em">VERSION 2.1</div>
+  <div style="font-size:10px;color:var(--text3);margin-top:5px;letter-spacing:.1em" class="version-label">VERSION</div>
   <div class="auth-spin" style="margin-top:1.5rem"></div>
   <div class="auth-ltxt" id="load-msg">Connecting to vault...</div>
 </div>
@@ -742,7 +742,7 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto}
       </svg>
       <div class="auth-logo">lanki <em>platform</em></div>
     </div>
-    <div style="font-size:10px;color:var(--text3);margin-top:5px;letter-spacing:.1em">VERSION 2.1</div>
+    <div style="font-size:10px;color:var(--text3);margin-top:5px;letter-spacing:.1em" class="version-label">VERSION</div>
   </div>
   <div class="auth-sub">Create your secure vault</div>
   <div class="auth-form">
@@ -771,7 +771,7 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto}
       </svg>
       <div class="auth-logo">lanki <em>platform</em></div>
     </div>
-    <div style="font-size:10px;color:var(--text3);margin-top:5px;letter-spacing:.1em">VERSION 2.1</div>
+    <div style="font-size:10px;color:var(--text3);margin-top:5px;letter-spacing:.1em" class="version-label">VERSION</div>
   </div>
   <div class="auth-sub">Enter your passphrase</div>
   <div class="auth-form">
@@ -1329,7 +1329,7 @@ function setSS(m,type){
 function ob(oid){const i=S.owners.findIndex(o=>o.id===oid);const o=S.owners[i];if(!o)return'';const c=oc(i);return`<span style="font-size:11px;font-weight:500;padding:2px 7px;border-radius:8px;background:${c}22;color:${c}">${o.name}</span>`;}
 function oSel(sel){const def=sel!==undefined?sel:(S.owners[0]?.id||'');return S.owners.map(o=>`<option value="${o.id}" ${o.id===def?'selected':''}>${o.name}</option>`).join('');}
 function togglePrivacy(){S.privacy=!S.privacy;const b=document.getElementById('priv-btn');if(b)b.innerHTML=S.privacy?'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg> Show':'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg> Hide';render();}
-function tp(id){const el=document.getElementById(id);if(el)el.classList.toggle('open');}
+function tp(id){const el=document.getElementById(id);if(el){el.classList.toggle('open');if(id==='atxn-panel'&&el.classList.contains('open')){setTimeout(()=>{const t=document.getElementById('nt-type');if(t)autoDir(t.value,'nt-dir');},10);}}}
 function getMC(id){if(S.deletedCats&&S.deletedCats.includes(id))return undefined;return MAIN_CATS.find(c=>c.id===id);}
 function getSC(id){if(S.deletedSubs&&S.deletedSubs.includes(id))return undefined;return SUB_CATS.find(c=>c.id===id);}
 function h(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');} // L6
@@ -4616,7 +4616,6 @@ function buildAddPanel(){
       <div><label class="lbl">Type</label><select id="nt-type" onchange="autoDir(this.value,'nt-dir')"><option value="expense">Expense</option><option value="income">Income</option><option value="transfer">Transfer</option><option value="investment">Investment</option><option value="external_transfer">External Transfer</option></select></div>
       <div><label class="lbl">Direction</label><select id="nt-dir"><option value="out">Debit</option><option value="in">Credit</option></select></div>
     </div>
-    <script>setTimeout(()=>{const t=document.getElementById('nt-type');if(t)autoDir(t.value,'nt-dir');},0);</script>
     <div class="fr" style="margin-bottom:8px">
       <div><label class="lbl">Account</label><select id="nt-acc"><option value="">-- Unassigned --</option>${S.accounts.map(a=>`<option value="${a.id}">${a.name}</option>`).join('')}</select></div>
       <div><label class="lbl">Linked Debt</label><select id="nt-debt"><option value="">-- None --</option>${S.debts.filter(d=>d.status==='active').map(d=>`<option value="${d.id}">${d.name}</option>`).join('')}</select></div>
@@ -5355,6 +5354,8 @@ function dedupDebtPayments(debtId){
   else toast('No duplicate payments found');
 }
 
+// Set version labels dynamically
+document.querySelectorAll('.version-label').forEach(el=>el.textContent='VERSION '+VERSION.toUpperCase());
 initAuth();
 </script>
 
