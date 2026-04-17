@@ -5810,7 +5810,10 @@ async function runAIExtract(){
       .slice(0,50);
     const resp=await fetch(EDGE_URL,{
       method:'POST',
-      headers:{'Content-Type':'application/json'},
+      headers:{
+        'Content-Type':'application/json',
+        'Authorization':'Bearer '+SK  // Supabase publishable key — required by Edge Function auth
+      },
       body:JSON.stringify({
         fileData:_aiState.fileData,
         fileType:_aiState.fileType,
