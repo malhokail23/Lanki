@@ -1067,7 +1067,7 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overfl
         </div>
       </div>
     </div>
-    <!-- V3.1: Restructured nav — meaningful groups, no label-item redundancy -->
+    <!-- V3.1: Restructured nav — ACTIVITY / FINANCES / HOUSEHOLD / Settings -->
     <button class="nav-item active" data-tab="overview" onclick="sw('overview')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg> Overview</button>
 
     <div class="nav-section-label">Activity</div>
@@ -1094,17 +1094,16 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overfl
       <button onclick="sw('insights')">Usage Insights</button>
     </div>
 
-    <div class="nav-section-label">Accounts</div>
-    <button class="nav-item nav-group" data-group="accounts" onclick="toggleGroup('accounts')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> Accounts &amp; Cards <span class="nav-arrow" id="arr-accounts">&#8250;</span></button>
-    <div id="nav-dd-accounts" class="nav-dd">
-      <button onclick="sw('accounts')">Accounts &amp; Cards</button>
-      <button onclick="sw('debts')">Debts</button>
-      <button onclick="sw('goals')">Goals</button>
-    </div>
+    <div class="nav-section-label">Finances</div>
+    <button class="nav-item" data-tab="accounts" onclick="sw('accounts')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> Accounts &amp; Cards</button>
+    <button class="nav-item" data-tab="debts" onclick="sw('debts')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> Debts</button>
+    <button class="nav-item" data-tab="goals" onclick="sw('goals')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg> Goals</button>
 
     <div class="nav-section-label">Household</div>
     <button class="nav-item" data-tab="staff" onclick="sw('staff')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Staff</button>
+    <button class="nav-item" data-tab="familyinv" onclick="sw('familyinv')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg> Family Investments</button>
 
+    <div style="border-top:1px solid var(--border);margin:6px 0"></div>
     <button class="nav-item" data-tab="settings" onclick="sw('settings')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Settings</button>
     <div class="nav-utils">
       <button id="demo-btn" class="nav-btn" onclick="toggleDemoMode()" style="font-size:11px;font-weight:500">Demo</button>
@@ -1192,9 +1191,8 @@ const NAV_GROUPS={
   transactions:{tabs:['txbank','txcards','aiupload'],labels:{txbank:'Bank Accounts',txcards:'Cards',aiupload:'AI Upload'}},
   recurring:{tabs:['income','bills','subscriptions'],labels:{income:'Income',bills:'Bills',subscriptions:'Subscriptions'}},
   inbox:{tabs:['uncat','transfers','reimbursements','rules','insights'],labels:{uncat:'Uncategorized',transfers:'Pending Matches',reimbursements:'Reimbursements',rules:'Merchant Rules',insights:'Usage Insights'}},
-  accounts:{tabs:['accounts','debts','goals'],labels:{accounts:'Accounts & Cards',debts:'Debts',goals:'Goals'}},
 };
-const TAB_TO_GROUP={txbank:'transactions',txcards:'transactions',aiupload:'transactions',income:'recurring',bills:'recurring',subscriptions:'recurring',accounts:'accounts',debts:'accounts',goals:'accounts',uncat:'inbox',transfers:'inbox',reimbursements:'inbox',rules:'inbox',insights:'inbox',staff:'',settings:''};
+const TAB_TO_GROUP={txbank:'transactions',txcards:'transactions',aiupload:'transactions',income:'recurring',bills:'recurring',subscriptions:'recurring',accounts:'',debts:'',goals:'',uncat:'inbox',transfers:'inbox',reimbursements:'inbox',rules:'inbox',insights:'inbox',staff:'',familyinv:'',settings:''};
 
 
 // ─── CONSTANTS ───
@@ -1381,7 +1379,7 @@ function lockApp(){sKey=null;
   // H2: Clear decrypted state from memory
   S.accounts=[];S.debts=[];S.goals=[];S.income=[];S.bills=[];S.subs=[];
   S.staff=[];S.rules=[];S.dismissed=[];S.deletedCats=[];S.deletedSubs=[];
-  S.owners=[];S.txnCache={};S.monthlyBal={};S.matchedPairs=[];S.settings={};
+  S.owners=[];S.familyMembers=[];S.txnCache={};S.monthlyBal={};S.matchedPairs=[];S.settings={};
   showAuth('s-unlock');const p=document.getElementById('ul-p');if(p){p.value='';p.focus();}const e=document.getElementById('ul-err');if(e)e.textContent='';const b=document.getElementById('ul-btn');if(b){b.disabled=false;b.textContent='Unlock \u2192';}}
 
 // ─── PIN MODAL ───
@@ -1459,7 +1457,7 @@ const OP=['#185FA5','#7F77DD','#D4537E','#1D9E75','#BA7517','#D85A30','#0F6E56',
 function oc(i){return OP[i%OP.length];}
 function defOwners(){return[{id:'owner_self',name:'Self'}];}
 let S={
-  tab:'overview',month:addM(getYM(new Date()),-1),dashOwner:'owner_self',privacy:false,ovPeriod:'month',
+  tab:'overview',month:addM(getYM(new Date()),-1),privacy:false,ovPeriod:'month',
   owners:[],accounts:[],debts:[],goals:[],income:[],bills:[],subs:[],staff:[],
   rules:[],dismissed:[],deletedCats:[],deletedSubs:[],txnCache:{},monthlyBal:{},matchedPairs:[],submitters:[],
   settings:{currency:'SAR',savingsTarget:20,backupReminderMonths:2,lastBackup:null},
@@ -1552,6 +1550,7 @@ function restoreS(d){
   S.dismissed=d.dismissed||[];
   S.deletedCats=d.deletedCats||[];S.deletedSubs=d.deletedSubs||[];
   S.owners=d.owners&&d.owners.length?d.owners:defOwners();
+  S.familyMembers=d.familyMembers||[];
   S.settings={currency:'SAR',savingsTarget:20,backupReminderMonths:2,lastBackup:null,...(d.settings||{})};  S.monthlyBal=d.monthlyBal||{};  S.matchedPairs=d.matchedPairs||[];
   S.submitters=d.submitters||[];
   // txnCache stays separate - loaded in loadS
@@ -1840,7 +1839,7 @@ function sw(tab){
   // Close mobile sidebar when navigating
   closeSidebar();
   // Update mobile page title in burger bar
-  const allLabels={overview:'Overview',txbank:'Bank Accounts',txcards:'Cards',income:'Income',bills:'Bills',subscriptions:'Subscriptions',staff:'Household Staff',accounts:'Accounts & Cards',debts:'Debts',goals:'Goals',uncat:'Uncategorized',transfers:'Pending Matches',rules:'Merchant Rules',insights:'Usage Insights',settings:'Settings'};
+  const allLabels={overview:'Overview',txbank:'Bank Accounts',txcards:'Cards',income:'Income',bills:'Bills',subscriptions:'Subscriptions',staff:'Staff',familyinv:'Family Investments',accounts:'Accounts & Cards',debts:'Debts',goals:'Goals',uncat:'Uncategorized',transfers:'Pending Matches',rules:'Merchant Rules',insights:'Usage Insights',settings:'Settings'};
   const titleEl=document.getElementById('mob-page-title');
   if(titleEl)titleEl.textContent=allLabels[tab]||tab;
   // Close mobile dropdown
@@ -1912,7 +1911,8 @@ function nextM(){
   S.month=proposed>last?last:proposed;
   render();
 }
-function setDO(id){S.dashOwner=id;render();}
+function setDO(id){}// removed — owner filter deprecated
+
 function lastTxnMonth(){
   const keys=Object.keys(S.txnCache||{}).filter(k=>(S.txnCache[k]||[]).length>0);
   if(!keys.length)return getYM(new Date());
@@ -1949,6 +1949,7 @@ async function render(){
   else if(t==='bills')el.innerHTML=rBills();
   else if(t==='subscriptions')el.innerHTML=await rSubs();
   else if(t==='staff')el.innerHTML=rStaff();
+  else if(t==='familyinv')el.innerHTML=rFamilyInv();
   else if(t==='accounts')el.innerHTML=rAcc();
   else if(t==='debts')el.innerHTML=rDebts();
   else if(t==='goals')el.innerHTML=rGoals();
@@ -2000,14 +2001,10 @@ async function rOv(){
   const prevMonths=months.map(m=>addM(m,-1));
   const allT=months.flatMap(m=>S.txnCache[m]||[]);
   const prevT=prevMonths.flatMap(m=>S.txnCache[m]||[]);
-  const af=S.dashOwner?S.accounts.filter(a=>a.owner===S.dashOwner):S.accounts;
-  const ai=new Set(af.map(a=>a.id));
-  const ownerOk=S.dashOwner&&S.owners.find(o=>o.id===S.dashOwner);
-  const tx=ownerOk?allT.filter(t=>t.accountId&&ai.has(t.accountId)):allT;
-  const pTx=ownerOk?prevT.filter(t=>t.accountId&&ai.has(t.accountId)):prevT;
-  // Owner-filtered versions of all data arrays
-  const fDebts=ownerOk?S.debts.filter(d=>d.owner===S.dashOwner):S.debts;
-  const fGoals=ownerOk?S.goals.filter(g=>g.owner===S.dashOwner):S.goals;
+  const tx=allT;
+  const pTx=prevT;
+  const fDebts=S.debts;
+  const fGoals=S.goals;
   const fStaff=S.staff; // staff has no owner field yet — shows all owners
   const fIncome=S.income; // income has no owner field yet — shows all owners
   const n=months.length;
@@ -2264,13 +2261,9 @@ async function rOv(){
       </div>
     </div>`).join(''):`<div style="font-size:var(--fs-xs);color:var(--text3);padding:8px 0">&#10003; No alerts — everything looks good.</div>`;
 
-  const opills=`<div class="fg" style="flex-wrap:wrap;gap:6px;margin-bottom:1.25rem">
-    ${S.owners.map(o=>`<button class="opill ${S.dashOwner===o.id?'active':''}" onclick="setDO('${o.id}')">${o.name}</button>`).join('')}
-    <button class="opill ${!S.dashOwner?'active':''}" onclick="setDO(null)">All</button>
-  </div>`;
   const pbtns=['month','3m','6m','12m','ytd','all'].map(p=>`<button class="pbtn ${S.ovPeriod===p?'active':''}" onclick="setOvP('${p}')">${{month:'1 Month','3m':'3 Months','6m':'6 Months','12m':'12 Months','ytd':'Year to Date','all':'All Time'}[p]}</button>`).join('');
 
-  return`${opills}
+  return`
   <div class="fg jb" style="margin-bottom:1.25rem;flex-wrap:wrap;gap:10px">
     <div>
       <div style="font-size:19px;font-weight:500">Financial Overview</div>
@@ -2636,6 +2629,15 @@ function openEditTxn(id,ym){
   document.getElementById('etxn-sc').value=t.subCatId||'';
   const mc=getMC(t.mainCatId),sc=getSC(t.subCatId);
   document.getElementById('etxn-cat-label').textContent=(mc?.name||'--')+(sc?' / '+sc.name:'');
+  // Beneficiary — only for investment and income
+  const benRow=document.getElementById('etxn-beneficiary-row');
+  const benSel=document.getElementById('etxn-beneficiary');
+  const showBen=(t.type==='investment'||t.type==='income');
+  if(benRow)benRow.style.display=showBen?'block':'none';
+  if(benSel){
+    benSel.innerHTML='<option value="">Unassigned</option>'+( S.familyMembers||[]).map(m=>`<option value="${m.id}">${h(m.name)}${m.relationship?' ('+m.relationship+')':''}</option>`).join('');
+    benSel.value=t.beneficiaryId||'';
+  }
   document.getElementById('edit-txn-modal').classList.add('active');
 }
 function openCPEditTxn(){
@@ -2681,6 +2683,7 @@ async function saveEditTxn(){
   t.direction=document.getElementById('etxn-dir').value;
   t.accountId=document.getElementById('etxn-acc').value||null;
   t.debtId=document.getElementById('etxn-debt').value||null;
+  t.beneficiaryId=document.getElementById('etxn-beneficiary')?.value||null;
   const newMid=document.getElementById('etxn-mc').value||null;
   const newSid=document.getElementById('etxn-sc').value||null;
   t.mainCatId=newMid;t.subCatId=newSid;
@@ -4053,6 +4056,141 @@ function onDebtTypeChange(v){
     }
   }
 }
+function rFamilyInv(){
+  // All investment and income transactions across all months (all-time)
+  const allInvTxns=Object.values(S.txnCache).flat().filter(t=>t.type==='investment'&&txDir(t)==='out');
+  const allRetTxns=Object.values(S.txnCache).flat().filter(t=>t.type==='income'&&t.beneficiaryId);
+
+  // Build member cards — named members + Unassigned
+  const members=[...(S.familyMembers||[])];
+
+  function memberCard(m, isUnassigned){
+    const mid=m?.id||null;
+    const invTxns=isUnassigned
+      ? allInvTxns.filter(t=>!t.beneficiaryId)
+      : allInvTxns.filter(t=>t.beneficiaryId===mid);
+    const retTxns=isUnassigned
+      ? allRetTxns.filter(t=>!t.beneficiaryId)
+      : allRetTxns.filter(t=>t.beneficiaryId===mid);
+    const deployed=invTxns.reduce((s,t)=>s+t.amount,0);
+    const returns=retTxns.reduce((s,t)=>s+t.amount,0);
+    const lastVal=m?.lastRecordedValue||null;
+    const lastValDate=m?.lastRecordedValueDate||null;
+    const net=lastVal!==null?lastVal-deployed:null;
+
+    // Sort txns newest first
+    const histTxns=[...invTxns,...retTxns].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,10);
+
+    const histRows=histTxns.length?histTxns.map(t=>`
+      <div style="display:flex;justify-content:space-between;align-items:baseline;padding:5px 0;border-bottom:1px solid var(--bg2);font-size:11px">
+        <div style="color:var(--text3);flex-shrink:0;margin-right:10px">${toDD(t.date)}</div>
+        <div style="flex:1;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(t.description||'—')}</div>
+        <div style="margin-left:12px;font-weight:500;font-variant-numeric:tabular-nums;flex-shrink:0;${t.type==='income'?'color:var(--ok)':'color:var(--bad)'}">${t.type==='income'?'+':'−'}${fmtP(t.amount)}</div>
+      </div>`).join(''):'<div style="font-size:11px;color:var(--text3);padding:6px 0">No transactions yet.</div>';
+
+    const expandId='finv-hist-'+( mid||'unassigned');
+    const editValId='finv-val-'+( mid||'unassigned');
+
+    return `<div class="card card-bordered" style="margin-bottom:12px">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+        <div>
+          <div style="font-size:15px;font-weight:600;color:var(--text);letter-spacing:-.02em">${isUnassigned?'Unassigned':h(m.name)}</div>
+          ${!isUnassigned&&m.relationship?`<div style="font-size:11px;color:var(--text3);margin-top:1px">${h(m.relationship)}</div>`:''}
+          ${isUnassigned?'<div style="font-size:11px;color:var(--text3);margin-top:1px">Investment transactions with no beneficiary set</div>':''}
+        </div>
+        ${!isUnassigned?`<button class="btn btn-xs btn-d" onclick="delFamilyMember('${mid}')">Remove</button>`:''}
+      </div>
+
+      <!-- Metrics row -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px">
+        <div style="padding:10px 12px;background:var(--bg2);border-radius:var(--rsm)">
+          <div style="font-size:10px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--text3);margin-bottom:4px">Capital Deployed</div>
+          <div style="font-size:18px;font-weight:600;letter-spacing:-.03em;font-variant-numeric:tabular-nums;color:var(--bad)">${fmtP(deployed)}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">${invTxns.length} transfer${invTxns.length!==1?'s':''}</div>
+        </div>
+        <div style="padding:10px 12px;background:var(--bg2);border-radius:var(--rsm)">
+          <div style="font-size:10px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--text3);margin-bottom:4px">Returns Received</div>
+          <div style="font-size:18px;font-weight:600;letter-spacing:-.03em;font-variant-numeric:tabular-nums;color:var(--ok)">${fmtP(returns)}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">${retTxns.length} transaction${retTxns.length!==1?'s':''}</div>
+        </div>
+        <div style="padding:10px 12px;background:var(--bg2);border-radius:var(--rsm)">
+          <div style="font-size:10px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--text3);margin-bottom:4px">Last Recorded Value</div>
+          ${lastVal!==null
+            ? `<div style="font-size:18px;font-weight:600;letter-spacing:-.03em;font-variant-numeric:tabular-nums;${net>=0?'color:var(--ok)':'color:var(--bad)'}">${fmtP(lastVal)}</div>
+               <div style="font-size:11px;color:var(--text3);margin-top:2px">As of ${toDD(lastValDate)} · ${net>=0?'+':''}${fmtP(net)} vs cost</div>`
+            : `<div style="font-size:13px;color:var(--text3);margin-top:4px">Not set</div>`
+          }
+        </div>
+      </div>
+
+      <!-- Update value panel -->
+      ${!isUnassigned?`<div style="margin-bottom:10px">
+        <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+          <div style="flex:1;min-width:120px"><label class="lbl">Update recorded value (SAR)</label><input type="number" id="${editValId}" placeholder="0.00" step="0.01" value="${lastVal!==null?lastVal:''}" style="width:100%"></div>
+          <button class="btn btn-sm btn-p" onclick="saveFamilyMemberValue('${mid}','${editValId}')">Save</button>
+        </div>
+      </div>`:''}
+
+      <!-- Transaction history (expandable) -->
+      <div>
+        <button onclick="const el=document.getElementById('${expandId}');el.style.display=el.style.display==='none'?'block':'none'" style="background:none;border:none;font-size:11px;color:var(--electric);cursor:pointer;padding:0">Show transaction history ↓</button>
+        <div id="${expandId}" style="display:none;margin-top:8px">${histRows}</div>
+      </div>
+    </div>`;
+  }
+
+  const memberCards=members.map(m=>memberCard(m,false)).join('');
+  const unassignedCard=memberCard(null,true);
+
+  return`<div class="pg-header">
+    <div style="font-size:19px;font-weight:500">Family Investments</div>
+    <div style="font-size:var(--fs-xs);color:var(--text3);margin-top:2px">Capital deployed per family member — all time</div>
+  </div>
+
+  <div style="display:flex;justify-content:flex-end;margin-bottom:1rem">
+    <button class="btn btn-p btn-sm" onclick="openAddFamilyMember()">+ Add Member</button>
+  </div>
+
+  <!-- Add member panel -->
+  <div id="add-fm-panel" class="panel" style="margin-bottom:1rem">
+    <div style="font-size:13px;font-weight:500;margin-bottom:10px">New Family Member</div>
+    <div class="fr" style="margin-bottom:8px">
+      <div><label class="lbl">Name</label><input type="text" id="fm-name" placeholder="e.g. Turki"></div>
+      <div><label class="lbl">Relationship</label><input type="text" id="fm-rel" placeholder="e.g. Son"></div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-p btn-sm" onclick="addFamilyMember()">Add</button>
+      <button class="btn btn-sm" onclick="tp('add-fm-panel')">Cancel</button>
+    </div>
+  </div>
+
+  ${members.length===0&&`<div class="card card-bordered" style="text-align:center;padding:2rem;color:var(--text3);font-size:var(--fs-sm);margin-bottom:12px">No family members yet. Add a member to start tracking their investments.</div>`}
+  ${memberCards}
+  ${unassignedCard}`;
+}
+function openAddFamilyMember(){tp('add-fm-panel');document.getElementById('fm-name')?.focus();}
+function addFamilyMember(){
+  const name=document.getElementById('fm-name')?.value.trim();
+  if(!name){toast('Name required',false);return;}
+  const rel=document.getElementById('fm-rel')?.value.trim()||'';
+  S.familyMembers=S.familyMembers||[];
+  S.familyMembers.push({id:'fm_'+Math.random().toString(36).substr(2,8),name,relationship:rel,lastRecordedValue:null,lastRecordedValueDate:null});
+  sched();tp('add-fm-panel');render();toast('Family member added');
+}
+function delFamilyMember(id){
+  if(!confirm('Remove this family member? Their transactions will remain but lose the beneficiary tag.'))return;
+  S.familyMembers=(S.familyMembers||[]).filter(m=>m.id!==id);
+  sched();render();toast('Removed');
+}
+function saveFamilyMemberValue(mid,inputId){
+  const val=parseFloat(document.getElementById(inputId)?.value);
+  if(isNaN(val)||val<0){toast('Enter a valid amount',false);return;}
+  const m=(S.familyMembers||[]).find(x=>x.id===mid);
+  if(!m){toast('Member not found',false);return;}
+  m.lastRecordedValue=val;
+  m.lastRecordedValueDate=new Date().toISOString().substr(0,10);
+  sched();render();toast('Value updated');
+}
 function rDebts(){
   const act=S.debts.filter(d=>d.status==='active');
   const to=act.reduce((s,d)=>s+(d.original||0),0);
@@ -4356,14 +4494,18 @@ function rSettings(){
       <div class="settings-row" style="align-items:flex-start"><div class="settings-row-label"><div class="settings-row-title">Edge Function URL</div><div class="settings-row-sub">Your Supabase Edge Function endpoint for AI extraction. See deployment guide.</div></div><div class="settings-row-ctrl" style="min-width:240px"><input type="text" placeholder="https://xxx.supabase.co/functions/v1/extract" value="${S.settings.edgeFnUrl||''}" onchange="S.settings.edgeFnUrl=this.value.trim();sched()" style="width:100%;font-size:11px;font-family:monospace"></div></div>
     </div>`;
   }else if(SP==='household'){
-    const oRows=S.owners.map((o,i)=>`<div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">${h(o.name)}</div><div class="settings-row-sub" style="font-family:monospace">${o.id}</div></div><div class="settings-row-ctrl"><button class="btn btn-xs btn-d" onclick="delOwner('${o.id}')">Remove</button></div></div>`).join('');
+    const fmRows=(S.familyMembers||[]).map(m=>`<div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">${h(m.name)}</div><div class="settings-row-sub">${m.relationship||'—'}</div></div><div class="settings-row-ctrl"><button class="btn btn-xs btn-d" onclick="delFamilyMember('${m.id}')">Remove</button></div></div>`).join('');
     const subRows=(S.submitters||[]).map((sub,si)=>`<div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">${h(sub.name)}</div><div class="settings-row-sub">PIN: ••••</div></div><div class="settings-row-ctrl"><button class="btn btn-xs btn-d" onclick="delSubmitter(${si})">Remove</button></div></div>`).join('');
     pageContent=`<div class="settings-page-title">Household</div>
     <div class="settings-section">
-      <div class="settings-section-label">Household Members</div>
-      <div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:12px">People you track finances for.</div>
-      ${oRows||'<div style="font-size:var(--fs-xs);color:var(--text3);padding:8px 0">No members yet.</div>'}
-      <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end;margin-top:12px"><div><label class="lbl">Name</label><input type="text" id="ow-name" placeholder="e.g. Noura"></div><button class="btn btn-p" onclick="addOwner()">Add</button></div>
+      <div class="settings-section-label">Family Members</div>
+      <div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:12px">Used to tag investment transactions and track capital per member.</div>
+      ${fmRows||'<div style="font-size:var(--fs-xs);color:var(--text3);padding:8px 0">No family members yet.</div>'}
+      <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;margin-top:12px">
+        <div><label class="lbl">Name</label><input type="text" id="fm-name-s" placeholder="e.g. Turki"></div>
+        <div><label class="lbl">Relationship</label><input type="text" id="fm-rel-s" placeholder="e.g. Son"></div>
+        <button class="btn btn-p" onclick="addFamilyMemberSettings()">Add</button>
+      </div>
     </div>
     <div class="settings-section">
       <div class="settings-section-label">Reimbursement Submitters</div>
@@ -4425,8 +4567,16 @@ function rSettings(){
 }
 function toggleCP(){const p=document.getElementById('cp-panel');if(p)p.style.display=p.style.display==='none'?'block':'none';}
 
-function addOwner(){const n=document.getElementById('new-own').value.trim();if(!n){toast('Name required',false);return;}const id='owner_'+n.toLowerCase().replace(/[^a-z0-9]/g,'_')+'_'+Math.random().toString(36).substr(2,4);S.owners.push({id,name:n});sched();render();toast('Owner added');}
+function addOwner(){const n=document.getElementById('new-own')?.value.trim();if(!n){toast('Name required',false);return;}const id='owner_'+n.toLowerCase().replace(/[^a-z0-9]/g,'_')+'_'+Math.random().toString(36).substr(2,4);S.owners.push({id,name:n});sched();render();toast('Owner added');}
 function delOwner(id){S.owners=S.owners.filter(x=>x.id!==id);sched();render();}
+function addFamilyMemberSettings(){
+  const name=document.getElementById('fm-name-s')?.value.trim();
+  if(!name){toast('Name required',false);return;}
+  const rel=document.getElementById('fm-rel-s')?.value.trim()||'';
+  S.familyMembers=S.familyMembers||[];
+  S.familyMembers.push({id:'fm_'+Math.random().toString(36).substr(2,8),name,relationship:rel,lastRecordedValue:null,lastRecordedValueDate:null});
+  sched();render();toast('Family member added');
+}
 function delRule(m){S.rules=S.rules.filter(r=>r.m!==m);sched();render();}
 function addMainCat(){const name=document.getElementById('cm-name').value.trim();if(!name){toast('Name required',false);return;}const id='cat_main_'+name.toLowerCase().replace(/[^a-z0-9]/g,'_').slice(0,15)+'_'+Math.random().toString(36).substr(2,4);const color=document.getElementById('cm-color').value;MAIN_CATS.push({id,name,type:'expense',color});CAT_COLORS[id]=color;SUGGESTED[id]=[];document.getElementById('cm-name').value='';sched();render();toast('Category added');}
 function delMainCat(id){const i=MAIN_CATS.findIndex(m=>m.id===id);if(i>=0)MAIN_CATS.splice(i,1);delete CAT_COLORS[id];delete SUGGESTED[id];if(!S.deletedCats.includes(id))S.deletedCats.push(id);sched();render();toast('Category removed. Affected transactions now appear in Uncategorized.');}
@@ -6334,7 +6484,7 @@ function enterDemoMode(){
   S.month=lastTxnMonth();
   S.ovPeriod='month';
   S.tab='overview';
-  S.dashOwner=null;
+  S.familyMembers=S.familyMembers||[];
   // Update sidebar button
   const btn=document.getElementById('demo-btn');
   if(btn){btn.textContent='Exit Demo';btn.style.background='var(--warn)';btn.style.color='var(--midnight)';}
@@ -6375,7 +6525,7 @@ initAuth();
     <div style="margin-bottom:8px"><label class="lbl">Description</label><input type="text" id="etxn-desc"></div>
     <div class="fr" style="margin-bottom:8px">
       <div><label class="lbl">Type</label>
-        <select id="etxn-type" onchange="autoDir(this.value,'etxn-dir')">
+        <select id="etxn-type" onchange="autoDir(this.value,'etxn-dir');const br=document.getElementById('etxn-beneficiary-row');if(br)br.style.display=(this.value==='investment'||this.value==='income')?'block':'none'">
           <option value="expense">Expense</option>
           <option value="income">Income</option>
           <option value="transfer">Transfer</option>
@@ -6403,6 +6553,7 @@ initAuth();
       </div>
     </div>
     <div style="margin-bottom:8px"><label class="lbl">Notes</label><input type="text" id="etxn-notes" placeholder="Optional"></div>
+    <div id="etxn-beneficiary-row" style="margin-bottom:8px;display:none"><label class="lbl">Beneficiary (Family Member)</label><select id="etxn-beneficiary"><option value="">Unassigned</option></select></div>
     <input type="hidden" id="etxn-mc">
     <input type="hidden" id="etxn-sc">
     <button class="btn btn-sm" id="etxn-cat-btn" onclick="openCPEditTxn()" style="margin-bottom:10px">Category: <span id="etxn-cat-label">--</span></button>
