@@ -926,6 +926,7 @@ max-width:1100px;margin:0 auto 2rem;
   </div>
   <div class="auth-spin"></div>
   <div class="auth-ltxt" id="load-msg">Connecting to vault…</div>
+  <button id="load-retry-btn" onclick="location.reload()" style="display:none;margin-top:20px;background:none;border:1px solid var(--border);border-radius:var(--rsm);padding:8px 20px;font-size:12px;color:var(--text3);cursor:pointer;font-family:var(--font)">Retry</button>
 </div>
 
 <div id="s-setup" class="auth-screen">
@@ -1364,7 +1365,7 @@ async function dec(key,obj){
 
 // ─── SUPABASE ───
 async function sbGet(id){
-  const ctrl=new AbortController();const t=setTimeout(()=>ctrl.abort(),10000);
+  const ctrl=new AbortController();const t=setTimeout(()=>ctrl.abort(),8000);
   // Do NOT catch here — let network errors propagate so initAuth can distinguish
   // missing vault (null) from connection failure (thrown error)
   const r=await fetch(`${SB}/rest/v1/dashboard_data?id=eq.${id}&select=payload`,{headers:{'apikey':SK,'Authorization':'Bearer '+SK},signal:ctrl.signal});
@@ -1436,8 +1437,11 @@ function resetActivityTimer(){
 
 async function initAuth(){
   showAuth('s-loading');setLd('Connecting to vault...');
+  // Show retry button after 6s in case connection hangs
+  const retryTimer=setTimeout(()=>{const b=document.getElementById('load-retry-btn');if(b)b.style.display='block';},6000);
   try{
     const d=await sbGet('phase1');
+    clearTimeout(retryTimer);
     if(d===null){
       // null = fetch succeeded but no row found — genuine new vault
       showAuth('s-setup');setTimeout(()=>document.getElementById('su-p1')?.focus(),100);return;
@@ -1448,8 +1452,10 @@ async function initAuth(){
     }
     showAuth('s-unlock');setTimeout(()=>document.getElementById('ul-p')?.focus(),100);
   }catch(e){
+    clearTimeout(retryTimer);
     // Network or fetch error — never show setup screen
-    setLd('Connection failed. Reload to retry. Do not create a new vault.');
+    setLd('Connection failed. Reload to retry.');
+    const b=document.getElementById('load-retry-btn');if(b)b.style.display='block';
   }
 }
 async function doSetup(){
