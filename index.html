@@ -343,10 +343,17 @@ body{font-family:var(--font);background:var(--feather);color:var(--text);min-hei
 
 /* Content area right margin to account for sidebar */
 .pg{
-  flex:1;padding:1.25rem 1.75rem 3rem;
+  flex:1;padding:2rem 2.25rem 4rem;
   min-width:0;box-sizing:border-box;
   animation:fi .18s ease;
 }
+
+/* ── PAGE HEADER — standard title + subtitle block ─── */
+.pg-header{margin-bottom:2.25rem}
+.pg-header-title{font-size:20px;font-weight:500;color:var(--text);letter-spacing:-.02em;line-height:1.2}
+.pg-header-sub{font-size:var(--fs-xs);color:var(--text3);margin-top:5px;line-height:1.5}
+/* Page header row variant (title + action buttons on same line) */
+.pg-header-row{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:2rem}
 
 /* ── MOBILE: burger menu ── */
 
@@ -411,7 +418,7 @@ body{font-family:var(--font);background:var(--feather);color:var(--text);min-hei
   /* Content pushed down below burger bar */
   .app-content{padding-top:52px;}
   .pg{
-    padding:.85rem .9rem 2.5rem;
+    padding:1rem 1.1rem 3rem;
     margin-left:0;
   }
 
@@ -457,35 +464,35 @@ body{font-family:var(--font);background:var(--feather);color:var(--text);min-hei
 /* ── CARDS ────────────────────────────────────────────── */
 .card{
   background:var(--bg);border:1px solid var(--border);
-  border-radius:var(--r);padding:1rem 1.2rem;margin-bottom:1rem;
+  border-radius:var(--r);padding:1.25rem 1.4rem;margin-bottom:1.5rem;
 }
 .card-bordered{border:1px solid var(--border2)}
 .chdr{
   font-size:11px;font-weight:600;color:var(--text3);
-  text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px;
+  text-transform:uppercase;letter-spacing:.07em;margin-bottom:12px;
 }
 .ctitle{font-size:var(--fs-sm);font-weight:600;color:var(--text);margin-bottom:2px;letter-spacing:-.01em}
-.csub{font-size:var(--fs-xxs);color:var(--text3);margin-bottom:10px;line-height:1.55}
-.g2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
-.g3{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
-.g3-fixed{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+.csub{font-size:var(--fs-xxs);color:var(--text3);margin-bottom:12px;line-height:1.55}
+.g2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.g3{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.g3-fixed{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
 @media(max-width:700px){.g3-fixed{grid-template-columns:repeat(2,1fr)}.g2,.g3{grid-template-columns:1fr}}
 @media(max-width:360px){.g3-fixed{grid-template-columns:1fr}}
 
 /* ── KPI CARDS ────────────────────────────────────────── */
-.kgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:1rem}
-@media(max-width:640px){.kgrid{grid-template-columns:repeat(2,1fr);gap:8px}}
+.kgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:1.75rem}
+@media(max-width:640px){.kgrid{grid-template-columns:repeat(2,1fr);gap:10px}}
 @media(max-width:360px){.kgrid{grid-template-columns:1fr}}
 .kpi{
   background:var(--bg);border:1px solid var(--border);
-  border-radius:var(--r);padding:.9rem 1rem;
+  border-radius:var(--r);padding:1.1rem 1.25rem;
 }
 .klbl{
   font-size:10px;font-weight:600;color:var(--text3);
-  margin-bottom:6px;text-transform:uppercase;letter-spacing:.07em;
+  margin-bottom:8px;text-transform:uppercase;letter-spacing:.07em;
 }
 .kval{font-size:24px;font-weight:600;line-height:1;letter-spacing:-.04em}
-.ksub{font-size:11px;color:var(--text3);margin-top:5px;font-weight:400}
+.ksub{font-size:11px;color:var(--text3);margin-top:6px;font-weight:400}
 
 /* ── BUTTONS ──────────────────────────────────────────── */
 .btn{
@@ -646,20 +653,20 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overfl
 .settings-layout{display:grid;grid-template-columns:180px 1fr;gap:0;min-height:400px}
 @media(max-width:700px){.settings-layout{grid-template-columns:1fr;}}
 .settings-sidebar{border-right:1px solid var(--border);padding-right:16px;display:flex;flex-direction:column;gap:2px}
-.settings-content{padding-left:24px}
+.settings-content{padding-left:32px}
 .settings-nav-btn{display:flex;align-items:center;gap:8px;padding:8px 10px;border:none;background:none;border-radius:var(--rsm);cursor:pointer;font-size:13px;font-weight:500;color:var(--text2);font-family:var(--font);width:100%;text-align:left;transition:all .12s}
 .settings-nav-btn:hover{background:var(--bg2);color:var(--text)}
 .settings-nav-active{background:color-mix(in srgb,var(--electric) 8%,transparent)!important;color:var(--midnight)!important;font-weight:600!important}
 .settings-nav-icon{display:flex;align-items:center;flex-shrink:0;opacity:.7}
-.settings-page-title{font-size:18px;font-weight:500;margin-bottom:20px;color:var(--text)}
-.settings-section{margin-bottom:24px;padding-bottom:24px;border-bottom:1px solid var(--border)}
+.settings-page-title{font-size:18px;font-weight:500;margin-bottom:28px;color:var(--text)}
+.settings-section{margin-bottom:32px;padding-bottom:32px;border-bottom:1px solid var(--border)}
 .settings-section:last-child{border-bottom:none}
-.settings-section-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:12px}
-.settings-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 0;border-bottom:1px solid var(--bg3)}
+.settings-section-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:14px}
+.settings-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px solid var(--bg3)}
 .settings-row:last-child{border-bottom:none}
 .settings-row-label{flex:1}
 .settings-row-title{font-size:var(--fs-xs);font-weight:500;color:var(--text)}
-.settings-row-sub{font-size:11px;color:var(--text3);margin-top:2px;line-height:1.5}
+.settings-row-sub{font-size:11px;color:var(--text3);margin-top:3px;line-height:1.5}
 .settings-row-ctrl{flex-shrink:0}
 
 .prow{
@@ -669,12 +676,12 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overfl
 .prow:last-child{border-bottom:none}
 .dmeta{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:12px}
 .slbl{
-  font-size:11px;font-weight:500;color:var(--charcoal);
-  letter-spacing:.01em;
-  margin-bottom:8px;margin-top:1.75rem;
-  padding-bottom:6px;border-bottom:1px solid var(--border);
+  font-size:11px;font-weight:600;color:var(--charcoal);
+  letter-spacing:.04em;text-transform:uppercase;
+  margin-bottom:12px;margin-top:2.25rem;
+  padding-bottom:8px;border-bottom:1px solid var(--border);
 }
-.shint{font-size:var(--fs-xxs);color:var(--text3);margin-bottom:10px;line-height:1.6}
+.shint{font-size:var(--fs-xxs);color:var(--text3);margin-bottom:14px;line-height:1.6}
 .fbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem;align-items:center}
 .fsel{
   padding:6px 10px;border:1px solid var(--border);
@@ -2268,10 +2275,10 @@ async function rOv(){
   const pbtns=['month','3m','6m','12m','ytd','all'].map(p=>`<button class="pbtn ${S.ovPeriod===p?'active':''}" onclick="setOvP('${p}')">${{month:'1 Month','3m':'3 Months','6m':'6 Months','12m':'12 Months','ytd':'Year to Date','all':'All Time'}[p]}</button>`).join('');
 
   return`
-  <div class="fg jb" style="margin-bottom:1.25rem;flex-wrap:wrap;gap:10px">
+  <div class="pg-header-row">
     <div>
-      <div style="font-size:19px;font-weight:500">Financial Overview</div>
-      <div style="font-size:var(--fs-xs);color:var(--text3);margin-top:2px">Cash Flow Engine · ${n} month${n!==1?'s':''} of data</div>
+      <div class="pg-header-title">Financial Overview</div>
+      <div class="pg-header-sub">Cash Flow Engine · ${n} month${n!==1?'s':''} of data</div>
     </div>
     <div class="fg" style="gap:8px;flex-wrap:wrap;align-items:center">
       <div class="fg" style="gap:4px;flex-wrap:wrap">${pbtns}</div>
@@ -3266,8 +3273,10 @@ function rescanAllTransfers(){
 
 function rPendingMatches(){
   return`
-  <div style="font-size:16px;font-weight:500;margin-bottom:4px">Pending Transfer Matches</div>
-  <div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:1.25rem">Internal transfers between your accounts. Match them to avoid double-counting in reports.</div>
+  <div class="pg-header">
+    <div class="pg-header-title">Pending Transfer Matches</div>
+    <div class="pg-header-sub">Internal transfers between your accounts. Match them to avoid double-counting in reports.</div>
+  </div>
   ${rTransferMatching()}`;
 }
 async function rUncat(){
@@ -3298,8 +3307,10 @@ async function rUncat(){
       </td>
     </tr>`;}).join(''):'';
   return`
-  <div style="font-size:16px;font-weight:500;margin-bottom:4px">Uncategorized &amp; Flagged</div>
-  <div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:1.25rem">Assign categories to build the merchant learning engine for future imports.</div>
+  <div class="pg-header">
+    <div class="pg-header-title">Uncategorized &amp; Flagged</div>
+    <div class="pg-header-sub">Assign categories to build the merchant learning engine for future imports.</div>
+  </div>
   <div class="slbl" style="margin-top:0">Uncategorized (${uncat.length})</div>
   <div class="card"><div class="tbl-wrap"><table>
     <thead><tr><th>Date</th><th>Description</th><th>Account</th><th style="text-align:right">Amount</th><th></th></tr></thead>
@@ -3398,10 +3409,10 @@ async function rSubs(){
       ${sorted.length>3?`<div style="font-size:11px;color:var(--text3)">+${sorted.length-3} more payments</div>`:''}
     </div>`;}).join('');
   return`
-  <div class="fg jb" style="margin-bottom:1rem;flex-wrap:wrap;gap:8px">
+  <div class="pg-header-row">
     <div>
-      <div style="font-size:16px;font-weight:500">Subscriptions</div>
-      <div style="font-size:var(--fs-xs);color:var(--text3);margin-top:2px">Auto-detected recurring payments. Confirm or dismiss each suggestion.</div>
+      <div class="pg-header-title">Subscriptions</div>
+      <div class="pg-header-sub">Auto-detected recurring payments. Confirm or dismiss each suggestion.</div>
     </div>
     <div class="fg" style="gap:6px;flex-wrap:wrap">
       <button class="btn btn-sm" onclick="downloadTemplate('subscriptions')">&#8595; Template</button>
@@ -3499,8 +3510,8 @@ function rInc(){
       </div>
     </div>`;}).join('')||'<div class="empty">No income sources defined yet.</div>';
   return`
-  <div class="fg jb" style="margin-bottom:1rem">
-    <div style="font-size:16px;font-weight:500">Expected Income Sources</div>
+  <div class="pg-header-row">
+    <div class="pg-header-title">Expected Income Sources</div>
     <button class="btn btn-p btn-sm" onclick="editIncId=null;document.getElementById('ii-ptitle').textContent='Add income source';document.getElementById('ii-sbtn').textContent='Add';tp('addinc-panel')">+ Add income source</button>
   </div>
   <div id="addinc-panel" class="panel">
@@ -3589,8 +3600,8 @@ function rBills(){
     </div>
   </div>`).join('')||'<div class="empty">No bills defined yet.</div>';
   return`
-  <div class="fg jb" style="margin-bottom:1rem;flex-wrap:wrap;gap:8px">
-    <div style="font-size:16px;font-weight:500">Household Bills</div>
+  <div class="pg-header-row">
+    <div class="pg-header-title">Household Bills</div>
     <div class="fg" style="gap:6px;flex-wrap:wrap">
       <button class="btn btn-sm" onclick="downloadTemplate('bills')">&#8595; Template</button>
       <label class="btn btn-sm" style="cursor:pointer">&#8593; Upload Excel<input type="file" accept=".xlsx,.xls" onchange="uploadTemplate('bills',this)" style="display:none"></label>
@@ -3748,8 +3759,8 @@ function rStaff(){
       </div>
     </div>`;}).join('')||'<div class="empty">No household staff profiles yet.</div>';
   return`
-  <div class="fg jb" style="margin-bottom:1rem">
-    <div style="font-size:16px;font-weight:500">Household Staff</div>
+  <div class="pg-header-row">
+    <div class="pg-header-title">Household Staff</div>
     <button class="btn btn-p btn-sm" onclick="openAddStaff()">+ Add staff</button>
   </div>
   <div id="addstf-panel" class="panel">
@@ -3933,8 +3944,8 @@ function rAcc(){
     </td>
   </tr>`;}).join(''):`<tr><td colspan="${showBalance?8:7}" class="empty">No accounts added yet</td></tr>`;
   return`
-  <div class="fg jb" style="margin-bottom:1rem;flex-wrap:wrap;gap:8px">
-    <div style="font-size:16px;font-weight:500">Accounts &amp; Cards</div>
+  <div class="pg-header-row">
+    <div class="pg-header-title">Accounts &amp; Cards</div>
     <div class="fg" style="gap:6px;flex-wrap:wrap">
       <button class="btn btn-sm" onclick="downloadTemplate('accounts')">&#8595; Template</button>
       <label class="btn btn-sm" style="cursor:pointer">&#8593; Upload Excel<input type="file" accept=".xlsx,.xls" onchange="uploadTemplate('accounts',this)" style="display:none"></label>
@@ -4146,8 +4157,8 @@ function rFamilyInv(){
   const memberCards=members.map(m=>memberCard(m,false)).join('');
 
   return`<div class="pg-header">
-    <div style="font-size:19px;font-weight:500">Family Investments</div>
-    <div style="font-size:var(--fs-xs);color:var(--text3);margin-top:2px">Capital deployed per family member — all time</div>
+    <div class="pg-header-title">Family Investments</div>
+    <div class="pg-header-sub">Capital deployed per family member — all time</div>
   </div>
 
   ${members.length===0?`<div class="card" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;margin-bottom:1rem;gap:12px">
@@ -4252,8 +4263,8 @@ function rDebts(){
       </div>`:`<div class="fg" style="margin-top:10px;gap:6px"><button class="btn btn-sm" onclick="togDebt('${d.id}')">Reactivate</button><button class="btn btn-sm btn-d" onclick="delDebt('${d.id}')">Remove</button></div>`}
     </div>`;}).join('')||'<div class="empty">No debts tracked yet.</div>';
   return`
-  <div class="fg jb" style="margin-bottom:1rem">
-    <div style="font-size:16px;font-weight:500">Debt Tracker</div>
+  <div class="pg-header-row">
+    <div class="pg-header-title">Debt Tracker</div>
     <button class="btn btn-p btn-sm" onclick="openAddDebt()">+ Add debt</button>
   </div>
   ${act.length?`<div class="g3" style="margin-bottom:1rem">
@@ -4435,8 +4446,8 @@ function rGoals(){
       </div>
     </div>`;}).join('')||'<div class="empty">No goals yet.</div>';
   return`
-  <div class="fg jb" style="margin-bottom:1rem">
-    <div style="font-size:16px;font-weight:500">Financial Goals</div>
+  <div class="pg-header-row">
+    <div class="pg-header-title">Financial Goals</div>
     <button class="btn btn-p btn-sm" onclick="tp('addgoal-panel')">+ New goal</button>
   </div>
   <div id="addgoal-panel" class="panel">
@@ -4961,13 +4972,13 @@ function buildTxHeader(fl, scopedAcc, accountPills, tabLabel){
   const out=fl.filter(t=>txDir(t)==='out'&&!isMatched(t.id)).reduce((s,t)=>s+t.amount,0);
   const net=inc-out;
   return`
-  <div style="margin-bottom:.75rem">
-    <div style="font-size:var(--fs-xxs);color:var(--text2);font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Account</div>
-    <div class="fg" style="gap:6px;flex-wrap:wrap;margin-bottom:.75rem">
+  <div style="margin-bottom:1.5rem">
+    <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Account</div>
+    <div class="fg" style="gap:6px;flex-wrap:wrap;margin-bottom:1rem">
       <button class="opill ${!scopedAcc?'active':''}" onclick="setTxnAcc('')">All ${tabLabel}</button>
       ${accountPills}
     </div>
-    ${scopedAcc?`<div style="font-size:var(--fs-xxs);color:var(--info);padding:4px 10px;background:#EFF6FF;border-radius:var(--rsm);display:inline-block;margin-bottom:.5rem">Running balance active &middot; Balance guard available</div>`:''}
+    ${scopedAcc?`<div style="font-size:var(--fs-xxs);color:var(--info);padding:4px 10px;background:#EFF6FF;border-radius:var(--rsm);display:inline-block;margin-bottom:.75rem">Running balance active &middot; Balance guard available</div>`:''}
     ${(()=>{
       // Show persistent discrepancy warning if guard failed for any account in this view
       const accsToCheck=scopedAcc?[scopedAcc]:S.accounts.map(a=>a.id);
@@ -4993,7 +5004,7 @@ function buildTxHeader(fl, scopedAcc, accountPills, tabLabel){
         </div>`).join('');
     })()}
   </div>
-  <div class="fg jb" style="margin-bottom:1rem;flex-wrap:wrap;gap:8px">
+  <div class="fg jb" style="margin-bottom:1.25rem;flex-wrap:wrap;gap:8px">
     <div class="mnav"><button onclick="prevM()">&#8592;</button><div class="mnav-lbl">${fmtYM(S.month)}</div><button onclick="nextM()">&#8594;</button></div>
     <div class="fg" style="gap:6px;flex-wrap:wrap">
       <button class="btn btn-sm" onclick="tp('imp-panel');setTimeout(prefillOpeningBal,50)">Import JSON</button>
@@ -5001,7 +5012,7 @@ function buildTxHeader(fl, scopedAcc, accountPills, tabLabel){
       <button class="btn btn-sm btn-p" onclick="tp('atxn-panel')">+ Add Manually</button>
     </div>
   </div>
-  <div class="card" style="margin-bottom:1rem;padding:.75rem 1.25rem">
+  <div class="card" style="padding:.9rem 1.25rem">
     <div class="g3">
       <div><div class="lbl">Total In</div><div style="font-size:16px;font-weight:500" class="c-ok">+${fmtP(inc)}</div></div>
       <div><div class="lbl">Total Out</div><div style="font-size:16px;font-weight:500" class="c-bad">-${fmtP(out)}</div></div>
@@ -5331,7 +5342,10 @@ function uploadTemplate(type,input){
 // ─── MERCHANT RULES PAGE ───
 function rMerchantRules(){
   if(!S.rules.length){
-    return`<div style="font-size:16px;font-weight:500;margin-bottom:1rem">Merchant Learning Rules</div>
+    return`<div class="pg-header">
+      <div class="pg-header-title">Merchant Learning Rules</div>
+      <div class="pg-header-sub">Built automatically when you assign categories to transactions.</div>
+    </div>
     <div class="card"><div class="empty">No rules yet. Assign categories to transactions and rules will be built automatically.</div></div>`;
   }
   const sorted=[...S.rules].sort((a,b)=>a.m.localeCompare(b.m));
@@ -5345,10 +5359,10 @@ function rMerchantRules(){
       <td style="white-space:nowrap"><button class="btn btn-xs btn-d mr-del-btn" data-merchant="${h(r.m)}">&#10005;</button></td>
     </tr>`;}).join('');
   const html=`
-  <div class="fg jb" style="margin-bottom:1rem;flex-wrap:wrap;gap:8px">
+  <div class="pg-header-row">
     <div>
-      <div style="font-size:16px;font-weight:500">Merchant Learning Rules</div>
-      <div style="font-size:var(--fs-xs);color:var(--text3);margin-top:2px">Built automatically when you assign categories to transactions. Applied at import — highest priority after Bills rules. Full list: ${S.rules.length} rules.</div>
+      <div class="pg-header-title">Merchant Learning Rules</div>
+      <div class="pg-header-sub">Applied at import — highest priority. ${S.rules.length} rule${S.rules.length!==1?'s':''} active.</div>
     </div>
     ${S.rules.length?`<button class="btn btn-d btn-sm" onclick="if(confirm('Clear all merchant rules?')){S.rules=[];sched();render();}">Clear all rules</button>`:''}
   </div>
@@ -5374,7 +5388,10 @@ function rMerchantRules(){
 function rUsageInsights(){
   const all=allTxns().filter(t=>t.type==='expense'||t.type==='income');
   if(!all.length){
-    return`<div style="font-size:16px;font-weight:500;margin-bottom:1rem">Usage Insights</div>
+    return`<div class="pg-header">
+      <div class="pg-header-title">Usage Insights</div>
+      <div class="pg-header-sub">Category usage across all imported transactions.</div>
+    </div>
     <div class="card"><div class="empty">No transactions yet. Import statements to see category usage.</div></div>`;
   }
 
@@ -5441,9 +5458,10 @@ function rUsageInsights(){
   const unusedSCHtml=unusedSC.length?unusedSC.map(s=>`<span style="font-size:var(--fs-xs);background:var(--bg2);border-radius:var(--rsm);padding:3px 8px;margin:2px;display:inline-block">${h(s.name)}</span>`).join(''):'<span style="color:var(--ok);font-size:var(--fs-xs)">All sub-categories used ✓</span>';
 
   return`
-  <div style="font-size:16px;font-weight:500;margin-bottom:4px">Usage Insights</div>
-  <div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:1.25rem">Based on ${all.length} transactions across all imported months. Use this to optimize your category and sub-category list.</div>
-
+  <div class="pg-header">
+    <div class="pg-header-title">Usage Insights</div>
+    <div class="pg-header-sub">Based on ${all.length} transactions across all imported months. Use this to optimize your category list.</div>
+  </div>
   <div class="g2" style="margin-bottom:1.5rem">
     <div class="card card-bordered" style="padding:.75rem 1rem">
       <div class="ctitle">Never Used Categories</div>
@@ -5768,10 +5786,10 @@ async function rReimbursements(){
       <td><span class="badge" style="background:#DCFCE7;color:#166534">Paid</span></td>
     </tr>`).join(''):`<tr><td colspan="6" class="empty">No paid history yet</td></tr>`;
   return`
-  <div class="fg jb" style="margin-bottom:1.25rem;flex-wrap:wrap;gap:8px">
+  <div class="pg-header-row">
     <div>
-      <div style="font-size:16px;font-weight:500">Reimbursements</div>
-      <div style="font-size:var(--fs-xs);color:var(--text3);margin-top:2px">Submitted via the Lanki Reimbursement page. Approve items, then import the matching bank transfer to auto-record.</div>
+      <div class="pg-header-title">Reimbursements</div>
+      <div class="pg-header-sub">Submitted via the Lanki Reimbursement page. Approve items, then import the matching bank transfer to auto-record.</div>
     </div>
     <a href="submitexpense.html" target="_blank" class="btn btn-sm">Open Submit Page ↗</a>
   </div>
@@ -6013,9 +6031,9 @@ function rAIUpload(){
   }
 
   // Step 1: upload form
-  return`<div style="margin-bottom:1.5rem">
-    <div style="font-size:19px;font-weight:500;margin-bottom:4px">AI Statement Upload</div>
-    <div style="font-size:var(--fs-xs);color:var(--text3)">Upload a bank statement PDF or image. AI extracts and categorizes all transactions. Review before importing.</div>
+  return`<div class="pg-header">
+    <div class="pg-header-title">AI Statement Upload</div>
+    <div class="pg-header-sub">Upload a bank statement PDF or image. AI extracts and categorizes all transactions. Review before importing.</div>
   </div>
 
   ${!hasEdge?`<div style="background:#FEF3C7;border:1px solid #D97706;border-radius:var(--rsm);padding:12px 16px;margin-bottom:16px;font-size:var(--fs-xs)">
