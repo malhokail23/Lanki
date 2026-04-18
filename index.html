@@ -2662,6 +2662,117 @@ async function rOv(){
     ${fGoals.filter(g=>g.status==='active').length>3?`<div style="font-size:var(--fs-xs);color:var(--info);cursor:pointer;margin-top:6px" onclick="sw('goals')">View all →</div>`:''}
   </div>
 
+  <!-- S7b: LIQUIDITY WATERFALL -->
+  ${(()=>{
+    // Cash position — liquid accounts only
+    const liquidTypes=new Set(['main_account','savings_account','sub_account','debit_card','prepaid_card','cash']);
+    const cashPos=S.accounts.filter(a=>liquidTypes.has(a.type)).reduce((s,a)=>{const b=calcAccBalance(a);return b!==null?s+b:s;},0);
+    const hasCash=S.accounts.some(a=>liquidTypes.has(a.type)&&calcAccBalance(a)!==null);
+    if(!hasCash)return'';
+
+    const curM=getYM(new Date());
+    // Last 3 months of transactions for variable bill averaging
+    const last3=[addM(curM,-2),addM(curM,-1),curM];
+    const last3Txns=last3.flatMap(m=>S.txnCache[m]||[]).filter(t=>txDir(t)==='out'&&t.type==='expense');
+
+    // Layer 1: Loan installments (exact, from active debts)
+    const loanRows=S.debts.filter(d=>d.status==='active'&&d.type!=='credit_card'&&d.installment>0).map(d=>({
+      label:d.name,amount:d.installment,type:'loan',certain:true
+    }));
+
+    // Layer 2 & 3: Bills — fixed or variable (3-month average)
+    const billRows=S.bills.filter(b=>!b.status||b.status!=='inactive').map(b=>{
+      if(b.paymentType==='Fixed'&&b.fixedAmount>0){
+        return{label:b.name,amount:b.fixedAmount,type:'bill',certain:true,sub:'fixed'};
+      }
+      // Variable — search last 3 months for matching transactions by provider or bill name
+      const keyword=(b.provider||b.name||'').toLowerCase().trim().substring(0,20);
+      const matches=last3Txns.filter(t=>{
+        const d=(t.description||'').toLowerCase();
+        return keyword&&d.includes(keyword);
+      });
+      if(matches.length>0){
+        const avg=matches.reduce((s,t)=>s+t.amount,0)/Math.min(matches.length,3);
+        return{label:b.name,amount:Math.round(avg*100)/100,type:'bill',certain:false,sub:'avg '+matches.length+'mo'};
+      }
+      // No history — fallback to fixed amount if any, else skip
+      if(b.fixedAmount>0)return{label:b.name,amount:b.fixedAmount,type:'bill',certain:true,sub:'fixed fallback'};
+      return null;
+    }).filter(Boolean);
+
+    // Layer 4: Goal contributions — auto-calculated from deadline
+    const today=new Date();
+    const goalRows=fGoals.filter(g=>g.status==='active'&&g.target>0&&g.deadline).map(g=>{
+      const dl=new Date(g.deadline);
+      if(dl<=today)return null;
+      const remaining=Math.max(0,g.target-(g.saved||0));
+      if(remaining<=0)return null;
+      // Months remaining (rounded up, minimum 1)
+      const msLeft=((dl.getFullYear()-today.getFullYear())*12)+(dl.getMonth()-today.getMonth());
+      const moLeft=Math.max(1,msLeft);
+      const monthly=Math.round(remaining/moLeft);
+      const moLabel=moLeft===1?'1 mo left':`${moLeft} mo left`;
+      return{label:g.name,amount:monthly,type:'goal',certain:false,sub:moLabel,moLeft};
+    }).filter(Boolean);
+
+    // Warn if goal total is very high vs income
+    const goalTotal=goalRows.reduce((s,r)=>s+r.amount,0);
+    const avgInc2=n>0?inc/n:inc;
+    const goalPct=avgInc2>0?Math.round(goalTotal/avgInc2*100):0;
+    const goalWarning=goalPct>30;
+
+    // Build waterfall
+    const allRows=[...loanRows,...billRows,...goalRows];
+    if(!allRows.length)return'';
+    const totalCommitted=allRows.reduce((s,r)=>s+r.amount,0);
+    const freeCash=cashPos-totalCommitted;
+    const freePct=cashPos>0?Math.round(freeCash/cashPos*100):0;
+
+    const rowHtml=allRows.map(r=>{
+      const pct=cashPos>0?Math.min(100,Math.round(r.amount/cashPos*100)):0;
+      const col=r.type==='loan'?'var(--bad)':r.type==='goal'?'var(--electric)':'var(--warn)';
+      const badge=r.type==='loan'?'Loan':r.type==='goal'?'Goal':'Bill';
+      const badgeBg=r.type==='loan'?'color-mix(in srgb,var(--bad) 12%,transparent)':r.type==='goal'?'color-mix(in srgb,var(--electric) 12%,transparent)':'color-mix(in srgb,var(--warn) 15%,transparent)';
+      const badgeColor=r.type==='loan'?'var(--bad)':r.type==='goal'?'var(--electric)':'color-mix(in srgb,var(--warn) 80%,var(--midnight))';
+      return`<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">
+        <span style="font-size:9px;font-weight:700;letter-spacing:.05em;padding:2px 6px;border-radius:4px;background:${badgeBg};color:${badgeColor};flex-shrink:0;min-width:32px;text-align:center">${badge}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:var(--fs-xs);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h(r.label)}</div>
+          ${r.sub?`<div style="font-size:10px;color:var(--text3)">${r.certain?'Fixed':'Est. avg'} · ${r.sub}</div>`:''}
+        </div>
+        <div style="width:80px;flex-shrink:0">
+          <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden"><div style="height:4px;background:${col};width:${pct}%;border-radius:2px"></div></div>
+        </div>
+        <div style="font-size:var(--fs-xs);font-weight:600;font-variant-numeric:tabular-nums;text-align:right;flex-shrink:0;min-width:90px">−${fmtP(r.amount)}</div>
+      </div>`;
+    }).join('');
+
+    return`<div class="slbl">Liquidity Waterfall</div>
+    <div class="shint">This month — after committed outflows. Goal amounts are the monthly contribution needed to hit each deadline on time.</div>
+    <div class="card card-bordered">
+      <!-- Starting line: Cash Position -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0 12px;border-bottom:2px solid var(--border);margin-bottom:4px">
+        <div>
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3)">Cash Position</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:1px">Liquid accounts</div>
+        </div>
+        <div style="font-size:22px;font-weight:700;letter-spacing:-.04em;font-variant-numeric:tabular-nums">${fmtP(cashPos)}</div>
+      </div>
+      <!-- Deductions -->
+      <div style="margin-bottom:4px">${rowHtml}</div>
+      ${goalWarning?`<div style="font-size:11px;color:var(--warn);padding:8px 10px;background:color-mix(in srgb,var(--warn) 8%,transparent);border-radius:var(--rsm);margin:8px 0">Goal contributions require ${goalPct}% of average monthly income. Consider extending some deadlines.</div>`:''}
+      <!-- Free Cash line -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0 4px;border-top:2px solid var(--border);margin-top:4px">
+        <div>
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:${freeCash>=0?'var(--ok)':'var(--bad)'}">${freeCash>=0?'Free Cash':'Shortfall'}</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:1px">${Math.abs(freePct)}% of cash position${freeCash<0?' — committed exceeds available cash':''}</div>
+        </div>
+        <div style="font-size:22px;font-weight:700;letter-spacing:-.04em;font-variant-numeric:tabular-nums;color:${freeCash>=0?'var(--ok)':'var(--bad)'}">${freeCash>=0?'':'-'}${fmtP(Math.abs(freeCash))}</div>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:10px;line-height:1.6">Committed: ${fmtP(totalCommitted)} · Loans: ${fmtP(loanRows.reduce((s,r)=>s+r.amount,0))} · Bills: ${fmtP(billRows.reduce((s,r)=>s+r.amount,0))} · Goals: ${fmtP(goalRows.reduce((s,r)=>s+r.amount,0))}</div>
+    </div>`;
+  })()}
+
   <!-- S8: EXTERNAL TRANSFERS -->
   ${ext>0?`<div class="slbl">External Transfers</div>
   <div class="card card-bordered">
