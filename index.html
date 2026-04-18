@@ -844,7 +844,7 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overfl
   </div>
   <div class="auth-form">
     <div id="ul-id-wrap" style="margin-bottom:8px">
-      <input type="text" id="ul-id" class="auth-inp" placeholder="Email or username (optional)" autocomplete="username" autocorrect="off" autocapitalize="none" spellcheck="false" onkeydown="if(event.key==='Enter')document.getElementById('ul-p').focus()">
+      <input type="text" id="ul-id" class="auth-inp" placeholder="Email or username" autocomplete="username" autocorrect="off" autocapitalize="none" spellcheck="false" onkeydown="if(event.key==='Enter')document.getElementById('ul-p').focus()">
     </div>
     <div class="pw-wrap">
       <input type="password" id="ul-p" class="auth-inp" placeholder="Passphrase" autocomplete="current-password" autocorrect="off" autocapitalize="none" spellcheck="false" onkeydown="if(event.key==='Enter')doUnlock()">
@@ -1540,7 +1540,7 @@ function getMainP(){
     version:VERSION,
     accounts:S.accounts,debts:S.debts,goals:S.goals,income:S.income,
     bills:S.bills,subs:S.subs,staff:S.staff,rules:S.rules,dismissed:S.dismissed,
-    deletedCats:S.deletedCats,deletedSubs:S.deletedSubs,owners:S.owners,settings:S.settings,monthlyBal:S.monthlyBal,matchedPairs:S.matchedPairs,submitters:S.submitters
+    deletedCats:S.deletedCats,deletedSubs:S.deletedSubs,owners:S.owners,familyMembers:S.familyMembers,settings:S.settings,monthlyBal:S.monthlyBal,matchedPairs:S.matchedPairs,submitters:S.submitters
   };
 }
 function restoreS(d){
@@ -1876,6 +1876,7 @@ function sw(tab){
   render();updateBadge();
 }
 async function refreshData(){
+  if(_realS){toast('Refresh disabled in Demo Mode',false);return;}
   if(!sKey){toast('Not unlocked',false);return;}
   const btn=document.getElementById('refresh-btn');
   if(btn){btn.style.animation='spin .6s linear infinite';btn.disabled=true;}
@@ -2175,8 +2176,8 @@ async function rOv(){
   // L5: Use the same period months as the KPIs, not a hardcoded 3-month window
   const srMonths=months.length>0?months.slice(-Math.min(6,months.length)):mRange(addM(now,-2),now);
   const srBars=srMonths.map(m=>{
-    const mInc=(S.txnCache[m]||[]).filter(t=>accFilter(t)&&t.type==='income'&&txDir(t)==='in').reduce((s,t)=>s+t.amount,0);
-    const mExp=(S.txnCache[m]||[]).filter(t=>accFilter(t)&&txDir(t)==='out'&&t.type!=='transfer').reduce((s,t)=>s+t.amount,0);
+    const mInc=(S.txnCache[m]||[]).filter(t=>t.type==='income'&&txDir(t)==='in').reduce((s,t)=>s+t.amount,0);
+    const mExp=(S.txnCache[m]||[]).filter(t=>txDir(t)==='out'&&t.type!=='transfer').reduce((s,t)=>s+t.amount,0);
     const mSr=mInc>0?Math.round((mInc-mExp)/mInc*100):0;
     const col=mSr>=tgt?'#3D6B4F':mSr>=10?'#7A5E20':'#8B4040'; // Brand: Dusty Mint / Gold / Rose
     return`<div style="text-align:center;flex:1">
@@ -2634,7 +2635,7 @@ function openEditTxn(id,ym){
   const showBen=(t.type==='investment'||t.type==='income');
   if(benRow)benRow.style.display=showBen?'block':'none';
   if(benSel){
-    benSel.innerHTML='<option value="">Unassigned</option>'+( S.familyMembers||[]).map(m=>`<option value="${m.id}">${h(m.name)}${m.relationship?' ('+m.relationship+')':''}</option>`).join('');
+    benSel.innerHTML=`<option value="">${(S.settings.displayName||'').split(' ')[0]||'Self'} (Self)</option>`+( S.familyMembers||[]).map(m=>`<option value="${m.id}">${h(m.name)}${m.relationship?' ('+m.relationship+')':''}</option>`).join('');
     benSel.value=t.beneficiaryId||'';
   }
   document.getElementById('edit-txn-modal').classList.add('active');
@@ -2828,10 +2829,7 @@ function rTransferMatching(){
     </tr>`;}).join(''):`<tr><td colspan="5" class="empty">No matched pairs yet</td></tr>`;
 
   return`
-  <div class="slbl" style="margin-top:1.5rem">Transfer Matching</div>
-  <div class="shint">Internal transfers between your own accounts are matched so they do not inflate Total In / Total Out. Unmatched transfers appear below until the other side is imported.</div>
-
-  <div class="fg jb" style="align-items:center;margin-top:.5rem;margin-bottom:4px">
+  <div class="fg jb" style="align-items:center;margin-bottom:4px">
     <div class="slbl" style="margin:0">Pending Matches (${pending.length})</div>
     <button class="btn btn-sm" onclick="rescanAllTransfers()">↻ Auto-match all</button>
   </div>
@@ -4093,9 +4091,9 @@ function rFamilyInv(){
     return `<div class="card card-bordered" style="margin-bottom:12px">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
         <div>
-          <div style="font-size:15px;font-weight:600;color:var(--text);letter-spacing:-.02em">${isUnassigned?'Unassigned':h(m.name)}</div>
-          ${!isUnassigned&&m.relationship?`<div style="font-size:11px;color:var(--text3);margin-top:1px">${h(m.relationship)}</div>`:''}
-          ${isUnassigned?'<div style="font-size:11px;color:var(--text3);margin-top:1px">Investment transactions with no beneficiary set</div>':''}
+          <div style="font-size:15px;font-weight:600;color:var(--text);letter-spacing:-.02em">${h(m?.name||'Self')}</div>
+          ${m?.relationship?`<div style="font-size:11px;color:var(--text3);margin-top:1px">${h(m.relationship)}</div>`:''}
+          ${isUnassigned&&!m?.id?'<div style="font-size:11px;color:var(--text3);margin-top:1px">Your own investment transactions</div>':''}
         </div>
         ${!isUnassigned?`<button class="btn btn-xs btn-d" onclick="delFamilyMember('${mid}')">Remove</button>`:''}
       </div>
@@ -4138,34 +4136,22 @@ function rFamilyInv(){
     </div>`;
   }
 
+  // Self card — user's own investment transactions (untagged = defaults to Self)
+  const firstName=(S.settings.displayName||'').split(' ')[0]||'Self';
+  const selfCard=memberCard({id:null,name:firstName,relationship:'Self',lastRecordedValue:null,lastRecordedValueDate:null},true);
   const memberCards=members.map(m=>memberCard(m,false)).join('');
-  const unassignedCard=memberCard(null,true);
 
   return`<div class="pg-header">
     <div style="font-size:19px;font-weight:500">Family Investments</div>
     <div style="font-size:var(--fs-xs);color:var(--text3);margin-top:2px">Capital deployed per family member — all time</div>
   </div>
 
-  <div style="display:flex;justify-content:flex-end;margin-bottom:1rem">
-    <button class="btn btn-p btn-sm" onclick="openAddFamilyMember()">+ Add Member</button>
-  </div>
-
-  <!-- Add member panel -->
-  <div id="add-fm-panel" class="panel" style="margin-bottom:1rem">
-    <div style="font-size:13px;font-weight:500;margin-bottom:10px">New Family Member</div>
-    <div class="fr" style="margin-bottom:8px">
-      <div><label class="lbl">Name</label><input type="text" id="fm-name" placeholder="e.g. Turki"></div>
-      <div><label class="lbl">Relationship</label><input type="text" id="fm-rel" placeholder="e.g. Son"></div>
-    </div>
-    <div style="display:flex;gap:8px">
-      <button class="btn btn-p btn-sm" onclick="addFamilyMember()">Add</button>
-      <button class="btn btn-sm" onclick="tp('add-fm-panel')">Cancel</button>
-    </div>
-  </div>
-
-  ${members.length===0&&`<div class="card card-bordered" style="text-align:center;padding:2rem;color:var(--text3);font-size:var(--fs-sm);margin-bottom:12px">No family members yet. Add a member to start tracking their investments.</div>`}
+  ${members.length===0?`<div class="card" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;margin-bottom:1rem;gap:12px">
+    <div style="font-size:var(--fs-xs);color:var(--text3)">No family members added yet. Manage members in Settings → Household.</div>
+    <button class="btn btn-sm" onclick="sw('settings');SP='household';render()">Go to Settings</button>
+  </div>`:''}
   ${memberCards}
-  ${unassignedCard}`;
+  ${selfCard}`;
 }
 function openAddFamilyMember(){tp('add-fm-panel');document.getElementById('fm-name')?.focus();}
 function addFamilyMember(){
@@ -4520,7 +4506,10 @@ function rSettings(){
       <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Email</div><div class="settings-row-sub">${S.settings.email?S.settings.email:'Not set — passphrase only'}</div></div></div>
       <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Username</div><div class="settings-row-sub">${S.settings.username?S.settings.username:'Not set'}</div></div></div>
       <div id="id-panel" style="display:none;margin-bottom:16px;padding:14px;background:var(--bg2);border-radius:var(--rmd);border:1px solid var(--border)">
-        <div style="margin-bottom:8px"><label class="lbl">Full name</label><input type="text" id="id-name" placeholder="e.g. Mohammad Al Hokail" value="${S.settings.displayName||''}" autocomplete="name"></div>
+        <div class="fr" style="margin-bottom:8px">
+          <div><label class="lbl">First Name</label><input type="text" id="id-first" placeholder="e.g. Mohammad" value="${(S.settings.displayName||'').split(' ')[0]||''}" autocomplete="given-name"></div>
+          <div><label class="lbl">Last Name</label><input type="text" id="id-last" placeholder="e.g. Al Hokail" value="${(S.settings.displayName||'').split(' ').slice(1).join(' ')||''}" autocomplete="family-name"></div>
+        </div>
         <div style="margin-bottom:8px"><label class="lbl">Email</label><input type="email" id="id-email" placeholder="your@email.com" value="${S.settings.email||''}" autocomplete="email"></div>
         <div style="margin-bottom:8px"><label class="lbl">Username</label><input type="text" id="id-username" placeholder="e.g. mohammad" value="${S.settings.username||''}" autocomplete="username" autocorrect="off" autocapitalize="none"></div>
         <div id="id-err" style="font-size:var(--fs-xs);color:var(--bad);margin-bottom:8px"></div>
@@ -5628,6 +5617,7 @@ async function hashPIN(pin){
 }
 
 async function loadSubmissions(){
+  if(_realS)return; // demo mode — keep demo submissions
   try{
     const r=await fetch(`${SB}/rest/v1/pending_submissions?select=*&order=submitted_at.desc`,{
       headers:{'apikey':SK,'Authorization':'Bearer '+SK}
@@ -6409,7 +6399,9 @@ function toggleIdPanel(){
 }
 
 async function saveIdentity(){
-  const name=document.getElementById('id-name')?.value.trim()||'';
+  const first=(document.getElementById('id-first')?.value||'').trim();
+  const last=(document.getElementById('id-last')?.value||'').trim();
+  const name=[first,last].filter(Boolean).join(' ');
   const email=document.getElementById('id-email')?.value.trim()||'';
   const username=document.getElementById('id-username')?.value.trim()||'';
   const errEl=document.getElementById('id-err');
@@ -6604,7 +6596,7 @@ initAuth();
       </div>
     </div>
     <div style="margin-bottom:8px"><label class="lbl">Notes</label><input type="text" id="etxn-notes" placeholder="Optional"></div>
-    <div id="etxn-beneficiary-row" style="margin-bottom:8px;display:none"><label class="lbl">Beneficiary (Family Member)</label><select id="etxn-beneficiary"><option value="">Unassigned</option></select></div>
+    <div id="etxn-beneficiary-row" style="margin-bottom:8px;display:none"><label class="lbl">Beneficiary (Family Member)</label><select id="etxn-beneficiary"><option value="">Self</option></select></div>
     <input type="hidden" id="etxn-mc">
     <input type="hidden" id="etxn-sc">
     <button class="btn btn-sm" id="etxn-cat-btn" onclick="openCPEditTxn()" style="margin-bottom:10px">Category: <span id="etxn-cat-label">--</span></button>
