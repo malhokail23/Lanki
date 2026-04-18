@@ -1211,9 +1211,9 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overfl
 
     <button class="nav-item nav-group" data-group="inbox" onclick="toggleGroup('inbox')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg> Inbox <span class="nav-badge" id="uncat-badge" style="display:none">0</span> <span class="nav-arrow" id="arr-inbox">&#8250;</span></button>
     <div id="nav-dd-inbox" class="nav-dd">
-      <button onclick="sw('uncat')">Uncategorized</button>
-      <button onclick="sw('transfers')">Pending Matches</button>
-      <button onclick="sw('reimbursements')">Reimbursements</button>
+      <button onclick="sw('uncat')" style="display:flex;justify-content:space-between;align-items:center">Uncategorized <span id="nb-uncat" style="display:none;font-size:10px;font-weight:600;padding:1px 6px;border-radius:8px;background:var(--warn);color:var(--midnight)"></span></button>
+      <button onclick="sw('transfers')" style="display:flex;justify-content:space-between;align-items:center">Pending Matches <span id="nb-transfers" style="display:none;font-size:10px;font-weight:600;padding:1px 6px;border-radius:8px;background:var(--warn);color:var(--midnight)"></span></button>
+      <button onclick="sw('reimbursements')" style="display:flex;justify-content:space-between;align-items:center">Reimbursements <span id="nb-reimb" style="display:none;font-size:10px;font-weight:600;padding:1px 6px;border-radius:8px;background:var(--warn);color:var(--midnight)"></span></button>
       <button onclick="sw('rules')">Merchant Rules</button>
       <button onclick="sw('insights')">Usage Insights</button>
     </div>
@@ -1785,7 +1785,20 @@ async function flushTxnQueue(){
 function allTxns(){return Object.values(S.txnCache).flat();}
 function uncatCount(){return allTxns().filter(t=>(!t.mainCatId||!getMC(t.mainCatId))&&!t.flagged&&(t.type==='expense'||t.type==='income')).length;}
 function pendingTransferCount(){return getPendingTransfers().filter(t=>!t.transferDismissed).length;}
-function updateBadge(){const c=uncatCount()+pendingTransferCount();const b=document.getElementById('uncat-badge');if(b){b.textContent=c;b.style.display=c>0?'':'none';}}
+function updateBadge(){
+  const uc=uncatCount();
+  const pt=pendingTransferCount();
+  const pr=_submissions.filter(s=>s.status==='pending').length;
+  const total=uc+pt+pr;
+  // Top-level inbox badge
+  const b=document.getElementById('uncat-badge');
+  if(b){b.textContent=total;b.style.display=total>0?'':'none';}
+  // Per-section counters
+  const setNB=(id,n)=>{const el=document.getElementById(id);if(!el)return;el.textContent=n;el.style.display=n>0?'':'none';};
+  setNB('nb-uncat',uc);
+  setNB('nb-transfers',pt);
+  setNB('nb-reimb',pr);
+}
 
 // ─── NAV ───
 function toggleGroup(g){
@@ -4745,7 +4758,7 @@ function rGoals(){
     const rem=Math.max(0,g.target-g.saved);
     return`<div class="card" style="${g.status!=='active'?'opacity:.6':''}">
       <div class="fg jb" style="flex-wrap:wrap;gap:8px">
-        <div><div style="font-size:16px;font-weight:500">${h(g.name)}</div><div style="font-size:var(--fs-xs);color:var(--text2)">${GTL[g.type]||g.type} &middot; ${ob(g.owner)}</div></div>
+        <div><div style="font-size:16px;font-weight:500">${h(g.name)}</div><div style="font-size:var(--fs-xs);color:var(--text2)">${GTL[g.type]||g.type}</div></div>
         <span class="badge b-grey">${g.status}</span>
       </div>
       <div class="div" style="margin:10px 0"></div>
@@ -4779,14 +4792,13 @@ function rGoals(){
     <div class="fr3" style="margin-top:8px">
       <div><label class="lbl">Target (SAR)</label><input type="number" id="gl-tgt" min="0" step="0.01"></div>
       <div><label class="lbl">Deadline (DD/MM/YYYY)</label><div class="date-inp-wrap"><input type="text" id="gl-dl" class="date-inp" placeholder="DD/MM/YYYY" maxlength="10"><button type="button" class="cal-btn" onclick="openCal('gl-dl')" title="Pick date">📅</button></div></div>
-      <div><label class="lbl">Owner</label><select id="gl-own">${oSel()}</select></div>
     </div>
     <div style="margin-top:8px"><label class="lbl">Notes</label><input type="text" id="gl-notes" placeholder="Strategy or context"></div>
     <div class="fg" style="margin-top:10px"><button class="btn btn-p" onclick="addGoal()">Create</button><button class="btn" onclick="tp('addgoal-panel')">Cancel</button></div>
   </div>
   ${cards}`;
 }
-function addGoal(){const name=document.getElementById('gl-name').value.trim();if(!name){toast('Name required',false);return;}S.goals.push({id:uid(),name,type:document.getElementById('gl-type').value,target:parseFloat(document.getElementById('gl-tgt').value)||0,saved:0,deadline:fromDD(document.getElementById('gl-dl').value)||null,owner:document.getElementById('gl-own').value||S.owners[0]?.id,notes:document.getElementById('gl-notes').value.trim(),status:'active'});sched();tp('addgoal-panel');render();toast('Goal created');}
+function addGoal(){const name=document.getElementById('gl-name').value.trim();if(!name){toast('Name required',false);return;}S.goals.push({id:uid(),name,type:document.getElementById('gl-type').value,target:parseFloat(document.getElementById('gl-tgt').value)||0,saved:0,deadline:fromDD(document.getElementById('gl-dl').value)||null,notes:document.getElementById('gl-notes').value.trim(),status:'active'});sched();tp('addgoal-panel');render();toast('Goal created');}
 function addToGoal(id){const a=parseFloat(document.getElementById('ga-'+id)?.value)||0;if(a<=0){toast('Enter valid amount',false);return;}const g=S.goals.find(x=>x.id===id);if(!g)return;g.saved=(g.saved||0)+a;if(g.saved>=g.target)g.status='complete';sched();render();toast(fmt(a)+' added');}
 function togGoal(id){const g=S.goals.find(x=>x.id===id);if(!g)return;g.status=g.status==='active'?'complete':'active';sched();render();}
 function delGoal(id){S.goals=S.goals.filter(x=>x.id!==id);sched();render();}
