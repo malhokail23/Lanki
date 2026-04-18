@@ -3300,22 +3300,41 @@ function addTxnM(){
 }
 
 // ─── IMPORT ───
-async function doImport(){
-  const raw=document.getElementById('imp-json').value.trim();
-  const errEl=document.getElementById('imp-err');
-  errEl.style.display='none';
-  if(!raw){toast('Paste JSON first',false);return;}
+async function doImport(directPayload){
+  // directPayload: when called from AI Upload (no DOM elements available)
+  // undefined: when called from the manual import panel (reads from DOM)
   let data;
-  try{data=JSON.parse(raw);}
-  catch(e){errEl.textContent='Invalid JSON: '+e.message.substring(0,120);errEl.style.display='block';return;}
+  let openingForGuardVal=null;
+  let closingBalVal=null;
+  let accOverride=null;
+
+  if(directPayload){
+    data=directPayload;
+    openingForGuardVal=parseFloat(directPayload._openingBal)||null;
+    closingBalVal=parseFloat(directPayload._closingBal)||null;
+    accOverride=directPayload.account_id||null;
+  }else{
+    const raw=document.getElementById('imp-json').value.trim();
+    const errEl=document.getElementById('imp-err');
+    errEl.style.display='none';
+    if(!raw){toast('Paste JSON first',false);return;}
+    try{data=JSON.parse(raw);}
+    catch(e){errEl.textContent='Invalid JSON: '+e.message.substring(0,120);errEl.style.display='block';return;}
+    openingForGuardVal=parseFloat(document.getElementById('imp-opening-bal')?.value)||null;
+    closingBalVal=parseFloat(document.getElementById('imp-closing-bal').value)||null;
+    accOverride=document.getElementById('imp-acc-override').value||null;
+  }
+
   const ym=data.month||S.month;
   const items=Array.isArray(data)?data:(data.transactions||[]);
-  if(!items.length){errEl.textContent='No transactions array found.';errEl.style.display='block';return;}
-  let rId=document.getElementById('imp-acc-override').value||data.account_id||data.accountId||null;
+  if(!items.length){
+    if(!directPayload){const errEl=document.getElementById('imp-err');errEl.textContent='No transactions array found.';errEl.style.display='block';}
+    return;
+  }
+  let rId=accOverride||data.account_id||data.accountId||null;
   if(!rId&&data.account_number){const an=(data.account_number||'').replace(/\s/g,'');const f=S.accounts.find(a=>a.accountNumber&&a.accountNumber.replace(/\s/g,'')===an);if(f)rId=f.id;}
   if(!S.txnCache[ym])S.txnCache[ym]=[];
   const txns=S.txnCache[ym];
-  // C2: Snapshot existing IDs before import so runTransferMatching can identify truly new transfers
   const preImportIds=new Set(txns.map(t=>t.id));
   let added=0;
   for(const t of items){
@@ -3326,7 +3345,6 @@ async function doImport(){
     let sid=t.sub_category_id||t.subCatId||null;
     const rawDesc=t.description||'';
     const cleanDesc=rawDesc.trim();
-    // PRIORITY 1: Bills category — highest priority, applied before merchant rules
     const matchedBill=S.bills.find(b=>{
       if(!b.mainCatId)return false;
       const bName=(b.name||'').toLowerCase();
@@ -3340,27 +3358,20 @@ async function doImport(){
       return false;
     });
     if(matchedBill&&matchedBill.mainCatId){mid=matchedBill.mainCatId;sid=matchedBill.subCatId||sid;}
-    // PRIORITY 2: Merchant rules always override Claude's assignment — rule represents explicit user correction
     const rule=!matchedBill?getRule(cleanDesc):null;
     let ruleApplied=false;
     if(rule){
-      // Only override if rule conflicts with what Claude assigned (or Claude left it empty)
       if(!mid||mid!==rule.mid){mid=rule.mid;sid=rule.sid;ruleApplied=true;}
       else if(mid===rule.mid&&(!sid||sid!==rule.sid)){sid=rule.sid;ruleApplied=true;}
     }
-    if(!mid&&!rule){/* no category and no rule — will show as uncategorized */}
     const di=t.debt_id||t.debtId||null;
-    // Sync type with resolved category — category is source of truth
     let txnType=t.type||'expense';
     if(mid){txnType=typeFromCat(mid,txnType);}
-    // direction is the source of truth for sign; fallback for pre-direction imports
     const dir=(t.direction?t.direction.toLowerCase().trim():null)||(txnType==='income'?'in':'out');
-    // C4: Deduplication — skip if a matching transaction already exists
     const amt=Math.abs(parseFloat(t.amount)||0);
     const isDup=txns.some(x=>x.date===t.date&&Math.abs(x.amount-amt)<0.01&&(x.description||'').trim().toLowerCase()===(cleanDesc||'').toLowerCase()&&(x.accountId||null)===(ai||null));
     if(isDup)continue;
     const txnItem={id:uid(),date:t.date,description:cleanDesc,raw_description:rawDesc,amount:amt,type:txnType,direction:dir,mainCatId:mid,subCatId:sid,accountId:ai,debtId:di,notes:(t.notes||'').trim(),flagged:!!t.flagged,ruleApplied:ruleApplied||false};
-    // Route to correct month bucket based on transaction date, not statement month
     const txnYm=t.date?t.date.substr(0,7):ym;
     if(txnYm!==ym){
       if(!S.txnCache[txnYm])S.txnCache[txnYm]=[];
@@ -3373,46 +3384,42 @@ async function doImport(){
   }
   txns.sort((a,b)=>a.date.localeCompare(b.date));
 
-  // Balance guard
-  const closingBal=parseFloat(document.getElementById('imp-closing-bal').value)||null;
-  const openingForGuard=parseFloat(document.getElementById('imp-opening-bal')?.value)||null;
-  // Store opening/closing for this account+month so running balance display is accurate
-  if(rId&&openingForGuard!==null){
+  if(rId&&openingForGuardVal!==null){
     const mk=rId+'_'+ym;
     if(!S.monthlyBal[mk])S.monthlyBal[mk]={};
-    S.monthlyBal[mk].opening=openingForGuard;
+    S.monthlyBal[mk].opening=openingForGuardVal;
   }
-  if(closingBal!==null&&rId){
+  if(closingBalVal!==null&&rId){
     const allAccTx=txns.filter(t=>t.accountId===rId);
-    // Use direction as source of truth for ALL transaction types including transfers
-    const calcBal=(openingForGuard||0)+allAccTx.reduce((s,t)=>{return s+(txDir(t)==='in'?t.amount:-t.amount);},0);
-    const diff=Math.abs(closingBal-calcBal);
+    const calcBal=(openingForGuardVal||0)+allAccTx.reduce((s,t)=>{return s+(txDir(t)==='in'?t.amount:-t.amount);},0);
+    const diff=Math.abs(closingBalVal-calcBal);
     if(diff>1){
-      if(rId){const mk=rId+'_'+ym;if(!S.monthlyBal[mk])S.monthlyBal[mk]={};S.monthlyBal[mk].closing=closingBal;}
+      if(rId){const mk=rId+'_'+ym;if(!S.monthlyBal[mk])S.monthlyBal[mk]={};S.monthlyBal[mk].closing=closingBalVal;}
       const inTxns=allAccTx.filter(t=>txDir(t)==='in');
       const outTxns=allAccTx.filter(t=>txDir(t)!=='in');
       const totalIn=inTxns.reduce((s,t)=>s+t.amount,0);
       const totalOut=outTxns.reduce((s,t)=>s+t.amount,0);
-      const guardMsg=`Balance guard: SAR ${diff.toFixed(2)} discrepancy. Opening ${fmt(openingForGuard)} + In ${fmt(totalIn)} (${inTxns.length} txns) − Out ${fmt(totalOut)} (${outTxns.length} txns) = ${fmt(calcBal)}. Statement says ${fmt(closingBal)}.`;
+      const guardMsg=`Balance guard: SAR ${diff.toFixed(2)} discrepancy. Opening ${fmt(openingForGuardVal)} + In ${fmt(totalIn)} (${inTxns.length} txns) − Out ${fmt(totalOut)} (${outTxns.length} txns) = ${fmt(calcBal)}. Statement says ${fmt(closingBalVal)}.`;
       toast(guardMsg,false);
-      // Store guard result in monthlyBal — no phantom transaction
-      if(rId){const mk=rId+'_'+ym;if(!S.monthlyBal[mk])S.monthlyBal[mk]={};S.monthlyBal[mk].guardFail=true;S.monthlyBal[mk].guardDiff=diff;S.monthlyBal[mk].guardCalc=calcBal;S.monthlyBal[mk].closing=closingBal;sched();}
-    }else{toast(`Imported ${added} transaction${added!==1?'s':''}. Balance guard passed ✓`);if(rId){const mk=rId+'_'+ym;if(!S.monthlyBal[mk])S.monthlyBal[mk]={};S.monthlyBal[mk].closing=closingBal;}}
+      if(rId){const mk=rId+'_'+ym;if(!S.monthlyBal[mk])S.monthlyBal[mk]={};S.monthlyBal[mk].guardFail=true;S.monthlyBal[mk].guardDiff=diff;S.monthlyBal[mk].guardCalc=calcBal;S.monthlyBal[mk].closing=closingBalVal;sched();}
+    }else{toast(`Imported ${added} transaction${added!==1?'s':''}. Balance guard passed ✓`);if(rId){const mk=rId+'_'+ym;if(!S.monthlyBal[mk])S.monthlyBal[mk]={};S.monthlyBal[mk].closing=closingBalVal;}}
   }
 
-  runTransferMatching(txns, preImportIds);
-  // Auto-match reimbursements against newly imported external transfers
+  runTransferMatching(txns,preImportIds);
   const newlyAdded=txns.filter(t=>!preImportIds.has(t.id));
   checkReimbursementMatch(newlyAdded);
-  syncDebtsFromTxns(); // rebuild debt payments from all linked transactions
-  sched(); // save monthlyBal
+  syncDebtsFromTxns();
+  sched();
   if(ym!==S.month)S.month=ym;
-  document.getElementById('imp-json').value='';
-  document.getElementById('imp-closing-bal').value='';
-  const ob=document.getElementById('imp-opening-bal');
-  if(ob){ob.value='';ob.style.background='';ob.title='';}
-  tp('imp-panel');schedTxn(ym);render();
-  if(closingBal===null)toast(`Imported ${added} transaction${added!==1?'s':''}`);
+  if(!directPayload){
+    document.getElementById('imp-json').value='';
+    document.getElementById('imp-closing-bal').value='';
+    const ob=document.getElementById('imp-opening-bal');
+    if(ob){ob.value='';ob.style.background='';ob.title='';}
+    tp('imp-panel');
+  }
+  schedTxn(ym);render();
+  if(closingBalVal===null)toast(`Imported ${added} transaction${added!==1?'s':''}`);
 }
 function lcMap(id){const m={'cat_income_salary':'cat_main_income','cat_income_other':'cat_main_income','cat_debt_payment':'cat_main_finance','cat_groceries':'cat_main_food','cat_kids':'cat_main_kids','cat_household':'cat_main_housing','cat_fuel':'cat_main_transport','cat_subscriptions':'cat_main_subscriptions','cat_shopping':'cat_main_shopping','cat_food_delivery':'cat_main_food','cat_staff':'cat_main_staff','cat_personal':'cat_main_personal','cat_medical':'cat_main_personal','cat_transfer':'cat_main_transfers','cat_investment':'cat_main_transfers','cat_external_transfer':'cat_main_transfers'};return m[id]||null;}
 function getRule(desc){const d=(desc||'').toLowerCase().trim();return S.rules.find(r=>d.includes(r.m.toLowerCase()))||null;}
@@ -6859,10 +6866,11 @@ async function commitAIImport(){
   if(!_aiState.extracted.length)return;
   _aiState.error='';
 
-  // Build a JSON payload matching the normal import format
   const payload={
     account_id:_aiState.accountId,
     month:_aiState.month,
+    _openingBal:_aiState.openingBal||'',
+    _closingBal:_aiState.closingBal||'',
     transactions:_aiState.extracted.map(t=>({
       date:t.date,
       description:t.description,
@@ -6876,32 +6884,15 @@ async function commitAIImport(){
     }))
   };
 
-  // Parse through normal doImport pipeline
-  const json=JSON.stringify(payload);
-  document.getElementById('imp-json')?document.getElementById('imp-json').value=json:null;
-
   // Learn rules from extracted transactions
   learnExtractionRules(_aiState.extracted);
 
-  // Run import via the normal pipeline — set balance fields first
-  if(_aiState.openingBal){
-    const impOp=document.getElementById('imp-opening-bal');if(impOp)impOp.value=_aiState.openingBal;
-  }
-  if(_aiState.closingBal){
-    const impCl=document.getElementById('imp-closing-bal');if(impCl)impCl.value=_aiState.closingBal;
-  }
+  // Call doImport directly with payload — no DOM elements needed
+  await doImport(payload);
 
-  // Direct import bypass (doImport reads from the textarea)
-  const mockJsonEl=document.getElementById('imp-json');
-  if(mockJsonEl){mockJsonEl.value=json;await doImport();}
-  else{
-    // Fallback: directly call the import core with our data
-    toast('Import complete — check Transactions',true);
-  }
-
-  // Reset
+  // Reset AI state and navigate to transactions
   _aiState={file:null,fileName:'',fileData:'',fileType:'',accountId:'',month:'',openingBal:'',closingBal:'',extracted:[],loading:false,error:'',step:1};
-  sw('txbank');
+  sw('transactions');
 }
 
 function learnExtractionRules(txns){
