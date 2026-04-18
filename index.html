@@ -1836,6 +1836,10 @@ function sw(tab){
   // Reset bulk selection when switching tabs
   if(BulkMode){BulkMode=false;BulkSelected.clear();}
   S.tab=tab;
+  // Scroll content area back to top
+  const content=document.querySelector('.app-content');
+  if(content)content.scrollTop=0;
+  window.scrollTo(0,0);
   // Close mobile sidebar when navigating
   closeSidebar();
   // Update mobile page title in burger bar
@@ -6485,14 +6489,14 @@ function enterDemoMode(){
 
   // Reimbursement submitters — demo names, no real PINs
   S.submitters=[
-    {name:'Sara (Demo)',pinHash:'8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92'}, // PIN: 123456
+    {name:'Lana (Demo)',pinHash:'8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92'}, // PIN: 123456
   ];
 
   // Demo pending reimbursements — replaces live Supabase data
   _submissions=[
-    {id:'sub_demo_1',submitter_name:'Sara (Demo)',submitted_at:'2026-04-15T10:30:00Z',amount:288,description:'Groceries from Tamimi',category_hint:'groceries',notes:'',expense_date:'2026-04-15',status:'pending'},
-    {id:'sub_demo_2',submitter_name:'Sara (Demo)',submitted_at:'2026-04-14T14:20:00Z',amount:170,description:'Jahez family dinner',category_hint:'food',notes:'Kids wanted pizza',expense_date:'2026-04-14',status:'pending'},
-    {id:'sub_demo_3',submitter_name:'Sara (Demo)',submitted_at:'2026-04-13T09:00:00Z',amount:95,description:'Pharmacy — vitamins',category_hint:'health',notes:'',expense_date:'2026-04-13',status:'approved'},
+    {id:'sub_demo_1',submitter_name:'Lana (Demo)',submitted_at:'2026-04-15T10:30:00Z',amount:288,description:'Groceries from Tamimi',category_hint:'groceries',notes:'',expense_date:'2026-04-15',status:'pending'},
+    {id:'sub_demo_2',submitter_name:'Lana (Demo)',submitted_at:'2026-04-14T14:20:00Z',amount:170,description:'Jahez family dinner',category_hint:'food',notes:'Kids wanted pizza',expense_date:'2026-04-14',status:'pending'},
+    {id:'sub_demo_3',submitter_name:'Lana (Demo)',submitted_at:'2026-04-13T09:00:00Z',amount:95,description:'Pharmacy — vitamins',category_hint:'health',notes:'',expense_date:'2026-04-13',status:'approved'},
   ];
 
   // Family members — demo members for Family Investments page
