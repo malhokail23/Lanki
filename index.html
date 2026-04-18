@@ -4315,33 +4315,125 @@ function saveFamilyMemberValue(mid,inputId){
   m.lastRecordedValueDate=new Date().toISOString().substr(0,10);
   sched();render();toast('Value updated');
 }
+function debtFormHtml(){
+  return`<!-- Row 1: Name + Lender -->
+    <div class="fr" style="margin-bottom:8px">
+      <div><label class="lbl">Debt name</label><input type="text" id="db-name" placeholder="e.g. Al Rajhi Home Finance"></div>
+      <div><label class="lbl">Lender</label><input type="text" id="db-ldr" placeholder="e.g. Al Rajhi Bank"></div>
+    </div>
+    <!-- Row 2: Type + Loan Value -->
+    <div class="fr" style="margin-bottom:8px">
+      <div><label class="lbl">Type</label><select id="db-type" onchange="onDebtTypeChange(this.value)">${DTS.map(t=>`<option value="${t.v}">${t.l}</option>`).join('')}</select></div>
+      <div><label class="lbl">Loan Value (SAR)</label><input type="number" id="db-orig" min="0" step="0.01" placeholder="Total contract amount incl. bank profit" oninput="updateBankProfitCalc()"></div>
+    </div>
+    <!-- CC-specific fields -->
+    <div id="cc-fields" style="display:none">
+      <div class="fr" style="margin-bottom:8px">
+        <div><label class="lbl">Credit Limit (SAR)</label><input type="number" id="db-limit" min="0" step="0.01" placeholder="e.g. 60,000"></div>
+        <div><label class="lbl">Minimum Monthly Payment (SAR)</label><input type="number" id="db-minpay" min="0" step="0.01" placeholder="For DTI calculation"></div>
+      </div>
+      <div class="fr" style="margin-bottom:8px">
+        <div><label class="lbl">Opening balance (SAR)</label><input type="number" id="db-opening" min="0" step="0.01" placeholder="Balance owed on the as-of date"></div>
+        <div><label class="lbl">Balance as of (DD/MM/YYYY)</label><div class="date-inp-wrap"><input type="text" id="db-cc-asof" class="date-inp" placeholder="DD/MM/YYYY" maxlength="10"><button type="button" class="cal-btn" onclick="openCal('db-cc-asof')" title="Pick date">📅</button></div></div>
+      </div>
+      <div class="fr" style="margin-bottom:8px">
+        <div><label class="lbl">Linked card account</label><select id="db-linked-acc"><option value="">-- Select card account --</option></select></div>
+        <div><label class="lbl">Interest rate (% p.a.)</label><input type="number" id="db-cc-rate" min="0" step="0.01" placeholder="e.g. 24"></div>
+      </div>
+      <div style="margin-bottom:8px;padding:10px;background:#DBEAFE22;border-radius:8px;border:1px solid #BFDBFE">
+        <div style="font-size:11px;color:var(--info);line-height:1.6">Current balance is calculated automatically from imported transactions: opening balance + card expenses − payments since the as-of date.</div>
+      </div>
+    </div>
+    <!-- Loan-specific fields -->
+    <div id="loan-fields">
+      <div class="fr" style="margin-bottom:4px">
+        <div><label class="lbl">Borrowed Amount (SAR)</label><input type="number" id="db-borrowed" min="0" step="0.01" placeholder="What was credited to your account" oninput="updateBankProfitCalc()"></div>
+        <div style="display:flex;flex-direction:column;justify-content:flex-end"><div id="bank-profit-calc" style="font-size:11px;color:var(--text3);padding:8px 12px;background:var(--bg2);border-radius:var(--rsm);min-height:36px;display:flex;align-items:center"></div></div>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.6">Loan Value = Borrowed Amount + Bank Profit. The bank profit shown here is the total profit agreed at contract signing.</div>
+      <div class="fr" style="margin-bottom:8px">
+        <div><label class="lbl">Remaining balance (SAR)</label><input type="number" id="db-rem" min="0" step="0.01" placeholder="Balance as of the date below"></div>
+        <div><label class="lbl">Remaining as of (DD/MM/YYYY)</label><div class="date-inp-wrap"><input type="text" id="db-asof" class="date-inp" placeholder="DD/MM/YYYY" maxlength="10"><button type="button" class="cal-btn" onclick="openCal('db-asof')" title="Pick date">📅</button></div></div>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.6;padding:8px 12px;background:var(--bg2);border-radius:var(--rsm)">Transactions linked to this debt after the above date will automatically reduce the remaining balance.</div>
+      <div class="fr3" style="margin-bottom:8px">
+        <div><label class="lbl">Monthly installment (SAR)</label><input type="number" id="db-inst" min="0" step="0.01"></div>
+        <div><label class="lbl">Profit rate (% p.a.)</label><input type="number" id="db-rate" min="0" step="0.01"></div>
+        <div><label class="lbl">Duration (months)</label><input type="number" id="db-dur" min="1"></div>
+      </div>
+      <div class="fr3" style="margin-bottom:8px">
+        <div><label class="lbl">Contract start (DD/MM/YYYY)</label><div class="date-inp-wrap"><input type="text" id="db-start" class="date-inp" placeholder="DD/MM/YYYY" maxlength="10"><button type="button" class="cal-btn" onclick="openCal('db-start')" title="Pick date">📅</button></div></div>
+        <div><label class="lbl">End date (DD/MM/YYYY)</label><div class="date-inp-wrap"><input type="text" id="db-end" class="date-inp" placeholder="DD/MM/YYYY" maxlength="10"><button type="button" class="cal-btn" onclick="openCal('db-end')" title="Pick date">📅</button></div></div>
+        <div><label class="lbl">Payment mode</label><select id="db-mode"><option value="auto">Auto (from statement)</option><option value="manual">Manual</option></select></div>
+      </div>
+      <div style="margin-bottom:8px;padding:12px;background:color-mix(in srgb,var(--ok) 6%,var(--bg2));border-radius:var(--rmd);border:1px solid color-mix(in srgb,var(--ok) 15%,transparent)">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:10px">Early Settlement (from your bank)</div>
+        <div class="fr3" style="margin-bottom:6px">
+          <div><label class="lbl">Amount to pay today (SAR)</label><input type="number" id="db-stl-amt" min="0" step="0.01" placeholder="Total from bank app"></div>
+          <div><label class="lbl">Management fees (SAR)</label><input type="number" id="db-stl-fees" min="0" step="0.01" placeholder="Optional"></div>
+          <div><label class="lbl">As of (DD/MM/YYYY)</label><div class="date-inp-wrap"><input type="text" id="db-stl-date" class="date-inp" placeholder="DD/MM/YYYY" maxlength="10"><button type="button" class="cal-btn" onclick="openCal('db-stl-date')" title="Pick date">📅</button></div></div>
+        </div>
+        <div style="font-size:11px;color:var(--text3);line-height:1.6">Get these from your bank app. Al Rajhi shows this under Early Payment. Update periodically as the amounts change over time.</div>
+      </div>
+      <div class="fr" style="margin-bottom:8px">
+        <div><label class="lbl">Statement keyword</label><input type="text" id="db-kw" placeholder="e.g. LOAN 53106565"></div>
+        <div><label class="lbl">Notes</label><input type="text" id="db-notes" placeholder="Optional context"></div>
+      </div>
+    </div>
+    <div class="fg" style="margin-top:10px">
+      <button class="btn btn-p" id="debt-sbtn" onclick="saveDebt()">Save</button>
+      <button class="btn" onclick="closeDebtForm()">Cancel</button>
+    </div>`;}
+
 function rDebts(){
   const act=S.debts.filter(d=>d.status==='active');
-  const to=act.reduce((s,d)=>s+(d.original||0),0);
-  const tr=act.reduce((s,d)=>s+(d.type==='credit_card'?calcCCBalance(d):(d.remaining||0)),0);
+  const to=act.reduce((s,d)=>s+(d.original||0),0);          // Total Loans Value
+  const tb=act.reduce((s,d)=>s+(d.borrowedAmount||0),0);    // Total Borrowed (principal only)
+  const tr=act.reduce((s,d)=>s+(d.type==='credit_card'?calcCCBalance(d):(d.remaining||0)),0); // Outstanding
+
   const cards=S.debts.map(d=>{
     const isCC=d.type==='credit_card';
     const liveBalance=isCC?calcCCBalance(d):(d.remaining||0);
     const ccUtil=isCC&&d.creditLimit?Math.min(100,Math.round(liveBalance/d.creditLimit*100)):null;
 
-    // For loans: baseline is remainingAtStart (what the user entered), paid = total payments recorded
     const baseline=d.remainingAtStart!==undefined?d.remainingAtStart:(d.original||0);
     const paidFromTxns=(d.payments||[]).filter(p=>p.source==='import').reduce((s,p)=>s+p.amount,0);
     const paidManual=(d.payments||[]).filter(p=>p.source!=='import').reduce((s,p)=>s+p.amount,0);
     const totalPaid=paidFromTxns+paidManual;
-    const paid=isCC?(d.openingBalance||0)-liveBalance:totalPaid;
-    const denom=isCC?(d.openingBalance||0):baseline;
-    // Progress bar: for loans use (original − remaining) ÷ original — true total repayment
     const pTotal=isCC?((d.openingBalance||0)-liveBalance):Math.max(0,(d.original||0)-liveBalance);
     const pDenom=isCC?(d.openingBalance||0):(d.original||0);
     const p=pDenom>0?Math.min(100,Math.round(pTotal/pDenom*100)):0;
 
-    // Projected payoff date
     const now=getYM(new Date());
     let projDate='--';
     if(!isCC){
       if(d.endDate)projDate=toDD(d.endDate);
       else if(d.installment>0&&liveBalance>0)projDate=toDD(addM(now,Math.ceil(liveBalance/d.installment))+'-01');
+    }
+
+    // Bank profit at origination
+    const origProfit=(d.original&&d.borrowedAmount&&d.original>d.borrowedAmount)?d.original-d.borrowedAmount:null;
+
+    // Early settlement insight
+    let settlementHtml='';
+    if(!isCC&&d.earlySettlementAmount){
+      const stlAmt=d.earlySettlementAmount||0;
+      const stlFees=d.earlySettlementFees||0;
+      const remainingPrincipal=Math.max(0,stlAmt-stlFees);
+      const remainingProfit=Math.max(0,liveBalance-remainingPrincipal);
+      const savings=Math.max(0,remainingProfit-stlFees);
+      const stlDate=d.earlySettlementDate?` · as of ${toDD(d.earlySettlementDate)}`:'';
+      settlementHtml=`
+      <div style="margin-top:14px;padding:14px;background:color-mix(in srgb,var(--ok) 6%,var(--bg2));border-radius:var(--rmd);border:1px solid color-mix(in srgb,var(--ok) 20%,transparent)">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:12px">Early Settlement Analysis${stlDate}</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:12px">
+          <div><div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:4px">Pay Today</div><div style="font-size:18px;font-weight:600;letter-spacing:-.03em;font-variant-numeric:tabular-nums">${fmtP(stlAmt)}</div>${stlFees>0?`<div style="font-size:10px;color:var(--text3);margin-top:2px">incl. ${fmtP(stlFees)} fees</div>`:''}</div>
+          <div><div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:4px">Remaining Principal</div><div style="font-size:18px;font-weight:600;letter-spacing:-.03em;font-variant-numeric:tabular-nums">${fmtP(remainingPrincipal)}</div><div style="font-size:10px;color:var(--text3);margin-top:2px">what you actually owe</div></div>
+          <div><div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--ok);margin-bottom:4px">Estimated Savings</div><div style="font-size:18px;font-weight:600;letter-spacing:-.03em;font-variant-numeric:tabular-nums;color:var(--ok)">${fmtP(savings)}</div><div style="font-size:10px;color:var(--text3);margin-top:2px">future profit waived</div></div>
+          <div><div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:4px">Remaining vs. Pay Now</div><div style="font-size:18px;font-weight:600;letter-spacing:-.03em;font-variant-numeric:tabular-nums;color:var(--warn)">${fmtP(liveBalance-stlAmt)}</div><div style="font-size:10px;color:var(--text3);margin-top:2px">premium for keeping loan</div></div>
+        </div>
+        <div style="font-size:11px;color:var(--text3);line-height:1.7;padding:8px 10px;background:var(--bg);border-radius:var(--rsm)">Settling today saves ${fmtP(savings)} in bank profit. The remaining balance in Lanki (${fmtP(liveBalance)}) includes all future scheduled profit — paying ${fmtP(stlAmt)} today closes the loan entirely.</div>
+      </div>`;
     }
 
     const pl=(d.payments||[]).slice().reverse().map(x=>{
@@ -4356,7 +4448,7 @@ function rDebts(){
       </div>`;
     }).join('')||'<div style="font-size:var(--fs-xs);color:var(--text3);padding:8px 0">No payments recorded yet.</div>';
 
-    return`<div class="card" style="${d.status==='settled'?'opacity:.65':''}">
+    return`<div class="card" id="debt-card-${d.id}" style="${d.status==='settled'?'opacity:.65':''}">
       <div class="fg jb" style="flex-wrap:wrap;gap:8px">
         <div>
           <div style="font-size:16px;font-weight:600;letter-spacing:-.02em">${h(d.name)}</div>
@@ -4392,14 +4484,16 @@ function rDebts(){
       <div style="font-size:var(--fs-xxs);color:var(--text3)">${(ccUtil||0)<30?'Low utilization':(ccUtil||0)<70?'Moderate utilization':'High utilization — consider paying down'}</div>
       `:`
       <div class="g3" style="margin-bottom:12px">
-        <div><div class="klbl">Starting Balance</div><div style="font-size:20px;font-weight:600;letter-spacing:-.03em">${fmtP(baseline)}</div><div style="font-size:10px;color:var(--text3);margin-top:3px">as of ${toDD(d.balanceAsOf)||'setup'}</div></div>
-        <div><div class="klbl">Paid Since Tracking</div><div style="font-size:20px;font-weight:600;letter-spacing:-.03em" class="c-ok">${fmtP(totalPaid)}</div><div style="font-size:10px;color:var(--text3);margin-top:3px">${(d.payments||[]).length} payment${(d.payments||[]).length!==1?'s':''}</div></div>
-        <div><div class="klbl">Remaining</div><div style="font-size:20px;font-weight:600;letter-spacing:-.03em" class="c-warn">${fmtP(liveBalance)}</div>${d.installment?`<div style="font-size:10px;color:var(--text3);margin-top:3px">${fmtP(d.installment)}/mo</div>`:''}</div>
+        <div><div class="klbl">Loan Value</div><div style="font-size:20px;font-weight:600;letter-spacing:-.03em">${fmtP(d.original||0)}</div>${d.borrowedAmount?`<div style="font-size:10px;color:var(--text3);margin-top:2px">Borrowed: ${fmtP(d.borrowedAmount)}${origProfit?` · Profit: ${fmtP(origProfit)}`:''}</div>`:''}</div>
+        <div><div class="klbl">Paid Since Tracking</div><div style="font-size:20px;font-weight:600;letter-spacing:-.03em" class="c-ok">${fmtP(totalPaid)}</div><div style="font-size:10px;color:var(--text3);margin-top:2px">${(d.payments||[]).length} payment${(d.payments||[]).length!==1?'s':''}</div></div>
+        <div><div class="klbl">Remaining</div><div style="font-size:20px;font-weight:600;letter-spacing:-.03em" class="c-warn">${fmtP(liveBalance)}</div>${d.installment?`<div style="font-size:10px;color:var(--text3);margin-top:2px">${fmtP(d.installment)}/mo</div>`:''}</div>
         <div><div class="klbl">Projected Payoff</div><div style="font-size:14px;font-weight:500;margin-top:4px">${projDate}</div></div>
       </div>
-      <div style="font-size:var(--fs-xxs);color:var(--text3);margin-bottom:5px;display:flex;justify-content:space-between"><span>${p}% repaid of original amount</span><span style="color:var(--electric)">${paidFromTxns>0?'⬡ '+fmtP(paidFromTxns)+' from '+((d.payments||[]).filter(pp=>pp.source==='import').length)+' linked transactions':''}</span></div>
+      <div style="font-size:var(--fs-xxs);color:var(--text3);margin-bottom:5px;display:flex;justify-content:space-between"><span>${p}% repaid of loan value</span><span style="color:var(--electric)">${paidFromTxns>0?'⬡ '+fmtP(paidFromTxns)+' from '+((d.payments||[]).filter(pp=>pp.source==='import').length)+' linked transactions':''}</span></div>
       <div class="pb" style="height:8px;margin-bottom:3px"><div class="pf pfd" style="width:${p}%"></div></div>
       `}
+
+      ${settlementHtml}
 
       ${d.notes?`<div style="font-size:var(--fs-xs);color:var(--text3);margin-top:8px">${h(d.notes)}</div>`:''}
       <div class="div" style="margin:12px 0 10px"></div>
@@ -4420,85 +4514,59 @@ function rDebts(){
         <button class="btn btn-sm btn-d" onclick="delDebt('${d.id}')">Remove</button>
         ${isCC?`<div style="font-size:var(--fs-xxs);color:var(--info);margin-top:4px;width:100%">Balance calculated automatically from imported card transactions.</div>`:''}
       </div>`:`<div class="fg" style="margin-top:10px;gap:6px"><button class="btn btn-sm" onclick="togDebt('${d.id}')">Reactivate</button><button class="btn btn-sm btn-d" onclick="delDebt('${d.id}')">Remove</button></div>`}
-    </div>`;}).join('')||'<div class="empty">No debts tracked yet.</div>';
+    </div>
+    <!-- Inline edit slot — populated by openEditDebt() -->
+    <div class="debt-edit-slot" id="debt-edit-slot-${d.id}" style="display:none;margin-bottom:1.5rem"></div>`;
+  }).join('')||'<div class="empty">No debts tracked yet.</div>';
+
   return`
   <div class="pg-header-row">
     <div class="pg-header-title">Debt Tracker</div>
     <button class="btn btn-p btn-sm" onclick="openAddDebt()">+ Add debt</button>
   </div>
-  ${act.length?`<div class="g3" style="margin-bottom:1rem">
-    <div class="kpi"><div class="klbl">Total borrowed</div><div class="kval">${fmtP(to)}</div></div>
-    <div class="kpi"><div class="klbl">Outstanding</div><div class="kval c-warn">${fmtP(tr)}</div></div>
-    <div class="kpi"><div class="klbl">Paid to date</div><div class="kval c-ok">${fmtP(to-tr)}</div></div>
+  ${act.length?`<div class="g3-fixed" style="margin-bottom:1.5rem">
+    <div class="kpi"><div class="klbl">Total Loans Value</div><div class="kval">${fmtP(to)}</div><div class="ksub">Principal + bank profit</div></div>
+    ${tb>0?`<div class="kpi"><div class="klbl">Total Borrowed</div><div class="kval">${fmtP(tb)}</div><div class="ksub">Actual principal received</div></div>`:''}
+    <div class="kpi"><div class="klbl">Outstanding</div><div class="kval c-warn">${fmtP(tr)}</div><div class="ksub">${act.length} active debt${act.length!==1?'s':''}</div></div>
+    <div class="kpi"><div class="klbl">Paid to Date</div><div class="kval c-ok">${fmtP(to-tr)}</div><div class="ksub">vs. loan value</div></div>
   </div>`:''}
+  <!-- Add debt panel (stays at top for new debts) -->
   <div id="debt-panel" class="panel">
     <div class="chdr" id="debt-ptitle">Add debt</div>
-    <!-- Row 1: Name + Lender -->
-    <div class="fr" style="margin-bottom:8px">
-      <div><label class="lbl">Debt name</label><input type="text" id="db-name" placeholder="e.g. Al Rajhi Home Finance"></div>
-      <div><label class="lbl">Lender</label><input type="text" id="db-ldr" placeholder="e.g. Al Rajhi Bank"></div>
-    </div>
-    <!-- Row 2: Type + Original -->
-    <div class="fr" style="margin-bottom:8px">
-      <div><label class="lbl">Type</label><select id="db-type" onchange="onDebtTypeChange(this.value)">${DTS.map(t=>`<option value="${t.v}">${t.l}</option>`).join('')}</select></div>
-      <div><label class="lbl">Original amount (SAR)</label><input type="number" id="db-orig" min="0" step="0.01" placeholder="Full loan amount"></div>
-    </div>
-    <!-- CC-specific fields -->
-    <div id="cc-fields" style="display:none">
-      <div class="fr" style="margin-bottom:8px">
-        <div><label class="lbl">Credit Limit (SAR)</label><input type="number" id="db-limit" min="0" step="0.01" placeholder="e.g. 60,000"></div>
-        <div><label class="lbl">Minimum Monthly Payment (SAR)</label><input type="number" id="db-minpay" min="0" step="0.01" placeholder="For DTI calculation"></div>
-      </div>
-      <div class="fr" style="margin-bottom:8px">
-        <div><label class="lbl">Opening balance (SAR)</label><input type="number" id="db-opening" min="0" step="0.01" placeholder="Balance owed on the as-of date"></div>
-        <div><label class="lbl">Balance as of (DD/MM/YYYY)</label><div class="date-inp-wrap"><input type="text" id="db-cc-asof" class="date-inp" placeholder="DD/MM/YYYY" maxlength="10"><button type="button" class="cal-btn" onclick="openCal('db-cc-asof')" title="Pick date">📅</button></div></div>
-      </div>
-      <div class="fr" style="margin-bottom:8px">
-        <div><label class="lbl">Linked card account</label><select id="db-linked-acc"><option value="">-- Select card account --</option></select></div>
-        <div><label class="lbl">Interest rate (% p.a.)</label><input type="number" id="db-cc-rate" min="0" step="0.01" placeholder="e.g. 24"></div>
-      </div>
-      <div style="margin-bottom:8px;padding:10px;background:#DBEAFE22;border-radius:8px;border:1px solid #BFDBFE">
-        <div style="font-size:11px;color:var(--info);line-height:1.6">Current balance is calculated automatically from imported transactions: opening balance + card expenses − payments since the as-of date.</div>
-      </div>
-    </div>
-    <!-- Loan-specific fields -->
-    <div id="loan-fields">
-      <!-- Row: Remaining balance + Remaining as of — paired together -->
-      <div class="fr" style="margin-bottom:8px">
-        <div><label class="lbl">Remaining balance (SAR)</label><input type="number" id="db-rem" min="0" step="0.01" placeholder="Balance as of the date below"></div>
-        <div><label class="lbl">Remaining as of (DD/MM/YYYY)</label><div class="date-inp-wrap"><input type="text" id="db-asof" class="date-inp" placeholder="DD/MM/YYYY" maxlength="10"><button type="button" class="cal-btn" onclick="openCal('db-asof')" title="Pick date">📅</button></div></div>
-      </div>
-      <div style="font-size:11px;color:var(--text3);margin-bottom:8px;line-height:1.6;padding:8px 12px;background:var(--bg2);border-radius:var(--rsm)">Transactions linked to this debt after the above date will automatically reduce the remaining balance. Set "remaining as of" to your most recent known balance date.</div>
-      <div class="fr3" style="margin-bottom:8px">
-        <div><label class="lbl">Monthly installment (SAR)</label><input type="number" id="db-inst" min="0" step="0.01"></div>
-        <div><label class="lbl">Profit rate (% p.a.)</label><input type="number" id="db-rate" min="0" step="0.01"></div>
-        <div><label class="lbl">Duration (months)</label><input type="number" id="db-dur" min="1"></div>
-      </div>
-      <div class="fr3" style="margin-bottom:8px">
-        <div><label class="lbl">Contract start (DD/MM/YYYY)</label><div class="date-inp-wrap"><input type="text" id="db-start" class="date-inp" placeholder="DD/MM/YYYY" maxlength="10"><button type="button" class="cal-btn" onclick="openCal('db-start')" title="Pick date">📅</button></div></div>
-        <div><label class="lbl">End date (DD/MM/YYYY)</label><div class="date-inp-wrap"><input type="text" id="db-end" class="date-inp" placeholder="DD/MM/YYYY" maxlength="10"><button type="button" class="cal-btn" onclick="openCal('db-end')" title="Pick date">📅</button></div></div>
-        <div><label class="lbl">Payment mode</label><select id="db-mode"><option value="auto">Auto (from statement)</option><option value="manual">Manual</option></select></div>
-      </div>
-      <div class="fr" style="margin-bottom:8px">
-        <div><label class="lbl">Statement keyword</label><input type="text" id="db-kw" placeholder="e.g. LOAN 53106565"></div>
-        <div><label class="lbl">Notes</label><input type="text" id="db-notes" placeholder="Optional context"></div>
-      </div>
-    </div>
-    <div class="fg" style="margin-top:10px">
-      <button class="btn btn-p" id="debt-sbtn" onclick="saveDebt()">Save</button>
-      <button class="btn" onclick="tp('debt-panel');editDebtId=null">Cancel</button>
-    </div>
+    ${debtFormHtml()}
   </div>
-  ${cards}`;
+  ${cards}`;}
+
+
+function updateBankProfitCalc(){
+  const orig=parseFloat(document.getElementById('db-orig')?.value)||0;
+  const borrowed=parseFloat(document.getElementById('db-borrowed')?.value)||0;
+  const el=document.getElementById('bank-profit-calc');
+  if(!el)return;
+  if(orig>0&&borrowed>0&&orig>borrowed){
+    const profit=orig-borrowed;
+    el.textContent='Bank profit at origination: '+fmtP(profit);
+    el.style.color='var(--warn)';
+  }else if(orig>0&&borrowed>0&&borrowed>=orig){
+    el.textContent='Borrowed amount should be less than loan value';
+    el.style.color='var(--bad)';
+  }else{
+    el.textContent='';
+  }
+}
+function closeDebtForm(){
+  // Close both the top panel and any inline slot
+  const p=document.getElementById('debt-panel');if(p)p.classList.remove('open');
+  document.querySelectorAll('.debt-edit-slot').forEach(s=>{s.innerHTML='';s.style.display='none';});
+  editDebtId=null;
 }
 function openAddDebt(){
   editDebtId=null;
-  ['db-name','db-ldr','db-orig','db-rem','db-inst','db-rate','db-dur','db-start','db-end','db-asof','db-kw','db-notes'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
-  const lim=document.getElementById('db-limit');if(lim)lim.value='';
-  const op=document.getElementById('db-opening');if(op)op.value='';
-  const ccasof=document.getElementById('db-cc-asof');if(ccasof)ccasof.value='';
-  const mp=document.getElementById('db-minpay');if(mp)mp.value='';
-  const ccr=document.getElementById('db-cc-rate');if(ccr)ccr.value='';
+  // Close any open inline edit slots first
+  document.querySelectorAll('.debt-edit-slot').forEach(s=>{s.innerHTML='';s.style.display='none';});
+  ['db-name','db-ldr','db-orig','db-borrowed','db-rem','db-inst','db-rate','db-dur','db-start','db-end','db-asof','db-kw','db-notes','db-stl-amt','db-stl-fees','db-stl-date'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  ['db-limit','db-opening','db-cc-asof','db-minpay','db-cc-rate'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  const bpc=document.getElementById('bank-profit-calc');if(bpc)bpc.textContent='';
   onDebtTypeChange('bank_loan');
   document.getElementById('debt-ptitle').textContent='Add debt';
   document.getElementById('debt-sbtn').textContent='Add debt';
@@ -4506,16 +4574,28 @@ function openAddDebt(){
 }
 function openEditDebt(id){
   const d=S.debts.find(x=>x.id===id);if(!d)return;editDebtId=id;
+  // Close any other open slots and the top panel
+  const tp2=document.getElementById('debt-panel');if(tp2)tp2.classList.remove('open');
+  document.querySelectorAll('.debt-edit-slot').forEach(s=>{s.innerHTML='';s.style.display='none';});
+  // Inject form into the slot below this card
+  const slot=document.getElementById('debt-edit-slot-'+id);
+  if(!slot)return;
+  slot.innerHTML=`<div class="panel open" style="margin-top:0;border-top:none;border-radius:0 0 var(--r) var(--r)"><div class="chdr">Edit debt</div>${debtFormHtml()}</div>`;
+  slot.style.display='block';
+  // Populate fields
   onDebtTypeChange(d.type);
   document.getElementById('db-name').value=d.name||'';
   document.getElementById('db-ldr').value=d.lender||'';
   document.getElementById('db-type').value=d.type||'bank_loan';
   document.getElementById('db-orig').value=d.original||'';
-  // Populate remaining with remainingAtStart (the as-of-date baseline), not computed remaining
+  document.getElementById('db-borrowed').value=d.borrowedAmount||'';
   document.getElementById('db-rem').value=d.remainingAtStart!==undefined?d.remainingAtStart:(d.remaining||'');
   document.getElementById('db-inst').value=d.installment||'';
   document.getElementById('db-rate').value=d.profitRate||'';
   document.getElementById('db-dur').value=d.durationMonths||'';
+  document.getElementById('db-stl-amt').value=d.earlySettlementAmount||'';
+  document.getElementById('db-stl-fees').value=d.earlySettlementFees||'';
+  document.getElementById('db-stl-date').value=d.earlySettlementDate?toDD(d.earlySettlementDate):'';
   if(d.type==='credit_card'){
     const la=document.getElementById('db-linked-acc');if(la)la.value=d.linkedAccountId||'';
     const lim=document.getElementById('db-limit');if(lim)lim.value=d.creditLimit||'';
@@ -4531,9 +4611,12 @@ function openEditDebt(id){
     document.getElementById('db-kw').value=d.refKeyword||'';
   }
   document.getElementById('db-notes').value=d.notes||'';
-  document.getElementById('debt-ptitle').textContent='Edit debt';
   document.getElementById('debt-sbtn').textContent='Save changes';
-  const p=document.getElementById('debt-panel');if(p&&!p.classList.contains('open')){p.classList.add('open');p.scrollIntoView({behavior:'smooth'});}
+  updateBankProfitCalc();
+  // Populate linked card account options
+  const la2=document.getElementById('db-linked-acc');
+  if(la2){const opts=S.accounts.map(a=>`<option value="${a.id}">${a.name} (${a.type})</option>`).join('');la2.innerHTML='<option value="">-- Select card account --</option>'+opts;la2.value=d.linkedAccountId||'';}
+  slot.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 function saveDebt(){
   const name=document.getElementById('db-name').value.trim();if(!name){toast('Name required',false);return;}
@@ -4542,6 +4625,10 @@ function saveDebt(){
   const orig=parseFloat(document.getElementById('db-orig').value)||0;
   const remRaw=document.getElementById('db-rem').value;
   const enteredRem=remRaw?parseFloat(remRaw):orig;
+  const borrowedRaw=parseFloat(document.getElementById('db-borrowed')?.value)||null;
+  const stlAmt=parseFloat(document.getElementById('db-stl-amt')?.value)||null;
+  const stlFees=parseFloat(document.getElementById('db-stl-fees')?.value)||null;
+  const stlDate=fromDD(document.getElementById('db-stl-date')?.value||'')||null;
   const data={
     name,
     lender:document.getElementById('db-ldr').value.trim(),
@@ -4559,8 +4646,9 @@ function saveDebt(){
       original:0,remaining:0,installment:0,durationMonths:null,contractStart:null,endDate:null,refKeyword:'',
     }:{
       original:orig,
-      remainingAtStart:enteredRem, // always take what the user entered as the new baseline
-      remaining:enteredRem,        // will be recomputed by syncDebtsFromTxns
+      borrowedAmount:borrowedRaw||null,
+      remainingAtStart:enteredRem,
+      remaining:enteredRem,
       installment:parseFloat(document.getElementById('db-inst').value)||0,
       profitRate:parseFloat(document.getElementById('db-rate').value)||null,
       durationMonths:parseInt(document.getElementById('db-dur').value)||null,
@@ -4569,6 +4657,9 @@ function saveDebt(){
       balanceAsOf:fromDD(document.getElementById('db-asof').value),
       paymentMode:document.getElementById('db-mode').value,
       refKeyword:document.getElementById('db-kw').value.trim(),
+      earlySettlementAmount:stlAmt,
+      earlySettlementFees:stlFees||null,
+      earlySettlementDate:stlDate,
     })
   };
   if(editDebtId){
@@ -4583,7 +4674,7 @@ function saveDebt(){
     syncDebtsFromTxns();
     toast('Debt added');
   }
-  editDebtId=null;sched();tp('debt-panel');render();
+  editDebtId=null;sched();closeDebtForm();render();
 }
 function recDP(id){
   const a=parseFloat(document.getElementById('dp-'+id)?.value)||0;
