@@ -4574,15 +4574,17 @@ function openAddDebt(){
 }
 function openEditDebt(id){
   const d=S.debts.find(x=>x.id===id);if(!d)return;editDebtId=id;
-  // Close any other open slots and the top panel
-  const tp2=document.getElementById('debt-panel');if(tp2)tp2.classList.remove('open');
+  // Clear top panel to remove duplicate IDs — getElementById must find the inline form only
+  const topPanel=document.getElementById('debt-panel');
+  if(topPanel){topPanel.classList.remove('open');topPanel.innerHTML='';}
+  // Close other inline slots
   document.querySelectorAll('.debt-edit-slot').forEach(s=>{s.innerHTML='';s.style.display='none';});
-  // Inject form into the slot below this card
+  // Inject form into the slot below this debt card
   const slot=document.getElementById('debt-edit-slot-'+id);
   if(!slot)return;
   slot.innerHTML=`<div class="panel open" style="margin-top:0;border-top:none;border-radius:0 0 var(--r) var(--r)"><div class="chdr">Edit debt</div>${debtFormHtml()}</div>`;
   slot.style.display='block';
-  // Populate fields
+  // Populate fields — getElementById now finds only the slot's elements
   onDebtTypeChange(d.type);
   document.getElementById('db-name').value=d.name||'';
   document.getElementById('db-ldr').value=d.lender||'';
@@ -4597,7 +4599,7 @@ function openEditDebt(id){
   document.getElementById('db-stl-fees').value=d.earlySettlementFees||'';
   document.getElementById('db-stl-date').value=d.earlySettlementDate?toDD(d.earlySettlementDate):'';
   if(d.type==='credit_card'){
-    const la=document.getElementById('db-linked-acc');if(la)la.value=d.linkedAccountId||'';
+    const la=document.getElementById('db-linked-acc');if(la){const opts=S.accounts.map(a=>`<option value="${a.id}">${a.name}</option>`).join('');la.innerHTML='<option value="">-- Select card account --</option>'+opts;la.value=d.linkedAccountId||'';}
     const lim=document.getElementById('db-limit');if(lim)lim.value=d.creditLimit||'';
     const op=document.getElementById('db-opening');if(op)op.value=d.openingBalance||'';
     const ccasof=document.getElementById('db-cc-asof');if(ccasof)ccasof.value=d.balanceAsOf?toDD(d.balanceAsOf):'';
@@ -4613,9 +4615,6 @@ function openEditDebt(id){
   document.getElementById('db-notes').value=d.notes||'';
   document.getElementById('debt-sbtn').textContent='Save changes';
   updateBankProfitCalc();
-  // Populate linked card account options
-  const la2=document.getElementById('db-linked-acc');
-  if(la2){const opts=S.accounts.map(a=>`<option value="${a.id}">${a.name} (${a.type})</option>`).join('');la2.innerHTML='<option value="">-- Select card account --</option>'+opts;la2.value=d.linkedAccountId||'';}
   slot.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 function saveDebt(){
