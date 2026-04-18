@@ -794,6 +794,126 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overfl
   }
 }
 
+/* ── EXPLORE OVERLAY ─────────────────────────────────── */
+.explore-overlay{
+  display:none;position:fixed;inset:0;z-index:1100;
+  background:var(--midnight);overflow-y:auto;
+  animation:fi .22s ease;
+}
+.explore-overlay.active{display:block}
+.explore-topbar{
+  position:sticky;top:0;z-index:10;
+  background:rgba(2,23,81,.92);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  border-bottom:1px solid rgba(243,241,239,.08);
+  padding:0 2.5rem;height:60px;
+  display:flex;align-items:center;justify-content:space-between;
+}
+.explore-logo{
+  display:flex;align-items:center;gap:12px;
+  font-size:20px;font-weight:600;letter-spacing:-.04em;
+  color:var(--feather);
+}
+.explore-close{
+  background:rgba(243,241,239,.1);border:1px solid rgba(243,241,239,.15);
+  color:var(--feather);border-radius:var(--rsm);
+  padding:7px 16px;font-size:12px;font-weight:500;
+  cursor:pointer;font-family:var(--font);
+  transition:all .15s;letter-spacing:.02em;
+}
+.explore-close:hover{background:rgba(243,241,239,.18)}
+.explore-hero{
+  text-align:center;padding:6rem 2rem 5rem;
+  max-width:700px;margin:0 auto;
+}
+.explore-hero-eyebrow{
+  font-size:10px;font-weight:700;letter-spacing:.25em;text-transform:uppercase;
+  color:rgba(163,188,215,.8);margin-bottom:1.25rem;
+}
+.explore-hero-title{
+  font-size:clamp(36px,6vw,58px);font-weight:600;
+  color:var(--feather);letter-spacing:-.04em;line-height:1.1;
+  margin-bottom:1.5rem;
+}
+.explore-hero-sub{
+  font-size:16px;color:rgba(243,241,239,.55);
+  line-height:1.75;max-width:500px;margin:0 auto;
+}
+.explore-platform{
+  max-width:1100px;margin:0 auto;
+  padding:0 2rem 6rem;
+  display:grid;grid-template-columns:1fr 1fr;gap:2.5rem;
+}
+@media(max-width:768px){.explore-platform{grid-template-columns:1fr;padding:0 1.25rem 5rem;}}
+.explore-domain{
+  background:rgba(243,241,239,.04);
+  border:1px solid rgba(243,241,239,.1);
+  border-radius:16px;padding:2rem;
+}
+.explore-domain-header{
+  display:flex;align-items:center;gap:12px;
+  margin-bottom:.5rem;
+}
+.explore-domain-accent{
+  width:10px;height:10px;border-radius:2px;flex-shrink:0;
+}
+.explore-domain-name{
+  font-size:13px;font-weight:600;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--feather);opacity:.6;
+}
+.explore-domain-title{
+  font-size:26px;font-weight:600;letter-spacing:-.03em;
+  color:var(--feather);margin-bottom:.6rem;
+}
+.explore-domain-desc{
+  font-size:13px;color:rgba(243,241,239,.5);
+  line-height:1.7;margin-bottom:2rem;
+  padding-bottom:1.75rem;border-bottom:1px solid rgba(243,241,239,.08);
+}
+.explore-engine{
+  padding:1.25rem 0;border-bottom:1px solid rgba(243,241,239,.06);
+}
+.explore-engine:last-child{border-bottom:none;padding-bottom:0}
+.explore-engine-header{
+  display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:.5rem;
+}
+.explore-engine-name{
+  font-size:15px;font-weight:600;letter-spacing:-.02em;
+  color:var(--feather);
+}
+.explore-engine-badge{
+  font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+  padding:3px 8px;border-radius:100px;flex-shrink:0;
+}
+.ebadge-active{background:rgba(181,203,183,.18);color:#B5CBB7}
+.ebadge-planned{background:rgba(163,188,215,.1);color:rgba(163,188,215,.6)}
+.explore-engine-desc{
+  font-size:12px;color:rgba(243,241,239,.45);line-height:1.7;
+}
+.explore-cta{
+  text-align:center;padding:0 2rem 6rem;
+}
+.explore-cta-title{
+  font-size:26px;font-weight:600;letter-spacing:-.03em;
+  color:var(--feather);margin-bottom:.75rem;
+}
+.explore-cta-sub{
+  font-size:13px;color:rgba(243,241,239,.45);margin-bottom:2rem;
+}
+.explore-cta-btn{
+  display:inline-block;padding:13px 36px;
+  background:var(--feather);color:var(--midnight);
+  border:none;border-radius:var(--rsm);font-size:14px;font-weight:600;
+  cursor:pointer;font-family:var(--font);letter-spacing:-.01em;
+  transition:opacity .15s;
+}
+.explore-cta-btn:hover{opacity:.88}
+.explore-divider{
+  height:1px;background:rgba(243,241,239,.06);
+  max-width:1100px;margin:0 auto 2rem;
+}
+
 </style>
 </head>
 <body>
@@ -859,6 +979,7 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overfl
     </div>
     <div class="auth-err" id="ul-err"></div>
     <button class="auth-btn" id="ul-btn" onclick="doUnlock()">Unlock →</button>
+    <button onclick="showExplore()" style="margin-top:14px;width:100%;background:none;border:1px solid var(--border);border-radius:var(--rsm);padding:10px;font-size:12px;color:var(--text3);cursor:pointer;font-family:var(--font);font-weight:500;letter-spacing:.01em;transition:all .15s" onmouseover="this.style.borderColor='var(--midnight)';this.style.color='var(--midnight)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text3)'">Explore the Lanki Platform →</button>
   </div>
 </div>
 
@@ -6661,6 +6782,9 @@ function toggleDemoMode(){
   if(_realS)exitDemoMode();else enterDemoMode();
 }
 
+function showExplore(){document.getElementById('explore-overlay').classList.add('active');document.body.style.overflow='hidden';}
+function hideExplore(){document.getElementById('explore-overlay').classList.remove('active');document.body.style.overflow='';setTimeout(()=>document.getElementById('ul-p')?.focus(),100);}
+
 // Set version labels dynamically
 document.querySelectorAll('.version-label').forEach(el=>el.textContent='VERSION '+VERSION.toUpperCase());
 initAuth();
@@ -6717,5 +6841,112 @@ initAuth();
     </div>
   </div>
 </div>
+<!-- ── EXPLORE LANKI OVERLAY ──────────────────────────── -->
+<div id="explore-overlay" class="explore-overlay">
+
+  <!-- Top bar -->
+  <div class="explore-topbar">
+    <div class="explore-logo">
+      <svg width="22" height="18" viewBox="0 0 40 33" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect y="0" width="40" height="8" rx="2" fill="#F3F1EF"/>
+        <rect y="12.5" width="26" height="8" rx="2" fill="#F3F1EF"/>
+        <rect y="25" width="34" height="8" rx="2" fill="#F3F1EF"/>
+      </svg>
+      lanki
+    </div>
+    <button class="explore-close" onclick="hideExplore()">← Back to Sign In</button>
+  </div>
+
+  <!-- Hero -->
+  <div class="explore-hero">
+    <div class="explore-hero-eyebrow">The Lanki Platform</div>
+    <div class="explore-hero-title">Intelligence for the<br>family that builds.</div>
+    <div class="explore-hero-sub">A private intelligence platform — not a consumer app. Two operating systems, six engines, one vault. Built to understand your family's financial and physical life at depth.</div>
+  </div>
+
+  <!-- Platform grid -->
+  <div class="explore-platform">
+
+    <!-- Capital OS -->
+    <div class="explore-domain">
+      <div class="explore-domain-header">
+        <div class="explore-domain-accent" style="background:#A3BCD7"></div>
+        <div class="explore-domain-name">Capital OS</div>
+      </div>
+      <div class="explore-domain-title">Your financial life, structured.</div>
+      <div class="explore-domain-desc">Every account, card, debt, investment, and transaction — in one encrypted vault. Capital OS turns raw bank data into a clear picture of where you stand and where you are going.</div>
+
+      <div class="explore-engine">
+        <div class="explore-engine-header">
+          <div class="explore-engine-name">Cash Flow Engine</div>
+          <div class="explore-engine-badge ebadge-active">Active</div>
+        </div>
+        <div class="explore-engine-desc">Import bank statements from all accounts and cards. AI extracts, categorizes, and organizes every transaction. See exactly where every riyal goes — by category, merchant, period, or account. Monthly patterns, spending trends, savings rate, and debt tracking all in one view.</div>
+      </div>
+
+      <div class="explore-engine">
+        <div class="explore-engine-header">
+          <div class="explore-engine-name">Portfolio Engine</div>
+          <div class="explore-engine-badge ebadge-planned">Planned</div>
+        </div>
+        <div class="explore-engine-desc">Track investments across all platforms — stocks, funds, real estate, and direct investments. Monitor returns, capital allocation, and portfolio performance against your goals. See every investment in context of your overall financial position.</div>
+      </div>
+
+      <div class="explore-engine">
+        <div class="explore-engine-header">
+          <div class="explore-engine-name">Capital Intelligence</div>
+          <div class="explore-engine-badge ebadge-planned">Planned</div>
+        </div>
+        <div class="explore-engine-desc">AI that reads twelve months of financial data and surfaces a clear, prioritized set of actions. Not a chatbot — a structured analysis engine that turns your numbers into decisions. Cash flow health, debt strategy, savings optimization, and opportunity detection.</div>
+      </div>
+    </div>
+
+    <!-- Health OS -->
+    <div class="explore-domain">
+      <div class="explore-domain-header">
+        <div class="explore-domain-accent" style="background:#8FA9A3"></div>
+        <div class="explore-domain-name">Health OS</div>
+      </div>
+      <div class="explore-domain-title">Your family's health, searchable.</div>
+      <div class="explore-domain-desc">A private health record system for the whole family. Not a wearable integration or a doctor portal — a structured repository you own and control. Built for the family that takes health seriously.</div>
+
+      <div class="explore-engine">
+        <div class="explore-engine-header">
+          <div class="explore-engine-name">Medical Engine</div>
+          <div class="explore-engine-badge ebadge-planned">Planned</div>
+        </div>
+        <div class="explore-engine-desc">Every consultation, diagnosis, prescription, lab result, and health expense — one record per family member, always current. Structured by date, doctor, condition, and cost. The complete picture a specialist needs, available in seconds.</div>
+      </div>
+
+      <div class="explore-engine">
+        <div class="explore-engine-header">
+          <div class="explore-engine-name">Biometrics Engine</div>
+          <div class="explore-engine-badge ebadge-planned">Planned</div>
+        </div>
+        <div class="explore-engine-desc">Track vitals, lab values, weight, blood pressure, sleep, and custom metrics over time. Visualize trends across months and years. Spot changes before they become concerns. Built for manual entry and structured imports — no wearable required.</div>
+      </div>
+
+      <div class="explore-engine">
+        <div class="explore-engine-header">
+          <div class="explore-engine-name">Health Intelligence</div>
+          <div class="explore-engine-badge ebadge-planned">Planned</div>
+        </div>
+        <div class="explore-engine-desc">Pattern recognition across the full health record. Surfaces correlations between biometrics, medications, and lifestyle. Prepares structured health briefs before appointments. Answers the questions you did not know to ask.</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="explore-divider"></div>
+
+  <!-- CTA -->
+  <div class="explore-cta">
+    <div class="explore-cta-title">Private. Encrypted. Yours.</div>
+    <div class="explore-cta-sub">All data is AES-256 encrypted in your vault. Lanki never reads your data. No ads, no profiling, no third-party access.</div>
+    <button class="explore-cta-btn" onclick="hideExplore()">Sign In to Your Vault →</button>
+  </div>
+
+</div>
+
 </body>
 </html>
