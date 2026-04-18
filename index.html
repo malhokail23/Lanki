@@ -2695,6 +2695,8 @@ async function saveEditTxn(){
   t.accountId=document.getElementById('etxn-acc').value||null;
   t.debtId=document.getElementById('etxn-debt').value||null;
   t.beneficiaryId=document.getElementById('etxn-beneficiary')?.value||null;
+  // Sync debt payments whenever a transaction's debtId, amount, or type may have changed
+  syncDebtsFromTxns();
   const newMid=document.getElementById('etxn-mc').value||null;
   const newSid=document.getElementById('etxn-sc').value||null;
   t.mainCatId=newMid;t.subCatId=newSid;
@@ -3047,7 +3049,7 @@ function addTxnM(){
   if(!S.txnCache[ym])S.txnCache[ym]=[];
   S.txnCache[ym].push(t);
   S.txnCache[ym].sort((a,b)=>a.date.localeCompare(b.date));
-  if(t.debtId&&txType==='expense')applyDP(t.debtId,t.amount,dateIso,'manual','');
+  if(t.debtId)syncDebtsFromTxns();
   tp('atxn-panel');schedTxn(ym);render();toast('Transaction added');
 }
 
@@ -3069,7 +3071,7 @@ async function doImport(){
   const txns=S.txnCache[ym];
   // C2: Snapshot existing IDs before import so runTransferMatching can identify truly new transfers
   const preImportIds=new Set(txns.map(t=>t.id));
-  let added=0,dapp=0;
+  let added=0;
   for(const t of items){
     if(!t.date||t.amount===undefined)continue;
     let ai=t.account_id||t.accountId||rId||null;
@@ -3122,7 +3124,6 @@ async function doImport(){
       txns.push(txnItem);
     }
     added++;
-    if(di&&txnType==='expense'){applyDP(di,amt,t.date,'import',cleanDesc);dapp++;}
   }
   txns.sort((a,b)=>a.date.localeCompare(b.date));
 
@@ -3157,6 +3158,7 @@ async function doImport(){
   // Auto-match reimbursements against newly imported external transfers
   const newlyAdded=txns.filter(t=>!preImportIds.has(t.id));
   checkReimbursementMatch(newlyAdded);
+  syncDebtsFromTxns(); // rebuild debt payments from all linked transactions
   sched(); // save monthlyBal
   if(ym!==S.month)S.month=ym;
   document.getElementById('imp-json').value='';
@@ -3164,7 +3166,7 @@ async function doImport(){
   const ob=document.getElementById('imp-opening-bal');
   if(ob){ob.value='';ob.style.background='';ob.title='';}
   tp('imp-panel');schedTxn(ym);render();
-  if(closingBal===null)toast(`Imported ${added} transaction${added!==1?'s':''}${dapp?', '+dapp+' debt payments applied':''}`);
+  if(closingBal===null)toast(`Imported ${added} transaction${added!==1?'s':''}`);
 }
 function lcMap(id){const m={'cat_income_salary':'cat_main_income','cat_income_other':'cat_main_income','cat_debt_payment':'cat_main_finance','cat_groceries':'cat_main_food','cat_kids':'cat_main_kids','cat_household':'cat_main_housing','cat_fuel':'cat_main_transport','cat_subscriptions':'cat_main_subscriptions','cat_shopping':'cat_main_shopping','cat_food_delivery':'cat_main_food','cat_staff':'cat_main_staff','cat_personal':'cat_main_personal','cat_medical':'cat_main_personal','cat_transfer':'cat_main_transfers','cat_investment':'cat_main_transfers','cat_external_transfer':'cat_main_transfers'};return m[id]||null;}
 function getRule(desc){const d=(desc||'').toLowerCase().trim();return S.rules.find(r=>d.includes(r.m.toLowerCase()))||null;}
@@ -4199,57 +4201,89 @@ function rDebts(){
     const isCC=d.type==='credit_card';
     const liveBalance=isCC?calcCCBalance(d):(d.remaining||0);
     const ccUtil=isCC&&d.creditLimit?Math.min(100,Math.round(liveBalance/d.creditLimit*100)):null;
-    const paid=isCC?(d.openingBalance||0)-liveBalance:((d.original||0)-(d.remaining||0));
-    const denom=isCC?(d.openingBalance||0):(d.original||0);
+
+    // For loans: baseline is remainingAtStart (what the user entered), paid = total payments recorded
+    const baseline=d.remainingAtStart!==undefined?d.remainingAtStart:(d.original||0);
+    const paidFromTxns=(d.payments||[]).filter(p=>p.source==='import').reduce((s,p)=>s+p.amount,0);
+    const paidManual=(d.payments||[]).filter(p=>p.source!=='import').reduce((s,p)=>s+p.amount,0);
+    const totalPaid=paidFromTxns+paidManual;
+    const paid=isCC?(d.openingBalance||0)-liveBalance:totalPaid;
+    const denom=isCC?(d.openingBalance||0):baseline;
     const p=denom>0?Math.min(100,Math.round(Math.max(0,paid)/denom*100)):0;
-    const pl=(d.payments||[]).slice().reverse().map(x=>`<div class="prow"><span style="color:var(--text3);flex-shrink:0">${toDD(x.date)}</span><span style="font-size:var(--fs-xxs);flex:1;margin:0 8px">${x.source==='import'?'<span style="color:var(--info)">[stmt]</span> ':''} ${h(x.notes||'')}</span><span class="c-bad" style="flex-shrink:0">-${fmtP(x.amount)}</span><button class="btn btn-xs btn-d" style="margin-left:8px;padding:1px 6px;font-size:10px;flex-shrink:0" onclick="delDebtPayment('${d.id}','${x.id||(x.date+(x.amount))}')" title="Remove this payment">✕</button></div>`).join('')||'<div style="font-size:var(--fs-xs);color:var(--text3);padding:6px 0">No payments recorded yet.</div>';
-    return`<div class="card" style="${d.status==='settled'?'opacity:.6':''}">
+
+    // Projected payoff date
+    const now=getYM(new Date());
+    let projDate='--';
+    if(!isCC){
+      if(d.endDate)projDate=toDD(d.endDate);
+      else if(d.installment>0&&liveBalance>0)projDate=toDD(addM(now,Math.ceil(liveBalance/d.installment))+'-01');
+    }
+
+    const pl=(d.payments||[]).slice().reverse().map(x=>{
+      const isFromTxn=x.source==='import';
+      return`<div class="prow">
+        <span style="color:var(--text3);flex-shrink:0;min-width:72px">${toDD(x.date)}</span>
+        <span style="flex:1;font-size:var(--fs-xxs);color:${isFromTxn?'var(--electric)':'var(--text2)'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+          ${isFromTxn?'<span title="Linked transaction" style="opacity:.7">⬡</span> ':''}${h(x.notes||'')}
+        </span>
+        <span class="c-bad" style="flex-shrink:0;font-variant-numeric:tabular-nums">−${fmtP(x.amount)}</span>
+        ${!isFromTxn?`<button class="btn btn-xs btn-d" style="margin-left:6px;padding:1px 6px;font-size:10px;flex-shrink:0" onclick="delDebtPayment('${d.id}','${x.id||(x.date+(x.amount))}')" title="Remove">✕</button>`:''}
+      </div>`;
+    }).join('')||'<div style="font-size:var(--fs-xs);color:var(--text3);padding:8px 0">No payments recorded yet.</div>';
+
+    return`<div class="card" style="${d.status==='settled'?'opacity:.65':''}">
       <div class="fg jb" style="flex-wrap:wrap;gap:8px">
         <div>
-          <div style="font-size:16px;font-weight:500">${h(d.name)}</div>
-          <div style="font-size:var(--fs-xs);color:var(--text2);margin-top:2px">${h(d.lender||'')} &middot; ${DTL[d.type]||d.type} &middot; ${ob(d.owner)}</div>
+          <div style="font-size:16px;font-weight:600;letter-spacing:-.02em">${h(d.name)}</div>
+          <div style="font-size:var(--fs-xs);color:var(--text2);margin-top:3px">${h(d.lender||'')}${d.lender?' · ':''}${DTL[d.type]||d.type}</div>
           ${isCC?`
-            <div style="font-size:var(--fs-xs);color:var(--text3)">Limit: ${fmt(d.creditLimit||0)}${d.profitRate?' &middot; '+d.profitRate+'% p.a.':''}</div>
+            <div style="font-size:var(--fs-xs);color:var(--text3);margin-top:2px">Limit: ${fmt(d.creditLimit||0)}${d.profitRate?' · '+d.profitRate+'% p.a.':''}</div>
             <div style="font-size:var(--fs-xxs);color:var(--text3)">Opening balance: ${fmt(d.openingBalance||0)} as of ${toDD(d.balanceAsOf)||'--'}</div>
             ${d.minPayment?`<div style="font-size:var(--fs-xxs);color:var(--text3)">Minimum payment: ${fmt(d.minPayment)}/mo</div>`:''}
           `:`
-            ${d.profitRate?`<div style="font-size:var(--fs-xs);color:var(--text3)">${d.profitRate}% p.a. &middot; ${d.durationMonths||'?'} months</div>`:''}
-            ${d.contractStart?`<div style="font-size:var(--fs-xs);color:var(--text3)">Start: ${toDD(d.contractStart)}${d.endDate?' &middot; End: '+toDD(d.endDate):''}</div>`:''}
+            ${d.profitRate?`<div style="font-size:var(--fs-xs);color:var(--text3);margin-top:2px">${d.profitRate}% p.a.${d.durationMonths?' · '+d.durationMonths+' months':''}</div>`:''}
+            ${d.contractStart?`<div style="font-size:var(--fs-xs);color:var(--text3)">Start: ${toDD(d.contractStart)}${d.endDate?' · End: '+toDD(d.endDate):''}</div>`:''}
             ${d.balanceAsOf?`<div style="font-size:var(--fs-xxs);color:var(--text3)">Balance as of: ${toDD(d.balanceAsOf)}</div>`:''}
             ${d.refKeyword?`<div style="font-size:var(--fs-xxs);font-family:monospace;color:var(--text3)">Keyword: ${h(d.refKeyword)}</div>`:''}
           `}
         </div>
-        <div class="fg" style="gap:6px">
-          ${isCC?'<span class="badge b-tr">Auto-tracked</span>':'<span class="badge '+(d.paymentMode==='auto'?'b-tr':'b-inv')+'">'+(d.paymentMode==='auto'?'Auto':'Manual')+'</span>'}
+        <div class="fg" style="gap:6px;align-items:flex-start;flex-wrap:wrap">
+          ${isCC?'<span class="badge b-tr">Auto-tracked</span>':''}
           <span class="badge ${d.status==='active'?'b-dbt':'b-grey'}">${d.status}</span>
         </div>
       </div>
-      <div class="div"></div>
+
+      <div class="div" style="margin:14px 0"></div>
+
       ${isCC?`
-      <div class="dmeta">
-        <div><div class="lbl">Current Balance</div><div style="font-size:16px;font-weight:500" class="c-warn">${fmtP(liveBalance)}</div></div>
-        <div><div class="lbl">Credit Limit</div><div style="font-size:16px;font-weight:500">${fmtP(d.creditLimit||0)}</div></div>
-        <div><div class="lbl">Available Credit</div><div style="font-size:16px;font-weight:500" class="c-ok">${fmtP(Math.max(0,(d.creditLimit||0)-liveBalance))}</div></div>
-        ${d.minPayment?`<div><div class="lbl">Min. Payment</div><div style="font-size:16px;font-weight:500">${fmtP(d.minPayment)}</div></div>`:''}
+      <div class="g3" style="margin-bottom:12px">
+        <div><div class="klbl">Current Balance</div><div style="font-size:20px;font-weight:600;letter-spacing:-.03em" class="c-warn">${fmtP(liveBalance)}</div></div>
+        <div><div class="klbl">Credit Limit</div><div style="font-size:20px;font-weight:600;letter-spacing:-.03em">${fmtP(d.creditLimit||0)}</div></div>
+        <div><div class="klbl">Available Credit</div><div style="font-size:20px;font-weight:600;letter-spacing:-.03em" class="c-ok">${fmtP(Math.max(0,(d.creditLimit||0)-liveBalance))}</div></div>
+        ${d.minPayment?`<div><div class="klbl">Min. Payment</div><div style="font-size:20px;font-weight:600;letter-spacing:-.03em">${fmtP(d.minPayment)}</div></div>`:''}
       </div>
-      <div style="font-size:var(--fs-xxs);color:var(--text3);margin-bottom:4px">Credit utilization: ${ccUtil!==null?ccUtil+'%':'--'}</div>
-      <div class="pb" style="height:8px"><div class="pf" style="width:${ccUtil||0}%;background:${(ccUtil||0)<30?'#1D9E75':(ccUtil||0)<70?'#BA7517':'#E24B4A'}"></div></div>
-      <div style="font-size:var(--fs-xxs);color:var(--text3);margin-top:3px">${(ccUtil||0)<30?'Low utilization':(ccUtil||0)<70?'Moderate utilization':'High utilization — consider paying down'}</div>
+      <div style="font-size:var(--fs-xxs);color:var(--text3);margin-bottom:5px">Credit utilization: ${ccUtil!==null?ccUtil+'%':'--'}</div>
+      <div class="pb" style="height:8px;margin-bottom:3px"><div class="pf" style="width:${ccUtil||0}%;background:${(ccUtil||0)<30?'var(--ok)':(ccUtil||0)<70?'var(--warn)':'var(--bad)'}"></div></div>
+      <div style="font-size:var(--fs-xxs);color:var(--text3)">${(ccUtil||0)<30?'Low utilization':(ccUtil||0)<70?'Moderate utilization':'High utilization — consider paying down'}</div>
       `:`
-      <div class="dmeta">
-        <div><div class="lbl">Original</div><div style="font-size:16px;font-weight:500">${fmtP(d.original)}</div></div>
-        <div><div class="lbl">Remaining</div><div style="font-size:16px;font-weight:500" class="c-warn">${fmtP(d.remaining)}</div></div>
-        <div><div class="lbl">Paid</div><div style="font-size:16px;font-weight:500" class="c-ok">${fmtP(paid)}</div></div>
-        ${d.installment?`<div><div class="lbl">Monthly</div><div style="font-size:16px;font-weight:500">${fmtP(d.installment)}</div></div>`:''}
+      <div class="g3" style="margin-bottom:12px">
+        <div><div class="klbl">Starting Balance</div><div style="font-size:20px;font-weight:600;letter-spacing:-.03em">${fmtP(baseline)}</div><div style="font-size:10px;color:var(--text3);margin-top:3px">as of ${toDD(d.balanceAsOf)||'setup'}</div></div>
+        <div><div class="klbl">Paid Since Tracking</div><div style="font-size:20px;font-weight:600;letter-spacing:-.03em" class="c-ok">${fmtP(totalPaid)}</div><div style="font-size:10px;color:var(--text3);margin-top:3px">${(d.payments||[]).length} payment${(d.payments||[]).length!==1?'s':''}</div></div>
+        <div><div class="klbl">Remaining</div><div style="font-size:20px;font-weight:600;letter-spacing:-.03em" class="c-warn">${fmtP(liveBalance)}</div>${d.installment?`<div style="font-size:10px;color:var(--text3);margin-top:3px">${fmtP(d.installment)}/mo</div>`:''}</div>
+        <div><div class="klbl">Projected Payoff</div><div style="font-size:14px;font-weight:500;margin-top:4px">${projDate}</div></div>
       </div>
-      <div class="pb" style="height:6px"><div class="pf pfd" style="width:${p}%"></div></div>
-      <div class="fg jb" style="font-size:var(--fs-xxs);color:var(--text3);margin-top:4px"><span>${p}% repaid</span><span>${(d.payments||[]).length} payment(s)</span></div>
+      <div style="font-size:var(--fs-xxs);color:var(--text3);margin-bottom:5px;display:flex;justify-content:space-between"><span>${p}% repaid since tracking began</span><span style="color:var(--electric)">${paidFromTxns>0?'⬡ '+fmtP(paidFromTxns)+' from '+((d.payments||[]).filter(pp=>pp.source==='import').length)+' linked transactions':''}</span></div>
+      <div class="pb" style="height:8px;margin-bottom:3px"><div class="pf pfd" style="width:${p}%"></div></div>
       `}
-      ${d.notes?`<div style="font-size:var(--fs-xs);color:var(--text3);margin-top:6px">${h(d.notes)}</div>`:''}
-      <div class="div" style="margin:10px 0 8px"></div>
-      <div class="fg jb" style="margin-bottom:6px;align-items:center">
-        <div class="chdr" style="margin-bottom:0">Payment history</div>
-        <button class="btn btn-xs" onclick="dedupDebtPayments('${d.id}')" style="font-size:10px;padding:2px 8px">Remove duplicates</button>
+
+      ${d.notes?`<div style="font-size:var(--fs-xs);color:var(--text3);margin-top:8px">${h(d.notes)}</div>`:''}
+      <div class="div" style="margin:12px 0 10px"></div>
+      <div class="fg jb" style="margin-bottom:8px;align-items:center">
+        <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--text3)">Payment history</div>
+        <div class="fg" style="gap:6px">
+          <span style="font-size:10px;color:var(--text3)">⬡ = from linked transaction</span>
+          <button class="btn btn-xs" onclick="syncDebtsFromTxns();render();toast('Synced from transactions')" style="font-size:10px">↻ Sync</button>
+        </div>
       </div>
       <div class="plog">${pl}</div>
       ${d.status==='active'?`<div class="fg" style="margin-top:12px;flex-wrap:wrap;gap:6px">
@@ -4259,7 +4293,7 @@ function rDebts(){
         <button class="btn btn-sm" onclick="openEditDebt('${d.id}')">Edit</button>
         <button class="btn btn-sm" onclick="togDebt('${d.id}')">Mark Settled</button>
         <button class="btn btn-sm btn-d" onclick="delDebt('${d.id}')">Remove</button>
-        ${isCC?`<div style="font-size:var(--fs-xxs);color:var(--info);margin-top:4px;width:100%">Balance is calculated automatically from imported card transactions.</div>`:''}
+        ${isCC?`<div style="font-size:var(--fs-xxs);color:var(--info);margin-top:4px;width:100%">Balance calculated automatically from imported card transactions.</div>`:''}
       </div>`:`<div class="fg" style="margin-top:10px;gap:6px"><button class="btn btn-sm" onclick="togDebt('${d.id}')">Reactivate</button><button class="btn btn-sm btn-d" onclick="delDebt('${d.id}')">Remove</button></div>`}
     </div>`;}).join('')||'<div class="empty">No debts tracked yet.</div>';
   return`
@@ -4380,6 +4414,7 @@ function saveDebt(){
     }:{
       original:orig,
       remaining:remRaw?parseFloat(remRaw):orig,
+      remainingAtStart:remRaw?parseFloat(remRaw):orig, // immutable baseline for recalc
       installment:parseFloat(document.getElementById('db-inst').value)||0,
       profitRate:parseFloat(document.getElementById('db-rate').value)||null,
       durationMonths:parseInt(document.getElementById('db-dur').value)||null,
@@ -4390,8 +4425,24 @@ function saveDebt(){
       refKeyword:document.getElementById('db-kw').value.trim(),
     })
   };
-  if(editDebtId){Object.assign(S.debts.find(x=>x.id===editDebtId),data);toast('Debt updated');}
-  else{data.id='debt_'+(typeof crypto!=='undefined'&&crypto.randomUUID?crypto.randomUUID().replace(/-/g,'').substr(0,9):Math.random().toString(36).substr(2,9));data.payments=[];S.debts.push(data);toast('Debt added');}
+  if(editDebtId){
+    const existing=S.debts.find(x=>x.id===editDebtId);
+    // Preserve remainingAtStart unless the user explicitly changed the balance input
+    if(existing&&!isCC){
+      const prevRem=existing.remainingAtStart;
+      const newRem=data.remaining;
+      // If remaining was changed in the edit form AND no payments exist yet, treat as a new baseline
+      if(prevRem!==undefined&&(existing.payments||[]).filter(p=>p.source==='import').length===0){
+        data.remainingAtStart=newRem;
+      } else {
+        data.remainingAtStart=prevRem!==undefined?prevRem:newRem;
+      }
+    }
+    Object.assign(existing,data);
+    syncDebtsFromTxns();
+    toast('Debt updated');
+  }
+  else{data.id='debt_'+(typeof crypto!=='undefined'&&crypto.randomUUID?crypto.randomUUID().replace(/-/g,'').substr(0,9):Math.random().toString(36).substr(2,9));data.payments=[];S.debts.push(data);syncDebtsFromTxns();toast('Debt added');}
   editDebtId=null;sched();tp('debt-panel');render();
 }
 function recDP(id){
@@ -4401,16 +4452,55 @@ function recDP(id){
   const dateIso=dRaw?fromDD(dRaw):new Date().toISOString().substr(0,10);
   applyDP(id,a,dateIso,'manual','');render();toast('Payment of '+fmt(a)+' recorded');sched();
 }
+
+// applyDP — only for manually recorded payments. Import payments come through syncDebtsFromTxns.
 function applyDP(did,amt,date,src,notes){
   const d=S.debts.find(x=>x.id===did);if(!d)return;
   if(d.balanceAsOf&&date<=d.balanceAsOf)return;
   if(!d.payments)d.payments=[];
-  // Dedup: skip if payment with same date+amount already recorded
-  const isDup=d.payments.some(p=>p.date===date&&Math.abs(p.amount-amt)<0.01);
+  const isDup=d.payments.some(p=>p.date===date&&Math.abs(p.amount-amt)<0.01&&p.source===src);
   if(isDup)return;
-  d.remaining=Math.max(0,(d.remaining||0)-amt);
   d.payments.push({id:uid(),date,amount:amt,source:src,notes});
+  d.payments.sort((a,b)=>a.date.localeCompare(b.date));
+  recalcDebtRemaining(d);
+  sched();
+}
+
+// Source of truth: derive remaining from (remainingAtStart - sum of all payments after balanceAsOf)
+function recalcDebtRemaining(d){
+  if(d.type==='credit_card')return;
+  // Baseline is the user-entered balance as of balanceAsOf date
+  // Fall back to original for legacy debts that don't have remainingAtStart
+  const baseline=d.remainingAtStart!==undefined?d.remainingAtStart:(d.original||0);
+  const totalPaid=(d.payments||[]).reduce((s,p)=>s+p.amount,0);
+  d.remaining=Math.max(0,baseline-totalPaid);
   if(d.remaining<=0)d.status='settled';
+  else if(d.status==='settled')d.status='active';
+}
+
+// Rebuild all import-sourced payments from transactions — the authoritative sync
+function syncDebtsFromTxns(){
+  const allT=allTxns();
+  S.debts.forEach(d=>{
+    if(d.type==='credit_card')return; // CC balance is derived from transactions directly
+    if(!d.payments)d.payments=[];
+    // Ensure baseline is set for legacy debts
+    if(d.remainingAtStart===undefined){
+      const manualPaid=(d.payments||[]).filter(p=>p.source!=='import').reduce((s,p)=>s+p.amount,0);
+      d.remainingAtStart=Math.min(d.original||0,(d.remaining||0)+manualPaid+
+        (d.payments||[]).filter(p=>p.source==='import').reduce((s,p)=>s+p.amount,0));
+    }
+    // Rebuild import payments from transactions
+    d.payments=d.payments.filter(p=>p.source!=='import');
+    const gate=d.balanceAsOf||'0000-00-00';
+    allT.filter(t=>t.debtId===d.id&&t.type==='expense'&&txDir(t)==='out'&&t.date>gate)
+      .forEach(t=>{
+        const isDup=d.payments.some(p=>p.date===t.date&&Math.abs(p.amount-t.amount)<0.01&&p.source==='import');
+        if(!isDup)d.payments.push({id:'dp_'+t.id,date:t.date,amount:t.amount,source:'import',notes:t.description||''});
+      });
+    d.payments.sort((a,b)=>a.date.localeCompare(b.date));
+    recalcDebtRemaining(d);
+  });
   sched();
 }
 function togDebt(id){const d=S.debts.find(x=>x.id===id);if(!d)return;d.status=d.status==='active'?'settled':'active';sched();render();}
@@ -5918,25 +6008,24 @@ function delDebtPayment(debtId, paymentRef){
   const d=S.debts.find(x=>x.id===debtId);if(!d)return;
   const idx=d.payments.findIndex(p=>(p.id||p.date+p.amount)===paymentRef);
   if(idx<0)return;
+  const pay=d.payments[idx];
+  if(pay.source==='import'){
+    toast('This payment comes from a linked transaction. Remove the debt link on that transaction to exclude it.',false);
+    return;
+  }
   d.payments.splice(idx,1);
   recalcDebtRemaining(d);
   sched();render();toast('Payment removed');
 }
 
-function recalcDebtRemaining(d){
-  if(d.type==='credit_card')return;
-  const totalPaid=(d.payments||[]).reduce((s,p)=>s+p.amount,0);
-  d.remaining=Math.max(0,(d.original||0)-totalPaid);
-  if(d.remaining<=0)d.status='settled';
-  else if(d.status==='settled')d.status='active';
-}
+// recalcDebtRemaining defined earlier — duplicate removed
 
 function dedupDebtPayments(debtId){
   const d=S.debts.find(x=>x.id===debtId);if(!d||!d.payments)return;
   const seen=new Set();
   const before=d.payments.length;
   d.payments=d.payments.filter(p=>{
-    const key=p.date+'_'+parseFloat(p.amount).toFixed(2);
+    const key=p.date+'_'+parseFloat(p.amount).toFixed(2)+'_'+(p.source||'');
     if(seen.has(key))return false;
     seen.add(key);return true;
   });
