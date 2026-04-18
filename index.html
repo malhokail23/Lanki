@@ -6639,7 +6639,7 @@ function rAIUpload(){
       return`<tr style="border-bottom:1px solid var(--bg3)">
         <td style="padding:8px 10px;font-size:var(--fs-xxs);white-space:nowrap">${toDD(t.date)}</td>
         <td style="padding:8px 10px;font-size:var(--fs-xs)">${h(t.description)}</td>
-        <td style="padding:8px 10px;font-size:var(--fs-xs);font-weight:500;text-align:right;white-space:nowrap;${t.type==='income'?'color:var(--ok)':'color:var(--bad)'}">${t.type==='income'?'+':'-'}${fmtP(t.amount)}</td>
+        <td style="padding:8px 10px;font-size:var(--fs-xs);font-weight:500;text-align:right;white-space:nowrap;${t.direction==='in'?'color:var(--ok)':'color:var(--bad)'}">${t.direction==='in'?'+':'-'}${fmtP(t.amount)}</td>
         <td style="padding:8px 10px;font-size:var(--fs-xxs)">${ctag(t.mainCatId,t.subCatId)}</td>
         <td style="padding:8px 10px">
           <button class="btn btn-xs" onclick="openAITxnEdit(${i})">Edit</button>
@@ -6647,8 +6647,8 @@ function rAIUpload(){
       </tr>`;
     }).join('');
 
-    const totalInc=_aiState.extracted.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
-    const totalExp=_aiState.extracted.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
+    const totalInc=_aiState.extracted.filter(t=>t.direction==='in').reduce((s,t)=>s+t.amount,0);
+    const totalExp=_aiState.extracted.filter(t=>t.direction==='out').reduce((s,t)=>s+t.amount,0);
 
     return`<div style="margin-bottom:1rem">
       <div class="fg" style="gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:4px">
