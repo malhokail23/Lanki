@@ -3935,64 +3935,143 @@ function openBillCat(){
 }
 
 // --- STAFF ---
+// ─── ADVANCE SYSTEM (ledger-based) ───────────────────────────────────────────
+
+// Migrate old history[] format to ledger[] on read
+function advMigrate(a){
+  if(a.ledger)return a; // already migrated
+  const history=a.history||[];
+  a.ledger=history.map(h=>({
+    id:uid(),
+    month:h.month,
+    type:h.skipped?'deferred':'deduction',
+    amount:h.skipped?0:(h.amount||0),
+    notes:h.skipped?'Deferred — not deducted this month':'',
+    recordedAt:h.month+'-01'
+  }));
+  delete a.history;
+  return a;
+}
+
+// Compute remaining from ledger — never trust stored remaining
+function advRemaining(a){
+  advMigrate(a);
+  const deducted=(a.ledger||[]).filter(l=>l.type==='deduction'||l.type==='settlement').reduce((s,l)=>s+(l.amount||0),0);
+  return Math.max(0,(a.amount||0)-deducted);
+}
+
 function advStatus(a){
-  // Determine if deduction is active this month
+  advMigrate(a);
+  if(a.status==='forgiven')return'forgiven';
   const now=getYM(new Date());
-  if(a.status==='settled'||a.status==='forgiven')return a.status;
   if(a.deductStart&&a.deductStart>now)return'pending';
-  if(a.remaining<=0)return'settled';
+  if(advRemaining(a)<=0){a.status='settled';return'settled';}
   return'active';
 }
+
 function advThisMonth(st){
-  // Total deduction for current month across all active advances
   const now=getYM(new Date());
   return(st.advances||[]).filter(a=>advStatus(a)==='active').reduce((s,a)=>{
-    const override=(a.history||[]).find(h=>h.month===now);
-    if(override)return s+(override.skipped?0:override.amount);
+    advMigrate(a);
+    const entry=(a.ledger||[]).find(l=>l.month===now);
+    if(entry)return s+(entry.type==='deferred'?0:entry.amount||0);
     return s+(a.monthlyDeduct||0);
   },0);
 }
+
 function rStaff(){
   const now=getYM(new Date());
   const cards=S.staff.map(st=>{
+    // Migrate all advances on render
+    (st.advances||[]).forEach(advMigrate);
     const ded=advThisMonth(st);
     const net=st.salary-ded;
     const activeAdv=(st.advances||[]).filter(a=>['active','pending'].includes(advStatus(a)));
-    const advHtml=activeAdv.map((a,ai)=>{
+    const settledAdv=(st.advances||[]).filter(a=>['settled','forgiven'].includes(advStatus(a)));
+
+    const advHtml=(st.advances||[]).map((a,ai)=>{
       const st2=advStatus(a);
-      const override=(a.history||[]).find(h=>h.month===now);
-      const thisMonthAmt=override?(override.skipped?0:override.amount):(a.monthlyDeduct||0);
-      const statusColor={active:'#FEF3C7',pending:'#DBEAFE',settled:'#DCFCE7',forgiven:'#F3E8FF'};
-      const thisMonthNote=override?(override.skipped?'<span style="color:var(--warn)"> · Skipped this month</span>':`<span style="color:var(--info)"> · Custom: ${fmtP(override.amount)} this month</span>`):'';
-      return`<div style="background:${statusColor[st2]||'#FEF3C7'};padding:10px 12px;border-radius:8px;margin-top:8px">
-        <div class="fg jb" style="flex-wrap:wrap;gap:6px">
-          <div>
-            <div style="font-size:var(--fs-xs);font-weight:500">Advance of ${fmtP(a.amount)}</div>
-            <div style="font-size:var(--fs-xxs);color:var(--text3);margin-top:2px">
-              Given: ${toDD(a.dateGiven)||'--'} &middot; Starts: ${fmtYM(a.deductStart)||'--'} &middot; Default: ${fmtP(a.monthlyDeduct)}/mo
-              ${thisMonthNote}
+      const remaining=advRemaining(a);
+      const thisEntry=(a.ledger||[]).find(l=>l.month===now);
+      const isRecorded=!!thisEntry;
+      const statusColors={active:'var(--bg2)',pending:'color-mix(in srgb,var(--electric) 8%,var(--bg))',settled:'color-mix(in srgb,var(--ok) 8%,var(--bg))',forgiven:'color-mix(in srgb,var(--text3) 8%,var(--bg))'};
+      const statusBadge={active:'<span style="font-size:9px;font-weight:700;letter-spacing:.05em;padding:2px 6px;border-radius:4px;background:color-mix(in srgb,var(--warn) 15%,transparent);color:color-mix(in srgb,var(--warn) 80%,var(--midnight))">ACTIVE</span>',pending:'<span style="font-size:9px;font-weight:700;letter-spacing:.05em;padding:2px 6px;border-radius:4px;background:color-mix(in srgb,var(--electric) 12%,transparent);color:var(--electric)">PENDING</span>',settled:'<span style="font-size:9px;font-weight:700;letter-spacing:.05em;padding:2px 6px;border-radius:4px;background:color-mix(in srgb,var(--ok) 15%,transparent);color:var(--ok)">SETTLED</span>',forgiven:'<span style="font-size:9px;font-weight:700;letter-spacing:.05em;padding:2px 6px;border-radius:4px;background:color-mix(in srgb,var(--text3) 15%,transparent);color:var(--text3)">FORGIVEN</span>'};
+      const pct=a.amount>0?Math.min(100,Math.round((a.amount-remaining)/a.amount*100)):100;
+
+      // This-month status indicator
+      let thisMonthBadge='';
+      if(st2==='active'){
+        if(!isRecorded)thisMonthBadge=`<span style="font-size:10px;color:var(--warn);font-weight:500">· ${fmtYM(now)}: ${fmtP(a.monthlyDeduct)} planned</span>`;
+        else if(thisEntry.type==='deferred')thisMonthBadge=`<span style="font-size:10px;color:var(--warn);font-weight:500">· ${fmtYM(now)}: Deferred</span>`;
+        else if(thisEntry.type==='settlement')thisMonthBadge=`<span style="font-size:10px;color:var(--ok);font-weight:500">· ${fmtYM(now)}: Settled ${fmtP(thisEntry.amount)}</span>`;
+        else thisMonthBadge=`<span style="font-size:10px;color:var(--ok);font-weight:500">· ${fmtYM(now)}: Recorded ${fmtP(thisEntry.amount)}</span>`;
+      }
+
+      // Ledger entries
+      const ledger=(a.ledger||[]).slice().sort((x,y)=>y.month.localeCompare(x.month));
+      const typeBadge={deduction:'<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:color-mix(in srgb,var(--ok) 15%,transparent);color:var(--ok)">DEDUCTED</span>',deferred:'<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:color-mix(in srgb,var(--warn) 15%,transparent);color:color-mix(in srgb,var(--warn) 70%,var(--midnight))">DEFERRED</span>',settlement:'<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:color-mix(in srgb,var(--electric) 12%,transparent);color:var(--electric)">SETTLED</span>',forgiven:'<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:color-mix(in srgb,var(--text3) 15%,transparent);color:var(--text3)">FORGIVEN</span>'};
+      const ledgerHtml=ledger.length?ledger.map(l=>`
+        <div style="display:flex;align-items:flex-start;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">
+          <div style="flex-shrink:0;min-width:52px;font-size:11px;color:var(--text3);font-weight:500">${fmtYM(l.month)}</div>
+          <div style="flex-shrink:0">${typeBadge[l.type]||''}</div>
+          <div style="flex:1;font-size:11px;color:var(--text2)">${l.notes?h(l.notes):''}</div>
+          <div style="flex-shrink:0;font-size:11px;font-weight:600;font-variant-numeric:tabular-nums;color:${l.type==='deferred'?'var(--warn)':'var(--text)'}">${l.type==='deferred'?'—':'−'+fmtP(l.amount)}</div>
+        </div>`).join(''):'<div style="font-size:11px;color:var(--text3);padding:6px 0">No entries yet.</div>';
+
+      const ledgerOpen=(a._ledgerOpen?'block':'none');
+
+      return`<div style="border:1px solid var(--border);border-radius:var(--rmd);overflow:hidden;margin-top:10px" id="adv-card-${st.id}-${ai}">
+        <!-- Header -->
+        <div style="background:${statusColors[st2]||'var(--bg2)'};padding:12px 14px">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+            <div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <div style="font-size:13px;font-weight:600">Advance of ${fmtP(a.amount)}</div>
+                ${statusBadge[st2]||''}
+              </div>
+              <div style="font-size:11px;color:var(--text3);margin-top:3px">Given ${toDD(a.dateGiven)||'--'} · ${fmtP(a.monthlyDeduct)}/mo default · Starts ${fmtYM(a.deductStart)}</div>
+              ${a.notes?`<div style="font-size:11px;color:var(--text3);margin-top:1px">${h(a.notes)}</div>`:''}
             </div>
-            <div style="font-size:var(--fs-xxs);color:var(--text3)">Remaining: <strong>${fmtP(a.remaining)}</strong> &middot; Status: ${st2}</div>
+            <div style="text-align:right">
+              <div style="font-size:18px;font-weight:700;letter-spacing:-.03em;font-variant-numeric:tabular-nums;color:${remaining>0?'var(--warn)':'var(--ok)'}">${fmtP(remaining)}</div>
+              <div style="font-size:10px;color:var(--text3)">remaining</div>
+            </div>
           </div>
-          <div class="fg" style="gap:5px;flex-wrap:wrap">
-            <button class="btn btn-xs" onclick="advCustom('${st.id}',${ai})">This month</button>
-            <button class="btn btn-xs" onclick="advSkip('${st.id}',${ai})">Skip month</button>
-            <button class="btn btn-xs" onclick="advEditDefault('${st.id}',${ai})">Edit default</button>
-            <button class="btn btn-xs" onclick="advForgive('${st.id}',${ai})">Forgive</button>
+          <!-- Progress bar -->
+          <div style="height:5px;background:var(--border);border-radius:3px;margin-top:10px;overflow:hidden">
+            <div style="height:5px;background:${st2==='settled'||st2==='forgiven'?'var(--ok)':'var(--electric)'};width:${pct}%;border-radius:3px;transition:width .3s"></div>
+          </div>
+          <div style="font-size:10px;color:var(--text3);margin-top:4px;display:flex;justify-content:space-between">
+            <span>${pct}% repaid</span>${thisMonthBadge}
           </div>
         </div>
-        ${(a.history||[]).length?`<div style="margin-top:8px;border-top:1px solid rgba(0,0,0,.06);padding-top:6px">${(a.history||[]).slice(-3).reverse().map(h=>`<div style="font-size:var(--fs-xxs);color:var(--text3);display:flex;justify-content:space-between"><span>${fmtYM(h.month)}</span><span>${h.skipped?'<span style="color:var(--warn)">Skipped</span>':'-'+fmtP(h.amount)}</span></div>`).join('')}</div>`:''}
-      </div>`;}).join('');
+        <!-- Actions (active/pending only) -->
+        ${['active','pending'].includes(st2)?`<div style="padding:10px 14px;display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--border)">
+          <button class="btn btn-xs btn-p" onclick="advRecord('${st.id}',${ai})">Record deduction</button>
+          <button class="btn btn-xs" onclick="advDefer('${st.id}',${ai})">Defer this month</button>
+          <button class="btn btn-xs" onclick="advSettle('${st.id}',${ai})">Settle now</button>
+          <button class="btn btn-xs" onclick="advChangeRate('${st.id}',${ai})">Change rate</button>
+          <button class="btn btn-xs btn-d" onclick="advForgive('${st.id}',${ai})">Forgive</button>
+        </div><div id="adv-action-${st.id}-${ai}"></div>`:''}
+        <!-- Ledger toggle -->
+        <div style="padding:8px 14px">
+          <button onclick="advToggleLedger('${st.id}',${ai})" style="font-size:11px;color:var(--electric);background:none;border:none;cursor:pointer;padding:0;font-family:var(--font)">${ledger.length} ledger entr${ledger.length===1?'y':'ies'} ${a._ledgerOpen?'▲':'▼'}</button>
+          <div id="adv-ledger-${st.id}-${ai}" style="display:${ledgerOpen};margin-top:8px">${ledgerHtml}</div>
+        </div>
+      </div>`;
+    }).join('');
+
     return`<div class="card">
       <div class="fg jb" style="flex-wrap:wrap;gap:8px">
         <div>
           <div style="font-size:16px;font-weight:500">${h(st.name)}</div>
           <div style="font-size:var(--fs-xs);color:var(--text2)">${st.role}</div>
           ${st.contractStart?`<div style="font-size:var(--fs-xs);color:var(--text3)">Since ${toDD(st.contractStart)}</div>`:''}
+          ${st.iqamaNumber?`<div style="font-size:var(--fs-xxs);color:var(--text3)">Iqama Number: ${h(st.iqamaNumber)}</div>`:''}
         </div>
         <div style="text-align:right">
           <div style="font-size:18px;font-weight:500">${fmtP(st.salary)}<span style="font-size:var(--fs-xs);color:var(--text3)">/mo</span></div>
-          ${ded>0?`<div style="font-size:var(--fs-sm);color:var(--warn);font-weight:500">Net this month: ${fmtP(net)}</div><div style="font-size:var(--fs-xxs);color:var(--text3)">Advance deduction: -${fmtP(ded)}</div>`:''}
+          ${ded>0?`<div style="font-size:var(--fs-sm);color:var(--warn);font-weight:500">Net this month: ${fmtP(net)}</div><div style="font-size:var(--fs-xxs);color:var(--text3)">Advance deduction: −${fmtP(ded)}</div>`:''}
           <div style="font-size:var(--fs-xxs);color:var(--text3)">Due: day ${st.dueDay}${st.weekendRule?' (Thu if Fri/Sat)':''}</div>
         </div>
       </div>
@@ -4004,7 +4083,9 @@ function rStaff(){
         <button class="btn btn-xs" onclick="openEditStaff('${st.id}')">Edit</button>
         <button class="btn btn-xs btn-d" onclick="delStaff('${st.id}')">Remove staff</button>
       </div>
-    </div>`;}).join('')||'<div class="empty">No household staff profiles yet.</div>';
+    </div>`;
+  }).join('')||'<div class="empty">No household staff profiles yet.</div>';
+
   return`
   <div class="pg-header-row">
     <div class="pg-header-title">Household Staff</div>
@@ -4029,6 +4110,189 @@ function rStaff(){
     <div class="fg" style="margin-top:10px"><button class="btn btn-p" id="stf-sbtn" onclick="addStaff()">Add</button><button class="btn" onclick="tp('addstf-panel');editStaffId=null">Cancel</button></div>
   </div>
   ${cards}`;
+}
+
+function advToggleLedger(sid,ai){
+  const st=S.staff.find(x=>x.id===sid);if(!st)return;
+  const a=st.advances[ai];if(!a)return;
+  a._ledgerOpen=!a._ledgerOpen;
+  const el=document.getElementById('adv-ledger-'+sid+'-'+ai);
+  if(el)el.style.display=a._ledgerOpen?'block':'none';
+  const btn=el?.previousElementSibling;
+  if(btn){
+    const count=(a.ledger||[]).length;
+    btn.textContent=`${count} ledger entr${count===1?'y':'ies'} ${a._ledgerOpen?'▲':'▼'}`;
+  }
+}
+
+function _advActionSlot(sid,ai){return document.getElementById('adv-action-'+sid+'-'+ai);}
+
+function advRecord(sid,ai){
+  const st=S.staff.find(x=>x.id===sid);if(!st)return;
+  const a=st.advances[ai];if(!a)return;
+  const slot=_advActionSlot(sid,ai);if(!slot)return;
+  // If already has entry this month, pre-fill
+  const now=getYM(new Date());
+  const existing=(a.ledger||[]).find(l=>l.month===now);
+  const remaining=advRemaining(a);
+  const defAmt=existing?.amount??Math.min(a.monthlyDeduct||0,remaining);
+  slot.innerHTML=`<div style="padding:12px 14px;background:var(--bg2);border-bottom:1px solid var(--border)">
+    <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);margin-bottom:10px">Record deduction for ${fmtYM(now)}</div>
+    <div class="fr3" style="margin-bottom:8px">
+      <div><label class="lbl">Amount deducted (SAR)</label><input type="number" id="ar-amt-${sid}-${ai}" value="${defAmt}" min="0" step="0.01" style="font-weight:600"></div>
+      <div><label class="lbl">Month</label><input type="text" id="ar-month-${sid}-${ai}" value="${now.substr(5,2)+'/'+now.substr(0,4)}" placeholder="MM/YYYY"></div>
+      <div style="display:flex;align-items:flex-end;gap:6px;padding-bottom:2px">
+        <button class="btn btn-xs" onclick="(function(){const r=advRemaining(S.staff.find(x=>x.id==='${sid}')?.advances[${ai}]);document.getElementById('ar-amt-${sid}-${ai}').value=r;})()">Settle (${fmtP(remaining)})</button>
+      </div>
+    </div>
+    <div style="margin-bottom:8px"><label class="lbl">Notes</label><input type="text" id="ar-notes-${sid}-${ai}" placeholder="e.g. Deducted ${fmtP(defAmt)} for advance" value="Deducted ${fmtP(defAmt)} for ${fmtYM(now)} advance"></div>
+    <div class="fg" style="gap:6px"><button class="btn btn-p btn-sm" onclick="advRecordSave('${sid}',${ai})">Save</button><button class="btn btn-sm" onclick="_advActionSlot('${sid}',${ai}).innerHTML=''">Cancel</button></div>
+  </div>`;
+}
+
+function advRecordSave(sid,ai){
+  const st=S.staff.find(x=>x.id===sid);if(!st)return;
+  const a=st.advances[ai];if(!a)return;
+  advMigrate(a);
+  const amtEl=document.getElementById('ar-amt-'+sid+'-'+ai);
+  const monthEl=document.getElementById('ar-month-'+sid+'-'+ai);
+  const notesEl=document.getElementById('ar-notes-'+sid+'-'+ai);
+  const amt=parseFloat(amtEl?.value)||0;
+  if(amt<=0){toast('Enter a valid amount',false);return;}
+  // Parse month
+  let month=getYM(new Date());
+  const mv=(monthEl?.value||'').trim();
+  if(mv.includes('/')){const[m2,y2]=mv.split('/');if(m2&&y2)month=y2+'-'+m2.padStart(2,'0');}
+  const notes=(notesEl?.value||'').trim()||`Deducted ${fmtP(amt)} for advance`;
+  const remaining=advRemaining(a);
+  const type=amt>=remaining-0.01?'settlement':'deduction';
+  // Remove any existing entry for this month, replace
+  a.ledger=(a.ledger||[]).filter(l=>l.month!==month);
+  a.ledger.push({id:uid(),month,type,amount:amt,notes,recordedAt:new Date().toISOString().substr(0,10)});
+  if(type==='settlement')a.status='settled';
+  sched();render();toast(`${type==='settlement'?'Advance settled':'Deduction recorded'} — ${fmtP(amt)} for ${fmtYM(month)}`);
+}
+
+function advDefer(sid,ai){
+  const st=S.staff.find(x=>x.id===sid);if(!st)return;
+  const a=st.advances[ai];if(!a)return;
+  const slot=_advActionSlot(sid,ai);if(!slot)return;
+  const now=getYM(new Date());
+  slot.innerHTML=`<div style="padding:12px 14px;background:color-mix(in srgb,var(--warn) 6%,var(--bg));border-bottom:1px solid var(--border)">
+    <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);margin-bottom:10px">Defer deduction for ${fmtYM(now)}</div>
+    <div style="margin-bottom:8px"><label class="lbl">Reason / notes</label><input type="text" id="ad-notes-${sid}-${ai}" placeholder="e.g. Staff requested deferral — extending timeline" value="Deduction deferred — not collected this month"></div>
+    <div class="fg" style="gap:6px"><button class="btn btn-sm" style="background:var(--warn);color:var(--midnight);border:none" onclick="advDeferSave('${sid}',${ai})">Confirm defer</button><button class="btn btn-sm" onclick="_advActionSlot('${sid}',${ai}).innerHTML=''">Cancel</button></div>
+  </div>`;
+}
+
+function advDeferSave(sid,ai){
+  const st=S.staff.find(x=>x.id===sid);if(!st)return;
+  const a=st.advances[ai];if(!a)return;
+  advMigrate(a);
+  const now=getYM(new Date());
+  const notes=(document.getElementById('ad-notes-'+sid+'-'+ai)?.value||'').trim()||'Deduction deferred — not collected this month';
+  a.ledger=(a.ledger||[]).filter(l=>l.month!==now);
+  a.ledger.push({id:uid(),month:now,type:'deferred',amount:0,notes,recordedAt:new Date().toISOString().substr(0,10)});
+  sched();render();toast(`${fmtYM(now)} deduction deferred`);
+}
+
+function advSettle(sid,ai){
+  const st=S.staff.find(x=>x.id===sid);if(!st)return;
+  const a=st.advances[ai];if(!a)return;
+  const slot=_advActionSlot(sid,ai);if(!slot)return;
+  const remaining=advRemaining(a);
+  const now=getYM(new Date());
+  slot.innerHTML=`<div style="padding:12px 14px;background:color-mix(in srgb,var(--ok) 6%,var(--bg));border-bottom:1px solid var(--border)">
+    <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);margin-bottom:10px">Settle advance</div>
+    <div class="fr" style="margin-bottom:8px">
+      <div><label class="lbl">Final settlement amount (SAR)</label><input type="number" id="as-amt-${sid}-${ai}" value="${remaining}" min="0" step="0.01"></div>
+      <div><label class="lbl">Month</label><input type="text" id="as-month-${sid}-${ai}" value="${now.substr(5,2)+'/'+now.substr(0,4)}" placeholder="MM/YYYY"></div>
+    </div>
+    <div style="margin-bottom:8px"><label class="lbl">Notes</label><input type="text" id="as-notes-${sid}-${ai}" value="Final settlement — advance cleared" placeholder="Settlement notes"></div>
+    <div class="fg" style="gap:6px"><button class="btn btn-p btn-sm" onclick="advRecordSave('${sid}',${ai})">Confirm settlement</button><button class="btn btn-sm" onclick="_advActionSlot('${sid}',${ai}).innerHTML=''">Cancel</button></div>
+  </div>`;
+  // Reuse advRecordSave — it auto-detects settlement type
+  setTimeout(()=>{
+    const amtEl=document.getElementById('ar-amt-'+sid+'-'+ai);
+    const monthEl=document.getElementById('ar-month-'+sid+'-'+ai);
+    const notesEl=document.getElementById('ar-notes-'+sid+'-'+ai);
+    if(!amtEl){
+      // advSettle has its own IDs, redirect to save function
+      const slot2=_advActionSlot(sid,ai);
+      if(slot2){
+        const saveBtn=slot2.querySelector('button.btn-p');
+        if(saveBtn)saveBtn.onclick=()=>advSettleSave(sid,ai);
+      }
+    }
+  },50);
+}
+
+function advSettleSave(sid,ai){
+  const st=S.staff.find(x=>x.id===sid);if(!st)return;
+  const a=st.advances[ai];if(!a)return;
+  advMigrate(a);
+  const amt=parseFloat(document.getElementById('as-amt-'+sid+'-'+ai)?.value)||0;
+  if(amt<=0){toast('Enter a valid amount',false);return;}
+  const mv=(document.getElementById('as-month-'+sid+'-'+ai)?.value||'').trim();
+  let month=getYM(new Date());
+  if(mv.includes('/')){const[m2,y2]=mv.split('/');if(m2&&y2)month=y2+'-'+m2.padStart(2,'0');}
+  const notes=(document.getElementById('as-notes-'+sid+'-'+ai)?.value||'').trim()||'Final settlement — advance cleared';
+  a.ledger=(a.ledger||[]).filter(l=>l.month!==month);
+  a.ledger.push({id:uid(),month,type:'settlement',amount:amt,notes,recordedAt:new Date().toISOString().substr(0,10)});
+  a.status='settled';
+  sched();render();toast(`Advance settled — ${fmtP(amt)} final payment recorded`);
+}
+
+function advChangeRate(sid,ai){
+  const st=S.staff.find(x=>x.id===sid);if(!st)return;
+  const a=st.advances[ai];if(!a)return;
+  const slot=_advActionSlot(sid,ai);if(!slot)return;
+  slot.innerHTML=`<div style="padding:12px 14px;background:var(--bg2);border-bottom:1px solid var(--border)">
+    <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);margin-bottom:10px">Change monthly deduction rate</div>
+    <div class="fr" style="margin-bottom:8px">
+      <div><label class="lbl">New monthly amount (SAR)</label><input type="number" id="acr-amt-${sid}-${ai}" value="${a.monthlyDeduct}" min="0" step="0.01"></div>
+      <div><label class="lbl">Notes</label><input type="text" id="acr-notes-${sid}-${ai}" placeholder="Reason for change"></div>
+    </div>
+    <div class="fg" style="gap:6px"><button class="btn btn-p btn-sm" onclick="advChangeRateSave('${sid}',${ai})">Update</button><button class="btn btn-sm" onclick="_advActionSlot('${sid}',${ai}).innerHTML=''">Cancel</button></div>
+  </div>`;
+}
+
+function advChangeRateSave(sid,ai){
+  const st=S.staff.find(x=>x.id===sid);if(!st)return;
+  const a=st.advances[ai];if(!a)return;
+  const v=parseFloat(document.getElementById('acr-amt-'+sid+'-'+ai)?.value)||0;
+  if(v<=0){toast('Enter a valid amount',false);return;}
+  const notes=(document.getElementById('acr-notes-'+sid+'-'+ai)?.value||'').trim();
+  const old=a.monthlyDeduct;
+  a.monthlyDeduct=v;
+  // Log the rate change in the ledger as a note entry
+  advMigrate(a);
+  a.ledger.push({id:uid(),month:getYM(new Date()),type:'deduction',amount:0,notes:`Rate changed from ${fmtP(old)}/mo to ${fmtP(v)}/mo${notes?' — '+notes:''}`,recordedAt:new Date().toISOString().substr(0,10),_rateChange:true});
+  // Remove zero-amount rate-change entries from deduction totals
+  sched();render();toast(`Monthly deduction updated to ${fmtP(v)}/mo`);
+}
+
+function advForgive(sid,ai){
+  const st=S.staff.find(x=>x.id===sid);if(!st)return;
+  const a=st.advances[ai];if(!a)return;
+  if(!confirm('Mark remaining balance as forgiven? This cannot be undone.'))return;
+  advMigrate(a);
+  const remaining=advRemaining(a);
+  const now=getYM(new Date());
+  a.ledger.push({id:uid(),month:now,type:'forgiven',amount:0,notes:`Remaining balance of ${fmtP(remaining)} forgiven`,recordedAt:new Date().toISOString().substr(0,10)});
+  a.status='forgiven';
+  sched();render();toast('Advance forgiven — balance cleared');
+}
+
+// advRemaining must exclude rate-change log entries (amount:0, _rateChange:true)
+// Override the reduce to skip _rateChange entries — patch advRemaining
+const _advRemainingOrig=advRemaining;
+// advRemaining already handles this since _rateChange entries have amount:0 and type:'deduction'
+// but we want them excluded from totals — fix by filtering _rateChange
+function advRemaining(a){
+  advMigrate(a);
+  const deducted=(a.ledger||[]).filter(l=>!l._rateChange&&(l.type==='deduction'||l.type==='settlement')).reduce((s,l)=>s+(l.amount||0),0);
+  return Math.max(0,(a.amount||0)-deducted);
 }
 let editStaffId=null;
 function openAddStaff(){
@@ -4098,6 +4362,7 @@ function logAdv(sid){
       <div><label class="lbl">Monthly deduction (SAR)</label><input type="number" id="${panelId}-monthly" placeholder="0.00" min="0" step="0.01"></div>
       <div style="display:flex;align-items:flex-end;padding-bottom:2px"><button class="btn btn-xs" onclick="prefillAdvMonthly('${panelId}')">Auto (÷6)</button></div>
     </div>
+    <div style="margin-bottom:10px"><label class="lbl">Notes (optional)</label><input type="text" id="${panelId}-notes" placeholder="Reason for advance, context"></div>
     <div class="fg"><button class="btn btn-p" onclick="saveLogAdv('${sid}','${panelId}')">Log Advance</button><button class="btn" onclick="document.getElementById('${panelId}').remove()">Cancel</button></div>
   `;
   // Insert after the Log Advance button
@@ -4118,51 +4383,16 @@ function saveLogAdv(sid,panelId){
   const deductStartRaw=document.getElementById(panelId+'-start').value;
   const monthly=parseFloat(document.getElementById(panelId+'-monthly').value)||0;
   if(monthly<=0){toast('Enter monthly deduction',false);return;}
+  const notes=(document.getElementById(panelId+'-notes')?.value||'').trim();
   let deductStart=getYM(new Date());
   if(deductStartRaw&&deductStartRaw.includes('/')){const[m,y]=deductStartRaw.split('/');if(m&&y)deductStart=y+'-'+m.padStart(2,'0');}
   if(!st.advances)st.advances=[];
-  st.advances.push({id:uid(),amount:amt,dateGiven:fromDD(dateGiven),deductStart,monthlyDeduct:monthly,remaining:amt,status:'active',history:[]});
+  // New ledger-based advance
+  st.advances.push({id:uid(),amount:amt,dateGiven:fromDD(dateGiven),deductStart,monthlyDeduct:monthly,status:'active',notes,ledger:[]});
   document.getElementById(panelId)?.remove();
   sched();render();toast('Advance logged');
 }
-function advCustom(sid,ai){
-  const st=S.staff.find(x=>x.id===sid);if(!st)return;
-  const a=st.advances[ai];if(!a)return;
-  const now=getYM(new Date());
-  const amt=parseFloat(prompt(`Custom deduction for ${fmtYM(now)} (SAR)? Default is ${a.monthlyDeduct}.`)||'0');
-  if(isNaN(amt)||amt<0)return;
-  if(!a.history)a.history=[];
-  const i=a.history.findIndex(h=>h.month===now);
-  if(i>=0)a.history[i]={month:now,amount:amt,skipped:false};
-  else a.history.push({month:now,amount:amt,skipped:false});
-  a.remaining=Math.max(0,a.remaining-(amt-(a.history.find(h=>h.month===now&&h._prev)||0)));
-  sched();render();toast('Custom deduction set for '+fmtYM(now));
-}
-function advSkip(sid,ai){
-  const st=S.staff.find(x=>x.id===sid);if(!st)return;
-  const a=st.advances[ai];if(!a)return;
-  const now=getYM(new Date());
-  if(!a.history)a.history=[];
-  const i=a.history.findIndex(h=>h.month===now);
-  if(i>=0)a.history[i]={month:now,amount:0,skipped:true};
-  else a.history.push({month:now,amount:0,skipped:true});
-  sched();render();toast(fmtYM(now)+' deduction skipped');
-}
-function advEditDefault(sid,ai){
-  const st=S.staff.find(x=>x.id===sid);if(!st)return;
-  const a=st.advances[ai];if(!a)return;
-  const v=parseFloat(prompt('New default monthly deduction (SAR)?',a.monthlyDeduct)||'0');
-  if(!v||v<=0)return;
-  a.monthlyDeduct=v;
-  sched();render();toast('Default deduction updated to '+fmt(v)+'/mo');
-}
-function advForgive(sid,ai){
-  const st=S.staff.find(x=>x.id===sid);if(!st)return;
-  const a=st.advances[ai];if(!a)return;
-  if(!confirm('Mark this advance as forgiven? The remaining balance will be cleared.'))return;
-  a.remaining=0;a.status='forgiven';
-  sched();render();toast('Advance forgiven');
-}
+
 
 // --- ACCOUNTS ---
 const ATG=[{g:'Bank Accounts',o:[{v:'main_account',l:'Main Account'},{v:'savings_account',l:'Savings Account'},{v:'sub_account',l:'Sub Account'}]},{g:'Cards',o:[{v:'debit_card',l:'Debit Card'},{v:'credit_card',l:'Credit Card'},{v:'charge_card',l:'Charge Card'},{v:'prepaid_card',l:'Prepaid Card'}]},{g:'Investments',o:[{v:'brokerage_account',l:'Brokerage Account'},{v:'fund_account',l:'Fund Account'},{v:'gold_account',l:'Gold Account'},{v:'crypto_wallet',l:'Crypto Wallet'},{v:'real_estate_fund',l:'Real Estate Fund'},{v:'direct_investment',l:'Direct Investment'}]},{g:'Other',o:[{v:'cash',l:'Cash'},{v:'other',l:'Other'}]}];
