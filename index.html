@@ -7356,15 +7356,16 @@ async function runAIExtract(){
       })
     });
     if(resp.status===429){
-      // Rate limited — show countdown then auto-retry once
+      // Rate limited — wait 65s showing countdown, then auto-retry
       for(let s=65;s>0;s--){
-        _aiState.error=`Rate limit hit — retrying in ${s}s. Please wait…`;
+        _aiState.error=`Rate limit — retrying in ${s}s…`;
         render();
         await new Promise(r=>setTimeout(r,1000));
       }
       _aiState.error='';
-      // Edge function has already retried server-side — this is a fallback message
-      throw new Error('Rate limit — please wait 1 minute between uploads, or split the statement into smaller date ranges.');
+      _aiState.loading=false;
+      runAIExtract(); // retry
+      return;
     }
     if(!resp.ok){const e=await resp.text();throw new Error('Edge Function error: '+e);}
     const data=await resp.json();
