@@ -1199,7 +1199,7 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overfl
     <div id="nav-dd-transactions" class="nav-dd">
       <button onclick="sw('txbank')">Bank Accounts</button>
       <button onclick="sw('txcards')">Cards</button>
-      <button onclick="sw('aiupload')">AI Upload</button>
+      <button onclick="sw('aiupload')">Statement Parser</button>
     </div>
 
     <button class="nav-item nav-group" data-group="recurring" onclick="toggleGroup('recurring')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg> Recurring <span class="nav-arrow" id="arr-recurring">&#8250;</span></button>
@@ -1312,7 +1312,7 @@ const SUGGESTED={"cat_main_income": ["sub_salary", "sub_bonus", "sub_commission"
 const CAT_COLORS={"cat_main_income": "#1D9E75", "cat_main_food": "#E24B4A", "cat_main_transport": "#888780", "cat_main_housing": "#378ADD", "cat_main_staff": "#5F5E5A", "cat_main_kids": "#7F77DD", "cat_main_personal": "#F0997B", "cat_main_clothing": "#D4537E", "cat_main_entertainment": "#534AB7", "cat_main_subscriptions": "#E91E8C", "cat_main_travel": "#00BCD4", "cat_main_education": "#8BC34A", "cat_main_shopping": "#BA7517", "cat_main_gifts": "#FF5722", "cat_main_charity": "#009688", "cat_main_govt": "#607D8B", "cat_main_finance": "#D85A30", "cat_main_business": "#3F51B5", "cat_main_pets": "#795548", "cat_main_transfers": "#185FA5"};
 const SADAD_CODES={"001": "STC", "002": "Saudi Electricity Company (SEC)", "003": "Tawuniya Insurance", "004": "Marafiq", "005": "Mobily", "006": "Madinah Municipality", "008": "Qiyas", "010": "Riyadh Municipality", "013": "Ministry of Commerce", "014": "STCSC", "015": "Water Services", "016": "AlAhli Finance", "018": "American Express", "019": "Jeddah Chamber of Commerce", "020": "ZATCA (Zakat & Tax)", "021": "Saudi Post", "022": "Saudia Airlines", "025": "Eastern Province Municipality", "026": "FlyNas", "027": "Holy Makkah Municipality", "028": "Jeddah Municipality", "030": "Saudi Customs", "032": "OSN", "033": "GO Telecom", "036": "Saudi Credit Bureau (SIMAH)", "040": "Real Estate Development Fund", "042": "CITC", "043": "Adahi", "044": "Zain", "045": "Saudi Agricultural Bank", "050": "Ministry of Labor", "054": "AlRajhi Bank Services", "055": "ITC", "057": "Saudi Tourism Authority", "058": "Social Development Bank", "060": "GOSI", "065": "Abdul Latif Jameel Finance", "067": "Riyad Bank Payments", "070": "Al Qassim Municipality", "071": "Banque Saudi Fransi", "075": "Ministry of Transportation", "078": "Bank Al-Jazira", "080": "King Saud University", "082": "ANB Payments", "084": "Aseer Province Municipality", "088": "Ministry of Finance", "089": "Saudi Ports Authority", "098": "General Authority of Civil Aviation", "101": "Ministry of Foreign Affairs", "105": "KACST", "106": "Taibah University", "108": "Ministry of Investment", "110": "AlRajhi Takaful", "112": "Amanah Al-Ahsa", "113": "Taif Municipality", "117": "KFUPM", "118": "King Faisal University", "120": "Saudi Railways", "122": "Tawzea", "128": "Ministry of Health", "130": "Bupa Arabia", "132": "Umm Al-Qura University", "134": "Extra (United Electronics)", "136": "Arabian Shield Insurance", "137": "Saudi Electronic University", "138": "National Water Company (NWC)", "139": "Asharqia Chamber", "140": "Bank Albilad", "141": "Government e-Procurement", "142": "HRDF", "143": "Saudi Industrial Development Fund", "147": "Saudi Home Loans", "149": "STC (Sawa)", "150": "SAPTCO", "151": "Virgin Mobile", "153": "Ejar (Property Registry)", "160": "Ministry of Justice", "161": "Ministry of Haj and Umrah", "163": "Saudi Investment Bank", "165": "SaudiOrix", "166": "Emaar Economic City", "175": "Bidaya Home Finance", "177": "Ministry of Municipality & Rural Affairs", "180": "Public Transport Authority", "181": "Flyadeal", "182": "Sakani \u2013 National Housing", "184": "Lebara", "185": "Saudi Exhibition & Convention Bureau", "187": "Ijarah Finance", "188": "AJIL Financial Services", "190": "Public Pension Agency (PPA)", "191": "Saudi Railway Company (SAR)", "197": "Tameeni (Insurance)", "199": "Takamol Holding", "204": "General Commission for Audiovisual Media", "206": "Haramain High Speed Rail", "207": "STC Pay", "209": "Tatweer Educational Tech", "213": "Maharah HR", "215": "University of Jeddah", "218": "Qassim University", "222": "General Directorate of Border Guard", "226": "Najran Province Emirate", "229": "SWCC (Saline Water)", "231": "Royal Saudi Land Forces", "234": "Public Security Directorate (Traffic/Passports)", "236": "Hafr Al Batin Municipality", "237": "Makkah Region Emirate", "241": "Ministry of Education", "242": "Saudi Authority for Intellectual Property", "249": "King Khalid University", "252": "Saudi Arabian National Guard", "254": "Saudi Red Crescent Authority", "255": "Musaned (Domestic Workers Platform)", "256": "Northern Border University", "257": "King Faisal Specialist Hospital", "259": "Premium Residency Center (Iqama)", "265": "Royal Saudi Naval Forces", "267": "Ministry of Energy", "270": "Ministry of Justice \u2013 Alimony Fund", "272": "Royal Commission for Jubail and Yanbu", "275": "General Entertainment Authority", "278": "General Organization for Military Industries", "280": "School Transport"};
 const NAV_GROUPS={
-  transactions:{tabs:['txbank','txcards','aiupload'],labels:{txbank:'Bank Accounts',txcards:'Cards',aiupload:'AI Upload'}},
+  transactions:{tabs:['txbank','txcards','aiupload'],labels:{txbank:'Bank Accounts',txcards:'Cards',aiupload:'Statement Parser'}},
   recurring:{tabs:['income','bills','subscriptions'],labels:{income:'Income',bills:'Bills',subscriptions:'Subscriptions'}},
   inbox:{tabs:['uncat','transfers','reimbursements','rules','insights'],labels:{uncat:'Uncategorized',transfers:'Pending Matches',reimbursements:'Reimbursements',rules:'Merchant Rules',insights:'Usage Insights'}},
 };
@@ -3301,7 +3301,7 @@ function addTxnM(){
 
 // ─── IMPORT ───
 async function doImport(directPayload){
-  // directPayload: when called from AI Upload (no DOM elements available)
+  // directPayload: when called from Statement Parser (no DOM elements available)
   // undefined: when called from the manual import panel (reads from DOM)
   let data;
   let openingForGuardVal=null;
@@ -3369,20 +3369,26 @@ async function doImport(directPayload){
     if(mid){txnType=typeFromCat(mid,txnType);}
     const dir=(t.direction?t.direction.toLowerCase().trim():null)||(txnType==='income'?'in':'out');
     const amt=Math.abs(parseFloat(t.amount)||0);
-    const isDup=txns.some(x=>x.date===t.date&&Math.abs(x.amount-amt)<0.01&&(x.description||'').trim().toLowerCase()===(cleanDesc||'').toLowerCase()&&(x.accountId||null)===(ai||null));
+    // Route to the correct month bucket first so dedup checks the right cache
+    const txnYm=t.date?t.date.substr(0,7):ym;
+    const targetCache=txnYm!==ym?(S.txnCache[txnYm]||(S.txnCache[txnYm]=[])):txns;
+    // Dedup: date + amount + description match is sufficient. AccountId is intentionally
+    // excluded — a previous import may have had null accountId and we must still catch it.
+    const descKey=(cleanDesc||'').trim().toLowerCase();
+    const isDup=targetCache.some(x=>x.date===t.date&&Math.abs(x.amount-amt)<0.01&&(x.description||'').trim().toLowerCase()===descKey);
     if(isDup)continue;
     const txnItem={id:uid(),date:t.date,description:cleanDesc,raw_description:rawDesc,amount:amt,type:txnType,direction:dir,mainCatId:mid,subCatId:sid,accountId:ai,debtId:di,notes:(t.notes||'').trim(),flagged:!!t.flagged,ruleApplied:ruleApplied||false};
-    const txnYm=t.date?t.date.substr(0,7):ym;
     if(txnYm!==ym){
-      if(!S.txnCache[txnYm])S.txnCache[txnYm]=[];
-      S.txnCache[txnYm].push(txnItem);
+      targetCache.push(txnItem);
       schedTxn(txnYm);
     }else{
       txns.push(txnItem);
     }
     added++;
   }
-  txns.sort((a,b)=>a.date.localeCompare(b.date));
+  // Sort every month bucket that was touched, not just the statement month
+  const touchedMonths=new Set(items.map(t=>t.date?t.date.substr(0,7):ym));
+  touchedMonths.forEach(m=>{if(S.txnCache[m])S.txnCache[m].sort((a,b)=>a.date.localeCompare(b.date));});
 
   if(rId&&openingForGuardVal!==null){
     const mk=rId+'_'+ym;
@@ -5169,7 +5175,7 @@ function rSettings(){
       <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Backup Reminder</div><div class="settings-row-sub">${S.settings.lastBackup?'Last backup: '+toDD(S.settings.lastBackup.substr(0,10)):'No backup taken yet'}</div></div><div class="settings-row-ctrl"><select onchange="S.settings.backupReminderMonths=parseInt(this.value);sched();toast('Backup reminder updated')"><option value="1" ${(S.settings.backupReminderMonths||2)===1?'selected':''}>Every month</option><option value="2" ${(S.settings.backupReminderMonths||2)===2?'selected':''}>Every 2 months</option><option value="3" ${(S.settings.backupReminderMonths||2)===3?'selected':''}>Every 3 months</option></select></div></div>
     </div>
     <div class="settings-section">
-      <div class="settings-section-label">AI Statement Upload</div>
+      <div class="settings-section-label">Statement Parser</div>
       <div class="settings-row" style="align-items:flex-start"><div class="settings-row-label"><div class="settings-row-title">Edge Function URL</div><div class="settings-row-sub">Your Supabase Edge Function endpoint for AI extraction. See deployment guide.</div></div><div class="settings-row-ctrl" style="min-width:240px"><input type="text" placeholder="https://xxx.supabase.co/functions/v1/extract" value="${S.settings.edgeFnUrl||''}" onchange="S.settings.edgeFnUrl=this.value.trim();sched()" style="width:100%;font-size:11px;font-family:monospace"></div></div>
     </div>`;
   }else if(SP==='household'){
@@ -5234,6 +5240,7 @@ function rSettings(){
     </div>
     <div class="settings-section">
       <div class="settings-section-label" style="color:var(--bad)">Danger Zone</div>
+      <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Remove duplicate transactions</div><div class="settings-row-sub">Scans all months and removes exact duplicates (same date, amount, description). Run this if you imported the same statement twice.</div></div><div class="settings-row-ctrl"><button class="btn btn-sm" onclick="deduplicateTxns()">Remove duplicates</button></div></div>
       <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Clear all transactions</div><div class="settings-row-sub">Removes imported data. Vault and settings preserved.</div></div><div class="settings-row-ctrl"><button class="btn btn-sm btn-d" onclick="doReset('txns')">Clear transactions</button></div></div>
       <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Reset everything</div><div class="settings-row-sub">Deletes all data and the vault. Cannot be undone.</div></div><div class="settings-row-ctrl"><button class="btn btn-sm btn-d" onclick="doReset('all')">Reset vault</button></div></div>
     </div>`;
@@ -5247,6 +5254,24 @@ function rSettings(){
   }
   return`<div class="settings-layout"><div class="settings-sidebar"><div style="font-size:16px;font-weight:500;padding:0 0 16px 0">Settings</div>${subNav}</div><div class="settings-content">${pageContent}</div></div>`;
 }
+function deduplicateTxns(){
+  let removed=0;
+  Object.keys(S.txnCache).forEach(ym=>{
+    const txns=S.txnCache[ym];
+    if(!txns?.length)return;
+    const seen=new Set();
+    S.txnCache[ym]=txns.filter(t=>{
+      // Key: date + rounded amount + description (lowercase). AccountId intentionally excluded.
+      const key=`${t.date}|${Math.round((t.amount||0)*100)}|${(t.description||'').trim().toLowerCase()}`;
+      if(seen.has(key)){removed++;return false;}
+      seen.add(key);return true;
+    });
+    if(removed)schedTxn(ym);
+  });
+  if(removed>0){sched();render();toast(`Removed ${removed} duplicate transaction${removed!==1?'s':''}`);}
+  else toast('No duplicates found');
+}
+
 function toggleCP(){const p=document.getElementById('cp-panel');if(p)p.style.display=p.style.display==='none'?'block':'none';}
 
 function addOwner(){const n=document.getElementById('new-own')?.value.trim();if(!n){toast('Name required',false);return;}const id='owner_'+n.toLowerCase().replace(/[^a-z0-9]/g,'_')+'_'+Math.random().toString(36).substr(2,4);S.owners.push({id,name:n});sched();render();toast('Owner added');}
@@ -6708,7 +6733,7 @@ function rAIUpload(){
 
   // Step 1: upload form
   return`<div class="pg-header">
-    <div class="pg-header-title">AI Statement Upload</div>
+    <div class="pg-header-title">Statement Parser</div>
     <div class="pg-header-sub">Upload a bank statement PDF or image. AI extracts and categorizes all transactions. Review before importing.</div>
   </div>
 
