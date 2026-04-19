@@ -2050,12 +2050,10 @@ function prevM(){
   render();
 }
 function nextM(){
-  // V3.0 #17: All-time disables navigation
   if(S.ovPeriod==='all')return;
-  // V3.0 #15 + #16: step by 1 month, clamp to last transaction month (not today's date)
-  const last=lastTxnMonth();
+  const cap=getYM(new Date()); // allow navigation up to current month
   const proposed=addM(S.month,1);
-  S.month=proposed>last?last:proposed;
+  S.month=proposed>cap?cap:proposed;
   render();
 }
 function setDO(id){}// removed — owner filter deprecated
@@ -2422,7 +2420,7 @@ async function rOv(){
         <div style="font-size:var(--fs-sm);font-weight:500;white-space:nowrap;min-width:160px;text-align:center">
           ${months.length===1?fmtYM(months[0]):(fmtYM(months[0])+' &ndash; '+fmtYM(months[months.length-1]))}
         </div>
-        <button class="mnav" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;border:1px solid var(--border);background:var(--bg);cursor:${S.ovPeriod==='all'?'not-allowed':(S.month>=lastTxnMonth()?'not-allowed':'pointer')};opacity:${S.ovPeriod==='all'||S.month>=lastTxnMonth()?'.4':'1'};border-radius:var(--rsm)" onclick="nextM()" ${S.ovPeriod==='all'||S.month>=lastTxnMonth()?'disabled':''}>&#8594;</button>
+        <button class="mnav" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;border:1px solid var(--border);background:var(--bg);cursor:${S.ovPeriod==='all'?'not-allowed':(S.month>=getYM(new Date())?'not-allowed':'pointer')};opacity:${S.ovPeriod==='all'||S.month>=getYM(new Date())?'.4':'1'};border-radius:var(--rsm)" onclick="nextM()" ${S.ovPeriod==='all'||S.month>=getYM(new Date())?'disabled':''}>&#8594;</button>
       </div>
     </div>
   </div>
@@ -2947,7 +2945,10 @@ async function saveEditTxn(){
   const newSid=document.getElementById('etxn-sc').value||null;
   t.mainCatId=newMid;t.subCatId=newSid;
   if(newMid){
+    const prevDir=t.direction; // preserve before typeFromCat
     t.type=typeFromCat(newMid,t.type); // sync type with category
+    // typeFromCat must not override an explicit direction — restore it
+    if(prevDir==='in'||prevDir==='out')t.direction=prevDir;
     learnRule(t.raw_description||t.description,newMid,newSid);
     t.ruleApplied=false;
   }
@@ -2963,7 +2964,12 @@ async function saveEditTxn(){
     S.txnCache[ymk].sort((a,b)=>a.date.localeCompare(b.date));
     schedTxn(ymk);
   }
-  closeEditTxn();render();toast('Transaction updated');
+  closeEditTxn();
+  // Warn if active filters will now hide this transaction
+  const willBeHidden=(TF.type&&TF.type!==t.type)||(TF.mc&&TF.mc!==t.mainCatId)||(TF.sub&&TF.sub!==t.subCatId);
+  render();
+  if(willBeHidden)toast('Transaction saved — hidden by active filter. Clear filters to see it.',true);
+  else toast('Transaction updated');
 }
 function closeEditTxn(){
   document.getElementById('edit-txn-modal').classList.remove('active');
@@ -3367,7 +3373,10 @@ async function doImport(directPayload){
     const di=t.debt_id||t.debtId||null;
     let txnType=t.type||'expense';
     if(mid){txnType=typeFromCat(mid,txnType);}
-    const dir=(t.direction?t.direction.toLowerCase().trim():null)||(txnType==='income'?'in':'out');
+    // direction: AI-provided value is authoritative. Only fall back when truly absent.
+    // NEVER derive direction from type — a refund is expense+in, not income+in.
+    const rawDir=(t.direction||t.dir||'').toLowerCase().trim();
+    const dir=rawDir==='in'||rawDir==='out'?rawDir:(txnType==='income'?'in':'out');
     const amt=Math.abs(parseFloat(t.amount)||0);
     // Route to the correct month bucket first so dedup checks the right cache
     const txnYm=t.date?t.date.substr(0,7):ym;
