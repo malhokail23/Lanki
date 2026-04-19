@@ -6654,7 +6654,7 @@ function dedupDebtPayments(debtId){
 let _aiState={
   file:null, fileName:'', fileData:'', fileType:'',
   accountId:'', month:'', openingBal:'', closingBal:'',
-  extracted:[], loading:false, scanning:false, scanMeta:null, usage:null, error:'', step:1
+  extracted:[], loading:false, scanning:false, scanMeta:null, scanError:'', usage:null, error:'', step:1
 };
 
 function rAIUpload(){
@@ -6750,9 +6750,14 @@ function rAIUpload(){
         ondragover="event.preventDefault();this.style.borderColor='var(--electric)';this.style.background='color-mix(in srgb,var(--electric) 6%,var(--bg))'"
         ondragleave="this.style.borderColor='';this.style.background='var(--bg2)'"
         ondrop="event.preventDefault();this.style.borderColor='';this.style.background='var(--bg2)';onAIFileDrop(event)">
-        ${_aiState.scanning?`<div style="font-size:var(--fs-xs);color:var(--electric)">Scanning statement…</div>`
-          :_aiState.fileName?`<div style="font-size:var(--fs-xs);font-weight:500">${h(_aiState.fileName)}</div><div style="font-size:11px;color:var(--text3);margin-top:4px">Click or drop to change</div>`
-          :`<div style="font-size:var(--fs-xs);color:var(--text3)">Click to select or drop a file here</div><div style="font-size:11px;color:var(--text3);margin-top:4px">PDF, JPG, or PNG</div>`}
+        ${_aiState.scanning
+          ?`<div style="font-size:var(--fs-xs);color:var(--electric)">Scanning statement…</div>`
+          :_aiState.scanError
+            ?`<div style="font-size:var(--fs-xs);font-weight:500">${h(_aiState.fileName)}</div><div style="font-size:11px;color:var(--warn);margin-top:4px">${h(_aiState.scanError)}</div>`
+            :_aiState.fileName
+              ?`<div style="font-size:var(--fs-xs);font-weight:500">${h(_aiState.fileName)}</div><div style="font-size:11px;color:${_aiState.scanMeta?'var(--ok)':'var(--text3)'};margin-top:4px">${_aiState.scanMeta?'Statement scanned — fields auto-filled below':'Click or drop to change'}</div>`
+              :`<div style="font-size:var(--fs-xs);color:var(--text3)">Click to select or drop a file here</div><div style="font-size:11px;color:var(--text3);margin-top:4px">PDF, JPG, or PNG</div>`
+        }
       </div>
       <input type="file" id="ai-file-inp" accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange="onAIFileSelect(this)">
     </div>
@@ -6818,33 +6823,45 @@ function loadAIFile(file){
 
 async function runAIPrescan(){
   const EDGE_URL=S.settings.edgeFnUrl||'';
-  if(!EDGE_URL||!_aiState.fileData)return;
-  _aiState.scanning=true;render();
+  if(!EDGE_URL||!_aiState.fileData){
+    // No edge URL configured — skip prescan silently, user fills manually
+    return;
+  }
+  _aiState.scanning=true;_aiState.scanError='';render();
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),30000); // 30s hard timeout
   try{
     const resp=await fetch(EDGE_URL,{
       method:'POST',
+      signal:controller.signal,
       headers:{'Content-Type':'application/json','Authorization':'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRnZWZzcHBraWpycnZvdGdnZW9tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4MzYyOTAsImV4cCI6MjA5MTQxMjI5MH0._MWK5XL_CQAV3ybEWPv1UrArPb-Enu6FZognyImSYzg'},
       body:JSON.stringify({fileData:_aiState.fileData,fileType:_aiState.fileType,mode:'prescan'})
     });
-    if(!resp.ok)throw new Error('prescan failed');
+    clearTimeout(timeout);
+    if(!resp.ok){
+      const errText=await resp.text().catch(()=>'');
+      throw new Error(`Prescan error ${resp.status}${errText?' — '+errText.slice(0,80):''}`);
+    }
     const meta=await resp.json();
     _aiState.scanMeta=meta;
-    // Auto-fill month from period_start
     if(meta.period_start){
       const ym=meta.period_start.substr(0,7);
       if(!_aiState.month)_aiState.month=ym;
     }
-    // Auto-fill balances
     if(meta.opening_balance!=null&&!_aiState.openingBal)_aiState.openingBal=String(meta.opening_balance);
     if(meta.closing_balance!=null&&!_aiState.closingBal)_aiState.closingBal=String(meta.closing_balance);
-    // Auto-match account by IBAN/account number
     if(meta.account_number&&!_aiState.accountId){
       const clean=meta.account_number.replace(/\s/g,'');
       const match=S.accounts.find(a=>a.accountNumber&&a.accountNumber.replace(/\s/g,'')===clean);
       if(match)_aiState.accountId=match.id;
     }
-  }catch(e){/* prescan failure is silent — user fills manually */}
-  finally{_aiState.scanning=false;render();}
+  }catch(e){
+    clearTimeout(timeout);
+    const msg=e.name==='AbortError'?'Prescan timed out — fill fields manually':(e.message||'Prescan failed — fill fields manually');
+    _aiState.scanError=msg;
+  }finally{
+    _aiState.scanning=false;render();
+  }
 }
 
 async function runAIExtract(){
@@ -6968,7 +6985,7 @@ async function commitAIImport(){
   await doImport(payload);
 
   // Reset AI state and navigate to transactions
-  _aiState={file:null,fileName:'',fileData:'',fileType:'',accountId:'',month:'',openingBal:'',closingBal:'',extracted:[],loading:false,scanning:false,scanMeta:null,usage:null,error:'',step:1};
+  _aiState={file:null,fileName:'',fileData:'',fileType:'',accountId:'',month:'',openingBal:'',closingBal:'',extracted:[],loading:false,scanning:false,scanMeta:null,scanError:'',usage:null,error:'',step:1};
   sw('txbank');
 }
 
