@@ -5728,7 +5728,7 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps){
       ${selCb}<td style="color:var(--text3);white-space:nowrap;font-size:var(--fs-xs)">${toDD(t.date)}</td>
       <td><div>${h(t.description)}${st}${ruleTag}${matchedTag}${pendingTag}${debtTag}</div>${t.notes?`<div style="font-size:10px;color:var(--text3)">${h(t.notes)}</div>`:''}</td>
       <td>${ch}</td>
-      <td style="font-size:var(--fs-xs)">${acc?`<span style="font-weight:500">${h(acc.name)}</span> ${ob(acc.owner)}`:'--'}</td>
+      <td style="font-size:var(--fs-xs)">${acc?`<span style="font-weight:500">${h(acc.name)}</span>`:'--'}</td>
       <td style="text-align:right;font-weight:500;white-space:nowrap" class="${ac}">${dir==='in'?'+':'-'}${fmtP(t.amount)}</td>
       ${showBalance?`<td style="text-align:right;font-size:var(--fs-xs);white-space:nowrap" class="${rb!==null?(rb<0?'c-bad':'c-ok'):''}">${rb!==null?fmtS(rb):'--'}</td>`:''}
       <td>${tbadge(t.type)}</td>
@@ -7034,7 +7034,7 @@ async function runAIExtract(){
         month:_aiState.month,
         rules,
         mainCats:MAIN_CATS.map(m=>({id:m.id,name:m.name,type:m.type})),
-        subCats:SUB_CATS.slice(0,80).map(s=>({id:s.id,name:s.name}))
+        subCats:SUB_CATS.map(s=>({id:s.id,name:s.name}))
       })
     });
     if(!resp.ok){const e=await resp.text();throw new Error('Edge Function error: '+e);}
