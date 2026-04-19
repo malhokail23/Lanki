@@ -7122,6 +7122,7 @@ async function commitAIImport(){
     transactions:_aiState.extracted.map(t=>({
       date:t.date,
       description:t.description,
+      raw_description:t.raw_description||t.description||'',
       amount:t.amount,
       type:t.type,
       direction:t.direction||((t.type==='income')?'in':'out'),
