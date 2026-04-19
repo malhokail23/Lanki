@@ -3347,6 +3347,12 @@ async function doImport(directPayload){
   if(!S.txnCache[ym])S.txnCache[ym]=[];
   const txns=S.txnCache[ym];
   const preImportIds=new Set(txns.map(t=>t.id));
+  // Snapshot the cache BEFORE the loop — dedup must only check pre-existing data,
+  // never against transactions being added in this same batch.
+  // Without this, the 2nd of three identical-looking same-day transactions
+  // deduplicates against the 1st one added moments earlier in the same loop.
+  const preImportSnapshots=new Map(); // ym -> shallow copy of array before loop
+  preImportSnapshots.set(ym,[...txns]);
   let added=0;
   let crossMonthCount=0;
   for(const t of items){
@@ -3384,15 +3390,16 @@ async function doImport(directPayload){
     const rawDir=(t.direction||t.dir||'').toLowerCase().trim();
     const dir=rawDir==='in'||rawDir==='out'?rawDir:(txnType==='income'?'in':'out');
     const amt=Math.abs(parseFloat(t.amount)||0);
-    // Route to the correct month bucket first so dedup checks the right cache
     const txnYm=t.date?t.date.substr(0,7):ym;
     const targetCache=txnYm!==ym?(S.txnCache[txnYm]||(S.txnCache[txnYm]=[])):txns;
-    // Dedup key: date + amount + RAW description (before any rule rewriting) + direction
-    // Raw description avoids false matches when two legitimate same-day same-amount transactions
-    // get their descriptions rewritten identically by merchant rules.
-    // Direction included so a charge and its same-day reversal are never collapsed.
+    // Get the pre-import snapshot for this month — initialise lazily for cross-month buckets
+    if(!preImportSnapshots.has(txnYm)){
+      preImportSnapshots.set(txnYm,[...(S.txnCache[txnYm]||[])]);
+    }
+    const snapCache=preImportSnapshots.get(txnYm);
+    // Dedup against snapshot only — never against transactions added in this same batch
     const rawDescKey=(rawDesc||cleanDesc||'').trim().toLowerCase();
-    const isDup=!forceAll&&targetCache.some(x=>
+    const isDup=!forceAll&&snapCache.some(x=>
       x.date===t.date&&
       Math.abs(x.amount-amt)<0.01&&
       (x.raw_description||x.description||'').trim().toLowerCase()===rawDescKey&&
