@@ -1551,7 +1551,7 @@ async function execClearTxns(){
   });
   sched();
   toast('All transactions cleared. Accounts, debts and settings intact.');
-  sw('transactions');
+  sw('txbank');
 }
 async function execClear(){
   document.getElementById('del-modal').classList.remove('active');
@@ -2212,7 +2212,7 @@ async function rOv(){
   const cl=Object.entries(bc).sort((a,b)=>b[1].amount-a[1].amount);
   const mx=cl.length?cl[0][1].amount:1;
   const catRows=cl.slice(0,8).map(([name,{amount,color,id}])=>`
-    <div class="fg" style="gap:8px;padding:5px 0;cursor:pointer" onclick="sw('transactions')">
+    <div class="fg" style="gap:8px;padding:5px 0;cursor:pointer" onclick="sw('txbank')">
       <div style="font-size:var(--fs-xs);color:var(--text2);width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0">${name}</div>
       <div class="cbar"><div class="cfill" style="width:${Math.round(amount/mx*100)}%;background:${color}"></div></div>
       <div style="font-size:var(--fs-xxs);color:var(--text3);width:32px;text-align:right;flex-shrink:0">${Math.round(amount/te*100)}%</div>
@@ -6892,7 +6892,7 @@ async function commitAIImport(){
 
   // Reset AI state and navigate to transactions
   _aiState={file:null,fileName:'',fileData:'',fileType:'',accountId:'',month:'',openingBal:'',closingBal:'',extracted:[],loading:false,error:'',step:1};
-  sw('transactions');
+  sw('txbank');
 }
 
 function learnExtractionRules(txns){
