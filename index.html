@@ -3386,7 +3386,7 @@ async function doImport(directPayload){
     const descKey=(cleanDesc||'').trim().toLowerCase();
     const isDup=targetCache.some(x=>x.date===t.date&&Math.abs(x.amount-amt)<0.01&&(x.description||'').trim().toLowerCase()===descKey);
     if(isDup)continue;
-    const txnItem={id:uid(),date:t.date,description:cleanDesc,raw_description:rawDesc,amount:amt,type:txnType,direction:dir,mainCatId:mid,subCatId:sid,accountId:ai,debtId:di,notes:(t.notes||'').trim(),flagged:!!t.flagged,ruleApplied:ruleApplied||false};
+    const txnItem={id:uid(),date:t.date,description:cleanDesc,raw_description:rawDesc,amount:amt,type:txnType,direction:dir,mainCatId:mid,subCatId:sid,accountId:ai,debtId:di,notes:(t.notes||'').trim(),flagged:!!t.flagged,ruleApplied:ruleApplied||false,statementBal:t.statement_balance!=null?parseFloat(t.statement_balance):undefined};
     if(txnYm!==ym){
       targetCache.push(txnItem);
       schedTxn(txnYm);
@@ -5626,6 +5626,26 @@ const CARD_ACC_TYPES=new Set(['credit_card','charge_card']);
 
 // ─── SHARED TX TABLE BUILDER ───
 function buildTxTable(fl, accounts, showBalance, isCards, rbMaps){
+  // Detect if any transaction in this view has statementBal — enables recon column
+  const hasRecon=showBalance&&fl.some(t=>t.statementBal!=null);
+
+  // Find first divergence point: walk sorted list, compare computed rb vs statementBal
+  const reconDivergenceIds=new Set();
+  if(hasRecon){
+    let foundFirst=false;
+    const sorted=[...fl].sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+    for(const t of sorted){
+      if(t.statementBal==null)continue;
+      const rb=t.accountId&&rbMaps[t.accountId]?rbMaps[t.accountId].get(t.id):null;
+      if(rb===null||rb===undefined)continue;
+      const diff=Math.abs(rb-t.statementBal);
+      if(diff>0.015){
+        if(!foundFirst){reconDivergenceIds.add(t.id+'_first');foundFirst=true;}
+        reconDivergenceIds.add(t.id);
+      }
+    }
+  }
+
   const colConfig=isCards
     ?['date','desc','cat','acc','amount','outstanding','type','']
     :['date','desc','cat','acc','amount','balance','type',''];
@@ -5633,6 +5653,7 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps){
     amount:'Amount',balance:'Balance',outstanding:'Outstanding',type:'Type','':''};
 
   const bulkCol=BulkMode?'<th style="width:36px;padding:8px 6px"><input type="checkbox" title="Select all displayed" onclick="if(this.checked)selectAllDisplayed();else clearBulkSelection()" style="cursor:pointer;width:15px;height:15px"></th>':'';
+  const reconTh=hasRecon?`<th style="text-align:right;white-space:nowrap;font-size:var(--fs-xxs);color:var(--warn)">Stmt Bal</th>`:'';
   const thead=`<thead><tr>${bulkCol}${colConfig.map(col=>{
     if(!col)return'<th></th>';
     if(col==='balance'||col==='outstanding'){
@@ -5642,8 +5663,7 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps){
     const arrow=active?(TF.sortDir===1?'\u2191':'\u2193'):'\u2195';
     const style=col==='amount'?'text-align:right;':'';
     return`<th style="${style}cursor:pointer;user-select:none;white-space:nowrap" onclick="setTxSort('${col}')">${labels[col]} <span style="font-size:10px;opacity:${active?1:0.35}">${arrow}</span></th>`;
-  }).join('')}</tr></thead>`;
-
+  }).join('')}${reconTh}</tr></thead>`;
 
   const rows=fl.length?fl.map(t=>{
     const acc=accounts.find(a=>a.id===t.accountId);
@@ -5660,7 +5680,34 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps){
     const ym=t.date?t.date.substr(0,7):S.month;
     const debtTag=debt?`<span style="font-size:10px;background:#FEF3C7;color:#92400E;border-radius:3px;padding:1px 5px;margin-left:4px">${h(debt.name)}</span>`:'';
     const selCb=BulkMode?`<td style="padding:8px 6px;width:36px"><input type="checkbox" id="cb-${t.id}" class="tx-sel-cb" data-id="${t.id}" ${BulkSelected.has(t.id)?'checked':''} onclick="event.stopPropagation();toggleTxSel('${t.id}')" style="cursor:pointer;width:15px;height:15px"></td>`:'';
-    return`<tr style="${BulkMode&&BulkSelected.has(t.id)?'background:color-mix(in srgb,var(--midnight) 5%,transparent)':''}">
+
+    // Reconciliation column
+    let reconTd='';
+    if(hasRecon){
+      if(t.statementBal!=null&&rb!=null){
+        const rdiff=Math.round((rb-t.statementBal)*100)/100;
+        const isDiverged=reconDivergenceIds.has(t.id);
+        const isFirst=reconDivergenceIds.has(t.id+'_first');
+        if(isDiverged){
+          const sign=rdiff>0?'+':'';
+          reconTd=`<td style="text-align:right;white-space:nowrap">
+            ${isFirst?`<div style="font-size:9px;font-weight:700;color:var(--bad);letter-spacing:.04em">FIRST BREAK ▼</div>`:''}
+            <div style="font-size:11px;font-weight:600;color:var(--bad)">${fmtP(t.statementBal)}</div>
+            <div style="font-size:10px;color:var(--bad)">${sign}${fmtS(rdiff)}</div>
+          </td>`;
+        }else{
+          reconTd=`<td style="text-align:right;white-space:nowrap;font-size:11px;color:var(--ok)">✓</td>`;
+        }
+      }else{
+        reconTd=`<td></td>`;
+      }
+    }
+
+    const rowBg=reconDivergenceIds.has(t.id+'_first')?'background:color-mix(in srgb,var(--bad) 4%,transparent);'
+      :reconDivergenceIds.has(t.id)?'background:color-mix(in srgb,var(--bad) 2%,transparent);'
+      :(BulkMode&&BulkSelected.has(t.id)?'background:color-mix(in srgb,var(--midnight) 5%,transparent)':'');
+
+    return`<tr style="${rowBg}">
       ${selCb}<td style="color:var(--text3);white-space:nowrap;font-size:var(--fs-xs)">${toDD(t.date)}</td>
       <td><div>${h(t.description)}${st}${ruleTag}${matchedTag}${pendingTag}${debtTag}</div>${t.notes?`<div style="font-size:10px;color:var(--text3)">${h(t.notes)}</div>`:''}</td>
       <td>${ch}</td>
@@ -5674,7 +5721,8 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps){
         ${!t.isSub?`<button class="btn btn-xs" onclick="mkSub('${t.id}','${ym}')">Sub</button>`:''}
         <button class="btn btn-xs btn-d" onclick="delTxn('${t.id}','${ym}')">&#10005;</button>
       </td>
-    </tr>`;}).join(''):`<tr><td colspan="${(showBalance?8:7)+(BulkMode?1:0)}" class="empty">No transactions found</td></tr>`;
+      ${reconTd}
+    </tr>`;}).join(''):`<tr><td colspan="${(showBalance?8:7)+(BulkMode?1:0)+(hasRecon?1:0)}" class="empty">No transactions found</td></tr>`;
 
   return`<div class="tbl-wrap"><table>${thead}<tbody>${rows}</tbody></table></div>`;
 }
@@ -5713,7 +5761,15 @@ function buildTxHeader(fl, scopedAcc, accountPills, tabLabel){
         const acc=S.accounts.find(a=>a.id===id);
         const inAmt=accTxns.filter(t=>txDir(t)==='in').reduce((s,t)=>s+t.amount,0);
         const outAmt=accTxns.filter(t=>txDir(t)!=='in').reduce((s,t)=>s+t.amount,0);
-        return{name:acc?.name||id,diff,calc:calcBal,closing:mb.closing,mk,opening,inAmt,outAmt,count:accTxns.length};
+        // Find first divergence if statementBal data exists
+        const accTxnsSorted=[...accTxns].sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+        let firstBreak=null;
+        for(const t of accTxnsSorted){
+          if(t.statementBal==null)continue;
+          const rb2=opening+accTxnsSorted.slice(0,accTxnsSorted.indexOf(t)+1).reduce((s,x)=>s+(txDir(x)==='in'?x.amount:-x.amount),0);
+          if(Math.abs(rb2-t.statementBal)>0.015){firstBreak=t;break;}
+        }
+        return{name:acc?.name||id,diff,calc:calcBal,closing:mb.closing,mk,opening,inAmt,outAmt,count:accTxns.length,firstBreak};
       }).filter(Boolean);
       if(!banners.length)return '';
       return banners.map(f=>`
@@ -5724,6 +5780,7 @@ function buildTxHeader(fl, scopedAcc, accountPills, tabLabel){
             <div style="font-size:var(--fs-xxs);color:#7F1D1D;margin-top:2px;line-height:1.6">
               Calculated: ${fmtP(f.calc)} &nbsp;·&nbsp; Statement says: ${fmtP(f.closing)} &nbsp;·&nbsp; Gap: SAR ${f.diff.toFixed(2)}<br>
               Opening ${fmtP(f.opening)} + In ${fmtP(f.inAmt)} − Out ${fmtP(f.outAmt)} = ${fmtP(f.calc)} &nbsp;(${f.count} transactions)
+              ${f.firstBreak?`<br><strong>First divergence: ${toDD(f.firstBreak.date)} — ${h(f.firstBreak.description)}</strong> · Lanki ${fmtP(f.firstBreak.statementBal+(f.firstBreak.statementBal-(f.calc-f.diff+(f.diff))))} vs Statement ${fmtP(f.firstBreak.statementBal)} · Select this account to see row-by-row markers`:''}
             </div>
           </div>
           <button onclick="clearGuardFail('${f.mk}')" style="background:none;border:none;cursor:pointer;font-size:16px;color:#991B1B;padding:0;flex-shrink:0" title="Dismiss">✕</button>
@@ -6996,6 +7053,7 @@ async function commitAIImport(){
       category_id:t.mainCatId,
       sub_category_id:t.subCatId,
       debt_id:t.debtId||'',
+      statement_balance:t.statementBal!=null?t.statementBal:undefined,
       notes:t.notes||''
     }))
   };
