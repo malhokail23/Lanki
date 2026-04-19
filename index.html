@@ -1214,7 +1214,8 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overfl
       <button onclick="sw('uncat')" style="display:flex;justify-content:space-between;align-items:center">Uncategorized <span id="nb-uncat" style="display:none;font-size:10px;font-weight:600;padding:1px 6px;border-radius:8px;background:#7A1F1F;color:#fff"></span></button>
       <button onclick="sw('transfers')" style="display:flex;justify-content:space-between;align-items:center">Pending Matches <span id="nb-transfers" style="display:none;font-size:10px;font-weight:600;padding:1px 6px;border-radius:8px;background:#7A1F1F;color:#fff"></span></button>
       <button onclick="sw('reimbursements')" style="display:flex;justify-content:space-between;align-items:center">Reimbursements <span id="nb-reimb" style="display:none;font-size:10px;font-weight:600;padding:1px 6px;border-radius:8px;background:#7A1F1F;color:#fff"></span></button>
-      <button onclick="sw('rules')">Merchant Rules</button>
+      <button onclick="sw('rules')">Transaction Rules</button>
+      <button onclick="sw('sanity')" style="display:flex;justify-content:space-between;align-items:center">Sanity Check <span id="nb-sanity" style="display:none;font-size:10px;font-weight:600;padding:1px 6px;border-radius:8px;background:#7A1F1F;color:#fff"></span></button>
       <button onclick="sw('insights')">Usage Insights</button>
     </div>
 
@@ -1314,9 +1315,9 @@ const SADAD_CODES={"001": "STC", "002": "Saudi Electricity Company (SEC)", "003"
 const NAV_GROUPS={
   transactions:{tabs:['txbank','txcards','aiupload'],labels:{txbank:'Bank Accounts',txcards:'Cards',aiupload:'Statement Parser'}},
   recurring:{tabs:['income','bills','subscriptions'],labels:{income:'Income',bills:'Bills',subscriptions:'Subscriptions'}},
-  inbox:{tabs:['uncat','transfers','reimbursements','rules','insights'],labels:{uncat:'Uncategorized',transfers:'Pending Matches',reimbursements:'Reimbursements',rules:'Merchant Rules',insights:'Usage Insights'}},
+  inbox:{tabs:['uncat','transfers','reimbursements','rules','sanity','insights'],labels:{uncat:'Uncategorized',transfers:'Pending Matches',reimbursements:'Reimbursements',rules:'Transaction Rules',sanity:'Sanity Check',insights:'Usage Insights'}},
 };
-const TAB_TO_GROUP={txbank:'transactions',txcards:'transactions',aiupload:'transactions',income:'recurring',bills:'recurring',subscriptions:'recurring',accounts:'',debts:'',goals:'',uncat:'inbox',transfers:'inbox',reimbursements:'inbox',rules:'inbox',insights:'inbox',staff:'',familyinv:'',settings:''};
+const TAB_TO_GROUP={txbank:'transactions',txcards:'transactions',aiupload:'transactions',income:'recurring',bills:'recurring',subscriptions:'recurring',accounts:'',debts:'',goals:'',uncat:'inbox',transfers:'inbox',reimbursements:'inbox',rules:'inbox',sanity:'inbox',insights:'inbox',staff:'',familyinv:'',settings:''};
 
 
 // ─── CONSTANTS ───
@@ -1507,7 +1508,7 @@ function lockApp(){sKey=null;
   window._cd=null; // M3: clear sensitive chart data from memory on lock
   // H2: Clear decrypted state from memory
   S.accounts=[];S.debts=[];S.goals=[];S.income=[];S.bills=[];S.subs=[];
-  S.staff=[];S.rules=[];S.dismissed=[];S.deletedCats=[];S.deletedSubs=[];
+  S.staff=[];S.rules=[];S.txnRules=[];S.dismissed=[];S.deletedCats=[];S.deletedSubs=[];
   S.owners=[];S.familyMembers=[];S.txnCache={};S.monthlyBal={};S.matchedPairs=[];S.settings={};
   showAuth('s-unlock');const p=document.getElementById('ul-p');if(p){p.value='';p.focus();}const e=document.getElementById('ul-err');if(e)e.textContent='';const b=document.getElementById('ul-btn');if(b){b.disabled=false;b.textContent='Unlock \u2192';}}
 
@@ -1668,7 +1669,7 @@ function getMainP(){
   return{
     version:VERSION,
     accounts:S.accounts,debts:S.debts,goals:S.goals,income:S.income,
-    bills:S.bills,subs:S.subs,staff:S.staff,rules:S.rules,dismissed:S.dismissed,
+    bills:S.bills,subs:S.subs,staff:S.staff,rules:S.rules,txnRules:S.txnRules,dismissed:S.dismissed,
     deletedCats:S.deletedCats,deletedSubs:S.deletedSubs,owners:S.owners,familyMembers:S.familyMembers,settings:S.settings,monthlyBal:S.monthlyBal,matchedPairs:S.matchedPairs,submitters:S.submitters
   };
 }
@@ -1677,6 +1678,28 @@ function restoreS(d){
   S.income=d.income||[];S.bills=d.bills||[];S.subs=d.subs||[];
   S.staff=d.staff||[];S.rules=d.rules||d.merchantRules||[];
   S.dismissed=d.dismissed||[];
+  // Migrate: merge S.rules + S.extractionRules into unified S.txnRules
+  const WEEK_MS=7*24*60*60*1000;
+  const now=Date.now();
+  const legacy=d.txnRules||[];
+  const merged=[...legacy];
+  // Absorb old S.rules (manual import-time rules)
+  (d.rules||d.merchantRules||[]).forEach(r=>{
+    const pat=(r.m||'').toLowerCase().trim().substr(0,40);
+    if(!pat||!r.mid)return;
+    const ex=merged.find(x=>x.pattern===pat);
+    if(ex){if(!ex.mainCatId)ex.mainCatId=r.mid;if(!ex.subCatId)ex.subCatId=r.sid||'';}
+    else merged.push({id:'tr_'+Math.random().toString(36).substr(2,8),pattern:pat,mainCatId:r.mid,subCatId:r.sid||'',source:'manual',useCount:1,lastUsed:now,createdAt:now});
+  });
+  // Absorb old S.extractionRules (AI hints)
+  (d.extractionRules||[]).forEach(r=>{
+    const pat=(r.pattern||'').toLowerCase().trim().substr(0,40);
+    if(!pat||!r.mainCatId)return;
+    const ex=merged.find(x=>x.pattern===pat);
+    if(ex){ex.useCount=Math.max(ex.useCount||1,r.useCount||1);ex.lastUsed=Math.max(ex.lastUsed||0,r.lastUsed||0);}
+    else merged.push({id:'tr_'+Math.random().toString(36).substr(2,8),pattern:pat,mainCatId:r.mainCatId,subCatId:r.subCatId||'',source:'ai',useCount:r.useCount||1,lastUsed:r.lastUsed||now,createdAt:r.lastUsed||now});
+  });
+  S.txnRules=merged;
   S.deletedCats=d.deletedCats||[];S.deletedSubs=d.deletedSubs||[];
   S.owners=d.owners&&d.owners.length?d.owners:defOwners();
   S.familyMembers=d.familyMembers||[];
@@ -1792,15 +1815,28 @@ function updateBadge(){
   const uc=uncatCount();
   const pt=pendingTransferCount();
   const pr=_submissions.filter(s=>s.status==='pending').length;
+  // Sanity check count: critical + warnings only
+  const sc=(()=>{
+    try{
+      let c=0;
+      const all=allTxns();
+      // Balance discrepancies
+      Object.values(S.monthlyBal||{}).forEach(mb=>{if(mb.guardFail)c++;});
+      // Large uncategorized
+      if(all.filter(t=>!t.mainCatId&&t.amount>=500).length>0)c++;
+      // Debt txns not linked
+      if(all.filter(t=>t.mainCatId==='cat_main_finance'&&t.subCatId==='sub_loan_installment'&&!t.debtId).length>0)c++;
+      return c;
+    }catch(e){return 0;}
+  })();
   const total=uc+pt+pr;
-  // Top-level inbox badge
   const b=document.getElementById('uncat-badge');
-  if(b){b.textContent=total;b.style.display=total>0?'':'none';}
-  // Per-section counters
+  if(b){b.textContent=total+sc;b.style.display=(total+sc)>0?'':'none';}
   const setNB=(id,n)=>{const el=document.getElementById(id);if(!el)return;el.textContent=n;el.style.display=n>0?'':'none';};
   setNB('nb-uncat',uc);
   setNB('nb-transfers',pt);
   setNB('nb-reimb',pr);
+  setNB('nb-sanity',sc);
 }
 
 // ─── NAV ───
@@ -1988,7 +2024,7 @@ function sw(tab){
   // Close mobile sidebar when navigating
   closeSidebar();
   // Update mobile page title in burger bar
-  const allLabels={overview:'Overview',txbank:'Bank Accounts',txcards:'Cards',income:'Income',bills:'Bills',subscriptions:'Subscriptions',staff:'Staff',familyinv:'Family Investments',accounts:'Accounts & Cards',debts:'Debts',goals:'Goals',uncat:'Uncategorized',transfers:'Pending Matches',rules:'Merchant Rules',insights:'Usage Insights',settings:'Settings'};
+  const allLabels={overview:'Overview',txbank:'Bank Accounts',txcards:'Cards',income:'Income',bills:'Bills',subscriptions:'Subscriptions',staff:'Staff',familyinv:'Family Investments',accounts:'Accounts & Cards',debts:'Debts',goals:'Goals',uncat:'Uncategorized',transfers:'Pending Matches',rules:'Transaction Rules',sanity:'Sanity Check',insights:'Usage Insights',settings:'Settings'};
   const titleEl=document.getElementById('mob-page-title');
   if(titleEl)titleEl.textContent=allLabels[tab]||tab;
   // Close mobile dropdown
@@ -2105,6 +2141,7 @@ async function render(){
   else if(t==='transfers')el.innerHTML=rPendingMatches();
   else if(t==='reimbursements')el.innerHTML=await rReimbursements();
   else if(t==='rules')el.innerHTML=rMerchantRules();
+  else if(t==='sanity')el.innerHTML=rSanityCheck();
   else if(t==='insights')el.innerHTML=rUsageInsights();
   else if(t==='settings')el.innerHTML=rSettings();
   else if(t==='catdrill')el.innerHTML=await rCatDrill();
@@ -2948,11 +2985,11 @@ async function saveEditTxn(){
   const newSid=document.getElementById('etxn-sc').value||null;
   t.mainCatId=newMid;t.subCatId=newSid;
   if(newMid){
-    const prevDir=t.direction; // preserve before typeFromCat
-    t.type=typeFromCat(newMid,t.type); // sync type with category
-    // typeFromCat must not override an explicit direction — restore it
+    const prevDir=t.direction;
+    t.type=typeFromCat(newMid,t.type);
     if(prevDir==='in'||prevDir==='out')t.direction=prevDir;
-    learnRule(t.raw_description||t.description,newMid,newSid);
+    // Learn from manual correction — unified rule system
+    learnTxnRule(t.description,newMid,newSid,'manual');
     t.ruleApplied=false;
   }
   // H1: If date moved to a different month, migrate transaction
@@ -3381,6 +3418,8 @@ async function doImport(directPayload){
     if(rule){
       if(!mid||mid!==rule.mid){mid=rule.mid;sid=rule.sid;ruleApplied=true;}
       else if(mid===rule.mid&&(!sid||sid!==rule.sid)){sid=rule.sid;ruleApplied=true;}
+      // Touch the rule to update lastUsed
+      if(ruleApplied&&rule._rule){rule._rule.lastUsed=Date.now();rule._rule.useCount=(rule._rule.useCount||0)+1;}
     }
     const di=t.debt_id||t.debtId||null;
     let txnType=t.type||'expense';
@@ -3461,9 +3500,48 @@ async function doImport(directPayload){
   }
 }
 function lcMap(id){const m={'cat_income_salary':'cat_main_income','cat_income_other':'cat_main_income','cat_debt_payment':'cat_main_finance','cat_groceries':'cat_main_food','cat_kids':'cat_main_kids','cat_household':'cat_main_housing','cat_fuel':'cat_main_transport','cat_subscriptions':'cat_main_subscriptions','cat_shopping':'cat_main_shopping','cat_food_delivery':'cat_main_food','cat_staff':'cat_main_staff','cat_personal':'cat_main_personal','cat_medical':'cat_main_personal','cat_transfer':'cat_main_transfers','cat_investment':'cat_main_transfers','cat_external_transfer':'cat_main_transfers'};return m[id]||null;}
-function getRule(desc){const d=(desc||'').toLowerCase().trim();return S.rules.find(r=>d.includes(r.m.toLowerCase()))||null;}
-function learnRule(desc,mid,sid){if(!desc||!mid)return;const key=(desc||'').toLowerCase().trim().substring(0,40);const i=S.rules.findIndex(r=>r.m.toLowerCase()===key);if(i>=0)S.rules[i]={m:key,mid,sid};else S.rules.push({m:key,mid,sid});sched();}
+// ─── UNIFIED TRANSACTION RULES ───────────────────────────────────────────────
+const TXN_RULES_MAX=300;
+const WEEK_MS_R=7*24*60*60*1000;
 
+function getRule(desc){
+  if(!desc)return null;
+  const d=(desc||'').toLowerCase().trim();
+  // Match by pattern contained in description (longest match wins to avoid false positives)
+  const matches=(S.txnRules||[]).filter(r=>r.pattern&&d.includes(r.pattern.toLowerCase()));
+  if(!matches.length)return null;
+  const best=matches.reduce((a,b)=>a.pattern.length>=b.pattern.length?a:b);
+  return{mid:best.mainCatId,sid:best.subCatId,_rule:best};
+}
+
+function learnTxnRule(desc,mainCatId,subCatId,source='manual'){
+  if(!desc||!mainCatId)return;
+  if(!S.txnRules)S.txnRules=[];
+  const pattern=(desc||'').toLowerCase().trim().substr(0,40);
+  const now=Date.now();
+  const ex=S.txnRules.find(r=>r.pattern===pattern);
+  if(ex){
+    ex.mainCatId=mainCatId;ex.subCatId=subCatId||'';
+    ex.useCount=(ex.useCount||0)+1;ex.lastUsed=now;
+    if(source==='manual')ex.source='manual'; // manual always wins
+  }else{
+    S.txnRules.push({id:'tr_'+Math.random().toString(36).substr(2,8),pattern,mainCatId,subCatId:subCatId||'',source,useCount:1,lastUsed:now,createdAt:now});
+  }
+  // Evict lowest-score rules when over limit
+  if(S.txnRules.length>TXN_RULES_MAX){
+    S.txnRules.sort((a,b)=>{
+      const sa=(a.lastUsed||0)+((a.useCount||1)*WEEK_MS_R);
+      const sb=(b.lastUsed||0)+((b.useCount||1)*WEEK_MS_R);
+      return sa-sb;
+    });
+    S.txnRules=S.txnRules.slice(-(TXN_RULES_MAX));
+  }
+  sched();
+}
+
+// Keep learnRule as an alias for backward compatibility (called from cfmSub etc.)
+function learnRule(desc,mid,sid){learnTxnRule(desc,mid,sid,'manual');}
+function delRule(pattern){S.txnRules=(S.txnRules||[]).filter(r=>r.pattern!==pattern);sched();render();}
 
 // ─── CAT PICKER (Bug 4.1 fix: capture catCb before clearing) ───
 function buildCM(curM,curS){
@@ -3630,20 +3708,29 @@ async function rSubs(){
   const all=allTxns();
   const byM={};
   all.filter(t=>t.type==='expense').forEach(t=>{
-    const key=(t.raw_description||t.description||'').toLowerCase().trim().substring(0,30);
+    const key=(t.description||'').toLowerCase().trim().substring(0,30);
     if(!byM[key])byM[key]=[];byM[key].push(t);
   });
+  // Build exclusion set from bills/staff/debts/income — never suggest these as subscriptions
+  const subExclKeys=new Set();
+  (S.bills||[]).forEach(b=>{[b.name,b.provider].filter(Boolean).forEach(s=>subExclKeys.add(s.toLowerCase().trim().substr(0,30)));});
+  (S.staff||[]).forEach(s=>{[s.name].filter(Boolean).forEach(x=>subExclKeys.add(x.toLowerCase().trim().substr(0,30)));});
+  (S.debts||[]).forEach(d=>{[d.name,d.statementKeyword].filter(Boolean).forEach(s=>subExclKeys.add(s.toLowerCase().trim().substr(0,30)));});
+  (S.income||[]).forEach(i=>{[i.name,i.employer].filter(Boolean).forEach(s=>subExclKeys.add(s.toLowerCase().trim().substr(0,30)));});
+
   const detected=[];
   Object.entries(byM).forEach(([key,txns])=>{
+    // Skip if matches any bill/staff/debt/income name
+    if([...subExclKeys].some(k=>k&&key.length>=3&&(key.includes(k.substr(0,20))||k.includes(key.substr(0,20)))))return;
     const sortedT=txns.slice().sort((a,b)=>a.date.localeCompare(b.date));
     const months=[...new Set(sortedT.map(t=>t.date.substr(0,7)))].sort();
     if(months.length<2)return;
     const latest=sortedT[sortedT.length-1];
-    if(S.dismissed.includes(key.toLowerCase().trim())||latest.isSub)return;
-    // Check if amounts are within ±10% of each other (handles FX fluctuation)
+    if(S.dismissed.includes(key)||latest.isSub)return;
+    // ±5 SAR fixed tolerance — amount must be consistent to within 5 SAR
     const amounts=sortedT.map(t=>t.amount);
     const minAmt=Math.min(...amounts),maxAmt=Math.max(...amounts);
-    const amountsConsistent=minAmt>0&&(maxAmt-minAmt)/minAmt<=0.10;
+    const amountsConsistent=minAmt>0&&(maxAmt-minAmt)<=5;
     if(!amountsConsistent)return;
     // Check for consecutive months OR ~12-month gap
     let qualifies=false;
@@ -3657,7 +3744,7 @@ async function rSubs(){
   const confirmed=all.filter(t=>t.isSub);
   const cMap2={};
   confirmed.forEach(t=>{
-    const key=(t.raw_description||t.description||'').toLowerCase().trim().substring(0,30);
+    const key=(t.description||'').toLowerCase().trim().substring(0,30);
     if(!cMap2[key])cMap2[key]={desc:t.description,txns:[]};
     cMap2[key].txns.push(t);
   });
@@ -3681,7 +3768,9 @@ async function rSubs(){
     </div>`).join('');
   const subCards=Object.entries(cMap2).map(([key,{desc,txns,notes,currency,amountUsd,id}])=>{
     const sorted=(txns||[]).slice().sort((a,b)=>b.date.localeCompare(a.date));
-    const avg=sorted.length?sorted.reduce((s,t)=>s+t.amount,0)/sorted.length:0;
+    // Use recent 3-month average so tier changes are reflected quickly
+    const recent=sorted.slice(0,3);
+    const recentAvg=recent.length?Math.round(recent.reduce((s,t)=>s+t.amount,0)/recent.length*100)/100:0;
     const last=sorted[0];
     return`<div class="card card-bordered" style="margin-bottom:.75rem">
       <div class="fg jb" style="flex-wrap:wrap;gap:8px">
@@ -3692,7 +3781,8 @@ async function rSubs(){
           ${currency==='USD'?`<div style="font-size:11px;color:var(--text3)">USD ${amountUsd||'?'} &#8776; ${fmtP((amountUsd||0)*3.75)} at 3.75</div>`:''}
         </div>
         <div style="text-align:right">
-          <div style="font-size:17px;font-weight:500">${fmtP(avg)}<span style="font-size:11px;font-weight:400;color:var(--text3)">/mo avg</span></div>
+          <div style="font-size:17px;font-weight:500">${fmtP(recentAvg)}<span style="font-size:11px;font-weight:400;color:var(--text3)">/mo</span></div>
+          ${sorted.length>3?`<div style="font-size:10px;color:var(--text3)">last 3-month avg</div>`:''}
           <div class="fg" style="gap:6px;margin-top:6px;justify-content:flex-end">
             <button class="btn btn-xs" onclick="editSubNote(${JSON.stringify(key)},${JSON.stringify(id||'')})">Add Note</button>
             <button class="btn btn-xs btn-d" onclick="unSub(${JSON.stringify(key)})">Remove</button>
@@ -3736,13 +3826,14 @@ async function rSubs(){
   ${subCards}`:`<div class="card"><div class="empty">No confirmed subscriptions yet. Import statements or add manually.</div></div>`}`;
 }
 function cfmSub(key){
+  const k=(key||'').toLowerCase().trim();
   const affYms=new Set();
-  allTxns().filter(t=>(t.raw_description||t.description||'').toLowerCase().trim().substring(0,30)===key).forEach(t=>{
+  allTxns().filter(t=>(t.description||'').toLowerCase().trim().substring(0,30)===k).forEach(t=>{
     t.isSub=true;if(t.date)affYms.add(t.date.substr(0,7));
   });
-  if(!S.subs.find(s=>(s.name||'').toLowerCase().trim().substring(0,30)===key)){
-    const ex=allTxns().find(t=>(t.raw_description||t.description||'').toLowerCase().trim().substring(0,30)===key);
-    S.subs.push({id:'sub_'+Math.random().toString(36).substr(2,6),name:ex?.description||key,key,notes:''});
+  if(!S.subs.find(s=>(s.name||'').toLowerCase().trim().substring(0,30)===k)){
+    const ex=allTxns().find(t=>(t.description||'').toLowerCase().trim().substring(0,30)===k);
+    S.subs.push({id:'sub_'+Math.random().toString(36).substr(2,6),name:ex?.description||k,key:k,notes:''});
   }
   affYms.forEach(ym=>schedTxn(ym));
   sched();render();toast('Subscription confirmed');
@@ -6160,50 +6251,261 @@ function uploadTemplate(type,input){
 
 // ─── MERCHANT RULES PAGE ───
 function rMerchantRules(){
-  if(!S.rules.length){
-    return`<div class="pg-header">
-      <div class="pg-header-title">Merchant Learning Rules</div>
-      <div class="pg-header-sub">Built automatically when you assign categories to transactions.</div>
-    </div>
-    <div class="card"><div class="empty">No rules yet. Assign categories to transactions and rules will be built automatically.</div></div>`;
+  const rules=S.txnRules||[];
+
+  // Build conflict lookup sets from other systems
+  const billKeywords=new Set((S.bills||[]).flatMap(b=>[b.name,b.provider].filter(Boolean).map(s=>s.toLowerCase().trim().substr(0,30))));
+  const staffKeywords=new Set((S.staff||[]).flatMap(s=>[s.name].filter(Boolean).map(x=>x.toLowerCase().trim().substr(0,30))));
+  const debtKeywords=new Set((S.debts||[]).flatMap(d=>[d.name,d.statementKeyword].filter(Boolean).map(s=>s.toLowerCase().trim().substr(0,30))));
+  const incomeKeywords=new Set((S.income||[]).flatMap(i=>[i.name,i.employer].filter(Boolean).map(s=>s.toLowerCase().trim().substr(0,30))));
+  const subKeywords=new Set((S.subs||[]).flatMap(s=>[s.name,s.key].filter(Boolean).map(x=>x.toLowerCase().trim().substr(0,30))));
+
+  function getConflicts(pattern){
+    const p=(pattern||'').toLowerCase();
+    const tags=[];
+    if([...billKeywords].some(k=>k&&(p.includes(k)||k.includes(p.substr(0,20)))))tags.push({label:'Bills',color:'#0077C1'});
+    if([...staffKeywords].some(k=>k&&(p.includes(k)||k.includes(p.substr(0,20)))))tags.push({label:'Staff',color:'#5F5E5A'});
+    if([...debtKeywords].some(k=>k&&(p.includes(k)||k.includes(p.substr(0,20)))))tags.push({label:'Debts',color:'#D85A30'});
+    if([...incomeKeywords].some(k=>k&&(p.includes(k)||k.includes(p.substr(0,20)))))tags.push({label:'Income',color:'#1D9E75'});
+    if([...subKeywords].some(k=>k&&(p.includes(k)||k.includes(p.substr(0,20)))))tags.push({label:'Subscriptions',color:'#E91E8C'});
+    return tags;
   }
-  const sorted=[...S.rules].sort((a,b)=>a.m.localeCompare(b.m));
+
+  if(!rules.length){
+    return`<div class="pg-header">
+      <div class="pg-header-title">Transaction Rules</div>
+      <div class="pg-header-sub">Built automatically as you categorize transactions — from the statement review screen or the transaction list.</div>
+    </div>
+    <div class="card"><div class="empty">No rules yet. Assign or correct categories on any transaction and rules will be built automatically.</div></div>`;
+  }
+
+  const sorted=[...rules].sort((a,b)=>(b.useCount||0)-(a.useCount||0)||(b.lastUsed||0)-(a.lastUsed||0));
+  const conflictCount=sorted.filter(r=>getConflicts(r.pattern).length>0).length;
+
   const rows=sorted.map(r=>{
-    const mc=getMC(r.mid);const sc=getSC(r.sid);
-    // M7: data-merchant attribute avoids onclick breakage with special chars including double quotes
-    return`<tr>
-      <td style="font-family:monospace;font-size:var(--fs-xs)">${h(r.m)}</td>
-      <td>${mc?ctag(r.mid,r.sid):'<span style="color:var(--warn);font-size:11px">&#9888; Unknown</span>'}</td>
-      <td style="font-size:var(--fs-xs);color:var(--text3)">${sc?.name||'--'}</td>
-      <td style="white-space:nowrap"><button class="btn btn-xs btn-d mr-del-btn" data-merchant="${h(r.m)}">&#10005;</button></td>
+    const mc=getMC(r.mainCatId);const sc=getSC(r.subCatId);
+    const conflicts=getConflicts(r.pattern);
+    const conflictTags=conflicts.map(c=>`<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:${c.color}22;color:${c.color};border:1px solid ${c.color}44">⚠ ${c.label}</span>`).join(' ');
+    const sourceBadge=r.source==='manual'
+      ?`<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:color-mix(in srgb,var(--electric) 12%,transparent);color:var(--electric)">Manual</span>`
+      :`<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:var(--bg2);color:var(--text3)">AI</span>`;
+    const lastUsedStr=r.lastUsed?new Date(r.lastUsed).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'2-digit'}):'—';
+    return`<tr ${conflicts.length?'style="background:color-mix(in srgb,var(--warn) 4%,transparent)"':''}>
+      <td style="font-size:var(--fs-xs);max-width:200px;word-break:break-word">${h(r.pattern)}</td>
+      <td>${mc?ctag(r.mainCatId,r.subCatId):'<span style="color:var(--warn);font-size:11px">⚠ Unknown</span>'}</td>
+      <td style="font-size:var(--fs-xs)">${sourceBadge}</td>
+      <td style="font-size:var(--fs-xs);text-align:right;font-variant-numeric:tabular-nums">${r.useCount||1}×</td>
+      <td style="font-size:var(--fs-xxs);color:var(--text3)">${lastUsedStr}</td>
+      <td style="font-size:var(--fs-xxs)">${conflictTags}</td>
+      <td style="white-space:nowrap"><button class="btn btn-xs btn-d mr-del-btn" data-pattern="${h(r.pattern)}">✕</button></td>
     </tr>`;}).join('');
+
   const html=`
   <div class="pg-header-row">
     <div>
-      <div class="pg-header-title">Merchant Learning Rules</div>
-      <div class="pg-header-sub">Applied at import — highest priority. ${S.rules.length} rule${S.rules.length!==1?'s':''} active.</div>
+      <div class="pg-header-title">Transaction Rules</div>
+      <div class="pg-header-sub">${rules.length} rule${rules.length!==1?'s':''} · max ${TXN_RULES_MAX} · least-used evicted first${conflictCount>0?` · <span style="color:var(--warn)">${conflictCount} conflict${conflictCount!==1?'s':''} need review</span>`:''}</div>
     </div>
-    ${S.rules.length?`<button class="btn btn-d btn-sm" onclick="if(confirm('Clear all merchant rules?')){S.rules=[];sched();render();}">Clear all rules</button>`:''}
+    ${rules.length?`<button class="btn btn-d btn-sm" onclick="if(confirm('Clear all transaction rules?')){S.txnRules=[];sched();render();}">Clear all</button>`:''}
   </div>
+  ${conflictCount>0?`<div style="padding:10px 14px;background:color-mix(in srgb,var(--warn) 8%,var(--bg));border:1px solid color-mix(in srgb,var(--warn) 30%,transparent);border-radius:var(--rsm);margin-bottom:12px;font-size:var(--fs-xs);color:var(--text)">
+    <strong>${conflictCount} rule${conflictCount!==1?'s':''}</strong> match names already defined in Bills, Staff, Debts, Income, or Subscriptions. Highlighted in amber below — review to make sure the rule isn't overriding the correct source.
+  </div>`:''}
   <div class="card"><div class="tbl-wrap"><table>
-    <thead><tr><th>Merchant (contains)</th><th>Category</th><th>Sub-Category</th><th></th></tr></thead>
+    <thead><tr>
+      <th>Pattern (contains)</th><th>Category</th><th>Source</th>
+      <th style="text-align:right">Used</th><th>Last used</th><th>Conflicts</th><th></th>
+    </tr></thead>
     <tbody>${rows}</tbody>
   </table></div></div>`;
-  // Attach delete handlers after render to avoid onclick/quote issues
+
   setTimeout(()=>{
     document.querySelectorAll('.mr-del-btn').forEach(btn=>{
       btn.addEventListener('click',()=>{
-        const m=btn.getAttribute('data-merchant');
-        // Find the original unescaped merchant key from S.rules
-        const rule=S.rules.find(r=>h(r.m)===m||r.m===m);
-        if(rule){delRule(rule.m);}
+        const p=btn.getAttribute('data-pattern');
+        const rule=S.txnRules.find(r=>h(r.pattern)===p||r.pattern===p);
+        if(rule){S.txnRules=S.txnRules.filter(x=>x.id!==rule.id);sched();render();}
       });
     });
   },0);
   return html;
 }
 
-// ─── USAGE INSIGHTS PAGE ───
+// ─── SANITY CHECK PAGE ───────────────────────────────────────────────────────
+function rSanityCheck(){
+  const issues=[];
+  const all=allTxns();
+  const now=new Date();
+  const currentYm=getYM(now);
+
+  // Helper: fuzzy name match (substring)
+  function nameMatch(a,b){
+    const x=(a||'').toLowerCase().trim();const y=(b||'').toLowerCase().trim();
+    return x.length>=3&&y.length>=3&&(x.includes(y.substr(0,15))||y.includes(x.substr(0,15)));
+  }
+
+  // ── 1. Subscription tagged transactions that also match a bill ──────────────
+  const subTxns=all.filter(t=>t.isSub);
+  subTxns.forEach(t=>{
+    const match=S.bills.find(b=>nameMatch(t.description,b.name)||nameMatch(t.description,b.provider||''));
+    if(match)issues.push({
+      severity:'warn',section:'Subscriptions × Bills',
+      message:`"${h(t.description)}" is tagged as a subscription but also matches bill "${h(match.name)}"`,
+      hint:'If it is already tracked as a bill, remove the subscription tag to avoid double-counting.',
+      action:`<button class="btn btn-xs" onclick="removeSub('${t.id}','${(t.date||'').substr(0,7)}')">Remove sub tag</button>`
+    });
+  });
+
+  // ── 2. Transaction rules that conflict with bills/staff/debts/income ────────
+  (S.txnRules||[]).forEach(r=>{
+    const conflicts=[];
+    if(S.bills.find(b=>nameMatch(r.pattern,b.name)||nameMatch(r.pattern,b.provider||'')))conflicts.push('Bills');
+    if(S.staff.find(s=>nameMatch(r.pattern,s.name)))conflicts.push('Staff');
+    if(S.debts.find(d=>nameMatch(r.pattern,d.name)))conflicts.push('Debts');
+    if(S.income.find(i=>nameMatch(r.pattern,i.name)||nameMatch(r.pattern,i.employer||'')))conflicts.push('Income');
+    if(conflicts.length)issues.push({
+      severity:'info',section:'Transaction Rules',
+      message:`Rule "${h(r.pattern)}" → ${getMC(r.mainCatId)?.name||'?'} conflicts with: ${conflicts.join(', ')}`,
+      hint:`Check the ${conflicts.join('/')} page — if it is already defined there, this rule may be overriding the correct categorization.`,
+      action:`<button class="btn btn-xs" onclick="sw('rules')">View Rules</button>`
+    });
+  });
+
+  // ── 3. Debt payments NOT linked to a debt entry ────────────────────────────
+  const debtTxns=all.filter(t=>t.mainCatId==='cat_main_finance'&&t.subCatId==='sub_loan_installment'&&!t.debtId);
+  if(debtTxns.length)issues.push({
+    severity:'warn',section:'Debts',
+    message:`${debtTxns.length} transaction${debtTxns.length!==1?'s':''} categorized as Loan Installment but not linked to any debt`,
+    hint:'Open the transaction and select the matching debt from the Debt field. This ensures accurate debt tracking.',
+    action:`<button class="btn btn-xs" onclick="sw('txbank')">View Transactions</button>`
+  });
+
+  // ── 4. Staff salary transactions NOT linked to a staff member ──────────────
+  const staffTxns=all.filter(t=>t.mainCatId==='cat_main_staff'&&!t.accountId);
+  // Actually check if there are transactions that look like staff but no staff defined
+  if(!(S.staff||[]).length&&all.filter(t=>t.mainCatId==='cat_main_staff').length>0){
+    issues.push({
+      severity:'info',section:'Staff',
+      message:`Transactions categorized as Household Staff but no staff profiles defined`,
+      hint:'Add staff profiles in the Staff page to track advances, salaries, and schedules properly.',
+      action:`<button class="btn btn-xs" onclick="sw('staff')">View Staff</button>`
+    });
+  }
+
+  // ── 5. Income transactions NOT matching any income source ──────────────────
+  const incomeTxns=all.filter(t=>t.type==='income'&&t.direction==='in');
+  const incomeNames=new Set((S.income||[]).map(i=>(i.name||'').toLowerCase().trim().substr(0,20)).filter(Boolean));
+  if((S.income||[]).length>0){
+    const unmatchedIncome=incomeTxns.filter(t=>![...incomeNames].some(n=>t.description.toLowerCase().includes(n)));
+    if(unmatchedIncome.length>3)issues.push({
+      severity:'info',section:'Income',
+      message:`${unmatchedIncome.length} income transactions don't match any defined income source`,
+      hint:'Review your Income page — you may have new income sources not yet defined.',
+      action:`<button class="btn btn-xs" onclick="sw('income')">View Income</button>`
+    });
+  }
+
+  // ── 6. Large uncategorized transactions ────────────────────────────────────
+  const bigUncat=all.filter(t=>(!t.mainCatId)&&t.amount>=500);
+  if(bigUncat.length)issues.push({
+    severity:'warn',section:'Uncategorized',
+    message:`${bigUncat.length} uncategorized transaction${bigUncat.length!==1?'s':''} of SAR 500 or more`,
+    hint:'Large uncategorized transactions distort your spending reports. Categorize them from the Uncategorized inbox.',
+    action:`<button class="btn btn-xs" onclick="sw('uncat')">Go to Inbox</button>`
+  });
+
+  // ── 7. Months with balance discrepancies ───────────────────────────────────
+  const discrepancies=[];
+  Object.entries(S.monthlyBal||{}).forEach(([mk,mb])=>{
+    if(mb.guardFail&&mb.guardDiff>0){
+      const[accId,ym]=mk.split('_');
+      const acc=S.accounts.find(a=>a.id===accId);
+      discrepancies.push({name:acc?.name||accId,ym,diff:mb.guardDiff});
+    }
+  });
+  if(discrepancies.length)issues.push({
+    severity:'error',section:'Balance',
+    message:`${discrepancies.length} month${discrepancies.length!==1?'s':''} with unresolved balance discrepancies: ${discrepancies.map(d=>`${h(d.name)} ${fmtYM(d.ym)} (gap: ${fmtP(d.diff)})`).join(' · ')}`,
+    hint:'Navigate to the affected month and account to see row-by-row markers.',
+    action:`<button class="btn btn-xs" onclick="sw('txbank')">View Transactions</button>`
+  });
+
+  // ── 8. Subscriptions suggesting things already in bills ─────────────────────
+  const subSuggestions=all.filter(t=>!t.isSub&&t.type==='expense');
+  const billNames=new Set((S.bills||[]).map(b=>(b.name||'').toLowerCase().trim().substr(0,20)).filter(Boolean));
+  // (already handled by detection cross-reference — just flag any confirmed subs matching bills)
+
+  // ── 9. Goals with no contributions in 2+ months ────────────────────────────
+  if((S.goals||[]).length){
+    const activeGoals=S.goals.filter(g=>g.status!=='achieved'&&g.status!=='paused');
+    activeGoals.forEach(g=>{
+      if((g.saved||0)===0&&g.targetAmount>0)issues.push({
+        severity:'info',section:'Goals',
+        message:`Goal "${h(g.name)}" has no contributions recorded`,
+        hint:'Add a contribution or mark it as paused if it is on hold.',
+        action:`<button class="btn btn-xs" onclick="sw('goals')">View Goals</button>`
+      });
+    });
+  }
+
+  // ── 10. Subscriptions with no recent payment (3+ months gap) ───────────────
+  (S.subs||[]).forEach(s=>{
+    const key=(s.name||'').toLowerCase().trim().substr(0,30);
+    const txns=all.filter(t=>t.isSub&&(t.description||'').toLowerCase().trim().substr(0,30)===key);
+    if(!txns.length)return;
+    const latest=txns.slice().sort((a,b)=>b.date.localeCompare(a.date))[0];
+    if(!latest)return;
+    const monthsAgo=Math.round((now-new Date(latest.date))/(1000*60*60*24*30));
+    if(monthsAgo>=3)issues.push({
+      severity:'info',section:'Subscriptions',
+      message:`"${h(s.name)}" subscription has no payment in the last ${monthsAgo} months`,
+      hint:'If this subscription was cancelled, remove it. If statements are not imported yet, ignore.',
+      action:`<button class="btn btn-xs btn-d" onclick="unSub(${JSON.stringify(key)})">Remove</button>`
+    });
+  });
+
+  // Render
+  const severityOrder={error:0,warn:1,info:2};
+  const sorted=issues.sort((a,b)=>(severityOrder[a.severity]||2)-(severityOrder[b.severity]||2));
+  const errorCount=issues.filter(i=>i.severity==='error').length;
+  const warnCount=issues.filter(i=>i.severity==='warn').length;
+  const infoCount=issues.filter(i=>i.severity==='info').length;
+
+  // Update badge
+  const badge=document.getElementById('nb-sanity');
+  if(badge){const c=errorCount+warnCount;if(c>0){badge.textContent=c;badge.style.display='';}else badge.style.display='none';}
+
+  const severityIcon={error:'🔴',warn:'🟡',info:'🔵'};
+  const severityBg={error:'#FEF2F2',warn:'color-mix(in srgb,var(--warn) 8%,var(--bg))',info:'color-mix(in srgb,var(--electric) 5%,var(--bg))'};
+  const severityBorder={error:'#FECACA',warn:'color-mix(in srgb,var(--warn) 25%,transparent)',info:'color-mix(in srgb,var(--electric) 20%,transparent)'};
+
+  const issueRows=sorted.length?sorted.map(issue=>`
+    <div style="display:flex;align-items:flex-start;gap:12px;padding:12px 14px;background:${severityBg[issue.severity]};border:1px solid ${severityBorder[issue.severity]};border-radius:var(--rsm);margin-bottom:8px">
+      <div style="font-size:14px;flex-shrink:0;margin-top:1px">${severityIcon[issue.severity]}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:3px">${h(issue.section)}</div>
+        <div style="font-size:var(--fs-xs);font-weight:500;margin-bottom:3px">${issue.message}</div>
+        <div style="font-size:11px;color:var(--text3);line-height:1.5">${issue.hint}</div>
+      </div>
+      <div style="flex-shrink:0">${issue.action||''}</div>
+    </div>`).join('')
+  :`<div class="card"><div class="empty" style="padding:2rem">✓ No issues found. Everything looks consistent.</div></div>`;
+
+  return`
+  <div class="pg-header-row">
+    <div>
+      <div class="pg-header-title">Sanity Check</div>
+      <div class="pg-header-sub">Cross-system audit — inconsistencies, conflicts, and things worth reviewing. Nothing is auto-fixed. You decide.</div>
+    </div>
+    <button class="btn btn-sm" onclick="render()">Refresh</button>
+  </div>
+  ${issues.length?`<div class="fg" style="gap:8px;margin-bottom:14px;flex-wrap:wrap">
+    ${errorCount?`<span style="font-size:12px;padding:3px 10px;border-radius:6px;background:#FEF2F2;color:#991B1B;font-weight:600">🔴 ${errorCount} critical</span>`:''}
+    ${warnCount?`<span style="font-size:12px;padding:3px 10px;border-radius:6px;background:color-mix(in srgb,var(--warn) 10%,var(--bg));color:color-mix(in srgb,var(--warn) 70%,var(--midnight));font-weight:600">🟡 ${warnCount} warnings</span>`:''}
+    ${infoCount?`<span style="font-size:12px;padding:3px 10px;border-radius:6px;background:color-mix(in srgb,var(--electric) 8%,var(--bg));color:var(--electric);font-weight:600">🔵 ${infoCount} info</span>`:''}
+  </div>`:''}
+  ${issueRows}`;
+}
 function rUsageInsights(){
   const all=allTxns().filter(t=>t.type==='expense'||t.type==='income');
   if(!all.length){
@@ -6947,9 +7249,9 @@ function rAIUpload(){
   </div>
 
   <div class="card card-bordered" style="margin-top:10px">
-    <div class="ctitle">Rules Library</div>
-    <div class="csub">${(S.extractionRules||[]).length} learned rule${(S.extractionRules||[]).length!==1?'s':''} — AI uses these to improve categorization accuracy over time</div>
-    ${(S.extractionRules||[]).length?`<div style="margin-top:8px">${(S.extractionRules||[]).slice(0,5).map(r=>`<div class="fg jb" style="padding:5px 0;border-bottom:1px solid var(--bg3);font-size:var(--fs-xxs)"><span style="color:var(--text2)">${h(r.pattern)}</span><span>${ctag(r.mainCatId,r.subCatId)}</span></div>`).join('')}${(S.extractionRules||[]).length>5?`<div style="font-size:11px;color:var(--text3);margin-top:4px">+${(S.extractionRules||[]).length-5} more rules</div>`:''}</div>`:''}
+    <div class="ctitle">Transaction Rules</div>
+    <div class="csub">${(S.txnRules||[]).length} rule${(S.txnRules||[]).length!==1?'s':''} · AI uses your top 50 most-used rules on each extraction</div>
+    ${(S.txnRules||[]).length?`<div style="margin-top:8px">${[...(S.txnRules||[])].sort((a,b)=>(b.useCount||0)-(a.useCount||0)).slice(0,5).map(r=>`<div class="fg jb" style="padding:5px 0;border-bottom:1px solid var(--bg3);font-size:var(--fs-xxs)"><span style="color:var(--text2)">${h(r.pattern)}</span><div class="fg" style="gap:6px">${ctag(r.mainCatId,r.subCatId)}<span style="color:var(--text3)">${r.useCount||1}×</span></div></div>`).join('')}${(S.txnRules||[]).length>5?`<div style="font-size:11px;color:var(--text3);margin-top:4px">+${(S.txnRules||[]).length-5} more · <button onclick="sw('rules')" style="background:none;border:none;cursor:pointer;color:var(--electric);font-size:11px;padding:0">View all →</button></div>`:''}</div>`:''}
   </div>`;
 }
 
@@ -7032,9 +7334,10 @@ async function runAIExtract(){
   try{
     const acc=S.accounts.find(a=>a.id===_aiState.accountId);
     // Sort by most recently used, inject top 50 for prompt context
-    const rules=(S.extractionRules||[])
+    const rules=(S.txnRules||[])
       .slice().sort((a,b)=>(b.lastUsed||0)-(a.lastUsed||0))
-      .slice(0,50);
+      .slice(0,50)
+      .map(r=>({pattern:r.pattern,mainCatId:r.mainCatId,subCatId:r.subCatId}));
     const resp=await fetch(EDGE_URL,{
       method:'POST',
       headers:{
@@ -7159,42 +7462,10 @@ async function commitAIImport(){
 
 function learnExtractionRules(txns){
   if(!txns?.length)return;
-  if(!S.extractionRules)S.extractionRules=[];
-  const now=Date.now();
   txns.forEach(t=>{
     if(!t.description||!t.mainCatId)return;
-    const pattern=t.description.trim().toLowerCase().substr(0,40);
-    const exists=S.extractionRules.find(r=>r.pattern===pattern);
-    if(!exists){
-      // New rule — add with timestamp and use count
-      S.extractionRules.push({
-        pattern,
-        mainCatId:t.mainCatId,
-        subCatId:t.subCatId||'',
-        lastUsed:now,
-        useCount:1
-      });
-    }else{
-      // Update existing rule — refresh timestamp and increment count
-      exists.mainCatId=t.mainCatId;
-      exists.subCatId=t.subCatId||'';
-      exists.lastUsed=now;
-      exists.useCount=(exists.useCount||0)+1;
-    }
+    learnTxnRule(t.description,t.mainCatId,t.subCatId||'','ai');
   });
-  // Weighted eviction: score = lastUsed + (useCount * 7 days in ms)
-  // A rule used 10 times gets a 10-week recency bonus — high-frequency rules survive
-  // even if not triggered recently, until genuinely abandoned
-  const WEEK_MS=7*24*60*60*1000;
-  if(S.extractionRules.length>200){
-    S.extractionRules.sort((a,b)=>{
-      const scoreA=(a.lastUsed||0)+((a.useCount||1)*WEEK_MS);
-      const scoreB=(b.lastUsed||0)+((b.useCount||1)*WEEK_MS);
-      return scoreA-scoreB; // ascending — lowest score evicted first
-    });
-    S.extractionRules=S.extractionRules.slice(-200);
-  }
-  sched();
 }
 
 // ─── DATE INPUT COMPONENT (V3.0 #4) ───
