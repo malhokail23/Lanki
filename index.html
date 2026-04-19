@@ -6933,9 +6933,17 @@ function rAIUpload(){
 
     ${_aiState.error?`<div style="color:var(--bad);font-size:var(--fs-xs);padding:8px;background:#FEE2E2;border-radius:var(--rsm);margin-bottom:10px">${h(_aiState.error)}</div>`:''}
 
-    <button class="btn btn-p" onclick="runAIExtract()" ${_aiState.loading||_aiState.scanning?'disabled':''} style="min-width:200px">
-      ${_aiState.loading?'<span class="ai-dots"><span></span><span></span><span></span></span>':'Extract Transactions'}
-    </button>
+    <div class="fg" style="gap:8px;flex-wrap:wrap">
+      <button class="btn btn-p" onclick="runAIExtract()" ${_aiState.loading||_aiState.scanning?'disabled':''} style="min-width:180px">
+        ${_aiState.loading?'<span class="ai-dots"><span></span><span></span><span></span></span>':'Extract Transactions'}
+      </button>
+      ${_aiState.fileName?`<button class="btn" onclick="
+        _aiState.file=null;_aiState.fileName='';_aiState.fileData='';_aiState.fileType='';
+        _aiState.openingBal='';_aiState.closingBal='';_aiState.month='';_aiState.accountId='';
+        _aiState.scanMeta=null;_aiState.scanError='';_aiState.error='';
+        const inp=document.getElementById('ai-file-inp');if(inp)inp.value='';
+        render();" title="Clear file and reset all fields">Clear</button>`:''}
+    </div>
   </div>
 
   <div class="card card-bordered" style="margin-top:10px">
