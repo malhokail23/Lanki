@@ -6777,7 +6777,8 @@ function rAIUpload(){
     _aiState.extracted.forEach((t,i)=>{
       const txnYm=t.date?t.date.substr(0,7):ym;
       const checkCache=S.txnCache[txnYm]||[];
-      const rawDescKey=(t.description||'').trim().toLowerCase();
+      // Must match doImport dedup key exactly: raw_description + direction
+      const rawDescKey=(t.raw_description||t.description||'').trim().toLowerCase();
       const amt=Math.abs(parseFloat(t.amount)||0);
       const dir=(t.direction||'out').toLowerCase();
       const isDup=checkCache.some(x=>
