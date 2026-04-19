@@ -7351,10 +7351,21 @@ async function runAIExtract(){
         accountType:acc?.type||'',
         month:_aiState.month,
         rules,
-        mainCats:MAIN_CATS.map(m=>({id:m.id,name:m.name,type:m.type})),
-        subCats:SUB_CATS.map(s=>({id:s.id,name:s.name}))
+        mainCats:undefined,  // hardcoded in edge function — not sent to save tokens
+        subCats:undefined,   // hardcoded in edge function — not sent to save tokens
       })
     });
+    if(resp.status===429){
+      // Rate limited — show countdown then auto-retry once
+      for(let s=65;s>0;s--){
+        _aiState.error=`Rate limit hit — retrying in ${s}s. Please wait…`;
+        render();
+        await new Promise(r=>setTimeout(r,1000));
+      }
+      _aiState.error='';
+      // Edge function has already retried server-side — this is a fallback message
+      throw new Error('Rate limit — please wait 1 minute between uploads, or split the statement into smaller date ranges.');
+    }
     if(!resp.ok){const e=await resp.text();throw new Error('Edge Function error: '+e);}
     const data=await resp.json();
     if(!data.transactions?.length)throw new Error('No transactions found in the statement.');
