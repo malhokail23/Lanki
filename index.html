@@ -3346,6 +3346,7 @@ async function doImport(directPayload){
   const txns=S.txnCache[ym];
   const preImportIds=new Set(txns.map(t=>t.id));
   let added=0;
+  let crossMonthCount=0;
   for(const t of items){
     if(!t.date||t.amount===undefined)continue;
     let ai=t.account_id||t.accountId||rId||null;
@@ -3384,15 +3385,23 @@ async function doImport(directPayload){
     // Route to the correct month bucket first so dedup checks the right cache
     const txnYm=t.date?t.date.substr(0,7):ym;
     const targetCache=txnYm!==ym?(S.txnCache[txnYm]||(S.txnCache[txnYm]=[])):txns;
-    // Dedup: date + amount + description match is sufficient. AccountId is intentionally
-    // excluded — a previous import may have had null accountId and we must still catch it.
-    const descKey=(cleanDesc||'').trim().toLowerCase();
-    const isDup=targetCache.some(x=>x.date===t.date&&Math.abs(x.amount-amt)<0.01&&(x.description||'').trim().toLowerCase()===descKey);
+    // Dedup key: date + amount + RAW description (before any rule rewriting) + direction
+    // Raw description avoids false matches when two legitimate same-day same-amount transactions
+    // get their descriptions rewritten identically by merchant rules.
+    // Direction included so a charge and its same-day reversal are never collapsed.
+    const rawDescKey=(rawDesc||cleanDesc||'').trim().toLowerCase();
+    const isDup=targetCache.some(x=>
+      x.date===t.date&&
+      Math.abs(x.amount-amt)<0.01&&
+      (x.raw_description||x.description||'').trim().toLowerCase()===rawDescKey&&
+      (x.direction||'out')===(dir||'out')
+    );
     if(isDup)continue;
     const txnItem={id:uid(),date:t.date,description:cleanDesc,raw_description:rawDesc,amount:amt,type:txnType,direction:dir,mainCatId:mid,subCatId:sid,accountId:ai,debtId:di,notes:(t.notes||'').trim(),flagged:!!t.flagged,ruleApplied:ruleApplied||false,statementBal:t.statement_balance!=null?parseFloat(t.statement_balance):undefined};
     if(txnYm!==ym){
       targetCache.push(txnItem);
       schedTxn(txnYm);
+      crossMonthCount=(crossMonthCount||0)+1;
     }else{
       txns.push(txnItem);
     }
@@ -3420,7 +3429,7 @@ async function doImport(directPayload){
       const guardMsg=`Balance guard: SAR ${diff.toFixed(2)} discrepancy. Opening ${fmt(openingForGuardVal)} + In ${fmt(totalIn)} (${inTxns.length} txns) − Out ${fmt(totalOut)} (${outTxns.length} txns) = ${fmt(calcBal)}. Statement says ${fmt(closingBalVal)}.`;
       toast(guardMsg,false);
       if(rId){const mk=rId+'_'+ym;if(!S.monthlyBal[mk])S.monthlyBal[mk]={};S.monthlyBal[mk].guardFail=true;S.monthlyBal[mk].guardDiff=diff;S.monthlyBal[mk].guardCalc=calcBal;S.monthlyBal[mk].closing=closingBalVal;sched();}
-    }else{toast(`Imported ${added} transaction${added!==1?'s':''}. Balance guard passed ✓`);if(rId){const mk=rId+'_'+ym;if(!S.monthlyBal[mk])S.monthlyBal[mk]={};S.monthlyBal[mk].closing=closingBalVal;}}
+    }else{const crossNote2=crossMonthCount>0?` · ${crossMonthCount} routed to other months`:'';toast(`Imported ${added} transaction${added!==1?'s':''}. Balance guard passed ✓${crossNote2}`);if(rId){const mk=rId+'_'+ym;if(!S.monthlyBal[mk])S.monthlyBal[mk]={};S.monthlyBal[mk].closing=closingBalVal;}}
   }
 
   runTransferMatching(txns,preImportIds);
@@ -3437,7 +3446,10 @@ async function doImport(directPayload){
     tp('imp-panel');
   }
   schedTxn(ym);render();
-  if(closingBalVal===null)toast(`Imported ${added} transaction${added!==1?'s':''}`);
+  if(closingBalVal===null){
+    const crossNote=crossMonthCount>0?` · ${crossMonthCount} routed to other months`:'';
+    toast(`Imported ${added} transaction${added!==1?'s':''}${crossNote}`);
+  }
 }
 function lcMap(id){const m={'cat_income_salary':'cat_main_income','cat_income_other':'cat_main_income','cat_debt_payment':'cat_main_finance','cat_groceries':'cat_main_food','cat_kids':'cat_main_kids','cat_household':'cat_main_housing','cat_fuel':'cat_main_transport','cat_subscriptions':'cat_main_subscriptions','cat_shopping':'cat_main_shopping','cat_food_delivery':'cat_main_food','cat_staff':'cat_main_staff','cat_personal':'cat_main_personal','cat_medical':'cat_main_personal','cat_transfer':'cat_main_transfers','cat_investment':'cat_main_transfers','cat_external_transfer':'cat_main_transfers'};return m[id]||null;}
 function getRule(desc){const d=(desc||'').toLowerCase().trim();return S.rules.find(r=>d.includes(r.m.toLowerCase()))||null;}
