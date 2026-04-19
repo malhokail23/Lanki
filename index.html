@@ -7071,7 +7071,7 @@ function dedupDebtPayments(debtId){
 let _aiState={
   file:null, fileName:'', fileData:'', fileType:'',
   accountId:'', month:'', openingBal:'', closingBal:'',
-  extracted:[], loading:false, scanning:false, scanMeta:null, scanError:'', usage:null, error:'', step:1
+  extracted:[], loading:false, scanning:false, scanMeta:null, scanError:'', usage:null, error:'', step:1, status:''
 };
 
 function rAIUpload(){
@@ -7237,7 +7237,7 @@ function rAIUpload(){
 
     <div class="fg" style="gap:8px;flex-wrap:wrap">
       <button class="btn btn-p" onclick="runAIExtract()" ${_aiState.loading||_aiState.scanning?'disabled':''} style="min-width:180px">
-        ${_aiState.loading?'<span class="ai-dots"><span></span><span></span><span></span></span>':'Extract Transactions'}
+        ${_aiState.loading?`<span class="ai-dots"><span></span><span></span><span></span></span> ${_aiState.status||'Preparing…'}`:'Extract Transactions'}
       </button>
       ${_aiState.fileName?`<button class="btn" onclick="
         _aiState.file=null;_aiState.fileName='';_aiState.fileData='';_aiState.fileType='';
@@ -7356,47 +7356,81 @@ async function runAIExtract(){
       })
     });
     if(resp.status===429){
-      // Rate limited — wait 65s showing countdown, then auto-retry
       for(let s=65;s>0;s--){
-        _aiState.error=`Rate limit — retrying in ${s}s…`;
+        _aiState.status=`Rate limit — retrying in ${s}s…`;
         render();
         await new Promise(r=>setTimeout(r,1000));
       }
-      _aiState.error='';
-      _aiState.loading=false;
-      runAIExtract();
-      return;
+      _aiState.status='';_aiState.loading=false;runAIExtract();return;
     }
     if(!resp.ok){const e=await resp.text();throw new Error('Edge Function error: '+e);}
-    // Read streaming response — keepalive newlines arrive during processing,
-    // final line is the JSON result
-    const rawText=await resp.text();
-    const lines=rawText.split('\n').map(l=>l.trim()).filter(Boolean);
-    const lastLine=lines[lines.length-1];
-    if(!lastLine)throw new Error('Empty response from Edge Function.');
+    // Read streaming response line by line.
+    // STATUS:message lines update the loading label.
+    // Final non-empty non-STATUS line is the JSON result.
+    const reader=resp.body.getReader();
+    const decoder=new TextDecoder();
+    let buffer='';
+    let lastJsonLine='';
+    while(true){
+      const{done,value}=await reader.read();
+      if(done)break;
+      buffer+=decoder.decode(value,{stream:true});
+      const parts=buffer.split('\n');
+      buffer=parts.pop()||''; // keep incomplete last chunk
+      for(const line of parts){
+        const trimmed=line.trim();
+        if(!trimmed)continue;
+        if(trimmed.startsWith('STATUS:')){
+          _aiState.status=trimmed.slice(7);
+          render();
+        } else {
+          lastJsonLine=trimmed; // will be the final JSON
+        }
+      }
+    }
+    // Process any remaining buffer content
+    if(buffer.trim()&&!buffer.trim().startsWith('STATUS:'))lastJsonLine=buffer.trim();
+    if(!lastJsonLine)throw new Error('Empty response from Edge Function.');
     let data;
-    try{data=JSON.parse(lastLine);}catch{throw new Error('Could not parse response: '+lastLine.substr(0,200));}
+    try{data=JSON.parse(lastJsonLine);}catch{throw new Error('Could not parse response: '+lastJsonLine.substr(0,200));}
     if(data.__error){
       if(data.__error==='RATE_LIMIT'){
-        for(let s=65;s>0;s--){_aiState.error=`Rate limit — retrying in ${s}s…`;render();await new Promise(r=>setTimeout(r,1000));}
-        _aiState.error='';_aiState.loading=false;runAIExtract();return;
+        for(let s=65;s>0;s--){_aiState.status=`Rate limit — retrying in ${s}s…`;render();await new Promise(r=>setTimeout(r,1000));}
+        _aiState.status='';_aiState.loading=false;runAIExtract();return;
       }
       throw new Error(data.__error);
     }
-    if(!data.transactions?.length)throw new Error('No transactions found in the statement.');
+    if(!data.transactions?.length&&!data.flagged?.length)throw new Error('No transactions found in the statement.');
     _aiState.usage=data.usage||null;
-    // Assign accountId to each transaction
-    _aiState.extracted=data.transactions.map(t=>({
+    // Merge transactions + flagged into one list for review.
+    // Flagged items are shown with a warning badge — user decides whether to import.
+    // Before this fix, flagged transactions were silently discarded (the 26 missing txns).
+    const allExtracted=[
+      ...(data.transactions||[]).map(t=>({...t,flagged:false})),
+      ...(data.flagged||[]).map(t=>({
+        ...t,
+        // Flagged items may not have full fields — set safe defaults
+        type:t.type||'expense',
+        direction:t.direction||'out',
+        mainCatId:t.mainCatId||'',
+        subCatId:t.subCatId||'',
+        notes:(t.notes||'')+(t.reason?` [⚠ ${t.reason}]`:''),
+        flagged:true
+      }))
+    ];
+    _aiState.extracted=allExtracted.map(t=>({
       ...t,
       id:'ai_'+Date.now()+'_'+Math.random().toString(36).substr(2,5),
       accountId:_aiState.accountId,
-      flagged:false,ruleApplied:true
+      ruleApplied:true
     }));
     _aiState.step=2;
     _aiState.loading=false;
+    _aiState.status='';
     render();
   }catch(e){
     _aiState.loading=false;
+    _aiState.status='';
     _aiState.error=e.message||'Extraction failed. Check the Edge Function is deployed.';
     render();
   }
@@ -7482,7 +7516,7 @@ async function commitAIImport(){
   await doImport(payload);
 
   // Reset AI state and navigate to transactions
-  _aiState={file:null,fileName:'',fileData:'',fileType:'',accountId:'',month:'',openingBal:'',closingBal:'',extracted:[],loading:false,scanning:false,scanMeta:null,scanError:'',usage:null,error:'',step:1,_forceAll:false};
+  _aiState={file:null,fileName:'',fileData:'',fileType:'',accountId:'',month:'',openingBal:'',closingBal:'',extracted:[],loading:false,scanning:false,scanMeta:null,scanError:'',usage:null,error:'',step:1,_forceAll:false,status:''};
   sw('txbank');
 }
 
