@@ -3296,7 +3296,8 @@ function clearMonthTxns(){
   schedTxn(ym);sched();render();
   toast(`Cleared ${count} transaction${count!==1?'s':''} for ${fmtYM(ym)}.`);
   }); // end reqPin
-}(id){TF.txnAcc=id;TF.sortCol='';render();}
+}
+function setTxnAcc(id){TF.txnAcc=id;TF.sortCol='';render();}
 function setTxSort(col){
   if(TF.sortCol===col){TF.sortDir*=-1;}
   else{TF.sortCol=col;TF.sortDir=1;}
