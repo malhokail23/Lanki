@@ -5388,6 +5388,7 @@ function rSettings(){
     pageContent=`<div class="settings-page-title">Data</div>
     <div class="settings-section">
       <div class="settings-section-label">Backup &amp; Restore</div>
+      <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Export reference file</div><div class="settings-row-sub">Downloads a .txt file with your accounts, debts, and categories — use this when starting an extraction session</div></div><div class="settings-row-ctrl"><button class="btn btn-sm" onclick="doRefExport()">Export</button></div></div>
       <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Export backup</div><div class="settings-row-sub">Downloads an encrypted JSON backup</div></div><div class="settings-row-ctrl"><button class="btn btn-sm btn-p" onclick="doExport()">Export</button></div></div>
       <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Import backup</div><div class="settings-row-sub">Restore from a backup file</div></div><div class="settings-row-ctrl"><button class="btn btn-sm" onclick="document.getElementById('imp-backup-file')?.click()">Import</button><input type="file" id="imp-backup-file" accept=".json" style="display:none" onchange="doImportBackup(this)"></div></div>
     </div>
