@@ -1535,6 +1535,20 @@ async function confirmPin(){
 function closePinM(){document.getElementById('pin-modal').classList.remove('active');pinCb=null;}
 
 // ─── RESET ALL DATA (Bug 4.2 fix) ───
+function doReset(mode){
+  // Gate both destructive actions behind PIN before showing the modal
+  reqPin(
+    mode==='all'?'Reset everything':'Clear transactions',
+    mode==='all'?'Enter PIN to permanently delete all data':'Enter PIN to clear all imported transactions',
+    ()=>{
+      const modal=document.getElementById('del-modal');
+      if(!modal)return;
+      // Store mode so execClear/execClearTxns know which path was confirmed
+      modal.dataset.resetMode=mode;
+      modal.classList.add('active');
+    }
+  );
+}
 async function execClearTxns(){
   document.getElementById('del-modal').classList.remove('active');
   if(!confirm('Permanently delete all imported transactions? This cannot be undone.'))return;
@@ -1815,18 +1829,22 @@ function updateBadge(){
   const uc=uncatCount();
   const pt=pendingTransferCount();
   const pr=_submissions.filter(s=>s.status==='pending').length;
-  // Sanity check count: critical + warnings only
+  // Sanity check badge — count critical+warning issues matching rSanityCheck logic
   const sc=(()=>{
     try{
-      let c=0;
+      let errors=0,warns=0;
       const all=allTxns();
-      // Balance discrepancies
-      Object.values(S.monthlyBal||{}).forEach(mb=>{if(mb.guardFail)c++;});
-      // Large uncategorized
-      if(all.filter(t=>!t.mainCatId&&t.amount>=500).length>0)c++;
-      // Debt txns not linked
-      if(all.filter(t=>t.mainCatId==='cat_main_finance'&&t.subCatId==='sub_loan_installment'&&!t.debtId).length>0)c++;
-      return c;
+      // Balance discrepancies (error)
+      Object.values(S.monthlyBal||{}).forEach(mb=>{if(mb.guardFail&&mb.guardDiff>0)errors++;});
+      // Large uncategorized ≥500 (warn)
+      if(all.filter(t=>!t.mainCatId&&t.amount>=500).length>0)warns++;
+      // Loan installments not linked to debt (warn)
+      if(all.filter(t=>t.mainCatId==='cat_main_finance'&&t.subCatId==='sub_loan_installment'&&!t.debtId).length>0)warns++;
+      // Subscription tagged txns that also match a bill (warn)
+      const billKws=new Set((S.bills||[]).flatMap(b=>[b.name,b.provider].filter(Boolean).map(s=>s.toLowerCase().trim().substr(0,15))));
+      if(all.filter(t=>t.isSub&&[...billKws].some(k=>k&&(t.description||'').toLowerCase().includes(k))).length>0)warns++;
+      // Transaction rules conflicting with other lists (info — not counted in badge)
+      return errors+warns;
     }catch(e){return 0;}
   })();
   const total=uc+pt+pr;
@@ -3245,7 +3263,7 @@ function clearMonthTxns(){
   const msg=accOverride
     ?`Delete ${count} transaction${count!==1?'s':''} for the selected account in ${fmtYM(ym)}?`
     :`Delete ALL ${count} transaction${count!==1?'s':''} for ${fmtYM(ym)} across all accounts?`;
-  if(!confirm(msg))return;
+  reqPin('Clear month transactions',msg,()=>{
   const toDelete=accOverride?(S.txnCache[ym]||[]).filter(t=>t.accountId===accOverride):[...(S.txnCache[ym]||[])];
   const deletedIds=new Set(toDelete.map(t=>t.id));
   if(accOverride){S.txnCache[ym]=(S.txnCache[ym]||[]).filter(t=>t.accountId!==accOverride);}
@@ -3277,8 +3295,8 @@ function clearMonthTxns(){
   }
   schedTxn(ym);sched();render();
   toast(`Cleared ${count} transaction${count!==1?'s':''} for ${fmtYM(ym)}.`);
-}
-function setTxnAcc(id){TF.txnAcc=id;TF.sortCol='';render();}
+  }); // end reqPin
+}(id){TF.txnAcc=id;TF.sortCol='';render();}
 function setTxSort(col){
   if(TF.sortCol===col){TF.sortDir*=-1;}
   else{TF.sortCol=col;TF.sortDir=1;}
@@ -3510,7 +3528,10 @@ function getRule(desc){
   // Match by pattern contained in description (longest match wins to avoid false positives)
   const matches=(S.txnRules||[]).filter(r=>r.pattern&&d.includes(r.pattern.toLowerCase()));
   if(!matches.length)return null;
-  const best=matches.reduce((a,b)=>a.pattern.length>=b.pattern.length?a:b);
+  const best=matches.reduce((a,b)=>{
+    if(a.pattern.length!==b.pattern.length)return a.pattern.length>b.pattern.length?a:b;
+    return(a.lastUsed||0)>=(b.lastUsed||0)?a:b; // tie-break by most recently used
+  });
   return{mid:best.mainCatId,sid:best.subCatId,_rule:best};
 }
 
@@ -3720,8 +3741,15 @@ async function rSubs(){
 
   const detected=[];
   Object.entries(byM).forEach(([key,txns])=>{
-    // Skip if matches any bill/staff/debt/income name
-    if([...subExclKeys].some(k=>k&&key.length>=3&&(key.includes(k.substr(0,20))||k.includes(key.substr(0,20)))))return;
+    // Skip if matches any bill/staff/debt/income name — require meaningful overlap,
+    // not just a short substring (e.g. "stc" should not exclude "stc internet cloud")
+    const excl=[...subExclKeys].some(k=>{
+      if(!k||k.length<3)return false;
+      // Only exclude if the exclusion key is at least 6 chars, OR is an exact match
+      if(k.length<6)return key===k;
+      return key===k||key.startsWith(k)||k.startsWith(key);
+    });
+    if(excl)return;
     const sortedT=txns.slice().sort((a,b)=>a.date.localeCompare(b.date));
     const months=[...new Set(sortedT.map(t=>t.date.substr(0,7)))].sort();
     if(months.length<2)return;
@@ -5379,21 +5407,24 @@ function rSettings(){
   return`<div class="settings-layout"><div class="settings-sidebar"><div style="font-size:16px;font-weight:500;padding:0 0 16px 0">Settings</div>${subNav}</div><div class="settings-content">${pageContent}</div></div>`;
 }
 function deduplicateTxns(){
-  let totalRemoved=0;
-  Object.keys(S.txnCache).forEach(ym=>{
-    const txns=S.txnCache[ym];
-    if(!txns?.length)return;
-    const seen=new Set();
-    let removedThisMonth=0;
-    S.txnCache[ym]=txns.filter(t=>{
-      const key=`${t.date}|${Math.round((t.amount||0)*100)}|${(t.description||'').trim().toLowerCase()}`;
-      if(seen.has(key)){removedThisMonth++;return false;}
-      seen.add(key);return true;
+  const totalTxns=Object.values(S.txnCache||{}).reduce((s,a)=>s+(a?.length||0),0);
+  reqPin('Remove duplicates',`Scan all ${totalTxns} transactions and permanently remove exact duplicates (same date, amount, description)?`,()=>{
+    let totalRemoved=0;
+    Object.keys(S.txnCache).forEach(ym=>{
+      const txns=S.txnCache[ym];
+      if(!txns?.length)return;
+      const seen=new Set();
+      let removedThisMonth=0;
+      S.txnCache[ym]=txns.filter(t=>{
+        const key=`${t.date}|${Math.round((t.amount||0)*100)}|${(t.description||'').trim().toLowerCase()}`;
+        if(seen.has(key)){removedThisMonth++;return false;}
+        seen.add(key);return true;
+      });
+      if(removedThisMonth>0){totalRemoved+=removedThisMonth;schedTxn(ym);}
     });
-    if(removedThisMonth>0){totalRemoved+=removedThisMonth;schedTxn(ym);}
+    if(totalRemoved>0){sched();render();toast(`Removed ${totalRemoved} duplicate transaction${totalRemoved!==1?'s':''}`);}
+    else toast('No duplicates found');
   });
-  if(totalRemoved>0){sched();render();toast(`Removed ${totalRemoved} duplicate transaction${totalRemoved!==1?'s':''}`);}
-  else toast('No duplicates found');
 }
 
 function toggleCP(){const p=document.getElementById('cp-panel');if(p)p.style.display=p.style.display==='none'?'block':'none';}
@@ -6380,9 +6411,7 @@ function rSanityCheck(){
     action:`<button class="btn btn-xs" onclick="sw('txbank')">View Transactions</button>`
   });
 
-  // ── 4. Staff salary transactions NOT linked to a staff member ──────────────
-  const staffTxns=all.filter(t=>t.mainCatId==='cat_main_staff'&&!t.accountId);
-  // Actually check if there are transactions that look like staff but no staff defined
+  // ── 4. Staff salary transactions but no staff defined ──────────────────────
   if(!(S.staff||[]).length&&all.filter(t=>t.mainCatId==='cat_main_staff').length>0){
     issues.push({
       severity:'info',section:'Staff',
@@ -6471,9 +6500,7 @@ function rSanityCheck(){
   const warnCount=issues.filter(i=>i.severity==='warn').length;
   const infoCount=issues.filter(i=>i.severity==='info').length;
 
-  // Update badge
-  const badge=document.getElementById('nb-sanity');
-  if(badge){const c=errorCount+warnCount;if(c>0){badge.textContent=c;badge.style.display='';}else badge.style.display='none';}
+  // Badge is set by updateBadge() — do not set it here to avoid divergence
 
   const severityIcon={error:'🔴',warn:'🟡',info:'🔵'};
   const severityBg={error:'#FEF2F2',warn:'color-mix(in srgb,var(--warn) 8%,var(--bg))',info:'color-mix(in srgb,var(--electric) 5%,var(--bg))'};
@@ -6814,40 +6841,38 @@ async function checkReimbursementMatch(importedTxns){
 }
 
 async function markReimbursementPaid(name,subs,paymentTxn,total){
-  const groupId='reimb_'+Date.now();
-  const paidAt=new Date().toISOString();
-  const payDate=paymentTxn.date;
-  const ym=payDate.substr(0,7);
-  for(const s of subs){
-    await fetch(`${SB}/rest/v1/pending_submissions?id=eq.${s.id}`,{
-      method:'PATCH',
-      headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json'},
-      body:JSON.stringify({status:'paid',paid_at:paidAt,payment_txn_id:paymentTxn.id,reimbursement_group_id:groupId})
+  // Gate the destructive delete behind PIN — auto-match could be wrong
+  reqPin('Confirm reimbursement match',`Match SAR ${total.toFixed(2)} transfer to ${name} (${subs.length} item${subs.length!==1?'s':''})? The original transfer will be replaced with itemized entries.`,async()=>{
+    const groupId='reimb_'+Date.now();
+    const paidAt=new Date().toISOString();
+    const payDate=paymentTxn.date;
+    const ym=payDate.substr(0,7);
+    for(const s of subs){
+      await fetch(`${SB}/rest/v1/pending_submissions?id=eq.${s.id}`,{
+        method:'PATCH',
+        headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json'},
+        body:JSON.stringify({status:'paid',paid_at:paidAt,payment_txn_id:paymentTxn.id,reimbursement_group_id:groupId})
+      });
+    }
+    if(!S.txnCache[ym])S.txnCache[ym]=[];
+    S.txnCache[ym]=S.txnCache[ym].filter(t=>t.id!==paymentTxn.id);
+    S.matchedPairs=(S.matchedPairs||[]).filter(p=>p.outId!==paymentTxn.id&&p.inId!==paymentTxn.id);
+    subs.forEach(s=>{
+      const rc=REIMB_CATS.find(r=>r.hint===s.category_hint)||REIMB_CATS[REIMB_CATS.length-1];
+      S.txnCache[ym].push({
+        id:uid(),date:payDate,description:s.description,raw_description:s.description,
+        amount:parseFloat(s.amount),type:'expense',direction:'out',
+        mainCatId:rc.mid,subCatId:rc.sid,
+        accountId:paymentTxn.accountId||null,debtId:null,
+        notes:`Reimbursement to ${name} — part of SAR ${total.toFixed(2)} (${subs.length} item${subs.length!==1?'s':''})`,
+        flagged:false,ruleApplied:false,reimbGroupId:groupId
+      });
     });
-  }
-  if(!S.txnCache[ym])S.txnCache[ym]=[];
-
-  // Remove the original external_transfer to prevent double-counting:
-  // net = inc - exp - ext - inv. The individual expense lines below replace it.
-  S.txnCache[ym]=S.txnCache[ym].filter(t=>t.id!==paymentTxn.id);
-  // Also remove from matchedPairs if it was matched
-  S.matchedPairs=(S.matchedPairs||[]).filter(p=>p.outId!==paymentTxn.id&&p.inId!==paymentTxn.id);
-
-  subs.forEach(s=>{
-    const rc=REIMB_CATS.find(r=>r.hint===s.category_hint)||REIMB_CATS[REIMB_CATS.length-1];
-    S.txnCache[ym].push({
-      id:uid(),date:payDate,description:s.description,raw_description:s.description,
-      amount:parseFloat(s.amount),type:'expense',direction:'out',
-      mainCatId:rc.mid,subCatId:rc.sid,
-      accountId:paymentTxn.accountId||null,debtId:null,
-      notes:`Reimbursement to ${name} — part of SAR ${total.toFixed(2)} (${subs.length} item${subs.length!==1?'s':''})`,
-      flagged:false,ruleApplied:false,reimbGroupId:groupId
-    });
+    S.txnCache[ym].sort((a,b)=>a.date.localeCompare(b.date));
+    schedTxn(ym);
+    await loadSubmissions();
+    toast(`${subs.length} reimbursement item${subs.length!==1?'s':''} for ${name} matched and recorded ✓`);
   });
-  S.txnCache[ym].sort((a,b)=>a.date.localeCompare(b.date));
-  schedTxn(ym);
-  await loadSubmissions();
-  toast(`${subs.length} reimbursement item${subs.length!==1?'s':''} for ${name} matched and recorded ✓`);
 }
 
 async function rReimbursements(){
@@ -7231,6 +7256,7 @@ function rAIUpload(){
     <div class="fr" style="margin-bottom:14px">
       <div><label class="lbl">Opening balance (SAR)</label><input type="number" placeholder="0.00" step="0.01" value="${_aiState.openingBal}" onchange="_aiState.openingBal=this.value"></div>
       <div><label class="lbl">Closing balance (SAR)</label><input type="number" placeholder="0.00" step="0.01" value="${_aiState.closingBal}" onchange="_aiState.closingBal=this.value"></div>
+      <div><label class="lbl">Expected transactions</label><input type="number" placeholder="—" min="1" step="1" value="${_aiState.transactionCount||''}" onchange="_aiState.transactionCount=this.value?parseInt(this.value):null" title="Deposits + withdrawals from statement summary. Auto-filled if found in prescan."></div>
     </div>
 
     ${_aiState.error?`<div style="color:var(--bad);font-size:var(--fs-xs);padding:8px;background:#FEE2E2;border-radius:var(--rsm);margin-bottom:10px">${h(_aiState.error)}</div>`:''}
@@ -7308,6 +7334,12 @@ async function runAIPrescan(){
     }
     if(meta.opening_balance!=null&&!_aiState.openingBal)_aiState.openingBal=String(meta.opening_balance);
     if(meta.closing_balance!=null&&!_aiState.closingBal)_aiState.closingBal=String(meta.closing_balance);
+    // Store deposit + withdrawal counts from statement summary if available
+    if(meta.deposit_count!=null||meta.withdrawal_count!=null){
+      const dep=parseInt(meta.deposit_count)||0;
+      const wit=parseInt(meta.withdrawal_count)||0;
+      _aiState.transactionCount=(dep+wit)||null;
+    }
     if(meta.account_number&&!_aiState.accountId){
       const clean=meta.account_number.replace(/\s/g,'');
       const match=S.accounts.find(a=>a.accountNumber&&a.accountNumber.replace(/\s/g,'')===clean);
@@ -7353,6 +7385,7 @@ async function runAIExtract(){
         rules,
         mainCats:undefined,  // hardcoded in edge function — not sent to save tokens
         subCats:undefined,   // hardcoded in edge function — not sent to save tokens
+        transactionCount:_aiState.transactionCount||null,
       })
     });
     if(resp.status===429){
@@ -7476,15 +7509,17 @@ function saveAITxnEdit(idx){
 }
 
 function clearMonthAndMark(ym,accountId){
-  if(!confirm(`Clear all transactions for ${fmtYM(ym)}${accountId?' for the selected account':' for all accounts'}? This cannot be undone. Make sure you have a backup.`))return;
-  if(accountId){
-    if(S.txnCache[ym])S.txnCache[ym]=S.txnCache[ym].filter(t=>t.accountId!==accountId);
-  }else{
-    delete S.txnCache[ym];
-  }
-  schedTxn(ym);sched();
-  toast(`${fmtYM(ym)} cleared — now import fresh`);
-  render();
+  const msg=`Clear all transactions for ${fmtYM(ym)}${accountId?' for the selected account':' for all accounts'}? This cannot be undone. Make sure you have a backup.`;
+  reqPin('Clear month & reimport',msg,()=>{
+    if(accountId){
+      if(S.txnCache[ym])S.txnCache[ym]=S.txnCache[ym].filter(t=>t.accountId!==accountId);
+    }else{
+      delete S.txnCache[ym];
+    }
+    schedTxn(ym);sched();
+    toast(`${fmtYM(ym)} cleared — now import fresh`);
+    render();
+  });
 }
 
 async function commitAIImport(){
@@ -7516,7 +7551,7 @@ async function commitAIImport(){
   await doImport(payload);
 
   // Reset AI state and navigate to transactions
-  _aiState={file:null,fileName:'',fileData:'',fileType:'',accountId:'',month:'',openingBal:'',closingBal:'',extracted:[],loading:false,scanning:false,scanMeta:null,scanError:'',usage:null,error:'',step:1,_forceAll:false,status:''};
+  _aiState={file:null,fileName:'',fileData:'',fileType:'',accountId:'',month:'',openingBal:'',closingBal:'',transactionCount:null,extracted:[],loading:false,scanning:false,scanMeta:null,scanError:'',usage:null,error:'',step:1,_forceAll:false,status:''};
   sw('txbank');
 }
 
