@@ -3033,6 +3033,22 @@ function isMatched(txnId){
   return S.matchedPairs.some(p=>p.outId===txnId||p.inId===txnId);
 }
 
+// Extract all 4+ consecutive digit sequences from a string
+function getDigitSeqs(text){
+  return ((text||'').match(/\d{4,}/g)||[]);
+}
+
+// Check if any 4+ digit sequence from txn's description+notes
+// appears inside the account number of the given accountId
+function txnMentionsAccount(txn, accountId){
+  const acc=S.accounts.find(a=>a.id===accountId);
+  if(!acc||!acc.accountNumber)return false;
+  const accDigits=acc.accountNumber.replace(/[^0-9]/g,'');
+  if(accDigits.length<4)return false;
+  const text=(txn.description||'')+' '+(txn.notes||'');
+  return getDigitSeqs(text).some(seq=>accDigits.includes(seq));
+}
+
 // Run matching on a newly imported batch of transactions
 // newTxns: the transactions just added; preExistingIds: IDs that existed before this import
 function runTransferMatching(newTxns, preExistingIds){
@@ -3043,19 +3059,27 @@ function runTransferMatching(newTxns, preExistingIds){
   newTransfers.forEach(t=>{
     if(isMatched(t.id))return;
     const tDir=txDir(t);
-    // Look for an opposing unmatched transfer: same amount, opposite direction,
-    // different account, within ±2 days
     const tDate=new Date(t.date);
+
+    // Three criteria must all pass:
+    // 1. Same amount, opposite direction, different account, within ±2 days (existing)
+    // 2. At least 4 consecutive digits from t's description/notes appear in
+    //    the other account's number, OR vice versa (new — prevents false positives
+    //    where unrelated transactions share a date and amount)
     const match=allT.find(other=>{
       if(other.id===t.id)return false;
       if(isMatched(other.id))return false;
-      if((other.type!=='transfer'&&other.type!=='external_transfer'))return false;
-      if(other.accountId===t.accountId)return false; // must be different account
-      if(Math.abs(other.amount-t.amount)>0.01)return false; // same amount
-      if(txDir(other)===tDir)return false; // must be opposite direction
+      if(other.type!=='transfer'&&other.type!=='external_transfer')return false;
+      if(other.accountId===t.accountId)return false;
+      if(Math.abs(other.amount-t.amount)>0.01)return false;
+      if(txDir(other)===tDir)return false;
       const oDate=new Date(other.date);
       const dayDiff=Math.abs((tDate-oDate)/(1000*60*60*24));
-      return dayDiff<=2;
+      if(dayDiff>2)return false;
+      // Digit linkage: t mentions other's account OR other mentions t's account
+      // (checks both description and notes fields of each transaction)
+      const linked=txnMentionsAccount(t,other.accountId)||txnMentionsAccount(other,t.accountId);
+      return linked;
     });
 
     if(match){
