@@ -762,7 +762,7 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overfl
   .mod-card{padding:1.1rem 1.2rem}
 
   /* Account pills wrap */
-  .tx-account-pills,.owner-pills-row{flex-wrap:wrap}
+  .tx-account-pills{flex-wrap:wrap}
   .opill{font-size:11px;padding:4px 11px}
 }
 
@@ -783,7 +783,7 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overfl
 
 /* Ensure tap targets are always usable */
 @media(hover:none){
-  .btn,.nav-item,.opill,.pbtn,.acc-pill,.owner-pill{
+  .btn,.nav-item,.opill,.pbtn,.acc-pill{
     cursor:pointer;
     -webkit-tap-highlight-color:rgba(2,23,81,.06);
   }
@@ -1324,7 +1324,7 @@ const TAB_TO_GROUP={txbank:'transactions',txcards:'transactions',aiupload:'trans
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='3.1';
+const VERSION='4.0';
 let sKey=null,saveTimer=null,pinCb=null,catCb=null,activeGroup=null;
 
 // ─── CRYPTO ───
@@ -1509,7 +1509,7 @@ function lockApp(){sKey=null;
   // H2: Clear decrypted state from memory
   S.accounts=[];S.debts=[];S.goals=[];S.income=[];S.bills=[];S.subs=[];
   S.staff=[];S.rules=[];S.txnRules=[];S.dismissed=[];S.deletedCats=[];S.deletedSubs=[];
-  S.owners=[];S.familyMembers=[];S.txnCache={};S.monthlyBal={};S.matchedPairs=[];S.settings={};
+  S.familyMembers=[];S.txnCache={};S.monthlyBal={};S.matchedPairs=[];S.settings={};
   showAuth('s-unlock');const p=document.getElementById('ul-p');if(p){p.value='';p.focus();}const e=document.getElementById('ul-err');if(e)e.textContent='';const b=document.getElementById('ul-btn');if(b){b.disabled=false;b.textContent='Unlock \u2192';}}
 
 // ─── PIN MODAL ───
@@ -1597,12 +1597,9 @@ function addM(ym,n){const[y,m]=ym.split('-').map(Number);const d=new Date(y,m-1+
 function mRange(from,to){const r=[];let c=from;while(c<=to){r.push(c);c=addM(c,1);}return r;}
 
 // ─── STATE ───
-const OP=['#185FA5','#7F77DD','#D4537E','#1D9E75','#BA7517','#D85A30','#0F6E56','#533400'];
-function oc(i){return OP[i%OP.length];}
-function defOwners(){return[{id:'owner_self',name:'Self'}];}
 let S={
   tab:'overview',month:addM(getYM(new Date()),-1),privacy:false,ovPeriod:'month',
-  owners:[],accounts:[],debts:[],goals:[],income:[],bills:[],subs:[],staff:[],
+  accounts:[],debts:[],goals:[],income:[],bills:[],subs:[],staff:[],
   rules:[],dismissed:[],deletedCats:[],deletedSubs:[],txnCache:{},monthlyBal:{},matchedPairs:[],submitters:[],
   settings:{currency:'SAR',savingsTarget:20,backupReminderMonths:2,lastBackup:null},
   version:VERSION
@@ -1619,8 +1616,6 @@ function setSS(m,type){
   e.style.color=type==='ok'?'var(--ok)':type==='err'?'var(--bad)':'var(--text3)';
   e.style.fontWeight=type==='err'?'600':'';
 }
-function ob(oid){const i=S.owners.findIndex(o=>o.id===oid);const o=S.owners[i];if(!o)return'';const c=oc(i);return`<span style="font-size:11px;font-weight:500;padding:2px 7px;border-radius:8px;background:${c}22;color:${c}">${o.name}</span>`;}
-function oSel(sel){const def=sel!==undefined?sel:(S.owners[0]?.id||'');return S.owners.map(o=>`<option value="${o.id}" ${o.id===def?'selected':''}>${o.name}</option>`).join('');}
 function togglePrivacy(){S.privacy=!S.privacy;const b=document.getElementById('priv-btn');if(b)b.innerHTML=S.privacy?'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg> Show':'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg> Hide';render();}
 function tp(id){const el=document.getElementById(id);if(el){el.classList.toggle('open');if(id==='atxn-panel'&&el.classList.contains('open')){setTimeout(()=>{const t=document.getElementById('nt-type');if(t)autoDir(t.value,'nt-dir');},10);}}}
 function getMC(id){if(S.deletedCats&&S.deletedCats.includes(id))return undefined;return MAIN_CATS.find(c=>c.id===id);}
@@ -1684,7 +1679,7 @@ function getMainP(){
     version:VERSION,
     accounts:S.accounts,debts:S.debts,goals:S.goals,income:S.income,
     bills:S.bills,subs:S.subs,staff:S.staff,rules:S.rules,txnRules:S.txnRules,dismissed:S.dismissed,
-    deletedCats:S.deletedCats,deletedSubs:S.deletedSubs,owners:S.owners,familyMembers:S.familyMembers,settings:S.settings,monthlyBal:S.monthlyBal,matchedPairs:S.matchedPairs,submitters:S.submitters
+    deletedCats:S.deletedCats,deletedSubs:S.deletedSubs,familyMembers:S.familyMembers,settings:S.settings,monthlyBal:S.monthlyBal,matchedPairs:S.matchedPairs,submitters:S.submitters
   };
 }
 function restoreS(d){
@@ -1715,8 +1710,7 @@ function restoreS(d){
   });
   S.txnRules=merged;
   S.deletedCats=d.deletedCats||[];S.deletedSubs=d.deletedSubs||[];
-  S.owners=d.owners&&d.owners.length?d.owners:defOwners();
-  S.familyMembers=d.familyMembers||[];
+    S.familyMembers=d.familyMembers||[];
   S.settings={currency:'SAR',savingsTarget:20,backupReminderMonths:2,lastBackup:null,...(d.settings||{})};  S.monthlyBal=d.monthlyBal||{};  S.matchedPairs=d.matchedPairs||[];
   S.submitters=d.submitters||[];
   // txnCache stays separate - loaded in loadS
@@ -3132,7 +3126,7 @@ function rTransferMatching(){
     return`<tr>
       <td style="color:var(--text3);font-size:var(--fs-xs);white-space:nowrap">${toDD(t.date)}</td>
       <td><div style="font-size:var(--fs-xs);font-weight:500">${h(t.description)}</div></td>
-      <td style="font-size:var(--fs-xs)">${acc?.name||'--'} ${ob(acc?.owner)}</td>
+      <td style="font-size:var(--fs-xs)">${acc?.name||'--'}</td>
       <td class="${dir==='out'?'c-bad':'c-ok'}" style="text-align:right;font-weight:500;white-space:nowrap">${dir==='out'?'-':'+'}${fmtP(t.amount)}</td>
       <td><span class="badge" style="background:#FEF3C7;color:#92400E">Pending</span><div style="font-size:10px;color:var(--text3);margin-top:2px">Other account not yet imported</div></td>
       <td><button class="btn btn-xs" onclick="showMatchPicker('${t.id}')">Match manually</button>
@@ -3956,11 +3950,11 @@ function onIF(v){
   const wr=document.getElementById('ii-wend-row');
   if(v==='One-time'){
     if(lbl)lbl.textContent='Specific date (DD/MM/YYYY)';
-    if(inp){inp.placeholder='DD/MM/YYYY';}
+    if(inp){inp.placeholder='DD/MM/YYYY';inp.maxLength=10;inp.classList.add('date-inp');inp.value='';initDateInputs();}
     if(wr)wr.style.display='none';
   }else{
     if(lbl)lbl.textContent='Expected day of month';
-    if(inp){inp.placeholder='e.g. 25';}
+    if(inp){inp.placeholder='e.g. 25';inp.maxLength=2;inp.classList.remove('date-inp');inp.value='';inp._dateInited=false;}
     if(wr)wr.style.display='';
   }
 }
@@ -4521,7 +4515,7 @@ function logAdv(sid){
     <div class="chdr">Log Advance — ${h(st.name)}</div>
     <div class="fr3" style="margin-bottom:8px">
       <div><label class="lbl">Amount (SAR)</label><input type="number" id="${panelId}-amt" placeholder="0.00" min="0" step="0.01"></div>
-      <div><label class="lbl">Date given (DD/MM/YYYY)</label><input type="text" id="${panelId}-date" value="${toDD(now.toISOString().substr(0,10))}"></div>
+      <div><label class="lbl">Date given (DD/MM/YYYY)</label><div class="date-inp-wrap"><input type="text" id="${panelId}-date" class="date-inp" maxlength="10" value="${toDD(now.toISOString().substr(0,10))}"><button type="button" class="cal-btn" onclick="openCal('${panelId}-date')" title="Pick date">📅</button></div></div>
       <div><label class="lbl">Deduction starts (MM/YYYY)</label><input type="text" id="${panelId}-start" value="${defDeductStart}"></div>
     </div>
     <div class="fr" style="margin-bottom:10px">
@@ -4535,6 +4529,7 @@ function logAdv(sid){
   const btn=document.querySelector('[onclick="logAdv(\''+sid+'\')"]');
   if(btn&&btn.parentNode){btn.parentNode.insertBefore(div,btn.nextSibling);}
   else{document.getElementById('page-content').appendChild(div);}
+  initDateInputs();
 }
 function prefillAdvMonthly(panelId){
   const amt=parseFloat(document.getElementById(panelId+'-amt').value)||0;
@@ -4578,14 +4573,13 @@ function rAcc(){
     <td style="color:var(--text3)">${h(a.institution||'')}</td>
     <td><span class="badge b-tr" style="font-size:10px">${ATL[a.type]||a.type}</span></td>
     ${balTd}
-    <td>${ob(a.owner)}</td>
     <td style="font-size:var(--fs-xs)">${a.openingBalance!=null?`<span style="font-weight:500">${fmtP(a.openingBalance)}</span><br><span style="font-size:10px;color:var(--text3)">as of ${toDD(a.balanceAsOf)||'--'}</span>`:'<span style="color:var(--text3)">--</span>'}</td>
     <td style="font-size:11px;font-family:monospace;color:var(--text3)">${a.id}</td>
     <td style="white-space:nowrap">
       <button class="btn btn-xs" onclick="openEditAcc('${a.id}')">Edit</button>
       <button class="btn btn-xs btn-d" onclick="delAcc('${a.id}')">&#10005;</button>
     </td>
-  </tr>`;}).join(''):`<tr><td colspan="${showBalance?8:7}" class="empty">No accounts added yet</td></tr>`;
+  </tr>`;}).join(''):`<tr><td colspan="${showBalance?7:6}" class="empty">No accounts added yet</td></tr>`;
   return`
   <div class="pg-header-row">
     <div class="pg-header-title">Accounts &amp; Cards</div>
@@ -4603,7 +4597,6 @@ function rAcc(){
     </div>
     <div class="fr3" style="margin-top:8px">
       <div><label class="lbl">Type</label><select id="ac-type" onchange="onATC(this.value)">${ATS}</select></div>
-      <div><label class="lbl">Owner</label><select id="ac-owner">${oSel()}</select></div>
       <div><label class="lbl">IBAN or Card Number</label><input type="text" id="ac-no" placeholder="SA followed by 22 digits"></div>
     </div>
     <div style="margin-top:8px">
@@ -4614,7 +4607,7 @@ function rAcc(){
     </div>
     <div class="fr" style="margin-top:8px">
       <div><label class="lbl">Opening Balance (SAR)</label><input type="number" id="ac-bal" placeholder="e.g. 921.20" min="0" step="0.01"></div>
-      <div><label class="lbl">Balance As Of (DD/MM/YYYY)</label><input type="text" id="ac-bal-date" placeholder="e.g. 31/12/2025"></div>
+      <div><label class="lbl">Balance As Of (DD/MM/YYYY)</label><div class="date-inp-wrap"><input type="text" id="ac-bal-date" class="date-inp" placeholder="e.g. 31/12/2025" maxlength="10"><button type="button" class="cal-btn" onclick="openCal('ac-bal-date')" title="Pick date">📅</button></div></div>
     </div>
     <div style="font-size:var(--fs-xxs);color:var(--text3);margin-top:4px;line-height:1.6">Set once from your statement. The system calculates the current balance automatically from imported transactions going forward.</div>
     <div class="fg" style="margin-top:10px">
@@ -4625,7 +4618,7 @@ function rAcc(){
   <div class="card">
     <div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:10px;line-height:1.6">Account ID is used in import JSON. IBAN enables automatic account matching during statement import.</div>
     <div class="tbl-wrap"><table>
-      <thead><tr><th>Name / Number</th><th>Institution</th><th>Type</th><th>Live Balance</th><th>Owner</th><th>Opening Balance</th><th>ID</th><th></th></tr></thead>
+      <thead><tr><th>Name / Number</th><th>Institution</th><th>Type</th><th>Live Balance</th><th>Opening Balance</th><th>ID</th><th></th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>
   </div>`;
@@ -4641,14 +4634,13 @@ function openEditAcc(id){
   const balEl=document.getElementById('ac-bal');if(balEl)balEl.value=a.openingBalance!==undefined?a.openingBalance:'';
   const balDtEl=document.getElementById('ac-bal-date');if(balDtEl)balDtEl.value=a.balanceAsOf?toDD(a.balanceAsOf):'';
   document.getElementById('ac-type').value=a.type||'main_account';onATC(a.type);
-  document.getElementById('ac-owner').value=a.owner||S.owners[0]?.id||'';
   document.getElementById('acc-ptitle').textContent='Edit account';document.getElementById('acc-sbtn').textContent='Save changes';
   const p=document.getElementById('acc-panel');if(p&&!p.classList.contains('open')){p.classList.add('open');p.scrollIntoView({behavior:'smooth'});}
 }
 function saveAcc(){
   const name=document.getElementById('ac-name').value.trim();if(!name){toast('Name required',false);return;}
   const type=document.getElementById('ac-type').value;
-  const balVal=document.getElementById('ac-bal')?.value;const data={name,institution:document.getElementById('ac-inst').value.trim(),type,owner:document.getElementById('ac-owner').value,accountNumber:document.getElementById('ac-no').value.trim()||null,purpose:document.getElementById('ac-purp')?.value.trim()||'',openingBalance:balVal!==''&&balVal!==undefined?parseFloat(balVal):undefined,balanceAsOf:fromDD(document.getElementById('ac-bal-date')?.value||'')||undefined};
+  const balVal=document.getElementById('ac-bal')?.value;const data={name,institution:document.getElementById('ac-inst').value.trim(),type,accountNumber:document.getElementById('ac-no').value.trim()||null,purpose:document.getElementById('ac-purp')?.value.trim()||'',openingBalance:balVal!==''&&balVal!==undefined?parseFloat(balVal):undefined,balanceAsOf:fromDD(document.getElementById('ac-bal-date')?.value||'')||undefined};
   if(editAccId){Object.assign(S.accounts.find(x=>x.id===editAccId),data);toast('Account updated');}
   else{data.id='acc_'+name.toLowerCase().replace(/[^a-z0-9]/g,'_').slice(0,12)+'_'+Math.random().toString(36).substr(2,4);S.accounts.push(data);toast('Account added');}
   editAccId=null;sched();tp('acc-panel');render();
@@ -5431,8 +5423,6 @@ function deduplicateTxns(){
 
 function toggleCP(){const p=document.getElementById('cp-panel');if(p)p.style.display=p.style.display==='none'?'block':'none';}
 
-function addOwner(){const n=document.getElementById('new-own')?.value.trim();if(!n){toast('Name required',false);return;}const id='owner_'+n.toLowerCase().replace(/[^a-z0-9]/g,'_')+'_'+Math.random().toString(36).substr(2,4);S.owners.push({id,name:n});sched();render();toast('Owner added');}
-function delOwner(id){S.owners=S.owners.filter(x=>x.id!==id);sched();render();}
 function addFamilyMemberSettings(){
   const name=document.getElementById('fm-name-s')?.value.trim();
   if(!name){toast('Name required',false);return;}
@@ -6176,15 +6166,13 @@ function downloadTemplate(type){
 
     if(type==='accounts'){
       const accTypes=['main_account','savings_account','sub_account','debit_card','credit_card','charge_card','prepaid_card','cash','other'];
-      const ownerNames=S.owners.map(o=>o.name);
       const data=[
-        ['name','institution','type','owner_name','iban_or_card','purpose','opening_balance','balance_as_of_dd_mm_yyyy'],
-        ['Al Rajhi Main','Al Rajhi Bank','main_account','Self','SA1234...','Main salary account','921.20','31/12/2025'],
-        ['D360 Current','D360','main_account','Self','SA5678...','Daily spending','150.00','31/12/2025'],
+        ['name','institution','type','iban_or_card','purpose','opening_balance','balance_as_of_dd_mm_yyyy'],
+        ['Al Rajhi Main','Al Rajhi Bank','main_account','SA1234...','Main salary account','921.20','31/12/2025'],
+        ['D360 Current','D360','main_account','SA5678...','Daily spending','150.00','31/12/2025'],
       ];
       ws=XLSX.utils.aoa_to_sheet(data);
-      // Add a reference sheet for valid types
-      const refData=[['Valid Account Types'],...accTypes.map(t=>[t]),[''],['Valid Owner Names'],...ownerNames.map(n=>[n])];
+      const refData=[['Valid Account Types'],...accTypes.map(t=>[t])];
       const wsRef=XLSX.utils.aoa_to_sheet(refData);
       XLSX.utils.book_append_sheet(wb,ws,'Accounts');
       XLSX.utils.book_append_sheet(wb,wsRef,'Reference');
@@ -6245,12 +6233,10 @@ function uploadTemplate(type,input){
             // L4: Skip duplicates by name or IBAN
             const iban=(row.iban_or_card||'').trim();
             if(S.accounts.find(a=>a.name.toLowerCase()===name.toLowerCase()||(iban&&a.accountNumber===iban))){skipped++;return;}
-            const ownerName=(row.owner_name||'').trim();
-            const owner=S.owners.find(o=>o.name.toLowerCase()===ownerName.toLowerCase())?.id||S.owners[0]?.id;
             const bal=parseFloat(row.opening_balance)||undefined;
             const asOf=fromDD((row.balance_as_of_dd_mm_yyyy||'').trim())||undefined;
             const typeVal=(row.type||'main_account').trim();
-            S.accounts.push({id:'acc_'+name.toLowerCase().replace(/[^a-z0-9]/g,'_').slice(0,12)+'_'+Math.random().toString(36).substr(2,4),name,institution:(row.institution||'').trim(),type:typeVal,owner,accountNumber:iban||null,purpose:(row.purpose||'').trim(),openingBalance:bal,balanceAsOf:asOf});
+            S.accounts.push({id:'acc_'+name.toLowerCase().replace(/[^a-z0-9]/g,'_').slice(0,12)+'_'+Math.random().toString(36).substr(2,4),name,institution:(row.institution||'').trim(),type:typeVal,accountNumber:iban||null,purpose:(row.purpose||'').trim(),openingBalance:bal,balanceAsOf:asOf});
             added++;
           });
         }else if(type==='bills'){
@@ -7141,6 +7127,9 @@ function rAIUpload(){
         <td style="padding:8px 10px">
           <button class="btn btn-xs" onclick="openAITxnEdit(${i})">Edit</button>
         </td>
+        <td style="padding:8px 6px">
+          <button class="btn btn-xs btn-d" title="Remove from list" onclick="_aiState.extracted.splice(${i},1);render()">✕</button>
+        </td>
       </tr>`;
     }).join('');
 
@@ -7252,6 +7241,14 @@ function rAIUpload(){
           <option value="">Select month…</option>
           ${[...Array(24)].map((_,i)=>{const d=addM(getYM(new Date()),-i);return`<option value="${d}" ${_aiState.month===d?'selected':''}>${fmtYM(d)}</option>`;}).join('')}
         </select>
+        ${(()=>{
+          const pm=_aiState.scanMeta;
+          if(!pm?.period_start||!pm?.period_end)return'';
+          const startYm=pm.period_start.substr(0,7);
+          const endYm=pm.period_end.substr(0,7);
+          if(startYm===endYm)return'';
+          return`<div style="font-size:10px;color:var(--electric);margin-top:3px">Multi-month statement (${fmtYM(startYm)} → ${fmtYM(endYm)}) — transactions from other months are included</div>`;
+        })()}
       </div>
     </div>
 
@@ -7856,8 +7853,7 @@ function enterDemoMode(){
   S.deletedSubs=[];      // no sub-category deletions in demo
   S.matchedPairs=[];
   S.monthlyBal={};
-  S.owners=[];
-
+  
   // Settings — generic demo, no personal info
   S.settings={
     currency:'SAR',
