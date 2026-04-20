@@ -7435,6 +7435,36 @@ async function runAIExtract(){
       throw new Error(data.__error);
     }
     if(!data.transactions?.length&&!data.flagged?.length)throw new Error('No transactions found in the statement.');
+
+    // ── CLIENT-SIDE RETRY: if count is known and we fell short, run a second pass ──
+    const firstPassTotal=(data.transactions?.length||0)+(data.flagged?.length||0);
+    if(_aiState.transactionCount&&firstPassTotal<_aiState.transactionCount&&!_aiState._retryDone){
+      const missing=_aiState.transactionCount-firstPassTotal;
+      // Store first pass data and flag that retry is in progress
+      _aiState._firstPassData={transactions:[...(data.transactions||[])],flagged:[...(data.flagged||[])]};
+      _aiState._retryDone=true;
+      _aiState.loading=true;
+      _aiState.status=`Found ${firstPassTotal} of ${_aiState.transactionCount} expected — ${missing} missing. Running second pass…`;
+      render();
+      // Brief pause so status renders
+      await new Promise(r=>setTimeout(r,400));
+      runAIExtract();
+      return;
+    }
+
+    // If this was a retry, merge with first pass and dedup
+    if(_aiState._retryDone&&_aiState._firstPassData){
+      const seen=new Set();
+      const dedup=(arr)=>(arr||[]).filter(t=>{
+        const key=`${t.date}|${Math.round((t.amount||0)*100)}|${(t.raw_description||t.description||'').trim().toLowerCase().slice(0,60)}`;
+        if(seen.has(key))return false;
+        seen.add(key);return true;
+      });
+      data.transactions=dedup([...(_aiState._firstPassData.transactions||[]),...(data.transactions||[])]);
+      data.flagged=dedup([...(_aiState._firstPassData.flagged||[]),...(data.flagged||[])]);
+      _aiState._firstPassData=null;
+      _aiState._retryDone=false;
+    }
     _aiState.usage=data.usage||null;
     // Merge transactions + flagged into one list for review.
     // Flagged items are shown with a warning badge — user decides whether to import.
@@ -7552,7 +7582,7 @@ async function commitAIImport(){
   await doImport(payload);
 
   // Reset AI state and navigate to transactions
-  _aiState={file:null,fileName:'',fileData:'',fileType:'',accountId:'',month:'',openingBal:'',closingBal:'',transactionCount:null,extracted:[],loading:false,scanning:false,scanMeta:null,scanError:'',usage:null,error:'',step:1,_forceAll:false,status:''};
+  _aiState={file:null,fileName:'',fileData:'',fileType:'',accountId:'',month:'',openingBal:'',closingBal:'',transactionCount:null,extracted:[],loading:false,scanning:false,scanMeta:null,scanError:'',usage:null,error:'',step:1,_forceAll:false,status:'',_retryDone:false,_firstPassData:null};
   sw('txbank');
 }
 
