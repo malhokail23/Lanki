@@ -7279,7 +7279,7 @@ function rAIUpload(){
     <div class="fr" style="margin-bottom:14px">
       <div><label class="lbl">Opening balance (SAR)</label><input type="number" placeholder="0.00" step="0.01" value="${_aiState.openingBal}" onchange="_aiState.openingBal=this.value"></div>
       <div><label class="lbl">Closing balance (SAR)</label><input type="number" placeholder="0.00" step="0.01" value="${_aiState.closingBal}" onchange="_aiState.closingBal=this.value"></div>
-      <div><label class="lbl">Expected transactions</label><input type="number" placeholder="—" min="1" step="1" value="${_aiState.transactionCount||''}" onchange="_aiState.transactionCount=this.value?parseInt(this.value):null" title="Deposits + withdrawals from statement summary. Auto-filled if found in prescan."></div>
+      <div><label class="lbl">Expected transactions</label><input type="number" placeholder="—" min="1" step="1" value="${_aiState.transactionCount||''}" onchange="_aiState.transactionCount=this.value?parseInt(this.value):null" title="Bank accounts: deposits + withdrawals from statement summary. Credit cards: count of dated transaction rows across all pages. Auto-filled from prescan. You can edit if needed."></div>
     </div>
 
     ${_aiState.error?`<div style="color:var(--bad);font-size:var(--fs-xs);padding:8px;background:#FEE2E2;border-radius:var(--rsm);margin-bottom:10px">${h(_aiState.error)}</div>`:''}
@@ -7357,8 +7357,11 @@ async function runAIPrescan(){
     }
     if(meta.opening_balance!=null&&!_aiState.openingBal)_aiState.openingBal=String(meta.opening_balance);
     if(meta.closing_balance!=null&&!_aiState.closingBal)_aiState.closingBal=String(meta.closing_balance);
-    // Store deposit + withdrawal counts from statement summary if available
-    if(meta.deposit_count!=null||meta.withdrawal_count!=null){
+    // For bank accounts: sum deposit + withdrawal counts from statement summary
+    // For credit cards: use card_transaction_count (dated row count across all pages)
+    if(meta.card_transaction_count!=null){
+      _aiState.transactionCount=parseInt(meta.card_transaction_count)||null;
+    } else if(meta.deposit_count!=null||meta.withdrawal_count!=null){
       const dep=parseInt(meta.deposit_count)||0;
       const wit=parseInt(meta.withdrawal_count)||0;
       _aiState.transactionCount=(dep+wit)||null;
