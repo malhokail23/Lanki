@@ -7387,26 +7387,138 @@ function parseExcelStatement(rows,filename){
   // Al Rajhi CC: has "billing amount" and card number pattern 467323
   if(flat.includes('billing amount')&&(flat.includes('467323')||flat.includes('credit card limit')))
     return parseAlRajhiCCExcel(rows);
+  // AmEx: has "original transaction" and "transaction name" headers
+  if(flat.includes('original transaction')&&flat.includes('transaction name'))
+    return parseAmexExcel(rows,filename);
   // D360 Prepaid: has "value date" and "d360" or prepaid indicator
   if(flat.includes('value date')&&(flat.includes('d360')||flat.includes('prepaid')))
     return parseD360PrepaidExcel(rows);
   return null;
 }
 
-// Convert DD-MM-YYYY (Al Rajhi CC Excel format) to YYYY-MM-DD
+function parseAmexExcel(rows,filename){
+  // Extract last 4 digits of card number from filename e.g. "AMEX - CC - 5309"
+  const cardMatch=(filename||'').match(/(\d{4})[^0-9]*(?:xlsx|xls)$/i)||(filename||'').match(/[\-_\s](\d{4})[\-_\s]/);
+  const cardNumber=cardMatch?cardMatch[1]:'';
+  // Row 0 is header, data starts at row 1
+  const transactions=[];
+  let firstDate='',lastDate='';
+  for(let i=1;i<rows.length;i++){
+    const row=rows[i]||[];
+    const rawDesc=String(row[0]||'').trim();
+    const txnName=String(row[1]||'').trim();
+    const amtRaw=row[2];
+    const currency=String(row[3]||'USD').trim();
+    const dateRaw=row[4];
+    if(!rawDesc||amtRaw===null||amtRaw===undefined)continue;
+    // Skip payments
+    if(rawDesc.toLowerCase().includes('payment received'))continue;
+    const amount=parseFloat(String(amtRaw).replace(/,/g,''));
+    if(isNaN(amount)||amount===0)continue;
+    // Parse date — stored as datetime string "2026-01-01 00:00:00" or Excel serial
+    let dateISO=null;
+    if(dateRaw instanceof Date){dateISO=dateRaw.toISOString().substr(0,10);}
+    else{
+      const ds=String(dateRaw||'').trim();
+      // "YYYY-MM-DD HH:MM:SS" or "YYYY-MM-DD"
+      const dm=ds.match(/^(\d{4}-\d{2}-\d{2})/);
+      if(dm)dateISO=dm[1];
+      else dateISO=xlDateToISO(dateRaw);
+    }
+    if(!dateISO)continue;
+    if(!firstDate||dateISO<firstDate)firstDate=dateISO;
+    if(!lastDate||dateISO>lastDate)lastDate=dateISO;
+    // Convert USD to SAR at 3.75
+    const sarAmount=Math.round(amount*3.75*100)/100;
+    const notes=`USD ${amount.toFixed(2)} × 3.75 = SAR ${sarAmount.toFixed(2)}`;
+    // Use clean transaction name if available, else original
+    const description=(txnName&&txnName!==rawDesc&&!txnName.toLowerCase().includes('payment received'))?txnName:rawDesc;
+    const cat=catAmexCC(rawDesc,txnName);
+    transactions.push({
+      date:dateISO,
+      description:cat.desc||description,
+      amount:sarAmount,
+      type:cat.type||'expense',
+      direction:'out',
+      mainCatId:cat.cat||'',
+      subCatId:cat.sub||'',
+      notes,
+      raw_description:rawDesc
+    });
+  }
+  const month=firstDate?firstDate.substr(0,7):'';
+  // Store period for multi-month display
+  if(firstDate&&lastDate&&firstDate.substr(0,7)!==lastDate.substr(0,7)){
+    _aiState.scanMeta={period_start:firstDate,period_end:lastDate,institution:'American Express',account_number:'xxxx-'+cardNumber};
+  }
+  return{transactions,cardNumber,month};
+}
+
+function catAmexCC(raw,name){
+  const d=(raw+' '+name).toLowerCase();
+  // Payments — should be skipped upstream but guard here too
+  if(d.includes('payment received'))return null;
+  // VAT rows
+  if(raw.trim().toUpperCase()==='VAT')return{type:'expense',cat:'cat_main_finance',desc:'FX VAT'};
+  // Shopping
+  if(d.includes('amazon mktpl')||d.includes('amazon mktplace')||d.includes('amazon.com'))
+    return{type:'expense',cat:'cat_main_shopping',desc:name||raw};
+  if(d.includes('amazon sa'))return{type:'expense',cat:'cat_main_shopping',desc:'Amazon SA'};
+  if(d.includes('myus'))return{type:'expense',cat:'cat_main_shopping',desc:'MyUS',notes:'US shipping service'};
+  if(d.includes('aliexpress'))return{type:'expense',cat:'cat_main_shopping'};
+  // Subscriptions
+  if(d.includes('amazon digital')||d.includes('amazonprime')||d.includes('amazon kids+'))
+    return{type:'expense',cat:'cat_main_subscriptions',desc:name||raw};
+  if(d.includes('prime video'))return{type:'expense',cat:'cat_main_subscriptions',desc:'Prime Video'};
+  if(d.includes('netflix'))return{type:'expense',cat:'cat_main_subscriptions',desc:'Netflix'};
+  if(d.includes('claude.ai')||d.includes('claude ai'))return{type:'expense',cat:'cat_main_subscriptions',desc:'Claude AI',notes:'AI tool'};
+  if(d.includes('openai')||d.includes('chatgpt'))return{type:'expense',cat:'cat_main_subscriptions',desc:'ChatGPT',notes:'AI tool'};
+  if(d.includes('filerev'))return{type:'expense',cat:'cat_main_subscriptions',desc:'FileRev'};
+  if(d.includes('google*workspace')||d.includes('google workspace'))return{type:'expense',cat:'cat_main_subscriptions',desc:'Google Workspace'};
+  if(d.includes('google*youtube')||d.includes('youtubepremium')||d.includes('youtube'))
+    return{type:'expense',cat:'cat_main_subscriptions',desc:'YouTube Premium'};
+  if(d.includes('microsoft'))return{type:'expense',cat:'cat_main_subscriptions',desc:name||raw};
+  if(d.includes('linkedin'))return{type:'expense',cat:'cat_main_subscriptions',desc:'LinkedIn'};
+  if(d.includes('adobe'))return{type:'expense',cat:'cat_main_subscriptions',desc:'Adobe'};
+  if(d.includes('apple.com/bill')||d.includes('apple.com')||(d.includes('apple')&&d.includes('bill')))
+    return{type:'expense',cat:'cat_main_subscriptions',desc:'Apple'};
+  if(d.includes('canva'))return{type:'expense',cat:'cat_main_subscriptions',desc:'Canva'};
+  if(d.includes('beefree'))return{type:'expense',cat:'cat_main_subscriptions',desc:'Beefree'};
+  if(d.includes('ifit'))return{type:'expense',cat:'cat_main_subscriptions',desc:'iFit'};
+  if(d.includes('surveymonkey'))return{type:'expense',cat:'cat_main_subscriptions',desc:'SurveyMonkey'};
+  if(d.includes('oculus'))return{type:'expense',cat:'cat_main_subscriptions',desc:'Oculus'};
+  if(d.includes('tenorshare'))return{type:'expense',cat:'cat_main_subscriptions',desc:'Tenorshare'};
+  // Entertainment
+  if(d.includes('playstation'))return{type:'expense',cat:'cat_main_entertainment',desc:'PlayStation'};
+  // Kids
+  if(d.includes('amazon kids'))return{type:'expense',cat:'cat_main_kids',desc:'Amazon Kids+'};
+  // Personal
+  if(d.includes('regain'))return{type:'expense',cat:'cat_main_personal',desc:name||raw};
+  // Travel
+  if(d.includes('emirates')||(d.includes('airline')))return{type:'expense',cat:'cat_main_travel',desc:name||raw};
+  // Transport
+  if(d.includes('careem'))return{type:'expense',cat:'cat_main_transport',desc:'Careem'};
+  // Unknown
+  return{type:'expense',cat:'',desc:name||raw};
+}
+
+// Convert various date formats to YYYY-MM-DD
 function xlDateToISO(v){
   if(!v)return null;
+  // JavaScript Date object
+  if(v instanceof Date){if(!isNaN(v))return v.toISOString().substr(0,10);return null;}
   const s=String(v).trim();
-  // DD-MM-YYYY
-  const m=s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
-  if(m)return`${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
-  // Already YYYY-MM-DD
-  if(/^\d{4}-\d{2}-\d{2}$/.test(s))return s;
+  // YYYY-MM-DD HH:MM:SS (AmEx Excel datetime)
+  const dtm=s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(dtm)return`${dtm[1]}-${dtm[2]}-${dtm[3]}`;
+  // DD-MM-YYYY (Al Rajhi CC)
+  const dmy=s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+  if(dmy)return`${dmy[3]}-${dmy[2].padStart(2,'0')}-${dmy[1].padStart(2,'0')}`;
+  // DD Mon YYYY (D360)
+  const dmon=s.match(/^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})$/);
+  if(dmon){const mo={'Jan':'01','Feb':'02','Mar':'03','Apr':'04','May':'05','Jun':'06','Jul':'07','Aug':'08','Sep':'09','Oct':'10','Nov':'11','Dec':'12'};const m=mo[dmon[2]];if(m)return`${dmon[3]}-${m}-${dmon[1].padStart(2,'0')}`;}
   // Excel serial number
-  if(/^\d+$/.test(s)){
-    const d=new Date(Math.round((parseInt(s)-25569)*86400000));
-    if(!isNaN(d))return d.toISOString().substr(0,10);
-  }
+  if(/^\d+(\.\d+)?$/.test(s)){const n=parseFloat(s);if(n>40000&&n<60000){const d=new Date(Math.round((n-25569)*86400000));if(!isNaN(d))return d.toISOString().substr(0,10);}}
   return null;
 }
 
