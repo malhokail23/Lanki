@@ -3275,15 +3275,14 @@ function prefillOpeningBal(){
 }
 function clearMonthTxns(){
   const ym=S.month;
-  // Use transaction page account filter (TF.txnAcc) — not the import panel dropdown
-  const accOverride=TF.txnAcc||null;
+  // Check both the transaction filter account and the import panel dropdown
+  const accOverride=TF.txnAcc||document.getElementById('imp-acc-override')?.value||null;
   const count=(S.txnCache[ym]||[]).filter(t=>!accOverride||t.accountId===accOverride).length;
   if(count===0){toast('No transactions found for '+fmtYM(ym),false);return;}
   const msg=accOverride
     ?`Delete ${count} transaction${count!==1?'s':''} for the selected account in ${fmtYM(ym)}?`
     :`Delete ALL ${count} transaction${count!==1?'s':''} for ${fmtYM(ym)} across all accounts?`;
-  reqPin('Clear month transactions',msg,async()=>{
-  try{
+  reqPin('Clear month transactions',msg,()=>{
   const toDelete=accOverride?(S.txnCache[ym]||[]).filter(t=>t.accountId===accOverride):[...(S.txnCache[ym]||[])];
   const deletedIds=new Set(toDelete.map(t=>t.id));
   if(accOverride){S.txnCache[ym]=(S.txnCache[ym]||[]).filter(t=>t.accountId!==accOverride);}
@@ -3308,13 +3307,8 @@ function clearMonthTxns(){
       if(S.monthlyBal[mk]){delete S.monthlyBal[mk].guardFail;delete S.monthlyBal[mk].guardDiff;delete S.monthlyBal[mk].guardCalc;}
     });
   }
-  render();
+  schedTxn(ym);sched();render();
   toast(`Cleared ${count} transaction${count!==1?'s':''} for ${fmtYM(ym)}.`);
-  clearTimeout(txnSaveTimer);
-  txnSaveQueue[ym]=true;
-  await flushTxnQueue();
-  sched();
-  }catch(e){console.error('clearMonthTxns error',e);toast('Clear failed: '+e.message,false);}
   }); // end reqPin
 }
 function setTxnAcc(id){TF.txnAcc=id;TF.sortCol='';render();}
