@@ -7411,8 +7411,28 @@ function parseAmexExcel(rows,filename){
     const currency=String(row[3]||'USD').trim();
     const dateRaw=row[4];
     if(!rawDesc||amtRaw===null||amtRaw===undefined)continue;
-    // Skip payments
-    if(rawDesc.toLowerCase().includes('payment received'))continue;
+    // Payment rows → transfer in (card payment)
+    if(rawDesc.toLowerCase().includes('payment received')){
+      const amount=parseFloat(String(amtRaw).replace(/,/g,''));
+      if(isNaN(amount)||amount===0)continue;
+      const dateISO=xlDateToISO(dateRaw);
+      if(!dateISO)continue;
+      const sarAmount=Math.round(amount*3.75*100)/100;
+      transactions.push({
+        date:dateISO,
+        description:'Credit Card Payment — AmEx',
+        amount:sarAmount,
+        type:'transfer',
+        direction:'in',
+        mainCatId:'cat_main_transfers',
+        subCatId:'sub_cc_payment',
+        notes:`USD ${amount.toFixed(2)} × 3.75 = SAR ${sarAmount.toFixed(2)}`,
+        raw_description:rawDesc
+      });
+      if(!firstDate||dateISO<firstDate)firstDate=dateISO;
+      if(!lastDate||dateISO>lastDate)lastDate=dateISO;
+      continue;
+    }
     const amount=parseFloat(String(amtRaw).replace(/,/g,''));
     if(isNaN(amount)||amount===0)continue;
     // Parse date — stored as datetime string "2026-01-01 00:00:00" or Excel serial
