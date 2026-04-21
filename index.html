@@ -1275,7 +1275,7 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overfl
     <div class="mdtitle" id="pinm-title">Confirm with Passphrase</div>
     <div class="mddesc" id="pinm-desc">Enter your passphrase to continue.</div>
     <div class="pw-wrap" style="margin-bottom:10px">
-      <input type="password" id="pinm-p" class="auth-inp" style="margin-bottom:0;background:var(--bg2)" placeholder="Your passphrase" autocorrect="off" autocapitalize="none" spellcheck="false" onkeydown="if(event.key==='Enter')confirmPin()">
+      <input type="password" id="pinm-p" class="auth-inp" style="margin-bottom:0;background:var(--bg2)" placeholder="Your passphrase" autocomplete="new-password" autocorrect="off" autocapitalize="none" spellcheck="false">
       <button class="pw-toggle" onclick="tpw('pinm-p',this)" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button>
     </div>
     <div class="auth-err" id="pinm-err"></div>
@@ -3275,13 +3275,14 @@ function prefillOpeningBal(){
 }
 function clearMonthTxns(){
   const ym=S.month;
-  const accOverride=document.getElementById('imp-acc-override')?.value||null;
+  // Use transaction page account filter (TF.txnAcc) — not the import panel dropdown
+  const accOverride=TF.txnAcc||null;
   const count=(S.txnCache[ym]||[]).filter(t=>!accOverride||t.accountId===accOverride).length;
   if(count===0){toast('No transactions found for '+fmtYM(ym),false);return;}
   const msg=accOverride
     ?`Delete ${count} transaction${count!==1?'s':''} for the selected account in ${fmtYM(ym)}?`
     :`Delete ALL ${count} transaction${count!==1?'s':''} for ${fmtYM(ym)} across all accounts?`;
-  reqPin('Clear month transactions',msg,()=>{
+  reqPin('Clear month transactions',msg,async()=>{
   const toDelete=accOverride?(S.txnCache[ym]||[]).filter(t=>t.accountId===accOverride):[...(S.txnCache[ym]||[])];
   const deletedIds=new Set(toDelete.map(t=>t.id));
   if(accOverride){S.txnCache[ym]=(S.txnCache[ym]||[]).filter(t=>t.accountId!==accOverride);}
@@ -3294,9 +3295,9 @@ function clearMonthTxns(){
     if(!d.payments)return;
     const before=d.payments.length;
     d.payments=d.payments.filter(p=>{
-      if(p.source!=='import')return true; // keep manually recorded payments always
+      if(p.source!=='import')return true;
       const payYm=p.date?p.date.substr(0,7):null;
-      return payYm!==ym; // remove import payments from the cleared month
+      return payYm!==ym;
     });
     if(d.payments.length!==before)recalcDebtRemaining(d);
   });
@@ -3311,8 +3312,13 @@ function clearMonthTxns(){
       if(S.monthlyBal[mk]){delete S.monthlyBal[mk].guardFail;delete S.monthlyBal[mk].guardDiff;delete S.monthlyBal[mk].guardCalc;}
     });
   }
-  schedTxn(ym);sched();render();
+  render();
   toast(`Cleared ${count} transaction${count!==1?'s':''} for ${fmtYM(ym)}.`);
+  // Flush immediately — do not debounce destructive operations
+  clearTimeout(txnSaveTimer);
+  txnSaveQueue[ym]=true;
+  await flushTxnQueue();
+  sched();
   }); // end reqPin
 }
 function setTxnAcc(id){TF.txnAcc=id;TF.sortCol='';render();}
@@ -6094,7 +6100,7 @@ function buildTxFilters(){
     <button class="btn btn-xs btn-p" onclick="applyBulkCategory()">Assign Category</button>
   </div>
   <div class="fg" style="gap:8px;flex-wrap:nowrap;align-items:center;margin-bottom:1rem;overflow-x:auto">
-    <input type="text" placeholder="Search description or amount…" value="${TF.q||''}" oninput="TF.q=this.value;render()" style="flex:1;min-width:180px">
+    <input type="text" placeholder="Search description or amount…" value="${TF.q||''}" oninput="TF.q=this.value;render()" autocomplete="off" style="flex:1;min-width:180px">
     <select onchange="TF.type=this.value;render()" style="min-width:140px">
       <option value="" ${!TF.type?'selected':''}>All Types</option>
       <option value="income" ${TF.type==='income'?'selected':''}>Income</option>
@@ -8017,7 +8023,19 @@ async function commitAIImport(){
   };
 
   learnExtractionRules(_aiState.extracted);
+
+  // Detect which months will be affected before importing
+  const allMonths=[...new Set((_aiState.extracted||[]).map(t=>t.date?t.date.substr(0,7):_aiState.month).filter(Boolean))].sort();
+  const primaryMonth=_aiState.month;
+
   await doImport(payload);
+
+  // Show multi-month notice if transactions span more than one month
+  const crossMonths=allMonths.filter(m=>m!==primaryMonth);
+  if(crossMonths.length>0){
+    const monthNames=crossMonths.map(m=>fmtYM(m)).join(', ');
+    toast(`Imported. Transactions also stored in: ${monthNames}. Switch month to view them.`);
+  }
 
   // Reset AI state and navigate to transactions
   _aiState={file:null,fileName:'',fileData:'',fileType:'',_isExcel:false,accountId:'',month:'',openingBal:'',closingBal:'',transactionCount:null,extracted:[],loading:false,scanning:false,scanMeta:null,scanError:'',usage:null,error:'',step:1,_forceAll:false,status:'',_retryDone:false,_firstPassData:null};
