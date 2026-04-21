@@ -7541,7 +7541,7 @@ function catAlRajhiCC(description,amount){
   // Transfer to Account
   if(d.includes('transfer to account'))return{type:'transfer',dir:'out',cat:'cat_main_transfers',sub:'sub_cc_payment',desc:'Transfer to Account'};
   // VAT on Markup — skip under SAR 20
-  if(d.includes('vat on markup')){if(abs<20)return null;return{type:'expense',dir:'out',cat:'cat_main_finance',desc:'FX Markup VAT'};}
+  if(d.includes('vat on markup'))return{type:'expense',dir:'out',cat:'cat_main_finance',desc:'FX Markup VAT'};
   // VAT on Account Trans
   if(d.includes('vat on account trans'))return{type:'expense',dir:'out',cat:'cat_main_finance',desc:'VAT on Account Transfer'};
   // Sadad
