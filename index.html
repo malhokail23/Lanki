@@ -3275,14 +3275,13 @@ function prefillOpeningBal(){
 }
 function clearMonthTxns(){
   const ym=S.month;
-  // Check both the transaction filter account and the import panel dropdown
   const accOverride=TF.txnAcc||document.getElementById('imp-acc-override')?.value||null;
   const count=(S.txnCache[ym]||[]).filter(t=>!accOverride||t.accountId===accOverride).length;
   if(count===0){toast('No transactions found for '+fmtYM(ym),false);return;}
   const msg=accOverride
     ?`Delete ${count} transaction${count!==1?'s':''} for the selected account in ${fmtYM(ym)}?`
     :`Delete ALL ${count} transaction${count!==1?'s':''} for ${fmtYM(ym)} across all accounts?`;
-  reqPin('Clear month transactions',msg,()=>{
+  if(!confirm(msg))return;
   const toDelete=accOverride?(S.txnCache[ym]||[]).filter(t=>t.accountId===accOverride):[...(S.txnCache[ym]||[])];
   const deletedIds=new Set(toDelete.map(t=>t.id));
   if(accOverride){S.txnCache[ym]=(S.txnCache[ym]||[]).filter(t=>t.accountId!==accOverride);}
@@ -3309,7 +3308,6 @@ function clearMonthTxns(){
   }
   schedTxn(ym);sched();render();
   toast(`Cleared ${count} transaction${count!==1?'s':''} for ${fmtYM(ym)}.`);
-  }); // end reqPin
 }
 function setTxnAcc(id){TF.txnAcc=id;TF.sortCol='';render();}
 function setTxSort(col){
