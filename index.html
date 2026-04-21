@@ -1275,7 +1275,7 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overfl
     <div class="mdtitle" id="pinm-title">Confirm with Passphrase</div>
     <div class="mddesc" id="pinm-desc">Enter your passphrase to continue.</div>
     <div class="pw-wrap" style="margin-bottom:10px">
-      <input type="password" id="pinm-p" class="auth-inp" style="margin-bottom:0;background:var(--bg2)" placeholder="Your passphrase" autocomplete="new-password" autocorrect="off" autocapitalize="none" spellcheck="false">
+      <input type="password" id="pinm-p" class="auth-inp" style="margin-bottom:0;background:var(--bg2)" placeholder="Your passphrase" autocomplete="new-password" autocorrect="off" autocapitalize="none" spellcheck="false" onkeydown="if(event.key==='Enter')confirmPin()">
       <button class="pw-toggle" onclick="tpw('pinm-p',this)" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button>
     </div>
     <div class="auth-err" id="pinm-err"></div>
@@ -3283,14 +3283,12 @@ function clearMonthTxns(){
     ?`Delete ${count} transaction${count!==1?'s':''} for the selected account in ${fmtYM(ym)}?`
     :`Delete ALL ${count} transaction${count!==1?'s':''} for ${fmtYM(ym)} across all accounts?`;
   reqPin('Clear month transactions',msg,async()=>{
+  try{
   const toDelete=accOverride?(S.txnCache[ym]||[]).filter(t=>t.accountId===accOverride):[...(S.txnCache[ym]||[])];
   const deletedIds=new Set(toDelete.map(t=>t.id));
   if(accOverride){S.txnCache[ym]=(S.txnCache[ym]||[]).filter(t=>t.accountId!==accOverride);}
   else{S.txnCache[ym]=[];}
-  // Remove dangling matched pairs for deleted transactions
   S.matchedPairs=(S.matchedPairs||[]).filter(p=>!deletedIds.has(p.outId)&&!deletedIds.has(p.inId));
-
-  // Auto-clear debt payments imported from this month — prevents duplicates on re-import
   S.debts.forEach(d=>{
     if(!d.payments)return;
     const before=d.payments.length;
@@ -3301,8 +3299,6 @@ function clearMonthTxns(){
     });
     if(d.payments.length!==before)recalcDebtRemaining(d);
   });
-
-  // Clear guardFail flags for the affected account(s) and month
   if(accOverride){
     const mk=accOverride+'_'+ym;
     if(S.monthlyBal[mk]){delete S.monthlyBal[mk].guardFail;delete S.monthlyBal[mk].guardDiff;delete S.monthlyBal[mk].guardCalc;}
@@ -3314,11 +3310,11 @@ function clearMonthTxns(){
   }
   render();
   toast(`Cleared ${count} transaction${count!==1?'s':''} for ${fmtYM(ym)}.`);
-  // Flush immediately — do not debounce destructive operations
   clearTimeout(txnSaveTimer);
   txnSaveQueue[ym]=true;
   await flushTxnQueue();
   sched();
+  }catch(e){console.error('clearMonthTxns error',e);toast('Clear failed: '+e.message,false);}
   }); // end reqPin
 }
 function setTxnAcc(id){TF.txnAcc=id;TF.sortCol='';render();}
