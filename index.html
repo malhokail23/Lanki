@@ -3144,6 +3144,94 @@ function unmatch(pairId){
   sched();render();toast('Match removed');
 }
 
+function closeMatchPopover(){
+  const el=document.getElementById('match-popover');
+  if(el)el.remove();
+  document.removeEventListener('click',_matchPopoverOutside);
+}
+function _matchPopoverOutside(e){
+  const el=document.getElementById('match-popover');
+  if(el&&!el.contains(e.target))closeMatchPopover();
+}
+function showMatchPopover(pairId,txnId,anchorEl){
+  // Close any existing popover
+  closeMatchPopover();
+  const pair=S.matchedPairs.find(p=>p.id===pairId);
+  if(!pair)return;
+  const allT=allTxns();
+  const outT=allT.find(t=>t.id===pair.outId);
+  const inT=allT.find(t=>t.id===pair.inId);
+  if(!outT||!inT)return;
+  const outAcc=S.accounts.find(a=>a.id===pair.outAccId);
+  const inAcc=S.accounts.find(a=>a.id===pair.inAccId);
+  const outName=outAcc?.name||'Unknown';
+  const inName=inAcc?.name||'Unknown';
+  const matchTypeLbl=pair.confirmedBy==='tolerance'?'Tolerance match (USD conversion)':pair.confirmedBy==='manual'?'Manually matched':'Auto-matched';
+  const matchTypeColor=pair.confirmedBy==='tolerance'?'#854D0E':pair.confirmedBy==='manual'?'#174FA0':'#174FA0';
+  const matchTypeBg=pair.confirmedBy==='tolerance'?'#FEF9C3':'#EEF4FF';
+  // Amount display — show both if they differ (tolerance case)
+  const sameAmt=Math.abs(outT.amount-inT.amount)<0.01;
+  const amtLine=sameAmt
+    ?`<span style="font-weight:600;color:var(--ink)">${fmtP(outT.amount)}</span>`
+    :`<span style="color:var(--bad)">-${fmtP(outT.amount)}</span> <span style="color:var(--text3);font-size:10px">debit</span> &nbsp; <span style="color:var(--ok)">+${fmtP(inT.amount)}</span> <span style="color:var(--text3);font-size:10px">credit</span>`;
+
+  const pop=document.createElement('div');
+  pop.id='match-popover';
+  pop.style.cssText='position:absolute;z-index:8000;width:300px;background:var(--bg);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.14);padding:0;overflow:hidden';
+  pop.innerHTML=`
+    <div style="background:var(--bg2);padding:12px 14px 10px;border-bottom:1px solid var(--line)">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:8px">Match Detail</div>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+        <div style="flex:1;min-width:80px;background:var(--bg);border-radius:6px;padding:6px 8px;border:1px solid var(--line)">
+          <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">Debit</div>
+          <div style="font-size:12px;font-weight:600;color:var(--ink);line-height:1.3">${h(outName)}</div>
+          <div style="font-size:10px;color:var(--bad);margin-top:1px">−${fmtP(outT.amount)}</div>
+        </div>
+        <div style="color:var(--ink);font-size:16px;font-weight:300;flex-shrink:0">⇄</div>
+        <div style="flex:1;min-width:80px;background:var(--bg);border-radius:6px;padding:6px 8px;border:1px solid var(--line)">
+          <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">Credit</div>
+          <div style="font-size:12px;font-weight:600;color:var(--ink);line-height:1.3">${h(inName)}</div>
+          <div style="font-size:10px;color:var(--ok);margin-top:1px">+${fmtP(inT.amount)}</div>
+        </div>
+      </div>
+    </div>
+    <div style="padding:10px 14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span style="font-size:11px;color:var(--text3)">Date</span>
+        <span style="font-size:11px;font-weight:500">${toDD(pair.date)}</span>
+      </div>
+      ${!sameAmt?`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span style="font-size:11px;color:var(--text3)">Difference</span>
+        <span style="font-size:11px;font-weight:500;color:#854D0E">SAR ${Math.abs(outT.amount-inT.amount).toFixed(2)}</span>
+      </div>`:''}
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <span style="font-size:11px;color:var(--text3)">Match type</span>
+        <span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;background:${matchTypeBg};color:${matchTypeColor}">${matchTypeLbl}</span>
+      </div>
+      ${pair.toleranceNote?`<div style="font-size:10px;color:var(--text3);background:var(--bg2);border-radius:5px;padding:5px 8px;margin-bottom:10px;line-height:1.5">${h(pair.toleranceNote)}</div>`:''}
+      <div style="display:flex;gap:8px">
+        <button onclick="closeMatchPopover();unmatch('${pairId}')" style="flex:1;padding:7px 0;border-radius:6px;border:1.5px solid var(--bad);background:transparent;color:var(--bad);font-size:12px;font-weight:600;cursor:pointer">Unmatch</button>
+        <button onclick="closeMatchPopover()" style="flex:1;padding:7px 0;border-radius:6px;border:none;background:var(--electric);color:#fff;font-size:12px;font-weight:600;cursor:pointer">Close</button>
+      </div>
+    </div>`;
+
+  // Position below the anchor button
+  document.body.appendChild(pop);
+  const rect=anchorEl.getBoundingClientRect();
+  const scrollY=window.scrollY||document.documentElement.scrollTop;
+  const scrollX=window.scrollX||document.documentElement.scrollLeft;
+  let top=rect.bottom+scrollY+6;
+  let left=rect.left+scrollX;
+  // Keep within viewport
+  const popW=300;
+  if(left+popW>window.innerWidth-12)left=window.innerWidth-popW-12;
+  if(left<8)left=8;
+  pop.style.top=top+'px';
+  pop.style.left=left+'px';
+  // Close on outside click after a tick so the current click doesn't immediately close it
+  setTimeout(()=>document.addEventListener('click',_matchPopoverOutside),10);
+}
+
 // Render transfer matching tab section (called from rUncat or standalone)
 function rTransferMatching(){
   const pending=getPendingTransfers();
@@ -5865,7 +5953,7 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps){
     const ac=dir==='in'?'c-ok':(t.type==='external_transfer'?'c-ext':(t.type==='investment'?'c-inv':'c-bad'));
     const isMatchedTxn=isMatched(t.id);
     const matchedPair=isMatchedTxn?S.matchedPairs.find(p=>p.outId===t.id||p.inId===t.id):null;
-    const matchedTag=isMatchedTxn?'<span class="badge b-tr" style="font-size:10px;margin-left:4px">\u21c6 Matched</span>':'';
+    const matchedTag=isMatchedTxn&&matchedPair?`<button onclick="event.stopPropagation();showMatchPopover('${matchedPair.id}','${t.id}',this)" class="badge b-tr" style="font-size:10px;margin-left:4px;cursor:pointer;border:none;padding:2px 6px">\u21c6 Matched</button>`:'';
     const toleranceTag=matchedPair?.toleranceNote?`<span class="badge" style="background:#FEF9C3;color:#854D0E;font-size:9px;margin-left:4px" title="${h(matchedPair.toleranceNote)}">~USD</span>`:'';
     const pendingTag=(!isMatchedTxn&&t.type==='transfer'&&!t.transferDismissed)?'<span class="badge" style="background:#FEF3C7;color:#92400E;font-size:10px;margin-left:4px">Pending match</span>':'';
     const ch=(t.mainCatId&&getMC(t.mainCatId))?ctag(t.mainCatId,t.subCatId):'<span style="color:var(--warn);font-size:11px">&#9888; Uncategorized</span>';
