@@ -3011,11 +3011,18 @@ async function saveEditTxn(){
     if(!S.txnCache[newYm])S.txnCache[newYm]=[];
     S.txnCache[newYm].push(t);
     S.txnCache[newYm].sort((a,b)=>a.date.localeCompare(b.date));
-    schedTxn(ymk);schedTxn(newYm);
+    // Flush immediately — don't debounce edits
+    clearTimeout(txnSaveTimer);
+    txnSaveQueue[ymk]=true;txnSaveQueue[newYm]=true;
+    await flushTxnQueue();
   }else{
     S.txnCache[ymk].sort((a,b)=>a.date.localeCompare(b.date));
-    schedTxn(ymk);
+    // Flush immediately — don't debounce edits
+    clearTimeout(txnSaveTimer);
+    txnSaveQueue[ymk]=true;
+    await flushTxnQueue();
   }
+  sched();
   closeEditTxn();
   // Warn if active filters will now hide this transaction
   const willBeHidden=(TF.type&&TF.type!==t.type)||(TF.mc&&TF.mc!==t.mainCatId)||(TF.sub&&TF.sub!==t.subCatId);
