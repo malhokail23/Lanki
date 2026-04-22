@@ -1638,7 +1638,7 @@ function txDir(t){
     if(d.includes('inbound')||d.includes('inward')||d.includes('from '))return'in';
     return'out';
   }
-  // expense, external_transfer, investment are always out
+  // expense, investment are always out; external_transfer and transfer depend on direction field
   return'out';
 }
 function calcRunningBalance(txns,openingBal){
@@ -3348,11 +3348,11 @@ function openNTCat(){
 function autoDir(type, dirElId){
   const elId=dirElId||'nt-dir';
   const d=document.getElementById(elId);if(!d)return;
-  if(type==='transfer'){
+  if(type==='transfer'||type==='external_transfer'){
     d.disabled=false;d.style.opacity='';d.style.pointerEvents='';
   } else {
     if(type==='income')d.value='in';
-    else d.value='out'; // expense, investment, external_transfer always out
+    else d.value='out'; // expense, investment always out
     d.disabled=true;d.style.opacity='.45';d.style.pointerEvents='none';
   }
 }
@@ -6147,7 +6147,7 @@ function buildAddPanel(){
     </div>
     <div style="margin-bottom:8px"><label class="lbl">Description</label><input type="text" id="nt-ds" placeholder="Merchant or payee name"></div>
     <div class="fr" style="margin-bottom:8px">
-      <div><label class="lbl">Type</label><select id="nt-type" onchange="autoDir(this.value,'nt-dir')"><option value="expense">Expense</option><option value="income">Income</option><option value="transfer">Transfer</option><option value="investment">Investment</option><option value="external_transfer">External Transfer</option></select></div>
+      <div><label class="lbl">Type</label><select id="nt-type" onchange="autoDir(this.value,'nt-dir')"><option value="expense">Expense</option><option value="income">Income</option><option value="investment">Investment</option><option value="transfer">Transfer</option><option value="external_transfer">External Transfer</option></select></div>
       <div><label class="lbl">Direction</label><select id="nt-dir"><option value="out">Debit</option><option value="in">Credit</option></select></div>
     </div>
     <div class="fr" style="margin-bottom:8px">
@@ -8377,8 +8377,8 @@ initAuth();
         <select id="etxn-type" onchange="autoDir(this.value,'etxn-dir');const br=document.getElementById('etxn-beneficiary-row');if(br)br.style.display=(this.value==='investment'||this.value==='income')?'block':'none'">
           <option value="expense">Expense</option>
           <option value="income">Income</option>
-          <option value="transfer">Transfer</option>
           <option value="investment">Investment</option>
+          <option value="transfer">Transfer</option>
           <option value="external_transfer">External Transfer</option>
         </select>
       </div>
