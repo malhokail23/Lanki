@@ -2131,6 +2131,13 @@ async function render(){
   _rendering=true;
   try{
   if(!sKey){lockApp();return;}
+  // Prune stale matched pairs where one or both transaction IDs no longer exist
+  if(S.matchedPairs?.length){
+    const allIds=new Set(allTxns().map(t=>t.id));
+    const before=S.matchedPairs.length;
+    S.matchedPairs=S.matchedPairs.filter(p=>allIds.has(p.outId)&&allIds.has(p.inId));
+    if(S.matchedPairs.length!==before)sched();
+  }
   updateBadge();
   const el=document.getElementById('page-content');if(!el)return;
   // Save search state before re-render to restore cursor position (Fix 2)
@@ -3161,7 +3168,13 @@ function showMatchPopover(pairId,txnId,anchorEl){
   const allT=allTxns();
   const outT=allT.find(t=>t.id===pair.outId);
   const inT=allT.find(t=>t.id===pair.inId);
-  if(!outT||!inT)return;
+  if(!outT||!inT){
+    // Stale pair — one or both transactions were deleted. Clean it up.
+    S.matchedPairs=S.matchedPairs.filter(p=>p.id!==pairId);
+    sched();render();
+    toast('Match removed — one of the linked transactions no longer exists.',false);
+    return;
+  }
   const outAcc=S.accounts.find(a=>a.id===pair.outAccId);
   const inAcc=S.accounts.find(a=>a.id===pair.inAccId);
   const outName=outAcc?.name||'Unknown';
