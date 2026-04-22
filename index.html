@@ -3755,20 +3755,24 @@ function closeCatM(){document.getElementById('cat-modal').classList.remove('acti
 function validateMatches(){
   if(!S.matchedPairs?.length){toast('No confirmed matches to validate.');return;}
   const allIds=new Set(allTxns().map(t=>t.id));
+  const allTxnMap=new Map(allTxns().map(t=>[t.id,t]));
   const accIds=new Set(S.accounts.map(a=>a.id));
   const before=S.matchedPairs.length;
-  const stale=[];
   S.matchedPairs=S.matchedPairs.filter(p=>{
-    if(!allIds.has(p.outId)||!allIds.has(p.inId)){stale.push('missing transaction');return false;}
-    if(!accIds.has(p.outAccId)||!accIds.has(p.inAccId)){stale.push('missing account');return false;}
+    if(!allIds.has(p.outId)||!allIds.has(p.inId))return false;
+    if(!accIds.has(p.outAccId)||!accIds.has(p.inAccId))return false;
+    // Same-day rule: reject pairs matched across different dates
+    const outT=allTxnMap.get(p.outId);
+    const inT=allTxnMap.get(p.inId);
+    if(outT&&inT&&outT.date!==inT.date)return false;
     return true;
   });
   const freed=before-S.matchedPairs.length;
   if(freed>0){
     sched();render();
-    toast(`${freed} stale match${freed!==1?'es':''} removed — click ↻ Auto-match all to re-pair.`);
+    toast(`${freed} invalid match${freed!==1?'es':''} removed — click ↻ Auto-match all to re-pair.`);
   }else{
-    toast('All confirmed matches are valid — no stale pairs found.');
+    toast('All confirmed matches are valid.');
   }
 }
 
@@ -3798,11 +3802,8 @@ function rescanAllTransfers(){
       return da-db;
     });
 
-    // Try exact match first (within 0.01, within 3 days)
-    let best=candidates.find(c=>{
-      const dayDiff=Math.abs(new Date(c.date)-new Date(t.date))/(1000*60*60*24);
-      return Math.abs(c.amount-t.amount)<0.01&&dayDiff<=3;
-    });
+    // Try exact match first (within 0.01, same day only)
+    let best=candidates.find(c=>c.date===t.date&&Math.abs(c.amount-t.amount)<0.01);
     let toleranceNote=null;
 
     // USD tolerance match: all 3 conditions must hold simultaneously
@@ -3860,7 +3861,6 @@ function rPendingMatches(){
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
       <input type="number" id="txn-search-amt" placeholder="Amount e.g. 1500" step="0.01" min="0" autocomplete="off" style="width:180px" oninput="renderTxnSearch()">
       <button class="btn btn-sm" onclick="document.getElementById('txn-search-amt').value='';renderTxnSearch()">Clear</button>
-      <button class="btn btn-sm" onclick="forceReloadTxns()" title="Re-fetch all transaction data directly from Supabase">↻ Reload from database</button>
     </div>
     <div id="txn-search-results"></div>
   </div>
@@ -3897,14 +3897,6 @@ function renderTxnSearch(){
       <thead><tr><th>Date</th><th>Description</th><th>Account</th><th>Month</th><th style="text-align:right">Amount</th><th>Status</th><th></th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>`;
-}
-
-async function forceReloadTxns(){
-  toast('Reloading all transaction data from Supabase…');
-  await loadAllTxnRows();
-  render();
-  renderTxnSearch();
-  toast('Reload complete — search results updated.');
 }
 
 function searchDelTxn(id,ym){
