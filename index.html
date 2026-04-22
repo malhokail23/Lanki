@@ -5828,7 +5828,7 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps){
     const ac=dir==='in'?'c-ok':(t.type==='external_transfer'?'c-ext':(t.type==='investment'?'c-inv':'c-bad'));
     const isMatchedTxn=isMatched(t.id);
     const matchedTag=isMatchedTxn?'<span class="badge b-tr" style="font-size:10px;margin-left:4px">\u21c6 Matched</span>':'';
-    const pendingTag=(!isMatchedTxn&&(t.type==='transfer'||t.type==='external_transfer')&&!t.transferDismissed)?'<span class="badge" style="background:#FEF3C7;color:#92400E;font-size:10px;margin-left:4px">Pending match</span>':'';
+    const pendingTag=(!isMatchedTxn&&t.type==='transfer'&&!t.transferDismissed)?'<span class="badge" style="background:#FEF3C7;color:#92400E;font-size:10px;margin-left:4px">Pending match</span>':'';
     const ch=(t.mainCatId&&getMC(t.mainCatId))?ctag(t.mainCatId,t.subCatId):'<span style="color:var(--warn);font-size:11px">&#9888; Uncategorized</span>';
     const st=t.isSub?`<span class="stag">SUB <button onclick="event.stopPropagation();removeSub('${t.id}','${t.date.substr(0,7)}')" style="background:none;border:none;cursor:pointer;color:inherit;padding:0;margin-left:2px;font-size:9px;line-height:1;vertical-align:middle" title="Remove subscription tag">&#10005;</button></span>`:'';
     const ruleTag=t.ruleApplied?'<span style="font-size:9px;background:#EDE9FE;color:#5B21B6;border-radius:3px;padding:1px 5px;margin-left:4px" title="Category set by merchant learning rule">rule</span>':''
