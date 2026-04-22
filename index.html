@@ -3749,6 +3749,13 @@ function closeCatM(){document.getElementById('cat-modal').classList.remove('acti
 
 // V2.1: Re-scan all transfers across all months and attempt auto-matching
 function rescanAllTransfers(){
+  // Step 1: Remove stale pairs where one or both transaction IDs no longer exist
+  const allIds=new Set(allTxns().map(t=>t.id));
+  const before=S.matchedPairs.length;
+  S.matchedPairs=S.matchedPairs.filter(p=>allIds.has(p.outId)&&allIds.has(p.inId));
+  const cleaned=before-S.matchedPairs.length;
+
+  // Step 2: Scan all unmatched transfers (now includes any freed from stale pairs)
   const allT=allTxns().filter(t=>t.type==='transfer'&&!isMatched(t.id)&&!t.transferDismissed);
   let matched=0;
   for(const t of allT){
@@ -3807,8 +3814,13 @@ function rescanAllTransfers(){
       matched++;
     }
   }
-  if(matched>0){sched();render();toast(`Auto-matched ${matched} transfer pair${matched!==1?'s':''}`);}
-  else toast('No new matches found');
+  if(matched>0||cleaned>0){
+    sched();render();
+    const parts=[];
+    if(matched>0)parts.push(`${matched} pair${matched!==1?'s':''} matched`);
+    if(cleaned>0)parts.push(`${cleaned} stale pair${cleaned!==1?'s':''} removed`);
+    toast(parts.join(' · '));
+  }else toast('No new matches found');
 }
 
 function rPendingMatches(){
