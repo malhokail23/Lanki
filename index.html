@@ -3267,7 +3267,7 @@ function rTransferMatching(){
     </tr>`;}).join(''):`<tr><td colspan="6" class="empty">&#10003; No pending unmatched transfers</td></tr>`;
 
   // Matched pairs section
-  const pairRows=pairs.length?pairs.slice().reverse().slice(0,20).map(p=>{
+  const pairRows=pairs.length?pairs.slice().reverse().map(p=>{
     const outAcc=S.accounts.find(a=>a.id===p.outAccId);
     const inAcc=S.accounts.find(a=>a.id===p.inAccId);
     return`<tr>
