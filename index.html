@@ -3172,7 +3172,7 @@ function rTransferMatching(){
       <td style="color:var(--text3);font-size:var(--fs-xs);white-space:nowrap">${toDD(p.date)}</td>
       <td style="font-size:var(--fs-xs)">${outAcc?.name||'--'} <span style="color:var(--text3)">&#8594;</span> ${inAcc?.name||'--'}</td>
       <td style="font-weight:500;white-space:nowrap">${fmtP(p.amount)}</td>
-      <td><span class="badge b-tr">${p.confirmedBy==='auto'?'Auto-matched':'Manually matched'}</span></td>
+      <td><span class="badge b-tr">${p.confirmedBy==='tolerance'?'Tolerance match':p.confirmedBy==='auto'?'Auto-matched':'Manually matched'}</span>${p.toleranceNote?`<div style="font-size:10px;color:var(--text3);margin-top:2px">${h(p.toleranceNote)}</div>`:''}</td>
       <td><button class="btn btn-xs btn-d" onclick="unmatch('${p.id}')">Unmatch</button></td>
     </tr>`;}).join(''):`<tr><td colspan="5" class="empty">No matched pairs yet</td></tr>`;
 
@@ -3657,26 +3657,51 @@ function rescanAllTransfers(){
       c.type==='transfer' &&
       c.accountId!==t.accountId &&
       txDir(c)!==dir &&
-      Math.abs(c.amount-t.amount)<0.01 &&
       !isMatched(c.id)
     ).sort((a,b)=>{
       const da=Math.abs(new Date(a.date)-new Date(t.date));
       const db=Math.abs(new Date(b.date)-new Date(t.date));
       return da-db;
     });
-    const best=candidates.find(c=>{
+
+    // Try exact match first (within 0.01, within 3 days)
+    let best=candidates.find(c=>{
       const dayDiff=Math.abs(new Date(c.date)-new Date(t.date))/(1000*60*60*24);
-      return dayDiff<=3;
+      return Math.abs(c.amount-t.amount)<0.01&&dayDiff<=3;
     });
+    let toleranceNote=null;
+
+    // USD tolerance match: all 3 conditions must hold simultaneously
+    // 1. Exact same date  2. Diff ≤ SAR 5.00  3. CC account in pair is USD
+    if(!best){
+      best=candidates.find(c=>{
+        if(c.date!==t.date)return false;
+        const diff=Math.abs(c.amount-t.amount);
+        if(diff>5.00)return false;
+        const ccAccId=((t.type==='transfer'&&(S.accounts.find(a=>a.id===t.accountId)?.type==='credit_card'||S.accounts.find(a=>a.id===t.accountId)?.type==='charge_card'))?t.accountId:null)||
+                      ((c.type==='transfer'&&(S.accounts.find(a=>a.id===c.accountId)?.type==='credit_card'||S.accounts.find(a=>a.id===c.accountId)?.type==='charge_card'))?c.accountId:null);
+        if(!ccAccId)return false;
+        const ccAcc=S.accounts.find(a=>a.id===ccAccId);
+        return ccAcc&&ccAcc.currency==='USD';
+      });
+      if(best){
+        const diff=Math.abs(best.amount-t.amount);
+        toleranceNote=`Matched under USD conversion tolerance — difference: SAR ${diff.toFixed(2)}`;
+      }
+    }
+
     if(best){
       const outT=dir==='out'?t:best;
       const inT=dir==='in'?t:best;
-      S.matchedPairs.push({
+      const pair={
         id:'mp_'+Date.now()+'_'+Math.random().toString(36).substr(2,5),
         outId:outT.id, inId:inT.id,
         outAccId:outT.accountId, inAccId:inT.accountId,
-        amount:t.amount, date:outT.date, confirmedBy:'auto'
-      });
+        amount:t.amount, date:outT.date,
+        confirmedBy:toleranceNote?'tolerance':'auto'
+      };
+      if(toleranceNote)pair.toleranceNote=toleranceNote;
+      S.matchedPairs.push(pair);
       matched++;
     }
   }
@@ -4587,7 +4612,10 @@ const ATS=ATG.map(g=>`<optgroup label="${g.g}">${g.o.map(o=>`<option value="${o.
 const INV=new Set(['brokerage_account','fund_account','gold_account','crypto_wallet','real_estate_fund','direct_investment']);
 const ACS=[{v:'public_markets',l:'Public Markets'},{v:'funds_managed',l:'Funds & Managed Portfolios'},{v:'private_credit',l:'Private Credit'},{v:'real_assets',l:'Real Assets'},{v:'commodities',l:'Commodities'},{v:'digital_assets',l:'Digital Assets'},{v:'private_equity',l:'Private Equity / Venture'},{v:'cash_liquidity',l:'Cash & Liquidity'}];
 let editAccId=null;
-function onATC(v){const r=document.getElementById('ac-row');if(r)r.style.display=INV.has(v)?'block':'none';}
+function onATC(v){
+  const r=document.getElementById('ac-row');if(r)r.style.display=INV.has(v)?'block':'none';
+  const cr=document.getElementById('ac-currency-row');if(cr)cr.style.display=(v==='credit_card'||v==='charge_card')?'flex':'none';
+}
 function rAcc(){
   const showBalance=false; // L1: explicit definition — rAcc never shows running balance
   const rows=S.accounts.length?S.accounts.map(a=>{
@@ -4623,6 +4651,7 @@ function rAcc(){
     <div class="fr3" style="margin-top:8px">
       <div><label class="lbl">Type</label><select id="ac-type" onchange="onATC(this.value)">${ATS}</select></div>
       <div><label class="lbl">IBAN or Card Number</label><input type="text" id="ac-no" placeholder="SA followed by 22 digits"></div>
+      <div id="ac-currency-row" style="display:none"><label class="lbl">Billing Currency</label><select id="ac-currency"><option value="SAR">SAR</option><option value="USD">USD</option></select></div>
     </div>
     <div style="margin-top:8px">
       <label class="lbl">Purpose</label><input type="text" id="ac-purp" placeholder="e.g. Main income, groceries only">
@@ -4659,13 +4688,14 @@ function openEditAcc(id){
   const balEl=document.getElementById('ac-bal');if(balEl)balEl.value=a.openingBalance!==undefined?a.openingBalance:'';
   const balDtEl=document.getElementById('ac-bal-date');if(balDtEl)balDtEl.value=a.balanceAsOf?toDD(a.balanceAsOf):'';
   document.getElementById('ac-type').value=a.type||'main_account';onATC(a.type);
+  const curEl=document.getElementById('ac-currency');if(curEl)curEl.value=a.currency||'SAR';
   document.getElementById('acc-ptitle').textContent='Edit account';document.getElementById('acc-sbtn').textContent='Save changes';
   const p=document.getElementById('acc-panel');if(p&&!p.classList.contains('open')){p.classList.add('open');p.scrollIntoView({behavior:'smooth'});}
 }
 function saveAcc(){
   const name=document.getElementById('ac-name').value.trim();if(!name){toast('Name required',false);return;}
   const type=document.getElementById('ac-type').value;
-  const balVal=document.getElementById('ac-bal')?.value;const data={name,institution:document.getElementById('ac-inst').value.trim(),type,accountNumber:document.getElementById('ac-no').value.trim()||null,purpose:document.getElementById('ac-purp')?.value.trim()||'',openingBalance:balVal!==''&&balVal!==undefined?parseFloat(balVal):undefined,balanceAsOf:fromDD(document.getElementById('ac-bal-date')?.value||'')||undefined};
+  const balVal=document.getElementById('ac-bal')?.value;const curVal=document.getElementById('ac-currency')?.value||'SAR';const data={name,institution:document.getElementById('ac-inst').value.trim(),type,accountNumber:document.getElementById('ac-no').value.trim()||null,purpose:document.getElementById('ac-purp')?.value.trim()||'',openingBalance:balVal!==''&&balVal!==undefined?parseFloat(balVal):undefined,balanceAsOf:fromDD(document.getElementById('ac-bal-date')?.value||'')||undefined,...((type==='credit_card'||type==='charge_card')?{currency:curVal}:{})};
   if(editAccId){Object.assign(S.accounts.find(x=>x.id===editAccId),data);toast('Account updated');}
   else{data.id='acc_'+name.toLowerCase().replace(/[^a-z0-9]/g,'_').slice(0,12)+'_'+Math.random().toString(36).substr(2,4);S.accounts.push(data);toast('Account added');}
   editAccId=null;sched();tp('acc-panel');render();
@@ -5834,7 +5864,9 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps){
     const dir=txDir(t);
     const ac=dir==='in'?'c-ok':(t.type==='external_transfer'?'c-ext':(t.type==='investment'?'c-inv':'c-bad'));
     const isMatchedTxn=isMatched(t.id);
+    const matchedPair=isMatchedTxn?S.matchedPairs.find(p=>p.outId===t.id||p.inId===t.id):null;
     const matchedTag=isMatchedTxn?'<span class="badge b-tr" style="font-size:10px;margin-left:4px">\u21c6 Matched</span>':'';
+    const toleranceTag=matchedPair?.toleranceNote?`<span class="badge" style="background:#FEF9C3;color:#854D0E;font-size:9px;margin-left:4px" title="${h(matchedPair.toleranceNote)}">~USD</span>`:'';
     const pendingTag=(!isMatchedTxn&&t.type==='transfer'&&!t.transferDismissed)?'<span class="badge" style="background:#FEF3C7;color:#92400E;font-size:10px;margin-left:4px">Pending match</span>':'';
     const ch=(t.mainCatId&&getMC(t.mainCatId))?ctag(t.mainCatId,t.subCatId):'<span style="color:var(--warn);font-size:11px">&#9888; Uncategorized</span>';
     const st=t.isSub?`<span class="stag">SUB <button onclick="event.stopPropagation();removeSub('${t.id}','${t.date.substr(0,7)}')" style="background:none;border:none;cursor:pointer;color:inherit;padding:0;margin-left:2px;font-size:9px;line-height:1;vertical-align:middle" title="Remove subscription tag">&#10005;</button></span>`:'';
@@ -5872,7 +5904,7 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps){
 
     return`<tr style="${rowBg}">
       ${selCb}<td style="color:var(--text3);white-space:nowrap;font-size:var(--fs-xs)">${toDD(t.date)}</td>
-      <td><div>${h(t.description)}${st}${ruleTag}${matchedTag}${pendingTag}${debtTag}</div>${t.notes?`<div style="font-size:10px;color:var(--text3)">${h(t.notes)}</div>`:''}</td>
+      <td><div>${h(t.description)}${st}${ruleTag}${matchedTag}${toleranceTag}${pendingTag}${debtTag}</div>${t.notes?`<div style="font-size:10px;color:var(--text3)">${h(t.notes)}</div>`:''}</td>
       <td>${ch}</td>
       <td style="font-size:var(--fs-xs)">${acc?`<span style="font-weight:500">${h(acc.name)}</span>`:'--'}</td>
       <td style="text-align:right;font-weight:500;white-space:nowrap" class="${ac}">${dir==='in'?'+':'-'}${fmtP(t.amount)}</td>
