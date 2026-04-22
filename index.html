@@ -3198,12 +3198,14 @@ function showMatchPopover(pairId,txnId,anchorEl){
         <div style="flex:1;min-width:80px;background:var(--bg);border-radius:6px;padding:6px 8px;border:1px solid var(--line)">
           <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">Debit</div>
           <div style="font-size:12px;font-weight:600;color:var(--ink);line-height:1.3">${h(outName)}</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:1px;word-break:break-word">${h(outT.description)}</div>
           <div style="font-size:10px;color:var(--bad);margin-top:1px">−${fmtP(outT.amount)}</div>
         </div>
         <div style="color:var(--ink);font-size:16px;font-weight:300;flex-shrink:0">⇄</div>
         <div style="flex:1;min-width:80px;background:var(--bg);border-radius:6px;padding:6px 8px;border:1px solid var(--line)">
           <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">Credit</div>
           <div style="font-size:12px;font-weight:600;color:var(--ink);line-height:1.3">${h(inName)}</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:1px;word-break:break-word">${h(inT.description)}</div>
           <div style="font-size:10px;color:var(--ok);margin-top:1px">+${fmtP(inT.amount)}</div>
         </div>
       </div>
@@ -3753,12 +3755,18 @@ function closeCatM(){document.getElementById('cat-modal').classList.remove('acti
 function validateMatches(){
   if(!S.matchedPairs?.length){toast('No confirmed matches to validate.');return;}
   const allIds=new Set(allTxns().map(t=>t.id));
+  const accIds=new Set(S.accounts.map(a=>a.id));
   const before=S.matchedPairs.length;
-  S.matchedPairs=S.matchedPairs.filter(p=>allIds.has(p.outId)&&allIds.has(p.inId));
+  const stale=[];
+  S.matchedPairs=S.matchedPairs.filter(p=>{
+    if(!allIds.has(p.outId)||!allIds.has(p.inId)){stale.push('missing transaction');return false;}
+    if(!accIds.has(p.outAccId)||!accIds.has(p.inAccId)){stale.push('missing account');return false;}
+    return true;
+  });
   const freed=before-S.matchedPairs.length;
   if(freed>0){
     sched();render();
-    toast(`${freed} stale match${freed!==1?'es':''} removed — ${freed} transaction${freed!==1?'s':''} now pending. Click ↻ Auto-match all to re-pair.`);
+    toast(`${freed} stale match${freed!==1?'es':''} removed — click ↻ Auto-match all to re-pair.`);
   }else{
     toast('All confirmed matches are valid — no stale pairs found.');
   }
