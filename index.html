@@ -1324,7 +1324,7 @@ const TAB_TO_GROUP={txbank:'transactions',txcards:'transactions',aiupload:'trans
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='4.1';
+const VERSION='4.2';
 let sKey=null,saveTimer=null,pinCb=null,catCb=null,activeGroup=null;
 
 // ─── CRYPTO ───
@@ -6187,16 +6187,23 @@ function buildTxHeader(fl, scopedAcc, accountPills, tabLabel){
       const accTxns=(S.txnCache[S.month]||[]).filter(t=>t.accountId===id);
       if(accTxns.length===0)return null;
       const opening=mb.opening??getAccountOpeningBal(id,S.month)??0;
-      const calcBal=opening+accTxns.reduce((s,t)=>s+(txDir(t)==='in'?t.amount:-t.amount),0);
+      const inAmt=accTxns.filter(t=>txDir(t)==='in').reduce((s,t)=>s+t.amount,0);
+      const outAmt=accTxns.filter(t=>txDir(t)!=='in').reduce((s,t)=>s+t.amount,0);
+      const calcBal=opening+inAmt-outAmt;
       const diff=Math.abs(mb.closing-calcBal);
+      const acc=S.accounts.find(a=>a.id===id);
+      // V4.2: Inference banner — opening missing, but transactions + closing back into a clean number
+      if(diff>1&&mb.opening==null){
+        const inferredOpening=Math.round((mb.closing-inAmt+outAmt)*100)/100;
+        if(Math.abs(inferredOpening-opening)>1){
+          return{kind:'infer',name:acc?.name||id,mk,inferred:inferredOpening,fallback:opening,closing:mb.closing,inAmt,outAmt,count:accTxns.length};
+        }
+      }
       if(diff<=1){
         if(mb.guardFail){delete mb.guardFail;delete mb.guardDiff;delete mb.guardCalc;sched();}
         return null;
       }
       mb.guardFail=true;mb.guardDiff=diff;mb.guardCalc=calcBal;
-      const acc=S.accounts.find(a=>a.id===id);
-      const inAmt=accTxns.filter(t=>txDir(t)==='in').reduce((s,t)=>s+t.amount,0);
-      const outAmt=accTxns.filter(t=>txDir(t)!=='in').reduce((s,t)=>s+t.amount,0);
       const accTxnsSorted=[...accTxns].sort((a,b)=>(a.date||'').localeCompare(b.date||''));
       let firstBreak=null;
       for(const t of accTxnsSorted){
@@ -6204,11 +6211,24 @@ function buildTxHeader(fl, scopedAcc, accountPills, tabLabel){
         const rb2=opening+accTxnsSorted.slice(0,accTxnsSorted.indexOf(t)+1).reduce((s,x)=>s+(txDir(x)==='in'?x.amount:-x.amount),0);
         if(Math.abs(rb2-t.statementBal)>0.015){firstBreak=t;break;}
       }
-      return{name:acc?.name||id,diff,calc:calcBal,closing:mb.closing,mk,opening,inAmt,outAmt,count:accTxns.length,firstBreak};
+      return{kind:'fail',name:acc?.name||id,diff,calc:calcBal,closing:mb.closing,mk,opening,inAmt,outAmt,count:accTxns.length,firstBreak};
     }).filter(Boolean);
 
     if(!loadErrBanner&&!banners.length)return '';
-    return loadErrBanner+banners.map(f=>`
+    return loadErrBanner+banners.map(f=>{
+      if(f.kind==='infer')return `
+      <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:var(--r);margin-bottom:.75rem">
+        <div style="font-size:16px;flex-shrink:0">ℹ️</div>
+        <div style="flex:1">
+          <div style="font-size:var(--fs-xs);font-weight:600;color:#1E40AF">Opening balance not recorded — ${h(f.name)}, ${fmtYM(S.month)}</div>
+          <div style="font-size:var(--fs-xxs);color:#1E3A8A;margin-top:2px;line-height:1.6">
+            Based on the ${f.count} transaction${f.count!==1?'s':''} and statement closing of ${fmtP(f.closing)}, the opening should have been <strong>${fmtP(f.inferred)}</strong>. The system is currently using ${fmtP(f.fallback)} from the account profile.<br>
+            <button onclick="confirmInferredOpening('${f.mk}',${f.inferred})" class="btn btn-xs btn-p" style="margin-top:6px;margin-right:6px">Use ${fmtP(f.inferred)}</button>
+            <button onclick="clearGuardFail('${f.mk}')" class="btn btn-xs" style="margin-top:6px">Dismiss</button>
+          </div>
+        </div>
+      </div>`;
+      return `
       <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;background:#FEF2F2;border:1px solid #FECACA;border-radius:var(--r);margin-bottom:.75rem">
         <div style="font-size:16px;flex-shrink:0">⚠️</div>
         <div style="flex:1">
@@ -6220,7 +6240,7 @@ function buildTxHeader(fl, scopedAcc, accountPills, tabLabel){
           </div>
         </div>
         <button onclick="clearGuardFail('${f.mk}')" style="background:none;border:none;cursor:pointer;font-size:16px;color:#991B1B;padding:0;flex-shrink:0" title="Dismiss">✕</button>
-      </div>`).join('');
+      </div>`;}).join('');
   })()}
   <div class="card" style="padding:.9rem 1.25rem;margin-bottom:1rem">
     <div class="g3">
@@ -7259,6 +7279,13 @@ function delSubmitter(idx){
 function clearGuardFail(mk){
   if(S.monthlyBal[mk])delete S.monthlyBal[mk].guardFail;
   sched();render();
+}
+function confirmInferredOpening(mk,value){
+  if(!S.monthlyBal[mk])S.monthlyBal[mk]={};
+  S.monthlyBal[mk].opening=value;
+  S.monthlyBal[mk].openingInferred=true;
+  delete S.monthlyBal[mk].guardFail;delete S.monthlyBal[mk].guardDiff;delete S.monthlyBal[mk].guardCalc;
+  saveState().then(()=>{render();toast('Opening balance set to '+fmtP(value));});
 }
 
 
