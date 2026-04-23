@@ -1324,7 +1324,7 @@ const TAB_TO_GROUP={txbank:'transactions',txcards:'transactions',aiupload:'trans
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='4.2';
+const VERSION='4.3';
 let sKey=null,saveTimer=null,pinCb=null,catCb=null,activeGroup=null;
 
 // ─── CRYPTO ───
@@ -1663,15 +1663,16 @@ function getAccountOpeningBal(accId,ym){
   const prevYm=addM(ym,-1);
   const pmk=accId+'_'+prevYm;
   if(S.monthlyBal[pmk]?.closing!=null)return S.monthlyBal[pmk].closing;
-  // Priority 3: account-level opening balance from the Accounts tab profile
+  // Priority 3: account-level opening balance — only valid for the exact As Of month
+  // (Earlier versions used asOfYM<=ym which silently carried stale anchors forward
+  // across un-imported months. That produced wrong balances for sparse users.)
   const acc=S.accounts.find(a=>a.id===accId);
   const bal=acc?.openingBalance??null;
   const asOf=acc?.balanceAsOf||null;
-  if(bal===null||!asOf)return 0;
+  if(bal===null||!asOf)return null;
   const asOfYM=asOf.substr(0,7);
-  // Only use if as-of date falls in a month before or equal to the viewing month
-  if(asOfYM<=ym)return bal;
-  return 0;
+  if(asOfYM===ym)return bal;
+  return null;
 }
 function tbadge(t){const m={income:'<span class="badge b-in">Income</span>',expense:'<span class="badge b-out">Expense</span>',transfer:'<span class="badge b-tr">Transfer</span>',investment:'<span class="badge b-inv">Investment</span>',external_transfer:'<span class="badge b-ext">External Transfer</span>'};return m[t]||`<span class="badge b-grey">${t}</span>`;}
 
@@ -6325,7 +6326,7 @@ async function rTxCards(){
   const accIds=scopedAcc?[scopedAcc]:[...new Set(fl.map(t=>t.accountId).filter(Boolean))];
   accIds.forEach(aid=>{
     const debt=S.debts.find(d=>d.linkedAccountId===aid&&d.type==='credit_card');
-    const opening=debt?(debt.openingBalance||0):getAccountOpeningBal(aid,S.month);
+    const opening=debt?(debt.openingBalance||0):(getAccountOpeningBal(aid,S.month)||0);
     const accTxns=(S.txnCache[S.month]||[]).filter(t=>t.accountId===aid);
     // For cards: expenses increase outstanding, payments (transfers in) decrease it
     let bal=opening;
