@@ -1510,6 +1510,8 @@ function lockApp(){sKey=null;
   S.accounts=[];S.debts=[];S.goals=[];S.income=[];S.bills=[];S.subs=[];
   S.staff=[];S.rules=[];S.txnRules=[];S.dismissed=[];S.deletedCats=[];S.deletedSubs=[];
   S.familyMembers=[];S.txnCache={};S.monthlyBal={};S.matchedPairs=[];S.settings={};
+  // M7: restore category colors for next unlock
+  Object.keys(CAT_COLORS).forEach(k=>{if(!MAIN_CATS.find(m=>m.id===k))delete CAT_COLORS[k];});
   showAuth('s-unlock');const p=document.getElementById('ul-p');if(p){p.value='';p.focus();}const e=document.getElementById('ul-err');if(e)e.textContent='';const b=document.getElementById('ul-btn');if(b){b.disabled=false;b.textContent='Unlock \u2192';}}
 
 // ─── PIN MODAL ───
@@ -1708,7 +1710,8 @@ function restoreS(d){
     if(ex){ex.useCount=Math.max(ex.useCount||1,r.useCount||1);ex.lastUsed=Math.max(ex.lastUsed||0,r.lastUsed||0);}
     else merged.push({id:'tr_'+Math.random().toString(36).substr(2,8),pattern:pat,mainCatId:r.mainCatId,subCatId:r.subCatId||'',source:'ai',useCount:r.useCount||1,lastUsed:r.lastUsed||now,createdAt:r.lastUsed||now});
   });
-  S.txnRules=merged;
+  // Cap at TXN_RULES_MAX — prevents corrupted/large backups from blowing memory
+  S.txnRules=merged.sort((a,b)=>(b.lastUsed||0)-(a.lastUsed||0)).slice(0,300);
   S.deletedCats=d.deletedCats||[];S.deletedSubs=d.deletedSubs||[];
     S.familyMembers=d.familyMembers||[];
   S.settings={currency:'SAR',savingsTarget:20,backupReminderMonths:2,lastBackup:null,...(d.settings||{})};  S.monthlyBal=d.monthlyBal||{};  S.matchedPairs=d.matchedPairs||[];
@@ -1716,9 +1719,12 @@ function restoreS(d){
   // txnCache stays separate - loaded in loadS
   applyDeletions();
 }
-const _appliedDels=new Set();
+// MAIN_CATS is never mutated — use getActiveCats() to get the filtered list
+function getActiveCats(){return MAIN_CATS.filter(c=>!(S.deletedCats||[]).includes(c.id));}
 function applyDeletions(){
-  if(S.deletedCats&&S.deletedCats.length){S.deletedCats.forEach(id=>{if(_appliedDels.has(id))return;const i=MAIN_CATS.findIndex(m=>m.id===id);if(i>=0){MAIN_CATS.splice(i,1);_appliedDels.add(id);}delete CAT_COLORS[id];delete SUGGESTED[id];});}
+  // No-op: category filtering is now done dynamically via getActiveCats()
+  // CAT_COLORS and SUGGESTED still need cleanup for deleted cats
+  if(S.deletedCats&&S.deletedCats.length){S.deletedCats.forEach(id=>{delete CAT_COLORS[id];delete SUGGESTED[id];});}
   if(S.deletedSubs&&S.deletedSubs.length){S.deletedSubs.forEach(id=>{const i=SUB_CATS.findIndex(s=>s.id===id);if(i>=0)SUB_CATS.splice(i,1);});}
 }
 
@@ -1768,6 +1774,22 @@ async function loadAllTxnRows(){
   await Promise.all(loads);
   const last=lastTxnMonth();
   if(last&&!S.month)S.month=last;
+  // Silently clean stale/cross-day pairs on every load
+  if(S.matchedPairs?.length){
+    const allIds=new Set(allTxns().map(t=>t.id));
+    const txnMap=new Map(allTxns().map(t=>[t.id,t]));
+    const accIds=new Set((S.accounts||[]).map(a=>a.id));
+    const before=S.matchedPairs.length;
+    S.matchedPairs=S.matchedPairs.filter(p=>{
+      if(!allIds.has(p.outId)||!allIds.has(p.inId))return false;
+      if(!accIds.has(p.outAccId)||!accIds.has(p.inAccId))return false;
+      const outT=txnMap.get(p.outId);
+      const inT=txnMap.get(p.inId);
+      if(outT&&inT&&outT.date!==inT.date)return false;
+      return true;
+    });
+    if(S.matchedPairs.length!==before)sched();
+  }
 }
 
 async function saveTxnRow(ym,txns){
@@ -2343,16 +2365,23 @@ async function rOv(){
     const isExpense=t.type==='expense';
     const isTransfer=t.type==='transfer';
     if(!isExpense&&!isTransfer)return false;
+    // H5: credit cards and charge cards cannot satisfy bank bills
+    // (a CC merchant name can match a bill name spuriously — e.g. "STC Pay" matching "STC" bill)
+    const txnAcc=S.accounts.find(a=>a.id===t.accountId);
+    const txnAccIsCard=txnAcc&&(txnAcc.type==='credit_card'||txnAcc.type==='charge_card');
+    // If bill has an explicit accountId, only match that account
+    if(b.accountId&&t.accountId!==b.accountId)return false;
+    // If no explicit accountId on bill, block credit/charge card transactions from name matching
     const desc=(t.description||'').toLowerCase();
-    // High-confidence: account number or Sadad code — allowed even for transfers
+    // High-confidence: account number or Sadad code — allowed even for cards
     if(b.accountNo&&b.accountNo.length>3&&desc.includes(b.accountNo.toLowerCase()))return true;
     if(b.sadadCode&&b.sadadCode.length>3&&desc.includes(b.sadadCode.toLowerCase()))return true;
-    // Medium/low confidence: name matching — only for expense type
+    // Name matching — blocked for credit/charge cards (too many false positives)
+    if(txnAccIsCard)return false;
+    // Medium/low confidence: name matching — only for expense type from bank accounts
     if(!isExpense)return false;
-    // Full provider name match (not just first word)
-    if(b.provider&&b.provider.trim().length>3&&desc.includes(b.provider.toLowerCase().trim()))return true;
-    // Full bill name match (not just first word)
-    if(b.name&&b.name.trim().length>3&&desc.includes(b.name.toLowerCase().trim()))return true;
+    if(b.provider&&b.provider.trim().length>4&&desc.includes(b.provider.toLowerCase().trim()))return true;
+    if(b.name&&b.name.trim().length>4&&desc.includes(b.name.toLowerCase().trim()))return true;
     return false;
   }
   const billHtml=S.bills.slice(0,5).map(b=>{
@@ -2396,9 +2425,8 @@ async function rOv(){
   // V3.0 #25: Merge by first+last word (handles middle names — "Norah Abdullah Aldakhil" = "Norah Aldakhil")
   function extNormKey(desc){
     if(!desc)return'Unknown';
-    const words=desc.trim().split(/\s+/).filter(Boolean);
-    if(words.length<=1)return desc.trim().toLowerCase(); // single-word = exact match
-    return(words[0]+' '+words[words.length-1]).toLowerCase();
+    // Use full description normalized — avoids merging distinct people with same first+last name
+    return desc.trim().toLowerCase().replace(/\s+/g,' ');
   }
   const extMerged={}; // key → { displayName, amount }
   extTx.forEach(t=>{
@@ -2909,7 +2937,12 @@ async function delTxn(id,ym){
   S.txnCache[ymk]=S.txnCache[ymk].filter(t=>t.id!==id);
   // Remove dangling matched pairs referencing the deleted transaction
   S.matchedPairs=(S.matchedPairs||[]).filter(p=>p.outId!==id&&p.inId!==id);
-  schedTxn(ymk);sched();render();
+  // Flush immediately — destructive operation must not be lost on tab close
+  clearTimeout(txnSaveTimer);
+  txnSaveQueue[ymk]=true;
+  await flushTxnQueue();
+  await saveState();
+  render();
 }
 async function mkSub(id,ym){
   const ymk=ym||S.month;
@@ -3068,30 +3101,24 @@ function txnMentionsAccount(txn, accountId){
 function runTransferMatching(newTxns, preExistingIds){
   const allT=allTxns();
   // Only match genuinely new transfers (not ones that existed before this import run)
-  const newTransfers=newTxns.filter(t=>(t.type==='transfer'||t.type==='external_transfer')&&(!preExistingIds||!preExistingIds.has(t.id)));
+  // Only match transfer type — external_transfer is one-way, never matched
+  const newTransfers=newTxns.filter(t=>t.type==='transfer'&&(!preExistingIds||!preExistingIds.has(t.id)));
 
   newTransfers.forEach(t=>{
     if(isMatched(t.id))return;
     const tDir=txDir(t);
-    const tDate=new Date(t.date);
 
-    // Three criteria must all pass:
-    // 1. Same amount, opposite direction, different account, within ±2 days (existing)
-    // 2. At least 4 consecutive digits from t's description/notes appear in
-    //    the other account's number, OR vice versa (new — prevents false positives
-    //    where unrelated transactions share a date and amount)
+    // Match criteria: same day (exact), same amount, opposite direction, different account
+    // Plus digit linkage to prevent false positives
     const match=allT.find(other=>{
       if(other.id===t.id)return false;
       if(isMatched(other.id))return false;
-      if(other.type!=='transfer'&&other.type!=='external_transfer')return false;
+      if(other.type!=='transfer')return false; // external_transfer excluded
       if(other.accountId===t.accountId)return false;
+      if(other.date!==t.date)return false; // same-day only — no date window
       if(Math.abs(other.amount-t.amount)>0.01)return false;
       if(txDir(other)===tDir)return false;
-      const oDate=new Date(other.date);
-      const dayDiff=Math.abs((tDate-oDate)/(1000*60*60*24));
-      if(dayDiff>2)return false;
       // Digit linkage: t mentions other's account OR other mentions t's account
-      // (checks both description and notes fields of each transaction)
       const linked=txnMentionsAccount(t,other.accountId)||txnMentionsAccount(other,t.accountId);
       return linked;
     });
@@ -3387,7 +3414,7 @@ function prefillOpeningBal(){
     inp.title='Auto-filled from '+fmtYM(prevYm)+' closing balance. Edit if needed.';
   }
 }
-function clearMonthTxns(){
+async function clearMonthTxns(){
   const ym=S.month;
   const accOverride=TF.txnAcc||document.getElementById('imp-acc-override')?.value||null;
   const count=(S.txnCache[ym]||[]).filter(t=>!accOverride||t.accountId===accOverride).length;
@@ -3420,7 +3447,12 @@ function clearMonthTxns(){
       if(S.monthlyBal[mk]){delete S.monthlyBal[mk].guardFail;delete S.monthlyBal[mk].guardDiff;delete S.monthlyBal[mk].guardCalc;}
     });
   }
-  schedTxn(ym);sched();render();
+  // Flush immediately — destructive operation must not be lost on tab close
+  clearTimeout(txnSaveTimer);
+  txnSaveQueue[ym]=true;
+  await flushTxnQueue();
+  await saveState();
+  render();
   toast(`Cleared ${count} transaction${count!==1?'s':''} for ${fmtYM(ym)}.`);
 }
 function setTxnAcc(id){TF.txnAcc=id;TF.sortCol='';render();}
@@ -3593,7 +3625,6 @@ async function doImport(directPayload){
     const txnItem={id:uid(),date:t.date,description:cleanDesc,raw_description:rawDesc,amount:amt,type:txnType,direction:dir,mainCatId:mid,subCatId:sid,accountId:ai,debtId:di,notes:(t.notes||'').trim(),flagged:!!t.flagged,ruleApplied:ruleApplied||false,statementBal:t.statement_balance!=null?parseFloat(t.statement_balance):undefined};
     if(txnYm!==ym){
       targetCache.push(txnItem);
-      schedTxn(txnYm);
       crossMonthCount=(crossMonthCount||0)+1;
     }else{
       txns.push(txnItem);
@@ -3629,7 +3660,11 @@ async function doImport(directPayload){
   const newlyAdded=txns.filter(t=>!preImportIds.has(t.id));
   checkReimbursementMatch(newlyAdded);
   syncDebtsFromTxns();
-  sched();
+  // Flush all touched months immediately — don't debounce import saves
+  clearTimeout(txnSaveTimer);
+  const touchedYms=[...new Set(items.map(t=>t.date?t.date.substr(0,7):ym))];
+  touchedYms.forEach(m=>{txnSaveQueue[m]=true;});
+  flushTxnQueue().then(()=>saveState());
   if(ym!==S.month)S.month=ym;
   if(!directPayload){
     document.getElementById('imp-json').value='';
@@ -3694,7 +3729,7 @@ function delRule(pattern){S.txnRules=(S.txnRules||[]).filter(r=>r.pattern!==patt
 // ─── CAT PICKER (Bug 4.1 fix: capture catCb before clearing) ───
 function buildCM(curM,curS){
   const ms=document.getElementById('catm-main');
-  ms.innerHTML=MAIN_CATS.map(m=>`<option value="${m.id}">${m.name}</option>`).join('');
+  ms.innerHTML=getActiveCats().map(m=>`<option value="${m.id}">${m.name}</option>`).join('');
   if(curM&&getMC(curM))ms.value=curM;
   onCMC(curS);
 }
@@ -5569,6 +5604,7 @@ function rSettings(){
     <div class="settings-section">
       <div class="settings-section-label">Statement Parser</div>
       <div class="settings-row" style="align-items:flex-start"><div class="settings-row-label"><div class="settings-row-title">Edge Function URL</div><div class="settings-row-sub">Your Supabase Edge Function endpoint for AI extraction. See deployment guide.</div></div><div class="settings-row-ctrl" style="min-width:240px"><input type="text" placeholder="https://xxx.supabase.co/functions/v1/extract" value="${S.settings.edgeFnUrl||''}" onchange="S.settings.edgeFnUrl=this.value.trim();sched()" style="width:100%;font-size:11px;font-family:monospace"></div></div>
+      <div class="settings-row" style="align-items:flex-start"><div class="settings-row-label"><div class="settings-row-title">Edge Function Secret</div><div class="settings-row-sub">LANKI_SECRET env var set on the Edge Function. Prevents unauthorized API calls.</div></div><div class="settings-row-ctrl" style="min-width:240px"><input type="password" placeholder="Optional — leave blank if not set" value="${S.settings.edgeFnSecret||''}" onchange="S.settings.edgeFnSecret=this.value.trim();sched()" style="width:100%;font-size:11px;font-family:monospace"></div></div>
     </div>`;
   }else if(SP==='household'){
     const fmRows=(S.familyMembers||[]).map(m=>`<div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">${h(m.name)}</div><div class="settings-row-sub">${m.relationship||'—'}</div></div><div class="settings-row-ctrl"><button class="btn btn-xs btn-d" onclick="delFamilyMember('${m.id}')">Remove</button></div></div>`).join('');
@@ -6330,7 +6366,7 @@ function buildTxFilters(){
     </select>
     <select onchange="TF.mc=this.value;TF.sub='';render()" style="min-width:160px">
       <option value="" ${!TF.mc?'selected':''}>All Categories</option>
-      ${MAIN_CATS.map(m=>`<option value="${m.id}" ${TF.mc===m.id?'selected':''}>${m.name}</option>`).join('')}
+      ${getActiveCats().map(m=>`<option value="${m.id}" ${TF.mc===m.id?'selected':''}>${m.name}</option>`).join('')}
     </select>
     <select onchange="TF.sub=this.value;render()" style="min-width:160px" id="tf-sub-sel">
       <option value="">All Sub-categories</option>
@@ -6353,7 +6389,7 @@ function buildImpPanel(){
     <textarea id="imp-json" rows="6" placeholder="Paste JSON array here..." style="width:100%;margin-bottom:8px;font-family:monospace;font-size:12px"></textarea>
     <div class="fr3" style="margin-bottom:8px">
       <div><label class="lbl">Account</label><select id="imp-acc-override" onchange="prefillOpeningBal()"><option value="">Auto-detect from JSON</option>${S.accounts.map(a=>`<option value="${a.id}" ${TF.txnAcc===a.id?'selected':''}>${a.name}</option>`).join('')}</select></div>
-      <div><label class="lbl">Opening Balance (SAR) — start of month</label><input type="number" id="imp-opening-bal" placeholder="Balance on last day of previous month" step="0.01"></div>
+      <div><label class="lbl">Opening Balance (SAR) — start of month</label><input type="number" id="imp-opening-bal" placeholder="Balance on last day of previous month" step="0.01" oninput="this.style.background='';this.title=''"></div>
       <div><label class="lbl">Closing Balance (SAR) — end of month</label><input type="number" id="imp-closing-bal" placeholder="Balance on last day of this statement" step="0.01"></div>
     </div>
     <div style="font-size:var(--fs-xxs);color:var(--text3);margin-bottom:8px;line-height:1.5">Balance guard: opening + all transactions = closing. All types counted by direction. Discrepancy above SAR 1 is flagged.</div>
@@ -6802,7 +6838,7 @@ function rUsageInsights(){
   });
 
   // Unused categories (in MAIN_CATS but never used)
-  const unusedMC=MAIN_CATS.filter(m=>!mcCount[m.id]);
+  const unusedMC=getActiveCats().filter(m=>!mcCount[m.id]);
   const unusedSC=SUB_CATS.filter(s=>!scCount[s.id]);
 
   // Main categories sorted by usage
@@ -7662,7 +7698,7 @@ function parseAmexExcel(rows,filename){
     if(isNaN(amount)||amount===0)continue;
     // Parse date — stored as datetime string "2026-01-01 00:00:00" or Excel serial
     let dateISO=null;
-    if(dateRaw instanceof Date){dateISO=dateRaw.toISOString().substr(0,10);}
+    if(dateRaw instanceof Date){dateISO=dateRaw.getFullYear()+'-'+String(dateRaw.getMonth()+1).padStart(2,'0')+'-'+String(dateRaw.getDate()).padStart(2,'0');}
     else{
       const ds=String(dateRaw||'').trim();
       // "YYYY-MM-DD HH:MM:SS" or "YYYY-MM-DD"
@@ -7751,7 +7787,7 @@ function catAmexCC(raw,name){
 function xlDateToISO(v){
   if(!v)return null;
   // JavaScript Date object
-  if(v instanceof Date){if(!isNaN(v))return v.toISOString().substr(0,10);return null;}
+  if(v instanceof Date){if(!isNaN(v))return v.getFullYear()+'-'+String(v.getMonth()+1).padStart(2,'0')+'-'+String(v.getDate()).padStart(2,'0');return null;}
   const s=String(v).trim();
   // YYYY-MM-DD HH:MM:SS (AmEx Excel datetime)
   const dtm=s.match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -7763,7 +7799,7 @@ function xlDateToISO(v){
   const dmon=s.match(/^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})$/);
   if(dmon){const mo={'Jan':'01','Feb':'02','Mar':'03','Apr':'04','May':'05','Jun':'06','Jul':'07','Aug':'08','Sep':'09','Oct':'10','Nov':'11','Dec':'12'};const m=mo[dmon[2]];if(m)return`${dmon[3]}-${m}-${dmon[1].padStart(2,'0')}`;}
   // Excel serial number
-  if(/^\d+(\.\d+)?$/.test(s)){const n=parseFloat(s);if(n>40000&&n<60000){const d=new Date(Math.round((n-25569)*86400000));if(!isNaN(d))return d.toISOString().substr(0,10);}}
+  if(/^\d+(\.\d+)?$/.test(s)){const n=parseFloat(s);if(n>40000&&n<60000){const serial=new Date(Math.floor((n-25569)*86400000));if(!isNaN(serial))return serial.getFullYear()+'-'+String(serial.getMonth()+1).padStart(2,'0')+'-'+String(serial.getDate()).padStart(2,'0');}}
   return null;
 }
 
@@ -7800,7 +7836,8 @@ function parseAlRajhiCCExcel(rows){
     if(isNaN(amount))continue;
     const description=String(row[5]||'').trim();
     const txnAmtRaw=String(row[6]||'').trim();
-    const txnDateRaw=row[12]||row[9]; // Transaction Date preferred, fall back to Posting Date
+    const txnDateRaw=row[12]||row[9]; // Transaction Date preferred (col 12), fall back to Posting Date (col 9)
+    const usedPostingDate=!row[12]&&row[9];
     const dateISO=xlDateToISO(txnDateRaw);
     if(!description||!dateISO)continue;
     // Detect FX notes
@@ -7819,7 +7856,7 @@ function parseAlRajhiCCExcel(rows){
       direction:isIn?'in':'out',
       mainCatId:cat.cat||'',
       subCatId:cat.sub||'',
-      notes:notes||(cat.notes||''),
+      notes:(notes||(cat.notes||''))+(usedPostingDate?' [Used Posting Date — Transaction Date missing]':''),
       raw_description:description
     });
   }
@@ -7905,8 +7942,8 @@ function catAlRajhiCC(description,amount){
   if(d.includes('sadad bill payment'))return{type:'expense',dir:'out',cat:'cat_main_housing',desc:'Sadad Bill Payment'};
   // Shopping
   if(d.includes('amazon sa')||d.includes('amazon mktpl')||d.includes('amazon.com'))
-    return{type:amount>0?'income':'expense',dir:amount>0?'in':'out',cat:amount>0?'cat_main_income':'cat_main_shopping'};
-  if(d.includes('noon'))return{type:amount>0?'income':'expense',dir:amount>0?'in':'out',cat:amount>0?'cat_main_income':'cat_main_shopping'};
+    return{type:'expense',dir:amount>0?'in':'out',cat:'cat_main_shopping'};
+  if(d.includes('noon'))return{type:'expense',dir:amount>0?'in':'out',cat:'cat_main_shopping'};
   if(d.includes('aliexpress'))return{type:'expense',dir:'out',cat:'cat_main_shopping'};
   if(d.includes('dhl'))return{type:'expense',dir:'out',cat:'cat_main_shopping',desc:'DHL Delivery'};
   if(d.includes('geekay'))return{type:'expense',dir:'out',cat:'cat_main_shopping'};
@@ -7963,7 +8000,7 @@ function catAlRajhiCC(description,amount){
   // Finance
   if(d.includes('masic'))return{type:'income',dir:'in',cat:'cat_main_income',desc:'Salary — MASIC'};
   // Unknown — leave uncategorized, user edits on review screen
-  return{type:amount>0?'income':'expense',dir:amount>0?'in':'out',cat:'',sub:''};
+  return{type:'expense',dir:amount>0?'in':'out',cat:'',sub:''};
 }
 
 async function runAIPrescan(){
@@ -7979,7 +8016,7 @@ async function runAIPrescan(){
     const resp=await fetch(EDGE_URL,{
       method:'POST',
       signal:controller.signal,
-      headers:{'Content-Type':'application/json','Authorization':'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRnZWZzcHBraWpycnZvdGdnZW9tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4MzYyOTAsImV4cCI6MjA5MTQxMjI5MH0._MWK5XL_CQAV3ybEWPv1UrArPb-Enu6FZognyImSYzg'},
+      headers:{'Content-Type':'application/json','Authorization':'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRnZWZzcHBraWpycnZvdGdnZW9tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4MzYyOTAsImV4cCI6MjA5MTQxMjI5MH0._MWK5XL_CQAV3ybEWPv1UrArPb-Enu6FZognyImSYzg',...(S.settings.edgeFnSecret?{'x-lanki-secret':S.settings.edgeFnSecret}:{})},
       body:JSON.stringify({fileData:_aiState.fileData,fileType:_aiState.fileType,mode:'prescan'})
     });
     clearTimeout(timeout);
@@ -8038,7 +8075,8 @@ async function runAIExtract(){
       method:'POST',
       headers:{
         'Content-Type':'application/json',
-        'Authorization':'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRnZWZzcHBraWpycnZvdGdnZW9tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4MzYyOTAsImV4cCI6MjA5MTQxMjI5MH0._MWK5XL_CQAV3ybEWPv1UrArPb-Enu6FZognyImSYzg'  // Supabase anon JWT — required by Edge Function auth
+        'Authorization':'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRnZWZzcHBraWpycnZvdGdnZW9tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4MzYyOTAsImV4cCI6MjA5MTQxMjI5MH0._MWK5XL_CQAV3ybEWPv1UrArPb-Enu6FZognyImSYzg',  // Supabase anon JWT — required by Edge Function auth
+        ...(S.settings.edgeFnSecret?{'x-lanki-secret':S.settings.edgeFnSecret}:{})
       },
       body:JSON.stringify({
         fileData:_aiState.fileData,
@@ -8165,7 +8203,7 @@ async function runAIExtract(){
 
 function openAITxnEdit(idx){
   const t=_aiState.extracted[idx];if(!t)return;
-  const mc=MAIN_CATS.map(m=>`<option value="${m.id}" ${t.mainCatId===m.id?'selected':''}>${m.name}</option>`).join('');
+  const mc=getActiveCats().map(m=>`<option value="${m.id}" ${t.mainCatId===m.id?'selected':''}>${m.name}</option>`).join('');
   const sc=SUB_CATS.sort((a,b)=>a.name.localeCompare(b.name)).map(s=>`<option value="${s.id}" ${t.subCatId===s.id?'selected':''}>${s.name}</option>`).join('');
   const existing=document.getElementById('ai-edit-modal');if(existing)existing.remove();
   const m=document.createElement('div');
