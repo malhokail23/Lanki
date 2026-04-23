@@ -579,6 +579,19 @@ th{
 td{padding:9px 10px;border-bottom:1px solid var(--bg2);vertical-align:middle}
 tr:last-child td{border-bottom:none}
 tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+/* Apple-grade transactions table: fixed column widths prevent shift between months */
+.tx-tbl{table-layout:fixed;width:100%;min-width:920px}
+.tx-tbl td,.tx-tbl th{overflow:hidden;text-overflow:ellipsis}
+.tx-tbl td>div{overflow:hidden;text-overflow:ellipsis}
+/* KPI row responsive: 5 cells on desktop, 3+2 on tablet, stacked on mobile */
+.kpi-row{grid-template-columns:repeat(5,1fr)}
+@media(max-width:900px){.kpi-row{grid-template-columns:repeat(3,1fr)}.kpi-row>div:nth-child(n+4){grid-column:span 1}}
+@media(max-width:520px){.kpi-row{grid-template-columns:repeat(2,1fr)}}
+/* Transactions More menu: caret hidden, positioned dropdown */
+.tx-more summary::-webkit-details-marker{display:none}
+.tx-more summary::marker{content:''}
+.tx-more[open] summary{background:var(--bg2)}
+.tx-more>div>button:hover{background:var(--bg2)!important}
 @media(max-width:768px){th,td{padding:8px 8px}}
 
 /* ── PROGRESS ─────────────────────────────────────────── */
@@ -1324,7 +1337,7 @@ const TAB_TO_GROUP={txbank:'transactions',txcards:'transactions',aiupload:'trans
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='4.3';
+const VERSION='4.4';
 let sKey=null,saveTimer=null,pinCb=null,catCb=null,activeGroup=null;
 
 // ─── CRYPTO ───
@@ -4839,21 +4852,30 @@ function onATC(v){
 }
 function rAcc(){
   const showBalance=false; // L1: explicit definition — rAcc never shows running balance
-  const rows=S.accounts.length?S.accounts.map(a=>{
+  const activeAccs=S.accounts.filter(a=>!a.archived);
+  const archivedAccs=S.accounts.filter(a=>a.archived);
+  const buildRow=(a,isArchived)=>{
     const lb=calcAccBalance(a);
-    const balTd=lb!==null?`<td><div style="font-size:var(--fs-xs);font-weight:500;color:${lb>=0?'var(--ok)':'var(--bad)'}">${fmt(lb)}</div><div style="font-size:10px;color:var(--text3)">live</div></td>`:'<td style="font-size:var(--fs-xxs);color:var(--text3)">Not set</td>';
-    return`<tr>
-    <td><div style="font-weight:500">${h(a.name)}</div>${a.accountNumber?`<div style="font-size:var(--fs-xxs);font-family:monospace;color:var(--text3)">${h(a.accountNumber)}</div>`:''}</td>
-    <td style="color:var(--text3)">${h(a.institution||'')}</td>
-    <td><span class="badge b-tr" style="font-size:10px">${ATL[a.type]||a.type}</span></td>
-    ${balTd}
-    <td style="font-size:var(--fs-xs)">${a.openingBalance!=null?`<span style="font-weight:500">${fmtP(a.openingBalance)}</span><br><span style="font-size:10px;color:var(--text3)">as of ${toDD(a.balanceAsOf)||'--'}</span>`:'<span style="color:var(--text3)">--</span>'}</td>
-    <td style="font-size:11px;font-family:monospace;color:var(--text3)">${a.id}</td>
-    <td style="white-space:nowrap">
-      <button class="btn btn-xs" onclick="openEditAcc('${a.id}')">Edit</button>
-      <button class="btn btn-xs btn-d" onclick="delAcc('${a.id}')">&#10005;</button>
-    </td>
-  </tr>`;}).join(''):`<tr><td colspan="${showBalance?7:6}" class="empty">No accounts added yet</td></tr>`;
+    const balTd=lb!==null?`<td><div style="font-size:var(--fs-xs);font-weight:500;color:${lb>0?'var(--ok)':lb<0?'var(--bad)':'var(--text1)'}">${fmt(lb)}</div><div style="font-size:10px;color:var(--text3)">live</div></td>`:'<td style="font-size:var(--fs-xxs);color:var(--text3)">Not set</td>';
+    return`<tr${isArchived?' style="opacity:.65"':''}>
+      <td><div style="font-weight:500">${h(a.name)}</div>${a.accountNumber?`<div style="font-size:var(--fs-xxs);font-family:monospace;color:var(--text3)">${h(a.accountNumber)}</div>`:''}</td>
+      <td style="color:var(--text3)">${h(a.institution||'')}</td>
+      <td><span class="badge b-tr" style="font-size:10px">${ATL[a.type]||a.type}</span></td>
+      ${balTd}
+      <td style="font-size:var(--fs-xs)">${a.openingBalance!=null?`<span style="font-weight:500">${fmtP(a.openingBalance)}</span><br><span style="font-size:10px;color:var(--text3)">as of ${toDD(a.balanceAsOf)||'--'}</span>`:'<span style="color:var(--text3)">--</span>'}</td>
+      <td style="font-size:11px;font-family:monospace;color:var(--text3)">${a.id}</td>
+      <td style="white-space:nowrap">
+        ${isArchived
+          ?`<button class="btn btn-xs btn-p" onclick="unarchiveAcc('${a.id}')" title="Restore to Transactions view">Unarchive</button>
+            <button class="btn btn-xs btn-d" onclick="delAcc('${a.id}')" title="Delete permanently">&#10005;</button>`
+          :`<button class="btn btn-xs" onclick="openEditAcc('${a.id}')">Edit</button>
+            <button class="btn btn-xs" onclick="archiveAcc('${a.id}')" title="Hide from Transactions page (data preserved)">Archive</button>
+            <button class="btn btn-xs btn-d" onclick="delAcc('${a.id}')">&#10005;</button>`}
+      </td>
+    </tr>`;
+  };
+  const activeRows=activeAccs.length?activeAccs.map(a=>buildRow(a,false)).join(''):`<tr><td colspan="7" class="empty">No accounts added yet</td></tr>`;
+  const archivedRows=archivedAccs.map(a=>buildRow(a,true)).join('');
   return`
   <div class="pg-header-row">
     <div class="pg-header-title">Accounts &amp; Cards</div>
@@ -4894,11 +4916,35 @@ function rAcc(){
     <div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:10px;line-height:1.6">Account ID is used in import JSON. IBAN enables automatic account matching during statement import.</div>
     <div class="tbl-wrap"><table>
       <thead><tr><th>Name / Number</th><th>Institution</th><th>Type</th><th>Live Balance</th><th>Opening Balance</th><th>ID</th><th></th></tr></thead>
-      <tbody>${rows}</tbody>
+      <tbody>${activeRows}</tbody>
     </table></div>
-  </div>`;
+  </div>
+  ${archivedAccs.length?`
+  <div style="margin-top:1.5rem">
+    <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Archived (${archivedAccs.length})</div>
+    <div class="card">
+      <div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:10px;line-height:1.6">Hidden from the Transactions page. Still included in Overview, Debts, and Reports. Unarchive to restore visibility.</div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Name / Number</th><th>Institution</th><th>Type</th><th>Live Balance</th><th>Opening Balance</th><th>ID</th><th></th></tr></thead>
+        <tbody>${archivedRows}</tbody>
+      </table></div>
+    </div>
+  </div>`:''}`;
 }
 function openAddAcc(){editAccId=null;['ac-name','ac-inst','ac-no','ac-purp'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});document.getElementById('acc-ptitle').textContent='Add account';document.getElementById('acc-sbtn').textContent='Add account';const p=document.getElementById('acc-panel');if(p&&!p.classList.contains('open')){p.classList.add('open');p.scrollIntoView({behavior:'smooth'});}}
+function archiveAcc(id){
+  const a=S.accounts.find(x=>x.id===id);if(!a)return;
+  if(!confirm(`Archive "${a.name}"?\n\nIt will be hidden from the Transactions page pills but its data stays intact in Overview, Debts, and Reports. You can unarchive it anytime.`))return;
+  a.archived=true;
+  // If it's currently the scoped account on transactions page, clear the scope
+  if(TF.txnAcc===id)TF.txnAcc='';
+  saveState().then(()=>{render();toast(`Archived "${a.name}"`);});
+}
+function unarchiveAcc(id){
+  const a=S.accounts.find(x=>x.id===id);if(!a)return;
+  delete a.archived;
+  saveState().then(()=>{render();toast(`Unarchived "${a.name}"`);});
+}
 function openEditAcc(id){
   const a=S.accounts.find(x=>x.id===id);if(!a)return;editAccId=id;
 
@@ -6065,18 +6111,20 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps){
     :['date','desc','cat','acc','amount','balance','type',''];
   const labels={date:'Date',desc:'Description',cat:'Category / Sub-Category',acc:'Account',
     amount:'Amount',balance:'Balance',outstanding:'Outstanding',type:'Type','':''};
+  const widths={date:'90px',desc:'auto',cat:'170px',acc:'130px',amount:'110px',balance:'110px',outstanding:'110px',type:'90px','':'160px'};
 
-  const bulkCol=BulkMode?'<th style="width:36px;padding:8px 6px"><input type="checkbox" title="Select all displayed" onclick="if(this.checked)selectAllDisplayed();else clearBulkSelection()" style="cursor:pointer;width:15px;height:15px"></th>':'';
-  const reconTh=hasRecon?`<th style="text-align:right;white-space:nowrap;font-size:var(--fs-xxs);color:var(--warn)">Stmt Bal</th>`:'';
+  const bulkCol=`<th style="width:32px;padding:8px 6px">${BulkMode?'<input type="checkbox" title="Select all displayed" onclick="if(this.checked)selectAllDisplayed();else clearBulkSelection()" style="cursor:pointer;width:15px;height:15px">':''}</th>`;
+  const reconTh=hasRecon?`<th style="text-align:right;white-space:nowrap;font-size:var(--fs-xxs);color:var(--warn);width:110px">Stmt Bal</th>`:'';
   const thead=`<thead><tr>${bulkCol}${colConfig.map(col=>{
-    if(!col)return'<th></th>';
+    const w=widths[col]||'auto';
+    if(!col)return`<th style="width:${w}"></th>`;
     if(col==='balance'||col==='outstanding'){
-      return showBalance?`<th style="text-align:right">${labels[col]}</th>`:'';
+      return showBalance?`<th style="text-align:right;width:${w}">${labels[col]}</th>`:'';
     }
     const active=TF.sortCol===col;
     const arrow=active?(TF.sortDir===1?'\u2191':'\u2193'):'\u2195';
     const style=col==='amount'?'text-align:right;':'';
-    return`<th style="${style}cursor:pointer;user-select:none;white-space:nowrap" onclick="setTxSort('${col}')">${labels[col]} <span style="font-size:10px;opacity:${active?1:0.35}">${arrow}</span></th>`;
+    return`<th style="${style}cursor:pointer;user-select:none;white-space:nowrap;width:${w}" onclick="setTxSort('${col}')">${labels[col]} <span style="font-size:10px;opacity:${active?1:0.35}">${arrow}</span></th>`;
   }).join('')}${reconTh}</tr></thead>`;
 
   const rows=fl.length?fl.map(t=>{
@@ -6095,7 +6143,7 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps){
     const rb=showBalance&&t.accountId&&rbMaps[t.accountId]?rbMaps[t.accountId].get(t.id):null;
     const ym=t.date?t.date.substr(0,7):S.month;
     const debtTag=debt?`<span style="font-size:10px;background:#FEF3C7;color:#92400E;border-radius:3px;padding:1px 5px;margin-left:4px">${h(debt.name)}</span>`:'';
-    const selCb=BulkMode?`<td style="padding:8px 6px;width:36px"><input type="checkbox" id="cb-${t.id}" class="tx-sel-cb" data-id="${t.id}" ${BulkSelected.has(t.id)?'checked':''} onclick="event.stopPropagation();toggleTxSel('${t.id}')" style="cursor:pointer;width:15px;height:15px"></td>`:'';
+    const selCb=`<td style="padding:8px 6px;width:32px">${BulkMode?`<input type="checkbox" id="cb-${t.id}" class="tx-sel-cb" data-id="${t.id}" ${BulkSelected.has(t.id)?'checked':''} onclick="event.stopPropagation();toggleTxSel('${t.id}')" style="cursor:pointer;width:15px;height:15px">`:''}</td>`;
 
     // Reconciliation column
     let reconTd='';
@@ -6129,7 +6177,7 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps){
       <td>${ch}</td>
       <td style="font-size:var(--fs-xs)">${acc?`<span style="font-weight:500">${h(acc.name)}</span>`:'--'}</td>
       <td style="text-align:right;font-weight:500;white-space:nowrap" class="${ac}">${dir==='in'?'+':'-'}${fmtP(t.amount)}</td>
-      ${showBalance?`<td style="text-align:right;font-size:var(--fs-xs);white-space:nowrap" class="${rb!==null?(rb<0?'c-bad':'c-ok'):''}">${rb!==null?fmtS(rb):'--'}</td>`:''}
+      ${showBalance?`<td style="text-align:right;font-size:var(--fs-xs);white-space:nowrap" class="${rb!==null?(rb<-0.005?'c-bad':rb>0.005?'c-ok':''):''}">${rb!==null?(Math.abs(rb)<0.005?fmt(0):fmtS(rb)):'--'}</td>`:''}
       <td>${tbadge(t.type)}</td>
       <td style="white-space:nowrap">
         <button class="btn btn-xs" onclick="openEditTxn('${t.id}','${ym}')">Edit</button>
@@ -6138,9 +6186,9 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps){
         <button class="btn btn-xs btn-d" onclick="delTxn('${t.id}','${ym}')">&#10005;</button>
       </td>
       ${reconTd}
-    </tr>`;}).join(''):`<tr><td colspan="${(showBalance?8:7)+(BulkMode?1:0)+(hasRecon?1:0)}" class="empty">No transactions found</td></tr>`;
+    </tr>`;}).join(''):`<tr><td colspan="${(showBalance?8:7)+1+(hasRecon?1:0)}" class="empty">No transactions found</td></tr>`;
 
-  return`<div class="tbl-wrap"><table>${thead}<tbody>${rows}</tbody></table></div>`;
+  return`<div class="tbl-wrap"><table class="tx-tbl">${thead}<tbody>${rows}</tbody></table></div>`;
 }
 
 // ─── SHARED TX HEADER (month nav + import + summary) ───
@@ -6148,21 +6196,40 @@ function buildTxHeader(fl, scopedAcc, accountPills, tabLabel){
   const inc=fl.filter(t=>txDir(t)==='in'&&!isMatched(t.id)).reduce((s,t)=>s+t.amount,0);
   const out=fl.filter(t=>txDir(t)==='out'&&!isMatched(t.id)).reduce((s,t)=>s+t.amount,0);
   const net=inc-out;
+  // Opening / Closing: meaningful only when scoped to a single account for the current month
+  let openingStr='—',closingStr='—';
+  if(scopedAcc&&!TF.allMonths){
+    const op=getAccountOpeningBal(scopedAcc,S.month);
+    const mb=S.monthlyBal[scopedAcc+'_'+S.month];
+    if(op!=null)openingStr=fmtP(op);
+    if(mb?.closing!=null)closingStr=fmtP(mb.closing);
+    else if(op!=null){
+      // Derive closing from opening + month's transactions for this account
+      const accMonth=(S.txnCache[S.month]||[]).filter(t=>t.accountId===scopedAcc);
+      const derived=op+accMonth.reduce((s,t)=>s+(txDir(t)==='in'?t.amount:-t.amount),0);
+      closingStr=fmtP(derived);
+    }
+  }
   return`
   <div style="margin-bottom:1.5rem">
     <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Account</div>
-    <div class="fg" style="gap:6px;flex-wrap:wrap;margin-bottom:1rem">
+    <div class="fg" style="gap:6px;flex-wrap:wrap">
       <button class="opill ${!scopedAcc?'active':''}" onclick="setTxnAcc('')">All ${tabLabel}</button>
       ${accountPills}
     </div>
-    ${scopedAcc?`<div style="font-size:var(--fs-xxs);color:var(--info);padding:4px 10px;background:#EFF6FF;border-radius:var(--rsm);display:inline-block;margin-bottom:.75rem">Running balance active &middot; Balance guard available</div>`:''}
   </div>
-  <div class="fg jb" style="margin-bottom:1rem;flex-wrap:wrap;gap:8px">
+  <div class="fg jb" style="margin-bottom:1.25rem;flex-wrap:wrap;gap:12px;align-items:center">
     <div class="mnav"><button onclick="prevM()">&#8592;</button><div class="mnav-lbl">${fmtYM(S.month)}</div><button onclick="nextM()">&#8594;</button></div>
-    <div class="fg" style="gap:6px;flex-wrap:wrap">
-      <button class="btn btn-sm" onclick="tp('imp-panel');setTimeout(prefillOpeningBal,50)">Import JSON</button>
-      <button class="btn btn-sm" id="bulk-sel-btn" onclick="toggleBulkSelect()">Select</button>
+    <div class="fg" style="gap:6px;flex-wrap:wrap;align-items:center">
       <button class="btn btn-sm btn-p" onclick="tp('atxn-panel')">+ Add Manually</button>
+      <details class="tx-more" style="position:relative">
+        <summary class="btn btn-sm" style="list-style:none;cursor:pointer">&#8943;</summary>
+        <div style="position:absolute;right:0;top:calc(100% + 4px);background:var(--bg1);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 4px 16px rgba(2,23,81,0.08);padding:4px;min-width:200px;z-index:50;display:flex;flex-direction:column;gap:2px">
+          <button class="btn btn-sm" style="justify-content:flex-start;text-align:left;background:transparent;border:none" onclick="this.closest('details').open=false;tp('imp-panel');setTimeout(prefillOpeningBal,50)">Import JSON</button>
+          <button class="btn btn-sm" style="justify-content:flex-start;text-align:left;background:transparent;border:none" onclick="this.closest('details').open=false;toggleBulkSelect()" id="bulk-sel-btn">Select multiple</button>
+          <button class="btn btn-sm btn-d" style="justify-content:flex-start;text-align:left;background:transparent;border:none;color:var(--bad)" onclick="this.closest('details').open=false;clearMonthTxns()">Clear this month</button>
+        </div>
+      </details>
     </div>
   </div>
   ${(()=>{
@@ -6243,19 +6310,19 @@ function buildTxHeader(fl, scopedAcc, accountPills, tabLabel){
         <button onclick="clearGuardFail('${f.mk}')" style="background:none;border:none;cursor:pointer;font-size:16px;color:#991B1B;padding:0;flex-shrink:0" title="Dismiss">✕</button>
       </div>`;}).join('');
   })()}
-  <div class="card" style="padding:.9rem 1.25rem;margin-bottom:1rem">
-    <div class="g3">
-      <div><div class="lbl">Total In</div><div style="font-size:16px;font-weight:500" class="c-ok">+${fmtP(inc)}</div></div>
-      <div><div class="lbl">Total Out</div><div style="font-size:16px;font-weight:500" class="c-bad">-${fmtP(out)}</div></div>
-      <div><div class="lbl">Net</div><div style="font-size:16px;font-weight:500" class="${net>=0?'c-ok':'c-bad'}">${net>=0?'+':''}${fmtS(net)}</div></div>
-    </div>
+  <div class="kpi-row" style="display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r);margin-bottom:1.25rem;overflow:hidden">
+    <div style="padding:.75rem 1rem;background:var(--bg1)"><div class="lbl" style="margin-bottom:4px">Opening</div><div style="font-size:15px;font-weight:500;color:var(--text1)">${openingStr}</div></div>
+    <div style="padding:.75rem 1rem;background:var(--bg1)"><div class="lbl" style="margin-bottom:4px">Total In</div><div style="font-size:15px;font-weight:500" class="${inc>0?'c-ok':''}">${inc>0?'+':''}${fmtP(inc)}</div></div>
+    <div style="padding:.75rem 1rem;background:var(--bg1)"><div class="lbl" style="margin-bottom:4px">Total Out</div><div style="font-size:15px;font-weight:500" class="${out>0?'c-bad':''}">${out>0?'-':''}${fmtP(out)}</div></div>
+    <div style="padding:.75rem 1rem;background:var(--bg1)"><div class="lbl" style="margin-bottom:4px">Net</div><div style="font-size:15px;font-weight:500" class="${net>0.005?'c-ok':net<-0.005?'c-bad':''}">${net>0.005?'+':''}${fmtS(net)}</div></div>
+    <div style="padding:.75rem 1rem;background:var(--bg1)"><div class="lbl" style="margin-bottom:4px">Closing</div><div style="font-size:15px;font-weight:500;color:var(--text1)">${closingStr}</div></div>
   </div>`;
 }
 
 // ─── BANK ACCOUNTS TAB ───
 async function rTxBank(){
 
-  const bankAccs=S.accounts.filter(a=>BANK_ACC_TYPES.has(a.type));
+  const bankAccs=S.accounts.filter(a=>BANK_ACC_TYPES.has(a.type)&&!a.archived);
   const txns=S.txnCache[S.month]||[];
   const bankTxns=txns.filter(t=>!t.accountId||bankAccs.some(a=>a.id===t.accountId));
   const scopedAcc=TF.txnAcc&&bankAccs.some(a=>a.id===TF.txnAcc)?TF.txnAcc:null;
@@ -6301,7 +6368,7 @@ async function rTxBank(){
 
 // ─── CARDS TAB ───
 async function rTxCards(){
-  const cardAccs=S.accounts.filter(a=>CARD_ACC_TYPES.has(a.type));
+  const cardAccs=S.accounts.filter(a=>CARD_ACC_TYPES.has(a.type)&&!a.archived);
   const txns=S.txnCache[S.month]||[];
   const cardTxns=txns.filter(t=>cardAccs.some(a=>a.id===t.accountId));
   const scopedAcc=TF.txnAcc&&cardAccs.some(a=>a.id===TF.txnAcc)?TF.txnAcc:null;
@@ -6368,8 +6435,8 @@ function buildTxFilters(){
     <button class="btn btn-xs btn-p" onclick="applyBulkCategory()">Assign Category</button>
   </div>
   <div class="fg" style="gap:8px;flex-wrap:nowrap;align-items:center;margin-bottom:1rem;overflow-x:auto">
-    <input type="text" placeholder="Search description or amount…" value="${TF.q||''}" oninput="TF.q=this.value;render()" autocomplete="off" style="flex:1;min-width:180px">
-    <select onchange="TF.type=this.value;render()" style="min-width:140px">
+    <input type="text" placeholder="Search" value="${TF.q||''}" oninput="TF.q=this.value;render()" autocomplete="off" style="flex:2;min-width:200px">
+    <select onchange="TF.type=this.value;render()" style="min-width:130px;flex:1">
       <option value="" ${!TF.type?'selected':''}>All Types</option>
       <option value="income" ${TF.type==='income'?'selected':''}>Income</option>
       <option value="expense" ${TF.type==='expense'?'selected':''}>Expense</option>
@@ -6377,11 +6444,11 @@ function buildTxFilters(){
       <option value="investment" ${TF.type==='investment'?'selected':''}>Investment</option>
       <option value="external_transfer" ${TF.type==='external_transfer'?'selected':''}>External Transfer</option>
     </select>
-    <select onchange="TF.mc=this.value;TF.sub='';render()" style="min-width:160px">
+    <select onchange="TF.mc=this.value;TF.sub='';render()" style="min-width:140px;flex:1">
       <option value="" ${!TF.mc?'selected':''}>All Categories</option>
       ${getActiveCats().map(m=>`<option value="${m.id}" ${TF.mc===m.id?'selected':''}>${m.name}</option>`).join('')}
     </select>
-    <select onchange="TF.sub=this.value;render()" style="min-width:160px" id="tf-sub-sel">
+    <select onchange="TF.sub=this.value;render()" style="min-width:140px;flex:1" id="tf-sub-sel">
       <option value="">All Sub-categories</option>
       ${(TF.mc?SUB_CATS.filter(s=>s.mainCatId===TF.mc||!s.mainCatId):SUB_CATS).sort((a,b)=>a.name.localeCompare(b.name)).map(s=>`<option value="${s.id}" ${TF.sub===s.id?'selected':''}>${h(s.name)}</option>`).join('')}
     </select>
