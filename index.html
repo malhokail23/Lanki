@@ -1337,7 +1337,7 @@ const TAB_TO_GROUP={txbank:'transactions',txcards:'transactions',aiupload:'trans
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='4.4';
+const VERSION='4.5';
 let sKey=null,saveTimer=null,pinCb=null,catCb=null,activeGroup=null;
 
 // ─── CRYPTO ───
@@ -2991,6 +2991,14 @@ function openEditTxn(id,ym){
     benSel.innerHTML=`<option value="">${(S.settings.displayName||'').split(' ')[0]||'Self'} (Self)</option>`+( S.familyMembers||[]).map(m=>`<option value="${m.id}">${h(m.name)}${m.relationship?' ('+m.relationship+')':''}</option>`).join('');
     benSel.value=t.beneficiaryId||'';
   }
+  // Staff dropdown — only visible when main category is Household Staff
+  const staffRow=document.getElementById('etxn-staff-row');
+  const staffSel=document.getElementById('etxn-staff');
+  if(staffRow)staffRow.style.display=t.mainCatId==='cat_main_staff'?'block':'none';
+  if(staffSel){
+    staffSel.innerHTML='<option value="">-- None --</option>'+(S.staff||[]).map(s=>`<option value="${s.id}">${h(s.name)} <span>— ${h(s.role||'')}</span></option>`).join('');
+    staffSel.value=t.staffId||'';
+  }
   document.getElementById('edit-txn-modal').classList.add('active');
 }
 function openCPEditTxn(){
@@ -3002,6 +3010,9 @@ function openCPEditTxn(){
     document.getElementById('etxn-sc').value=s||'';
     const mc=getMC(m),sc=getSC(s);
     document.getElementById('etxn-cat-label').textContent=(mc?.name||'--')+(sc?' / '+sc.name:'');
+    // Toggle staff dropdown visibility based on new category
+    const staffRow=document.getElementById('etxn-staff-row');
+    if(staffRow)staffRow.style.display=m==='cat_main_staff'?'block':'none';
     // V3.0 #18: auto-set type when sub-category drives it
     const typeEl=document.getElementById('etxn-type');
     if(typeEl){
@@ -3037,6 +3048,16 @@ async function saveEditTxn(){
   t.accountId=document.getElementById('etxn-acc').value||null;
   t.debtId=document.getElementById('etxn-debt').value||null;
   t.beneficiaryId=document.getElementById('etxn-beneficiary')?.value||null;
+  // Staff tag — only meaningful for Household Staff category, but we preserve selection regardless
+  const prevStaffId=t.staffId||null;
+  const newStaffId=document.getElementById('etxn-staff')?.value||null;
+  t.staffId=newStaffId;
+  let autoRec=null;
+  // Auto-record advance deduction on new staff tag (but not if unchanged)
+  if(newStaffId&&newStaffId!==prevStaffId&&t.mainCatId==='cat_main_staff'){
+    const st=S.staff.find(x=>x.id===newStaffId);
+    if(st)autoRec=maybeAutoRecordDeduction(t,st);
+  }
   // Sync debt payments whenever a transaction's debtId, amount, or type may have changed
   syncDebtsFromTxns();
   const newMid=document.getElementById('etxn-mc').value||null;
@@ -3073,7 +3094,8 @@ async function saveEditTxn(){
   // Warn if active filters will now hide this transaction
   const willBeHidden=(TF.type&&TF.type!==t.type)||(TF.mc&&TF.mc!==t.mainCatId)||(TF.sub&&TF.sub!==t.subCatId);
   render();
-  if(willBeHidden)toast('Transaction saved — hidden by active filter. Clear filters to see it.',true);
+  if(autoRec)toast(`Linked to staff · auto-recorded ${fmt(autoRec.amount)} advance deduction for ${fmtYM(autoRec.month)}`,true);
+  else if(willBeHidden)toast('Transaction saved — hidden by active filter. Clear filters to see it.',true);
   else toast('Transaction updated');
 }
 function closeEditTxn(){
@@ -4423,6 +4445,92 @@ function advThisMonth(st){
   },0);
 }
 
+// Project forward schedule from ledger + remaining plan.
+// Deferrals skip without advancing progress, naturally shifting timeline.
+function advPlan(a){
+  advMigrate(a);
+  const ledger=a.ledger||[];
+  const plan=[];
+  const target=a.amount||0;
+  const monthly=a.monthlyDeduct||0;
+  if(target<=0||monthly<=0||!a.deductStart)return plan;
+  let deducted=0,m=a.deductStart,i=0;
+  while(deducted<target-0.005&&i<120){
+    i++;
+    const entry=ledger.find(l=>l.month===m);
+    if(entry){
+      if(entry.type==='deferred'){
+        plan.push({month:m,amount:0,status:'deferred',note:entry.notes||''});
+      }else if(entry.type==='forgiven'){
+        plan.push({month:m,amount:0,status:'forgiven',note:entry.notes||''});
+        break;
+      }else{
+        const amt=entry.amount||0;
+        plan.push({month:m,amount:amt,status:entry.type==='settlement'?'settled':'deducted',note:entry.notes||''});
+        deducted+=amt;
+      }
+    }else{
+      const remaining=target-deducted;
+      const amt=Math.min(monthly,remaining);
+      plan.push({month:m,amount:+amt.toFixed(2),status:'planned',note:''});
+      deducted+=amt;
+    }
+    // Advance month
+    const[yy,mm]=m.split('-').map(Number);
+    const nd=new Date(yy,mm,1); // next month
+    m=nd.getFullYear()+'-'+String(nd.getMonth()+1).padStart(2,'0');
+  }
+  return plan;
+}
+
+// Delete an advance outright (with confirmation)
+function advDelete(sid,ai){
+  const st=S.staff.find(x=>x.id===sid);if(!st||!st.advances||!st.advances[ai])return;
+  const a=st.advances[ai];
+  const ledgerCount=(a.ledger||[]).length;
+  const warning=ledgerCount>0?`\n\nThis advance has ${ledgerCount} ledger entr${ledgerCount===1?'y':'ies'} which will also be deleted.`:'';
+  if(!confirm(`Delete advance of ${fmt(a.amount)} given ${toDD(a.dateGiven)||'--'}?${warning}\n\nThis cannot be undone.`))return;
+  st.advances.splice(ai,1);
+  sched();saveState();render();toast('Advance deleted');
+}
+
+// Summary for Overview dashboard: staff payroll due this month
+function staffPayrollThisMonth(){
+  return(S.staff||[]).reduce((s,st)=>s+Math.max(0,(st.salary||0)-advThisMonth(st)),0);
+}
+
+// List transactions tagged to a given staff member across all cached months
+function staffTxns(sid){
+  const out=[];
+  Object.values(S.txnCache||{}).forEach(arr=>arr.forEach(t=>{if(t.staffId===sid)out.push(t);}));
+  out.sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  return out;
+}
+
+// Auto-record advance deduction when tagging a salary transaction to a staff member
+// Fires only if: staff has an active advance, no ledger entry for that month yet,
+// transaction is expense direction out, and amount reasonably matches expected salary.
+function maybeAutoRecordDeduction(t,st){
+  if(!st||!t||txDir(t)!=='out')return null;
+  const ym=(t.date||'').substr(0,7);if(!ym)return null;
+  const activeAdvances=(st.advances||[]).filter(a=>advStatus(a)==='active');
+  if(!activeAdvances.length)return null;
+  const expected=Math.max(0,(st.salary||0)-advThisMonth(st));
+  // Heuristic: transaction amount within 50% of expected net salary
+  if(expected<=0||Math.abs(t.amount-expected)/expected>0.5)return null;
+  let recorded=null;
+  activeAdvances.forEach(a=>{
+    advMigrate(a);
+    if((a.ledger||[]).find(l=>l.month===ym))return; // already recorded
+    const amt=Math.min(a.monthlyDeduct||0,advRemaining(a));
+    if(amt<=0)return;
+    a.ledger=a.ledger||[];
+    a.ledger.push({id:uid(),month:ym,type:'deduction',amount:amt,notes:`Auto-recorded from "${(t.description||'salary payment').substr(0,40)}"`,recordedAt:new Date().toISOString().substr(0,10)});
+    recorded={month:ym,amount:amt};
+  });
+  return recorded;
+}
+
 function rStaff(){
   const now=getYM(new Date());
   const cards=S.staff.map(st=>{
@@ -4451,18 +4559,24 @@ function rStaff(){
         else thisMonthBadge=`<span style="font-size:10px;color:var(--ok);font-weight:500">· ${fmtYM(now)}: Recorded ${fmtP(thisEntry.amount)}</span>`;
       }
 
-      // Ledger entries
-      const ledger=(a.ledger||[]).slice().sort((x,y)=>y.month.localeCompare(x.month));
-      const typeBadge={deduction:'<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:color-mix(in srgb,var(--ok) 15%,transparent);color:var(--ok)">DEDUCTED</span>',deferred:'<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:color-mix(in srgb,var(--warn) 15%,transparent);color:color-mix(in srgb,var(--warn) 70%,var(--midnight))">DEFERRED</span>',settlement:'<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:color-mix(in srgb,var(--electric) 12%,transparent);color:var(--electric)">SETTLED</span>',forgiven:'<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:color-mix(in srgb,var(--text3) 15%,transparent);color:var(--text3)">FORGIVEN</span>'};
-      const ledgerHtml=ledger.length?ledger.map(l=>`
-        <div style="display:flex;align-items:flex-start;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">
-          <div style="flex-shrink:0;min-width:52px;font-size:11px;color:var(--text3);font-weight:500">${fmtYM(l.month)}</div>
-          <div style="flex-shrink:0">${typeBadge[l.type]||''}</div>
-          <div style="flex:1;font-size:11px;color:var(--text2)">${l.notes?h(l.notes):''}</div>
-          <div style="flex-shrink:0;font-size:11px;font-weight:600;font-variant-numeric:tabular-nums;color:${l.type==='deferred'?'var(--warn)':'var(--text)'}">${l.type==='deferred'?'—':'−'+fmtP(l.amount)}</div>
-        </div>`).join(''):'<div style="font-size:11px;color:var(--text3);padding:6px 0">No entries yet.</div>';
+      // Schedule (forward projection) — shows every month from start to completion
+      const plan=advPlan(a);
+      const schedStatusBadge={
+        deducted:'<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:color-mix(in srgb,var(--ok) 15%,transparent);color:var(--ok)">DEDUCTED</span>',
+        settled:'<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:color-mix(in srgb,var(--electric) 12%,transparent);color:var(--electric)">SETTLED</span>',
+        deferred:'<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:color-mix(in srgb,var(--warn) 15%,transparent);color:color-mix(in srgb,var(--warn) 70%,var(--midnight))">DEFERRED</span>',
+        forgiven:'<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:color-mix(in srgb,var(--text3) 15%,transparent);color:var(--text3)">FORGIVEN</span>',
+        planned:'<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:color-mix(in srgb,var(--text3) 10%,transparent);color:var(--text3)">PLANNED</span>'
+      };
+      const scheduleHtml=plan.length?plan.map(p=>`
+        <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">
+          <div style="flex-shrink:0;min-width:72px;font-size:11px;color:var(--text2);font-weight:500">${fmtYM(p.month)}</div>
+          <div style="flex-shrink:0">${schedStatusBadge[p.status]||''}</div>
+          <div style="flex:1;font-size:11px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.note?h(p.note):''}</div>
+          <div style="flex-shrink:0;font-size:11px;font-weight:600;font-variant-numeric:tabular-nums;color:${p.status==='deferred'||p.status==='forgiven'?'var(--text3)':p.status==='planned'?'var(--text2)':'var(--text1)'}">${p.status==='deferred'||p.status==='forgiven'?'—':fmt(p.amount)}</div>
+        </div>`).join(''):'<div style="font-size:11px;color:var(--text3);padding:6px 0">Schedule will appear when amount and monthly deduction are set.</div>';
 
-      const ledgerOpen=(a._ledgerOpen?'block':'none');
+      const schedOpen=(a._schedOpen?'block':'none');
 
       return`<div style="border:1px solid var(--border);border-radius:var(--rmd);overflow:hidden;margin-top:10px" id="adv-card-${st.id}-${ai}">
         <!-- Header -->
@@ -4473,7 +4587,7 @@ function rStaff(){
                 <div style="font-size:13px;font-weight:600">Advance of ${fmtP(a.amount)}</div>
                 ${statusBadge[st2]||''}
               </div>
-              <div style="font-size:11px;color:var(--text3);margin-top:3px">Given ${toDD(a.dateGiven)||'--'} · ${fmtP(a.monthlyDeduct)}/mo default · Starts ${fmtYM(a.deductStart)}</div>
+              <div style="font-size:11px;color:var(--text3);margin-top:3px">Given ${toDD(a.dateGiven)||'--'} · ${fmtP(a.monthlyDeduct)}/mo · Starts ${fmtYM(a.deductStart)}</div>
               ${a.notes?`<div style="font-size:11px;color:var(--text3);margin-top:1px">${h(a.notes)}</div>`:''}
             </div>
             <div style="text-align:right">
@@ -4495,15 +4609,46 @@ function rStaff(){
           <button class="btn btn-xs" onclick="advDefer('${st.id}',${ai})">Defer this month</button>
           <button class="btn btn-xs" onclick="advSettle('${st.id}',${ai})">Settle now</button>
           <button class="btn btn-xs" onclick="advChangeRate('${st.id}',${ai})">Change rate</button>
-          <button class="btn btn-xs btn-d" onclick="advForgive('${st.id}',${ai})">Forgive</button>
-        </div><div id="adv-action-${st.id}-${ai}"></div>`:''}
-        <!-- Ledger toggle -->
+          <button class="btn btn-xs" onclick="advForgive('${st.id}',${ai})">Forgive</button>
+          <div style="flex:1"></div>
+          <button class="btn btn-xs btn-d" onclick="advDelete('${st.id}',${ai})" title="Permanently delete this advance">Delete</button>
+        </div><div id="adv-action-${st.id}-${ai}"></div>`:`<div style="padding:8px 14px;display:flex;justify-content:flex-end;border-bottom:1px solid var(--border)">
+          <button class="btn btn-xs btn-d" onclick="advDelete('${st.id}',${ai})" title="Permanently delete this advance">Delete</button>
+        </div>`}
+        <!-- Schedule toggle -->
         <div style="padding:8px 14px">
-          <button onclick="advToggleLedger('${st.id}',${ai})" style="font-size:11px;color:var(--electric);background:none;border:none;cursor:pointer;padding:0;font-family:var(--font)">${ledger.length} ledger entr${ledger.length===1?'y':'ies'} ${a._ledgerOpen?'▲':'▼'}</button>
-          <div id="adv-ledger-${st.id}-${ai}" style="display:${ledgerOpen};margin-top:8px">${ledgerHtml}</div>
+          <button onclick="advToggleLedger('${st.id}',${ai})" style="font-size:11px;color:var(--electric);background:none;border:none;cursor:pointer;padding:0;font-family:var(--font)">Full schedule (${plan.length} month${plan.length===1?'':'s'}) ${a._schedOpen?'▲':'▼'}</button>
+          <div id="adv-ledger-${st.id}-${ai}" style="display:${schedOpen};margin-top:8px">${scheduleHtml}</div>
         </div>
       </div>`;
     }).join('');
+
+    // Payments: transactions tagged to this staff member across all cached months
+    const payments=staffTxns(st.id);
+    const totalPaid=payments.reduce((s,t)=>s+(txDir(t)==='out'?t.amount:0),0);
+    const lastPayment=payments[0];
+    const paymentsToShow=payments.slice(0,8);
+    const paymentsHtml=payments.length?`
+      <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px">
+          <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Payments (${payments.length})</div>
+          <div style="font-size:11px;color:var(--text3)">Total paid: <span style="font-weight:600;color:var(--text1)">${fmtP(totalPaid)}</span>${lastPayment?` · Last: ${toDD(lastPayment.date)}`:''}</div>
+        </div>
+        <div style="border:1px solid var(--border);border-radius:var(--rsm);overflow:hidden">
+          ${paymentsToShow.map((t,i)=>`
+            <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;${i<paymentsToShow.length-1?'border-bottom:1px solid var(--border);':''}">
+              <div style="flex-shrink:0;min-width:80px;font-size:11px;color:var(--text3)">${toDD(t.date)}</div>
+              <div style="flex:1;font-size:12px;color:var(--text1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(t.description||'--')}</div>
+              <div style="flex-shrink:0;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;color:${txDir(t)==='out'?'var(--text1)':'var(--ok)'}">${txDir(t)==='out'?'−':'+'}${fmtP(t.amount)}</div>
+            </div>
+          `).join('')}
+          ${payments.length>8?`<div style="padding:6px 12px;font-size:10px;color:var(--text3);text-align:center;border-top:1px solid var(--border)">+ ${payments.length-8} earlier payment${payments.length-8===1?'':'s'}</div>`:''}
+        </div>
+      </div>`:`
+      <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Payments</div>
+        <div style="font-size:11px;color:var(--text3);line-height:1.6">No transactions tagged to ${h(st.name.split(' ')[0])} yet. On the Transactions page, categorize a payment under <strong>Household Staff</strong> and select ${h(st.name.split(' ')[0])} to link it here.</div>
+      </div>`;
 
     return`<div class="card">
       <div class="fg jb" style="flex-wrap:wrap;gap:8px">
@@ -4520,6 +4665,7 @@ function rStaff(){
         </div>
       </div>
       ${advHtml}
+      ${paymentsHtml}
       ${st.notes?`<div style="font-size:var(--fs-xs);color:var(--text3);margin-top:8px">${h(st.notes)}</div>`:''}
       <div class="div" style="margin:10px 0 8px"></div>
       <div class="fg" style="flex-wrap:wrap;gap:6px">
@@ -4559,13 +4705,13 @@ function rStaff(){
 function advToggleLedger(sid,ai){
   const st=S.staff.find(x=>x.id===sid);if(!st)return;
   const a=st.advances[ai];if(!a)return;
-  a._ledgerOpen=!a._ledgerOpen;
+  a._schedOpen=!a._schedOpen;
   const el=document.getElementById('adv-ledger-'+sid+'-'+ai);
-  if(el)el.style.display=a._ledgerOpen?'block':'none';
+  if(el)el.style.display=a._schedOpen?'block':'none';
   const btn=el?.previousElementSibling;
   if(btn){
-    const count=(a.ledger||[]).length;
-    btn.textContent=`${count} ledger entr${count===1?'y':'ies'} ${a._ledgerOpen?'▲':'▼'}`;
+    const count=advPlan(a).length;
+    btn.textContent=`Full schedule (${count} month${count===1?'':'s'}) ${a._schedOpen?'▲':'▼'}`;
   }
 }
 
@@ -4784,9 +4930,7 @@ function addStaff(){
 function delStaff(id){S.staff=S.staff.filter(x=>x.id!==id);sched();render();}
 function logAdv(sid){
   const st=S.staff.find(x=>x.id===sid);if(!st)return;
-  // L7: Replaced blocking prompt() dialogs with inline panel
   const panelId='adv-panel-'+sid;
-  // Toggle panel if already open
   const existing=document.getElementById(panelId);
   if(existing){existing.remove();return;}
   const now=new Date();
@@ -4798,27 +4942,57 @@ function logAdv(sid){
   div.innerHTML=`
     <div class="chdr">Log Advance — ${h(st.name)}</div>
     <div class="fr3" style="margin-bottom:8px">
-      <div><label class="lbl">Amount (SAR)</label><input type="number" id="${panelId}-amt" placeholder="0.00" min="0" step="0.01"></div>
+      <div><label class="lbl">Amount (SAR)</label><input type="number" id="${panelId}-amt" placeholder="0.00" min="0" step="0.01" oninput="advPreviewUpdate('${panelId}')"></div>
       <div><label class="lbl">Date given (DD/MM/YYYY)</label><div class="date-inp-wrap"><input type="text" id="${panelId}-date" class="date-inp" maxlength="10" value="${toDD(now.toISOString().substr(0,10))}"><button type="button" class="cal-btn" onclick="openCal('${panelId}-date')" title="Pick date">📅</button></div></div>
-      <div><label class="lbl">Deduction starts (MM/YYYY)</label><input type="text" id="${panelId}-start" value="${defDeductStart}"></div>
+      <div><label class="lbl">Deduction starts (MM/YYYY)</label><input type="text" id="${panelId}-start" value="${defDeductStart}" oninput="advPreviewUpdate('${panelId}')"></div>
     </div>
     <div class="fr" style="margin-bottom:10px">
-      <div><label class="lbl">Monthly deduction (SAR)</label><input type="number" id="${panelId}-monthly" placeholder="0.00" min="0" step="0.01"></div>
-      <div style="display:flex;align-items:flex-end;padding-bottom:2px"><button class="btn btn-xs" onclick="prefillAdvMonthly('${panelId}')">Auto (÷6)</button></div>
+      <div><label class="lbl">Monthly deduction (SAR)</label><input type="number" id="${panelId}-monthly" placeholder="e.g. 300" min="0" step="0.01" oninput="advPreviewUpdate('${panelId}')"></div>
+    </div>
+    <div id="${panelId}-preview" style="padding:10px 12px;background:var(--bg2);border-radius:var(--rsm);margin-bottom:10px;font-size:var(--fs-xs);color:var(--text2);min-height:40px;line-height:1.7">
+      Enter an amount and monthly deduction to see the repayment plan.
     </div>
     <div style="margin-bottom:10px"><label class="lbl">Notes (optional)</label><input type="text" id="${panelId}-notes" placeholder="Reason for advance, context"></div>
     <div class="fg"><button class="btn btn-p" onclick="saveLogAdv('${sid}','${panelId}')">Log Advance</button><button class="btn" onclick="document.getElementById('${panelId}').remove()">Cancel</button></div>
   `;
-  // Insert after the Log Advance button
   const btn=document.querySelector('[onclick="logAdv(\''+sid+'\')"]');
   if(btn&&btn.parentNode){btn.parentNode.insertBefore(div,btn.nextSibling);}
   else{document.getElementById('page-content').appendChild(div);}
   initDateInputs();
 }
-function prefillAdvMonthly(panelId){
-  const amt=parseFloat(document.getElementById(panelId+'-amt').value)||0;
-  const mo=document.getElementById(panelId+'-monthly');
-  if(mo&&amt>0)mo.value=Math.round(amt/6*100)/100;
+// Live schedule preview — runs on every input change
+function advPreviewUpdate(panelId){
+  const preview=document.getElementById(panelId+'-preview');if(!preview)return;
+  const amt=parseFloat(document.getElementById(panelId+'-amt')?.value)||0;
+  const monthly=parseFloat(document.getElementById(panelId+'-monthly')?.value)||0;
+  const startRaw=document.getElementById(panelId+'-start')?.value||'';
+  if(amt<=0||monthly<=0){
+    preview.innerHTML='Enter an amount and monthly deduction to see the repayment plan.';
+    return;
+  }
+  if(monthly>amt){
+    preview.innerHTML=`<span style="color:var(--warn)">Monthly deduction (${fmt(monthly)}) is larger than the advance (${fmt(amt)}). The advance will settle in one month.</span>`;
+    return;
+  }
+  const fullMonths=Math.floor(amt/monthly);
+  const finalAmt=+(amt-fullMonths*monthly).toFixed(2);
+  const totalMonths=finalAmt>0.005?fullMonths+1:fullMonths;
+  // Compute completion month
+  let completeLabel='--';
+  if(startRaw.includes('/')){
+    const[mm,yy]=startRaw.split('/').map(s=>s.trim());
+    if(mm&&yy){
+      const d=new Date(parseInt(yy),parseInt(mm)-1+totalMonths-1,1);
+      completeLabel=fmtYM(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));
+    }
+  }
+  const planDesc=finalAmt>0.005
+    ?`<strong>${fullMonths}</strong> × ${fmt(monthly)} + final month of <strong>${fmt(finalAmt)}</strong>`
+    :`<strong>${fullMonths}</strong> × ${fmt(monthly)}`;
+  preview.innerHTML=`
+    <div>Plan: ${planDesc}</div>
+    <div style="color:var(--text3);font-size:var(--fs-xxs);margin-top:4px">Total ${totalMonths} month${totalMonths===1?'':'s'} · Completes ${completeLabel}</div>
+  `;
 }
 function saveLogAdv(sid,panelId){
   const st=S.staff.find(x=>x.id===sid);if(!st)return;
@@ -8758,6 +8932,7 @@ initAuth();
     </div>
     <div style="margin-bottom:8px"><label class="lbl">Notes</label><input type="text" id="etxn-notes" placeholder="Optional"></div>
     <div id="etxn-beneficiary-row" style="margin-bottom:8px;display:none"><label class="lbl">Beneficiary (Family Member)</label><select id="etxn-beneficiary"><option value="">Self</option></select></div>
+    <div id="etxn-staff-row" style="margin-bottom:8px;display:none"><label class="lbl">Staff member</label><select id="etxn-staff"><option value="">-- None --</option></select><div style="font-size:var(--fs-xxs);color:var(--text3);margin-top:3px;line-height:1.5">Tagging a salary payment auto-records an advance deduction for that month if an active advance exists.</div></div>
     <input type="hidden" id="etxn-mc">
     <input type="hidden" id="etxn-sc">
     <button class="btn btn-sm" id="etxn-cat-btn" onclick="openCPEditTxn()" style="margin-bottom:10px">Category: <span id="etxn-cat-label">--</span></button>
