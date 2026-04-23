@@ -1324,7 +1324,7 @@ const TAB_TO_GROUP={txbank:'transactions',txcards:'transactions',aiupload:'trans
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='4.0';
+const VERSION='4.1';
 let sKey=null,saveTimer=null,pinCb=null,catCb=null,activeGroup=null;
 
 // ─── CRYPTO ───
@@ -2365,23 +2365,16 @@ async function rOv(){
     const isExpense=t.type==='expense';
     const isTransfer=t.type==='transfer';
     if(!isExpense&&!isTransfer)return false;
-    // H5: credit cards and charge cards cannot satisfy bank bills
-    // (a CC merchant name can match a bill name spuriously — e.g. "STC Pay" matching "STC" bill)
-    const txnAcc=S.accounts.find(a=>a.id===t.accountId);
-    const txnAccIsCard=txnAcc&&(txnAcc.type==='credit_card'||txnAcc.type==='charge_card');
-    // If bill has an explicit accountId, only match that account
-    if(b.accountId&&t.accountId!==b.accountId)return false;
-    // If no explicit accountId on bill, block credit/charge card transactions from name matching
     const desc=(t.description||'').toLowerCase();
-    // High-confidence: account number or Sadad code — allowed even for cards
+    // High-confidence: account number or Sadad code — allowed even for transfers
     if(b.accountNo&&b.accountNo.length>3&&desc.includes(b.accountNo.toLowerCase()))return true;
     if(b.sadadCode&&b.sadadCode.length>3&&desc.includes(b.sadadCode.toLowerCase()))return true;
-    // Name matching — blocked for credit/charge cards (too many false positives)
-    if(txnAccIsCard)return false;
-    // Medium/low confidence: name matching — only for expense type from bank accounts
+    // Medium/low confidence: name matching — only for expense type
     if(!isExpense)return false;
-    if(b.provider&&b.provider.trim().length>4&&desc.includes(b.provider.toLowerCase().trim()))return true;
-    if(b.name&&b.name.trim().length>4&&desc.includes(b.name.toLowerCase().trim()))return true;
+    // Full provider name match (not just first word)
+    if(b.provider&&b.provider.trim().length>3&&desc.includes(b.provider.toLowerCase().trim()))return true;
+    // Full bill name match (not just first word)
+    if(b.name&&b.name.trim().length>3&&desc.includes(b.name.toLowerCase().trim()))return true;
     return false;
   }
   const billHtml=S.bills.slice(0,5).map(b=>{
@@ -2940,8 +2933,7 @@ async function delTxn(id,ym){
   // Flush immediately — destructive operation must not be lost on tab close
   clearTimeout(txnSaveTimer);
   txnSaveQueue[ymk]=true;
-  await flushTxnQueue();
-  await saveState();
+  flushTxnQueue().then(()=>saveState());
   render();
 }
 async function mkSub(id,ym){
@@ -3414,7 +3406,7 @@ function prefillOpeningBal(){
     inp.title='Auto-filled from '+fmtYM(prevYm)+' closing balance. Edit if needed.';
   }
 }
-async function clearMonthTxns(){
+function clearMonthTxns(){
   const ym=S.month;
   const accOverride=TF.txnAcc||document.getElementById('imp-acc-override')?.value||null;
   const count=(S.txnCache[ym]||[]).filter(t=>!accOverride||t.accountId===accOverride).length;
@@ -3450,8 +3442,7 @@ async function clearMonthTxns(){
   // Flush immediately — destructive operation must not be lost on tab close
   clearTimeout(txnSaveTimer);
   txnSaveQueue[ym]=true;
-  await flushTxnQueue();
-  await saveState();
+  flushTxnQueue().then(()=>saveState());
   render();
   toast(`Cleared ${count} transaction${count!==1?'s':''} for ${fmtYM(ym)}.`);
 }
@@ -3532,10 +3523,12 @@ async function doImport(directPayload){
   let accOverride=null;
   let forceAll=false;
 
+  // Bug 4.1: parseFloat('0')||null coerces legitimate zero to null — breaks guard for zero-balance statements
+  const parseNum=v=>{if(v===''||v==null)return null;const n=parseFloat(v);return isNaN(n)?null:n;};
   if(directPayload){
     data=directPayload;
-    openingForGuardVal=parseFloat(directPayload._openingBal)||null;
-    closingBalVal=parseFloat(directPayload._closingBal)||null;
+    openingForGuardVal=parseNum(directPayload._openingBal);
+    closingBalVal=parseNum(directPayload._closingBal);
     accOverride=directPayload.account_id||null;
     forceAll=directPayload._forceAll||false;
   }else{
@@ -3545,8 +3538,8 @@ async function doImport(directPayload){
     if(!raw){toast('Paste JSON first',false);return;}
     try{data=JSON.parse(raw);}
     catch(e){errEl.textContent='Invalid JSON: '+e.message.substring(0,120);errEl.style.display='block';return;}
-    openingForGuardVal=parseFloat(document.getElementById('imp-opening-bal')?.value)||null;
-    closingBalVal=parseFloat(document.getElementById('imp-closing-bal').value)||null;
+    openingForGuardVal=parseNum(document.getElementById('imp-opening-bal')?.value);
+    closingBalVal=parseNum(document.getElementById('imp-closing-bal')?.value);
     accOverride=document.getElementById('imp-acc-override').value||null;
   }
 
@@ -5604,7 +5597,6 @@ function rSettings(){
     <div class="settings-section">
       <div class="settings-section-label">Statement Parser</div>
       <div class="settings-row" style="align-items:flex-start"><div class="settings-row-label"><div class="settings-row-title">Edge Function URL</div><div class="settings-row-sub">Your Supabase Edge Function endpoint for AI extraction. See deployment guide.</div></div><div class="settings-row-ctrl" style="min-width:240px"><input type="text" placeholder="https://xxx.supabase.co/functions/v1/extract" value="${S.settings.edgeFnUrl||''}" onchange="S.settings.edgeFnUrl=this.value.trim();sched()" style="width:100%;font-size:11px;font-family:monospace"></div></div>
-      <div class="settings-row" style="align-items:flex-start"><div class="settings-row-label"><div class="settings-row-title">Edge Function Secret</div><div class="settings-row-sub">LANKI_SECRET env var set on the Edge Function. Prevents unauthorized API calls.</div></div><div class="settings-row-ctrl" style="min-width:240px"><input type="password" placeholder="Optional — leave blank if not set" value="${S.settings.edgeFnSecret||''}" onchange="S.settings.edgeFnSecret=this.value.trim();sched()" style="width:100%;font-size:11px;font-family:monospace"></div></div>
     </div>`;
   }else if(SP==='household'){
     const fmRows=(S.familyMembers||[]).map(m=>`<div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">${h(m.name)}</div><div class="settings-row-sub">${m.relationship||'—'}</div></div><div class="settings-row-ctrl"><button class="btn btn-xs btn-d" onclick="delFamilyMember('${m.id}')">Remove</button></div></div>`).join('');
@@ -8016,7 +8008,7 @@ async function runAIPrescan(){
     const resp=await fetch(EDGE_URL,{
       method:'POST',
       signal:controller.signal,
-      headers:{'Content-Type':'application/json','Authorization':'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRnZWZzcHBraWpycnZvdGdnZW9tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4MzYyOTAsImV4cCI6MjA5MTQxMjI5MH0._MWK5XL_CQAV3ybEWPv1UrArPb-Enu6FZognyImSYzg',...(S.settings.edgeFnSecret?{'x-lanki-secret':S.settings.edgeFnSecret}:{})},
+      headers:{'Content-Type':'application/json','Authorization':'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRnZWZzcHBraWpycnZvdGdnZW9tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4MzYyOTAsImV4cCI6MjA5MTQxMjI5MH0._MWK5XL_CQAV3ybEWPv1UrArPb-Enu6FZognyImSYzg'},
       body:JSON.stringify({fileData:_aiState.fileData,fileType:_aiState.fileType,mode:'prescan'})
     });
     clearTimeout(timeout);
@@ -8075,8 +8067,7 @@ async function runAIExtract(){
       method:'POST',
       headers:{
         'Content-Type':'application/json',
-        'Authorization':'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRnZWZzcHBraWpycnZvdGdnZW9tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4MzYyOTAsImV4cCI6MjA5MTQxMjI5MH0._MWK5XL_CQAV3ybEWPv1UrArPb-Enu6FZognyImSYzg',  // Supabase anon JWT — required by Edge Function auth
-        ...(S.settings.edgeFnSecret?{'x-lanki-secret':S.settings.edgeFnSecret}:{})
+        'Authorization':'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRnZWZzcHBraWpycnZvdGdnZW9tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4MzYyOTAsImV4cCI6MjA5MTQxMjI5MH0._MWK5XL_CQAV3ybEWPv1UrArPb-Enu6FZognyImSYzg'  // Supabase anon JWT — required by Edge Function auth
       },
       body:JSON.stringify({
         fileData:_aiState.fileData,
