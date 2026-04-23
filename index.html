@@ -1337,7 +1337,7 @@ const TAB_TO_GROUP={txbank:'transactions',txcards:'transactions',aiupload:'trans
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='4.5';
+const VERSION='4.6';
 let sKey=null,saveTimer=null,pinCb=null,catCb=null,activeGroup=null;
 
 // ─── CRYPTO ───
@@ -1668,7 +1668,9 @@ function calcRunningBalance(txns,openingBal){
   });
   return map;
 }
-function getAccountOpeningBal(accId,ym){
+function getAccountOpeningBal(accId,ym,_depth=0){
+  // Safety: cap recursion depth
+  if(_depth>120)return null;
   // Priority 1: opening balance stored from import form for this specific account+month
   const mk=accId+'_'+ym;
   if(S.monthlyBal[mk]?.opening!=null)return S.monthlyBal[mk].opening;
@@ -1677,14 +1679,22 @@ function getAccountOpeningBal(accId,ym){
   const pmk=accId+'_'+prevYm;
   if(S.monthlyBal[pmk]?.closing!=null)return S.monthlyBal[pmk].closing;
   // Priority 3: account-level opening balance — only valid for the exact As Of month
-  // (Earlier versions used asOfYM<=ym which silently carried stale anchors forward
-  // across un-imported months. That produced wrong balances for sparse users.)
   const acc=S.accounts.find(a=>a.id===accId);
   const bal=acc?.openingBalance??null;
   const asOf=acc?.balanceAsOf||null;
-  if(bal===null||!asOf)return null;
-  const asOfYM=asOf.substr(0,7);
-  if(asOfYM===ym)return bal;
+  const asOfYM=asOf?asOf.substr(0,7):null;
+  if(bal!==null&&asOfYM===ym)return bal;
+  // Priority 4: forward-walk from an earlier anchor.
+  // If we can determine the previous month's opening recursively, derive this month's
+  // opening by summing the previous month's actual transactions. This is deterministic —
+  // it uses real transactions, never silently assumes stale balances.
+  // Bound: don't walk past the profile As Of month (nothing earlier is knowable).
+  if(asOfYM&&prevYm<asOfYM)return null;
+  const prevOpening=getAccountOpeningBal(accId,prevYm,_depth+1);
+  if(prevOpening!==null){
+    const prevTxns=(S.txnCache[prevYm]||[]).filter(t=>t.accountId===accId);
+    return prevOpening+prevTxns.reduce((s,t)=>s+(txDir(t)==='in'?t.amount:-t.amount),0);
+  }
   return null;
 }
 function tbadge(t){const m={income:'<span class="badge b-in">Income</span>',expense:'<span class="badge b-out">Expense</span>',transfer:'<span class="badge b-tr">Transfer</span>',investment:'<span class="badge b-inv">Investment</span>',external_transfer:'<span class="badge b-ext">External Transfer</span>'};return m[t]||`<span class="badge b-grey">${t}</span>`;}
@@ -3094,7 +3104,9 @@ async function saveEditTxn(){
   // Warn if active filters will now hide this transaction
   const willBeHidden=(TF.type&&TF.type!==t.type)||(TF.mc&&TF.mc!==t.mainCatId)||(TF.sub&&TF.sub!==t.subCatId);
   render();
-  if(autoRec)toast(`Linked to staff · auto-recorded ${fmt(autoRec.amount)} advance deduction for ${fmtYM(autoRec.month)}`,true);
+  if(autoRec&&autoRec.flag==='overpaid')toast(`Linked to staff · ⚠ ${autoRec.note} — no deduction recorded. Review manually.`,true);
+  else if(autoRec&&autoRec.flag==='no_deduction')toast(`Linked to staff · ${autoRec.note}`,true);
+  else if(autoRec)toast(`Linked to staff · auto-recorded ${fmt(autoRec.amount)} advance deduction for ${fmtYM(autoRec.month)}`,true);
   else if(willBeHidden)toast('Transaction saved — hidden by active filter. Clear filters to see it.',true);
   else toast('Transaction updated');
 }
@@ -4507,28 +4519,70 @@ function staffTxns(sid){
   return out;
 }
 
-// Auto-record advance deduction when tagging a salary transaction to a staff member
-// Fires only if: staff has an active advance, no ledger entry for that month yet,
-// transaction is expense direction out, and amount reasonably matches expected salary.
+// Auto-record advance deduction when tagging a salary transaction to a staff member.
+// Fires only for expense-out transactions with an active advance and no existing ledger entry for that month.
+// Records the IMPLIED deduction (salary - paid), not a fixed monthly amount — this keeps the ledger honest.
+// Returns: {month, amount, note} on success, {month, note, flag:true} on anomaly, null on no-op.
 function maybeAutoRecordDeduction(t,st){
   if(!st||!t||txDir(t)!=='out')return null;
   const ym=(t.date||'').substr(0,7);if(!ym)return null;
-  const activeAdvances=(st.advances||[]).filter(a=>advStatus(a)==='active');
+  const activeAdvances=(st.advances||[]).filter(a=>advStatus(a)==='active'&&!(a.ledger||[]).find(l=>l.month===ym));
   if(!activeAdvances.length)return null;
-  const expected=Math.max(0,(st.salary||0)-advThisMonth(st));
-  // Heuristic: transaction amount within 50% of expected net salary
-  if(expected<=0||Math.abs(t.amount-expected)/expected>0.5)return null;
+  const salary=st.salary||0;
+  const paid=t.amount||0;
+  const implied=+(salary-paid).toFixed(2);
+  // Overpayment: paid more than salary — flag, don't record
+  if(implied<-0.005){
+    return{flag:'overpaid',month:ym,amount:Math.abs(implied),note:`Paid ${fmt(paid)} against ${fmt(salary)} salary — overpaid by ${fmt(Math.abs(implied))}`};
+  }
+  // Full salary paid (no deduction made this month) — don't record, don't flag
+  if(Math.abs(implied)<0.5){
+    return{flag:'no_deduction',month:ym,amount:0,note:`Paid full salary — no deduction this month`};
+  }
+  // Guard: if amount is wildly off expected net (< 50% of salary), don't assume this is a salary payment
+  if(paid<salary*0.5)return null;
+  // Record the actual implied deduction — may differ from planned monthlyDeduct
   let recorded=null;
   activeAdvances.forEach(a=>{
     advMigrate(a);
-    if((a.ledger||[]).find(l=>l.month===ym))return; // already recorded
-    const amt=Math.min(a.monthlyDeduct||0,advRemaining(a));
+    const remaining=advRemaining(a);
+    const amt=Math.min(implied,remaining);
     if(amt<=0)return;
     a.ledger=a.ledger||[];
-    a.ledger.push({id:uid(),month:ym,type:'deduction',amount:amt,notes:`Auto-recorded from "${(t.description||'salary payment').substr(0,40)}"`,recordedAt:new Date().toISOString().substr(0,10)});
-    recorded={month:ym,amount:amt};
+    const isExact=Math.abs(amt-(a.monthlyDeduct||0))<0.5;
+    const note=isExact
+      ?`Auto-recorded from "${(t.description||'salary payment').substr(0,40)}"`
+      :`Auto-recorded from "${(t.description||'salary payment').substr(0,40)}" — actual deduction ${fmt(amt)} (plan was ${fmt(a.monthlyDeduct||0)})`;
+    a.ledger.push({id:uid(),month:ym,type:'deduction',amount:+amt.toFixed(2),notes:note,recordedAt:new Date().toISOString().substr(0,10)});
+    recorded={month:ym,amount:+amt.toFixed(2),note};
   });
   return recorded;
+}
+
+// On advance creation, back-scan tagged salary transactions for each month in the plan
+// from deductStart up to (and including) the current month, and auto-record where possible.
+function backfillAdvanceFromTaggedTxns(st,a){
+  if(!st||!a)return 0;
+  const nowYM=getYM(new Date());
+  const startYM=a.deductStart;
+  if(!startYM)return 0;
+  let m=startYM,count=0,i=0;
+  while(m<=nowYM&&i<120){
+    i++;
+    // Skip if already has ledger entry for this month
+    if(!(a.ledger||[]).find(l=>l.month===m)){
+      // Find first tagged salary transaction for this staff in this month
+      const monthTxns=(S.txnCache[m]||[]).filter(t=>t.staffId===st.id&&t.mainCatId==='cat_main_staff'&&txDir(t)==='out');
+      if(monthTxns.length){
+        // Use the largest (most likely the salary, not a bonus or gift)
+        const t=monthTxns.sort((x,y)=>y.amount-x.amount)[0];
+        const res=maybeAutoRecordDeduction(t,st);
+        if(res&&!res.flag)count++;
+      }
+    }
+    m=addM(m,1);
+  }
+  return count;
 }
 
 function rStaff(){
@@ -4568,13 +4622,20 @@ function rStaff(){
         forgiven:'<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:color-mix(in srgb,var(--text3) 15%,transparent);color:var(--text3)">FORGIVEN</span>',
         planned:'<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:color-mix(in srgb,var(--text3) 10%,transparent);color:var(--text3)">PLANNED</span>'
       };
-      const scheduleHtml=plan.length?plan.map(p=>`
-        <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">
+      const scheduleHtml=plan.length?plan.map(p=>{
+        const rowActions=p.status==='planned'
+          ?`<button class="btn btn-xs" style="padding:1px 6px;font-size:10px" onclick="advRecordRow('${st.id}',${ai},'${p.month}')" title="Mark this month as deducted (no transaction required)">Mark deducted</button> <button class="btn btn-xs" style="padding:1px 6px;font-size:10px" onclick="advDeferRow('${st.id}',${ai},'${p.month}')" title="Defer this month — plan extends forward">Defer</button>`
+          :p.status==='forgiven'
+            ?''
+            :`<button class="btn btn-xs" style="padding:1px 6px;font-size:10px" onclick="advUndoRow('${st.id}',${ai},'${p.month}')" title="Remove this entry and revert to planned">Undo</button>`;
+        return`<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">
           <div style="flex-shrink:0;min-width:72px;font-size:11px;color:var(--text2);font-weight:500">${fmtYM(p.month)}</div>
           <div style="flex-shrink:0">${schedStatusBadge[p.status]||''}</div>
-          <div style="flex:1;font-size:11px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.note?h(p.note):''}</div>
-          <div style="flex-shrink:0;font-size:11px;font-weight:600;font-variant-numeric:tabular-nums;color:${p.status==='deferred'||p.status==='forgiven'?'var(--text3)':p.status==='planned'?'var(--text2)':'var(--text1)'}">${p.status==='deferred'||p.status==='forgiven'?'—':fmt(p.amount)}</div>
-        </div>`).join(''):'<div style="font-size:11px;color:var(--text3);padding:6px 0">Schedule will appear when amount and monthly deduction are set.</div>';
+          <div style="flex:1;font-size:11px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">${p.note?h(p.note):''}</div>
+          <div style="flex-shrink:0;display:flex;gap:4px">${rowActions}</div>
+          <div style="flex-shrink:0;min-width:80px;text-align:right;font-size:11px;font-weight:600;font-variant-numeric:tabular-nums;color:${p.status==='deferred'||p.status==='forgiven'?'var(--text3)':p.status==='planned'?'var(--text2)':'var(--text1)'}">${p.status==='deferred'||p.status==='forgiven'?'—':fmt(p.amount)}</div>
+        </div>`;
+      }).join(''):'<div style="font-size:11px;color:var(--text3);padding:6px 0">Schedule will appear when amount and monthly deduction are set.</div>';
 
       const schedOpen=(a._schedOpen?'block':'none');
 
@@ -4784,6 +4845,49 @@ function advDeferSave(sid,ai){
   a.ledger=(a.ledger||[]).filter(l=>l.month!==now);
   a.ledger.push({id:uid(),month:now,type:'deferred',amount:0,notes,recordedAt:new Date().toISOString().substr(0,10)});
   sched();render();toast(`${fmtYM(now)} deduction deferred`);
+}
+
+// Quick inline actions on schedule rows — target any specific month, not just the current one.
+// Mark a planned month as deducted retroactively (e.g., for deductions that occurred before you started using the tool)
+function advRecordRow(sid,ai,month){
+  const st=S.staff.find(x=>x.id===sid);if(!st)return;
+  const a=st.advances[ai];if(!a)return;
+  advMigrate(a);
+  // Use the planned amount for this month from the projection
+  const plan=advPlan(a);
+  const entry=plan.find(p=>p.month===month);
+  const defAmt=entry?entry.amount:Math.min(a.monthlyDeduct||0,advRemaining(a));
+  if(!confirm(`Mark ${fmtYM(month)} as deducted?\n\nRecords ${fmt(defAmt)} as a manual deduction. Use this for months before you started using Lanki, or for payments that happened outside the tracked transactions.`))return;
+  const remaining=advRemaining(a);
+  const type=defAmt>=remaining-0.01?'settlement':'deduction';
+  a.ledger=(a.ledger||[]).filter(l=>l.month!==month);
+  a.ledger.push({id:uid(),month,type,amount:defAmt,notes:'Recorded manually — no transaction linked',recordedAt:new Date().toISOString().substr(0,10)});
+  if(type==='settlement')a.status='settled';
+  sched();render();toast(`${fmtYM(month)} marked as deducted (${fmt(defAmt)})`);
+}
+// Defer any specific month (past, current, or future)
+function advDeferRow(sid,ai,month){
+  const st=S.staff.find(x=>x.id===sid);if(!st)return;
+  const a=st.advances[ai];if(!a)return;
+  advMigrate(a);
+  if(!confirm(`Defer ${fmtYM(month)}?\n\nThis month won't count toward the advance. The repayment plan will extend by one month.`))return;
+  a.ledger=(a.ledger||[]).filter(l=>l.month!==month);
+  a.ledger.push({id:uid(),month,type:'deferred',amount:0,notes:'Deduction deferred',recordedAt:new Date().toISOString().substr(0,10)});
+  sched();render();toast(`${fmtYM(month)} deferred — plan shifted forward one month`);
+}
+// Undo any ledger entry for a specific month (revert to planned)
+function advUndoRow(sid,ai,month){
+  const st=S.staff.find(x=>x.id===sid);if(!st)return;
+  const a=st.advances[ai];if(!a)return;
+  advMigrate(a);
+  const entry=(a.ledger||[]).find(l=>l.month===month);
+  if(!entry)return;
+  const label={deduction:'deduction',settlement:'settlement',deferred:'deferral',forgiven:'forgive'}[entry.type]||entry.type;
+  if(!confirm(`Remove the ${label} entry for ${fmtYM(month)}?\n\nThe month will revert to Planned.`))return;
+  a.ledger=(a.ledger||[]).filter(l=>l.month!==month);
+  // If settlement was removed, revert to active (unless another settlement remains)
+  if(a.status==='settled'&&!(a.ledger||[]).find(l=>l.type==='settlement'))a.status='active';
+  sched();render();toast(`${fmtYM(month)} reverted to planned`);
 }
 
 function advSettle(sid,ai){
@@ -5007,9 +5111,14 @@ function saveLogAdv(sid,panelId){
   if(deductStartRaw&&deductStartRaw.includes('/')){const[m,y]=deductStartRaw.split('/');if(m&&y)deductStart=y+'-'+m.padStart(2,'0');}
   if(!st.advances)st.advances=[];
   // New ledger-based advance
-  st.advances.push({id:uid(),amount:amt,dateGiven:fromDD(dateGiven),deductStart,monthlyDeduct:monthly,status:'active',notes,ledger:[]});
+  const newAdvance={id:uid(),amount:amt,dateGiven:fromDD(dateGiven),deductStart,monthlyDeduct:monthly,status:'active',notes,ledger:[]};
+  st.advances.push(newAdvance);
+  // Back-scan tagged salary transactions for months in the plan — auto-record historic deductions
+  const backfilled=backfillAdvanceFromTaggedTxns(st,newAdvance);
   document.getElementById(panelId)?.remove();
-  sched();render();toast('Advance logged');
+  sched();render();
+  if(backfilled>0)toast(`Advance logged · ${backfilled} historic deduction${backfilled===1?'':'s'} auto-recorded from tagged salary payments`);
+  else toast('Advance logged');
 }
 
 
@@ -6367,8 +6476,12 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps){
 
 // ─── SHARED TX HEADER (month nav + import + summary) ───
 function buildTxHeader(fl, scopedAcc, accountPills, tabLabel){
-  const inc=fl.filter(t=>txDir(t)==='in'&&!isMatched(t.id)).reduce((s,t)=>s+t.amount,0);
-  const out=fl.filter(t=>txDir(t)==='out'&&!isMatched(t.id)).reduce((s,t)=>s+t.amount,0);
+  // Matched transfers: in aggregate view both sides live in the dashboard and would double-count,
+  // so they are excluded from totals. In scoped view only one side is visible — excluding it would
+  // hide a real money movement for this account. So scope-aware exclusion.
+  const excludeMatched=!scopedAcc;
+  const inc=fl.filter(t=>txDir(t)==='in'&&(!excludeMatched||!isMatched(t.id))).reduce((s,t)=>s+t.amount,0);
+  const out=fl.filter(t=>txDir(t)==='out'&&(!excludeMatched||!isMatched(t.id))).reduce((s,t)=>s+t.amount,0);
   const net=inc-out;
   // Opening / Closing: meaningful only when scoped to a single account for the current month
   let openingStr='—',closingStr='—';
