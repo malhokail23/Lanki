@@ -1420,7 +1420,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='5.8';
+const VERSION='5.9';
 let sKey=null,saveTimer=null,pinCb=null,catCb=null,activeGroup=null;
 
 // ─── CRYPTO ───
@@ -5327,6 +5327,33 @@ function advPlannedForMonth(st,ym){
   return+total.toFixed(2);
 }
 
+// Historically-accurate adjustment for a given month — used for variance baseline calculations.
+// Reads the ledger first: if a deduction or settlement was recorded for that month, that recorded amount
+// is the truth, regardless of the advance's current status. Only falls back to "planned" for active advances
+// when no ledger entry exists for the month (covers future months not yet deducted).
+// Deferred entries contribute 0 (the deduction didn't happen that month).
+function advAdjustmentForMonth(st,ym){
+  if(!st||!ym)return 0;
+  let total=0;
+  (st.advances||[]).forEach(a=>{
+    // Skip rate-change markers (amount=0 metadata entries) when looking for real ledger activity
+    const entry=(a.ledger||[]).find(l=>l.month===ym&&!l._rateChange);
+    if(entry){
+      if(entry.type==='deduction'||entry.type==='settlement'){
+        total+=entry.amount||0;
+      }
+      return; // deferred = 0, handled implicitly
+    }
+    // No ledger entry for this month — use planned amount only if the advance is still active for this month
+    if(a.status==='settled'||a.status==='forgiven')return;
+    if(!a.deductStart||ym<a.deductStart)return;
+    const remaining=advRemaining(a);
+    if(remaining<=0)return;
+    total+=Math.min(a.monthlyDeduct||0,remaining);
+  });
+  return+total.toFixed(2);
+}
+
 // Summary for Overview dashboard: staff payroll due this month
 function staffPayrollThisMonth(){
   return(S.staff||[]).reduce((s,st)=>s+Math.max(0,(st.salary||0)-advThisMonth(st)),0);
@@ -5513,12 +5540,14 @@ function rStaff(){
     const totalPaid=payments.reduce((s,t)=>s+(txDir(t)==='out'?t.amount:0),0);
     const lastPayment=payments[0];
     const paymentsToShow=payments.slice(0,6);
-    // Staff variance: baseline = salary - planned deduction for that payment's month.
+    // Staff variance: baseline = salary - historical adjustment for that payment's month.
+    // Uses advAdjustmentForMonth so settled advances keep their historical deduction on record —
+    // a salary paid in a month where 100 was deducted is correctly baselined at salary-100, not salary.
     // Only applies to salary payments — advance payments are a separate type and are excluded.
     const stfVariance=(t)=>{
       if(t.advanceId)return{baseline:null,variance:0,tag:null,isAdvance:true};
       const ym=(t.date||'').substr(0,7);
-      const planned=advPlannedForMonth(st,ym);
+      const planned=advAdjustmentForMonth(st,ym);
       const baseline=Math.max(0,(st.salary||0)-planned);
       if(baseline<=0)return{baseline:null,variance:0,tag:null};
       const diff=t.amount-baseline;
