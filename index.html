@@ -1388,7 +1388,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='5.3';
+const VERSION='5.5';
 let sKey=null,saveTimer=null,pinCb=null,catCb=null,activeGroup=null;
 
 // ─── CRYPTO ───
@@ -5377,9 +5377,11 @@ function rStaff(){
           <button class="btn btn-xs" onclick="advSettle('${st.id}',${ai})">Settle now</button>
           <button class="btn btn-xs" onclick="advChangeRate('${st.id}',${ai})">Change rate</button>
           <button class="btn btn-xs" onclick="advForgive('${st.id}',${ai})">Forgive</button>
+          <button class="btn btn-xs" onclick="advEdit('${st.id}',${ai})" title="Edit amount, date, account, notes">Edit</button>
           <div style="flex:1"></div>
           <button class="btn btn-xs btn-d" onclick="advDelete('${st.id}',${ai})" title="Permanently delete this advance">Delete</button>
-        </div><div id="adv-action-${st.id}-${ai}"></div>`:`<div style="padding:8px 14px;display:flex;justify-content:flex-end;border-bottom:1px solid var(--border)">
+        </div><div id="adv-action-${st.id}-${ai}"></div>`:`<div style="padding:8px 14px;display:flex;justify-content:flex-end;gap:6px;border-bottom:1px solid var(--border)">
+          <button class="btn btn-xs" onclick="advEdit('${st.id}',${ai})" title="Edit details">Edit</button>
           <button class="btn btn-xs btn-d" onclick="advDelete('${st.id}',${ai})" title="Permanently delete this advance">Delete</button>
         </div>`}
         <!-- Schedule toggle -->
@@ -5790,13 +5792,18 @@ const STAFF_ROLE_TO_SUBCAT={
 };
 function staffSubCat(st){return STAFF_ROLE_TO_SUBCAT[st?.role]||'sub_staff_other';}
 
-// Find external_transfer candidates in S.txnCache that could match an advance amount around dateGiven
+// Find candidates in S.txnCache that could match an advance amount around dateGiven.
+// Only outflows are considered — inbound transfers or income cannot represent an advance given.
 function findAdvanceTxnCandidates(amount,dateGiven){
   const target=new Date(dateGiven);
   const candidates=[];
   Object.entries(S.txnCache||{}).forEach(([ym,arr])=>{
     (arr||[]).forEach(t=>{
       if(t.type!=='external_transfer'&&t.type!=='expense')return;
+      if(txDir(t)!=='out')return; // must be an outflow
+      // Safety net: for legacy transactions where direction is missing, check description for inward markers
+      const desc=(t.description||'').toLowerCase();
+      if(desc.includes('inward')||desc.includes('inbound')||/\bfrom\s/.test(desc))return;
       if(Math.abs(t.amount-amount)>=0.01)return;
       if(t.advanceId)return; // already linked to another advance
       if(t.reimbGroupId)return; // part of a reimbursement settlement
@@ -6031,6 +6038,131 @@ function saveLogAdv(sid,panelId){
   const parts=['Advance logged'+txnMsg];
   if(backfilled>0)parts.push(`${backfilled} historic deduction${backfilled===1?'':'s'} auto-recorded`);
   toast(parts.join(' · '));
+}
+
+// Edit an existing advance. Amount, date, monthly, start, account, notes are editable.
+// If the advance has a linked transaction, changes cascade to that transaction automatically.
+// If the date crosses a month boundary, the transaction moves to the correct txnCache bucket.
+function advEdit(sid,ai){
+  const st=S.staff.find(x=>x.id===sid);if(!st||!st.advances||!st.advances[ai])return;
+  const a=st.advances[ai];
+  const panelId='adv-edit-'+sid+'-'+ai;
+  const existing=document.getElementById(panelId);
+  if(existing){existing.remove();return;}
+  const bankAccs=(S.accounts||[]).filter(acc=>BANK_ACC_TYPES.has(acc.type)&&!acc.archived);
+  const curAccVal=a.txnExempt?'__historical__':(a.accountId||'');
+  const accOptions=bankAccs.map(acc=>`<option value="${acc.id}" ${curAccVal===acc.id?'selected':''}>${h(acc.name)}</option>`).join('');
+  const startRaw=a.deductStart?(a.deductStart.substr(5,2)+'/'+a.deductStart.substr(0,4)):'';
+
+  const div=document.createElement('div');
+  div.id=panelId;
+  div.className='panel';div.style.display='block';div.style.marginTop='8px';
+  div.innerHTML=`
+    <div class="chdr">Edit Advance — ${h(st.name)}</div>
+    <div class="fr3" style="margin-bottom:8px">
+      <div><label class="lbl">Amount (SAR)</label><input type="number" id="${panelId}-amt" value="${a.amount}" min="0" step="0.01" oninput="advPreviewUpdate('${panelId}')"></div>
+      <div><label class="lbl">Date given (DD/MM/YYYY)</label><div class="date-inp-wrap"><input type="text" id="${panelId}-date" class="date-inp" maxlength="10" value="${toDD(a.dateGiven)||''}"><button type="button" class="cal-btn" onclick="openCal('${panelId}-date')" title="Pick date">📅</button></div></div>
+      <div><label class="lbl">Deduction starts (MM/YYYY)</label><input type="text" id="${panelId}-start" value="${startRaw}" oninput="advPreviewUpdate('${panelId}')"></div>
+    </div>
+    <div class="fr" style="margin-bottom:10px">
+      <div><label class="lbl">Monthly deduction (SAR)</label><input type="number" id="${panelId}-monthly" value="${a.monthlyDeduct}" min="0" step="0.01" oninput="advPreviewUpdate('${panelId}')"></div>
+      <div><label class="lbl">Paid from account</label><select id="${panelId}-account">${accOptions}<option value="" ${curAccVal===''&&!a.txnExempt?'selected':''}>Cash / Other</option><option value="__historical__" ${a.txnExempt?'selected':''}>Historical — no transaction</option></select></div>
+    </div>
+    <div id="${panelId}-preview" style="padding:10px 12px;background:var(--bg2);border-radius:var(--rsm);margin-bottom:10px;font-size:var(--fs-xs);color:var(--text2);min-height:40px;line-height:1.7">Updating schedule…</div>
+    <div style="margin-bottom:10px"><label class="lbl">Notes (optional)</label><input type="text" id="${panelId}-notes" value="${h(a.notes||'')}"></div>
+    ${a.txnId?`<div style="margin-bottom:10px;padding:8px 10px;background:color-mix(in srgb,var(--ok) 6%,var(--bg2));border-radius:var(--rsm);font-size:var(--fs-xxs);color:var(--text3);line-height:1.5"><span style="color:var(--ok)">●</span> Linked to an expense transaction. Changes to amount, date, account, and notes will be applied to that transaction too.</div>`:''}
+    ${(a.ledger||[]).length>0?`<div style="margin-bottom:10px;padding:8px 10px;background:color-mix(in srgb,var(--warn) 6%,var(--bg2));border-radius:var(--rsm);font-size:var(--fs-xxs);color:var(--text3);line-height:1.5"><span style="color:var(--warn)">●</span> This advance has ${(a.ledger||[]).length} recorded deduction${(a.ledger||[]).length===1?'':'s'}. Changing the amount or start month may affect the repayment plan.</div>`:''}
+    <div class="fg"><button class="btn btn-p" onclick="advEditSave('${sid}',${ai},'${panelId}')">Save changes</button><button class="btn" onclick="document.getElementById('${panelId}').remove()">Cancel</button></div>
+  `;
+  const card=document.getElementById('staff-card-'+sid);
+  if(card)card.appendChild(div);else document.getElementById('page-content').appendChild(div);
+  initDateInputs();
+  advPreviewUpdate(panelId);
+}
+async function advEditSave(sid,ai,panelId){
+  const st=S.staff.find(x=>x.id===sid);if(!st||!st.advances||!st.advances[ai])return;
+  const a=st.advances[ai];
+  const newAmt=parseFloat(document.getElementById(panelId+'-amt').value)||0;
+  if(newAmt<=0){toast('Enter a valid amount',false);return;}
+  const newDateRaw=document.getElementById(panelId+'-date').value;
+  const newDate=fromDD(newDateRaw);
+  if(!newDate){toast('Enter a valid date',false);return;}
+  const newMonthly=parseFloat(document.getElementById(panelId+'-monthly').value)||0;
+  if(newMonthly<=0){toast('Enter monthly deduction',false);return;}
+  const newStartRaw=document.getElementById(panelId+'-start').value;
+  let newDeductStart=a.deductStart;
+  if(newStartRaw&&newStartRaw.includes('/')){const[m,y]=newStartRaw.split('/');if(m&&y)newDeductStart=y+'-'+m.padStart(2,'0');}
+  const newNotes=document.getElementById(panelId+'-notes').value.trim();
+  const newAccRaw=document.getElementById(panelId+'-account').value;
+  const newIsHistorical=newAccRaw==='__historical__';
+  const newAccountId=newIsHistorical?null:(newAccRaw||null);
+
+  // Can't shrink below already-deducted amount
+  const deductedSoFar=(a.ledger||[]).filter(l=>l.type==='deducted'||l.type==='settlement').reduce((s,l)=>s+l.amount,0);
+  if(newAmt<deductedSoFar-0.005){
+    toast(`Cannot reduce below already-deducted amount (${fmtP(deductedSoFar)})`,false);return;
+  }
+
+  if(newIsHistorical&&a.txnId){
+    if(!confirm('Switching to Historical will delete the linked expense transaction. Continue?'))return;
+  }
+
+  const oldTxnId=a.txnId;
+
+  // Apply changes to the advance
+  a.amount=newAmt;
+  a.dateGiven=newDate;
+  a.monthlyDeduct=newMonthly;
+  a.deductStart=newDeductStart;
+  a.notes=newNotes;
+  a.accountId=newAccountId;
+  a.txnExempt=newIsHistorical;
+
+  // Cascade to linked transaction
+  if(oldTxnId){
+    if(newIsHistorical){
+      Object.keys(S.txnCache||{}).forEach(ym=>{
+        const before=S.txnCache[ym].length;
+        S.txnCache[ym]=S.txnCache[ym].filter(t=>t.id!==oldTxnId);
+        if(S.txnCache[ym].length!==before)schedTxn(ym);
+      });
+      a.txnId=null;
+    }else{
+      let linkedTxn=null,ymFound=null;
+      Object.entries(S.txnCache||{}).forEach(([ym,arr])=>{
+        const found=(arr||[]).find(t=>t.id===oldTxnId);
+        if(found){linkedTxn=found;ymFound=ym;}
+      });
+      if(linkedTxn){
+        linkedTxn.amount=newAmt;
+        linkedTxn.date=newDate;
+        linkedTxn.accountId=newAccountId;
+        linkedTxn.subCatId=staffSubCat(st);
+        linkedTxn.notes=`Advance: ${fmtP(newAmt)} · repay ${fmtP(newMonthly)}/mo${newNotes?' · '+newNotes:''}`;
+        const newYm=newDate.substr(0,7);
+        if(newYm!==ymFound){
+          S.txnCache[ymFound]=S.txnCache[ymFound].filter(t=>t.id!==oldTxnId);
+          if(!S.txnCache[newYm])S.txnCache[newYm]=[];
+          S.txnCache[newYm].push(linkedTxn);
+          S.txnCache[newYm].sort((x,y)=>x.date.localeCompare(y.date));
+          schedTxn(ymFound);schedTxn(newYm);
+        }else{
+          S.txnCache[ymFound].sort((x,y)=>x.date.localeCompare(y.date));
+          schedTxn(ymFound);
+        }
+      }
+    }
+  }else if(!newIsHistorical&&newAccRaw!==''){
+    // Previously no transaction, user chose an account — create one now
+    const newTxn=createAdvanceTxn(st,a,newAccountId);
+    a.txnId=newTxn.id;
+  }
+
+  await flushTxnQueue();
+  sched();await saveState();
+  document.getElementById(panelId)?.remove();
+  render();
+  toast('Advance updated'+(oldTxnId?' · transaction synced':''));
 }
 
 // ─── ADVANCE BACKFILL — legacy advances without a transaction ───
@@ -8724,13 +8856,18 @@ function openSettlementModal(name){
     .map(([label,amt])=>`<div class="fg jb" style="padding:4px 0;font-size:var(--fs-xs)"><span style="color:var(--text2)">${h(label)}</span><span style="font-weight:600;font-variant-numeric:tabular-nums">${fmtP(amt)}</span></div>`)
     .join('');
 
-  // Candidate bank transactions — external transfers with EXACT amount match in the last 60 days
+  // Candidate bank transactions — external transfers with EXACT amount match in the last 60 days.
+  // Only outflows qualify — an inbound transfer cannot represent money paid out.
   const today=new Date();
   const cutoff=new Date();cutoff.setDate(today.getDate()-60);
   const candidates=[];
   Object.entries(S.txnCache||{}).forEach(([ym,arr])=>{
     (arr||[]).forEach(t=>{
       if(t.type!=='external_transfer')return;
+      if(txDir(t)!=='out')return; // must be an outflow
+      // Safety net: for legacy transactions where direction is missing, check description for inward markers
+      const _desc=(t.description||'').toLowerCase();
+      if(_desc.includes('inward')||_desc.includes('inbound')||/\bfrom\s/.test(_desc))return;
       if(Math.abs(t.amount-total)>=0.01)return; // exact match, no tolerance
       if(t.reimbGroupId)return; // already part of a settlement
       const d=new Date(t.date);
