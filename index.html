@@ -1428,7 +1428,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='6.4';
+const VERSION='6.5';
 let sKey=null,saveTimer=null,pinCb=null,catCb=null,activeGroup=null;
 
 // ─── CRYPTO ───
@@ -5725,7 +5725,17 @@ function advPlan(a){
   const target=a.amount||0;
   const monthly=a.monthlyDeduct||0;
   if(target<=0||monthly<=0||!a.deductStart)return plan;
-  let deducted=0,m=a.deductStart,i=0;
+  // Surface any orphan ledger entries BEFORE deductStart as "unexpected" rows so users can spot and fix them.
+  // These can result from legacy data before the deductStart guard was added in V6.5.
+  const orphans=ledger.filter(l=>l.month<a.deductStart&&!l._rateChange&&l.type!=='deferred').sort((x,y)=>x.month.localeCompare(y.month));
+  let deductedFromOrphans=0;
+  orphans.forEach(entry=>{
+    if(entry.type==='forgiven')return; // rare edge case — skip
+    const amt=entry.amount||0;
+    plan.push({month:entry.month,amount:amt,status:'unexpected',note:entry.notes||'',type:entry.type});
+    deductedFromOrphans+=amt;
+  });
+  let deducted=deductedFromOrphans,m=a.deductStart,i=0;
   while(deducted<target-0.005&&i<120){
     i++;
     const entry=ledger.find(l=>l.month===m);
@@ -5837,7 +5847,14 @@ function staffTxns(sid){
 function maybeAutoRecordDeduction(t,st){
   if(!st||!t||txDir(t)!=='out')return null;
   const ym=(t.date||'').substr(0,7);if(!ym)return null;
-  const activeAdvances=(st.advances||[]).filter(a=>advStatus(a)==='active'&&!(a.ledger||[]).find(l=>l.month===ym));
+  // Only include advances that have actually started deducting by this month.
+  // An advance with deductStart='2026-02' must not receive a '2026-01' deduction.
+  const activeAdvances=(st.advances||[]).filter(a=>{
+    if(advStatus(a)!=='active')return false;
+    if(a.deductStart&&ym<a.deductStart)return false; // not started yet
+    if((a.ledger||[]).find(l=>l.month===ym&&!l._rateChange))return false;
+    return true;
+  });
   if(!activeAdvances.length)return null;
   const salary=st.salary||0;
   const paid=t.amount||0;
@@ -5852,22 +5869,27 @@ function maybeAutoRecordDeduction(t,st){
   }
   // Guard: if amount is wildly off expected net (< 50% of salary), don't assume this is a salary payment
   if(paid<salary*0.5)return null;
-  // Record the actual implied deduction — may differ from planned monthlyDeduct
-  let recorded=null;
-  activeAdvances.forEach(a=>{
+  // Distribute the implied deduction across advances sequentially (oldest first).
+  // Each advance consumes its share of the implied total; the implied doesn't duplicate per advance.
+  const sorted=[...activeAdvances].sort((a,b)=>(a.dateGiven||'').localeCompare(b.dateGiven||''));
+  let leftover=implied;
+  let lastRecorded=null;
+  for(const a of sorted){
+    if(leftover<=0.005)break;
     advMigrate(a);
-    const remaining=advRemaining(a);
-    const amt=Math.min(implied,remaining);
-    if(amt<=0)return;
+    const advRem=advRemaining(a);
+    const amt=Math.min(leftover,advRem,a.monthlyDeduct||leftover);
+    if(amt<=0.005)continue;
     a.ledger=a.ledger||[];
     const isExact=Math.abs(amt-(a.monthlyDeduct||0))<0.5;
     const note=isExact
       ?`Auto-recorded from "${(t.description||'salary payment').substr(0,40)}"`
       :`Auto-recorded from "${(t.description||'salary payment').substr(0,40)}" — actual deduction ${fmt(amt)} (plan was ${fmt(a.monthlyDeduct||0)})`;
     a.ledger.push({id:uid(),month:ym,type:'deduction',amount:+amt.toFixed(2),notes:note,recordedAt:new Date().toISOString().substr(0,10)});
-    recorded={month:ym,amount:+amt.toFixed(2),note};
-  });
-  return recorded;
+    lastRecorded={month:ym,amount:+amt.toFixed(2),note};
+    leftover-=amt;
+  }
+  return lastRecorded;
 }
 
 // On advance creation, back-scan tagged salary transactions for each month in the plan
@@ -5931,14 +5953,17 @@ function rStaff(){
         settled:'<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:color-mix(in srgb,var(--electric) 12%,transparent);color:var(--electric)">SETTLED</span>',
         deferred:'<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:color-mix(in srgb,var(--warn) 15%,transparent);color:color-mix(in srgb,var(--warn) 70%,var(--midnight))">DEFERRED</span>',
         forgiven:'<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:color-mix(in srgb,var(--text3) 15%,transparent);color:var(--text3)">FORGIVEN</span>',
-        planned:'<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:color-mix(in srgb,var(--text3) 10%,transparent);color:var(--text3)">PLANNED</span>'
+        planned:'<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:color-mix(in srgb,var(--text3) 10%,transparent);color:var(--text3)">PLANNED</span>',
+        unexpected:'<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:color-mix(in srgb,var(--bad) 14%,transparent);color:var(--bad)" title="This ledger entry is dated before the advance was supposed to start deducting — likely an orphan from a legacy bug. Click Undo to remove it.">UNEXPECTED</span>'
       };
       const scheduleHtml=plan.length?plan.map(p=>{
         const rowActions=p.status==='planned'
           ?`<button class="btn btn-xs" style="padding:1px 6px;font-size:10px" onclick="advRecordRow('${st.id}',${ai},'${p.month}')" title="Mark this month as deducted (no transaction required)">Mark deducted</button> <button class="btn btn-xs" style="padding:1px 6px;font-size:10px" onclick="advDeferRow('${st.id}',${ai},'${p.month}')" title="Defer this month — plan extends forward">Defer</button>`
           :p.status==='forgiven'
             ?''
-            :`<button class="btn btn-xs" style="padding:1px 6px;font-size:10px" onclick="advUndoRow('${st.id}',${ai},'${p.month}')" title="Remove this entry and revert to planned">Undo</button>`;
+            :p.status==='unexpected'
+              ?`<button class="btn btn-xs btn-d" style="padding:1px 6px;font-size:10px" onclick="advUndoRow('${st.id}',${ai},'${p.month}')" title="Remove this unexpected entry">Remove</button>`
+              :`<button class="btn btn-xs" style="padding:1px 6px;font-size:10px" onclick="advUndoRow('${st.id}',${ai},'${p.month}')" title="Remove this entry and revert to planned">Undo</button>`;
         return`<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">
           <div style="flex-shrink:0;min-width:72px;font-size:11px;color:var(--text2);font-weight:500">${fmtYM(p.month)}</div>
           <div style="flex-shrink:0">${schedStatusBadge[p.status]||''}</div>
@@ -8961,6 +8986,15 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps){
     const debtTag=debt?`<span style="font-size:10px;background:#FEF3C7;color:#92400E;border-radius:3px;padding:1px 5px;margin-left:4px">${h(debt.name)}</span>`:'';
     const linkedBill=t.billId?(S.bills||[]).find(b=>b.id===t.billId):null;
     const billTag=linkedBill?`<span style="font-size:10px;background:#E5EDF5;color:#1E3A6F;border-radius:3px;padding:1px 5px;margin-left:4px;font-weight:500" title="Linked to bill: ${h(linkedBill.name)}">↳ ${h(linkedBill.name)}</span>`:'';
+    // Staff first-name tag when a transaction is linked to a household staff member
+    let staffTag='';
+    if(t.staffId){
+      const stm=(S.staff||[]).find(s=>s.id===t.staffId);
+      if(stm){
+        const firstName=(stm.name||'').trim().split(/\s+/)[0]||'Staff';
+        staffTag=`<span style="font-size:10px;background:color-mix(in srgb,var(--midnight) 10%,transparent);color:var(--midnight);border-radius:3px;padding:1px 5px;margin-left:4px;font-weight:500" title="Household staff: ${h(stm.name)}">👤 ${h(firstName)}</span>`;
+      }
+    }
     // Refund link tag: badge on both sides of a linked pair
     let refundTag='';
     if(t.refundedTxnId){
@@ -9000,7 +9034,7 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps){
 
     return`<tr style="${rowBg}">
       ${selCb}<td style="color:var(--text3);white-space:nowrap;font-size:var(--fs-xs)">${toDD(t.date)}</td>
-      <td><div class="tx-desc-clamp">${h(t.description)}${st}${ruleTag}${matchedTag}${toleranceTag}${pendingTag}${debtTag}${billTag}${refundTag}${t.notes?`<span class="tx-notes">${h(t.notes)}</span>`:''}</div></td>
+      <td><div class="tx-desc-clamp">${h(t.description)}${st}${ruleTag}${matchedTag}${toleranceTag}${pendingTag}${debtTag}${billTag}${staffTag}${refundTag}${t.notes?`<span class="tx-notes">${h(t.notes)}</span>`:''}</div></td>
       <td>${ch}</td>
       <td style="font-size:var(--fs-xs)">${acc?`<span style="font-weight:500">${h(acc.name)}</span>`:'--'}</td>
       <td style="text-align:right;font-weight:500;white-space:nowrap" class="${ac}">${dir==='in'?'+':'-'}${fmtP(t.amount)}</td>
