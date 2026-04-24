@@ -580,7 +580,7 @@ td{padding:9px 10px;border-bottom:1px solid var(--bg2);vertical-align:middle}
 tr:last-child td{border-bottom:none}
 tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
 /* Apple-grade transactions table: fixed column widths prevent shift between months */
-.tx-tbl{table-layout:fixed;width:100%;min-width:1160px}
+.tx-tbl{table-layout:fixed;width:100%;min-width:1200px}
 .tx-tbl td,.tx-tbl th{overflow:hidden;text-overflow:ellipsis}
 .tx-tbl td>div{overflow:hidden;text-overflow:ellipsis}
 /* Description cell: clamp to 2 lines max, notes appear inline as a secondary line */
@@ -1428,7 +1428,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='6.3';
+const VERSION='6.4';
 let sKey=null,saveTimer=null,pinCb=null,catCb=null,activeGroup=null;
 
 // ─── CRYPTO ───
@@ -1748,6 +1748,101 @@ function txDir(t){
   }
   // expense, investment are always out; external_transfer and transfer depend on direction field
   return'out';
+}
+// ─── REFUND LINKING ───
+// A refund link pairs a refund-in transaction with the original expense-out transaction.
+// Linked pairs are fully excluded from Income and Expense aggregations so gross figures
+// reflect actual economic activity. Account balances are unaffected (the cash flow did happen).
+function isRefundLinked(t){
+  if(!t)return false;
+  if(t.refundedTxnId)return true;   // t is a refund pointing at an original expense
+  if(t.refundedBy)return true;      // t is the original expense pointing back at its refund
+  return false;
+}
+// Link a refund transaction to its original expense.
+// Called from the Link Refund modal.
+async function linkRefund(refundTxnId,refundYm,origTxnId,origYm){
+  const refund=(S.txnCache[refundYm]||[]).find(x=>x.id===refundTxnId);
+  const orig=(S.txnCache[origYm]||[]).find(x=>x.id===origTxnId);
+  if(!refund){toast('Refund transaction not found',false);return false;}
+  if(!orig){toast('Original expense not found',false);return false;}
+  // Safety: refund must be inflow, original must be outflow
+  if(txDir(refund)!=='in'){toast('Refund must be an inflow transaction',false);return false;}
+  if(txDir(orig)!=='out'){toast('Original must be an outflow transaction',false);return false;}
+  // Clear any stale links before creating new ones
+  if(refund.refundedTxnId){
+    await unlinkRefundInternal(refund,refundYm,false);
+  }
+  if(orig.refundedBy){
+    const prior=findTxnById(orig.refundedBy);
+    if(prior)await unlinkRefundInternal(prior.txn,prior.ym,false);
+  }
+  refund.refundedTxnId=origTxnId;
+  orig.refundedBy=refundTxnId;
+  schedTxn(refundYm);
+  if(refundYm!==origYm)schedTxn(origYm);
+  await flushTxnQueue();await saveState();
+  return true;
+}
+// Unlink an existing refund pair. Safe to call on either side of the link.
+async function unlinkRefundInternal(t,ym,persist){
+  if(!t)return;
+  const otherYm=(m=>{for(const k of Object.keys(S.txnCache)){const f=(S.txnCache[k]||[]).find(x=>x.id===m);if(f)return k;}return null;});
+  let other=null,otherYmk=null;
+  if(t.refundedTxnId){
+    otherYmk=otherYm(t.refundedTxnId);
+    if(otherYmk)other=(S.txnCache[otherYmk]||[]).find(x=>x.id===t.refundedTxnId);
+    delete t.refundedTxnId;
+  } else if(t.refundedBy){
+    otherYmk=otherYm(t.refundedBy);
+    if(otherYmk)other=(S.txnCache[otherYmk]||[]).find(x=>x.id===t.refundedBy);
+    delete t.refundedBy;
+  }
+  if(other){delete other.refundedTxnId;delete other.refundedBy;}
+  schedTxn(ym);
+  if(otherYmk&&otherYmk!==ym)schedTxn(otherYmk);
+  if(persist){await flushTxnQueue();await saveState();}
+}
+async function unlinkRefund(txnId,ym){
+  const t=(S.txnCache[ym]||[]).find(x=>x.id===txnId);
+  if(!t)return;
+  await unlinkRefundInternal(t,ym,true);
+  render();
+  toast('Refund link removed');
+}
+// Helper for cross-month lookup
+function findTxnById(id){
+  for(const ym of Object.keys(S.txnCache)){
+    const t=(S.txnCache[ym]||[]).find(x=>x.id===id);
+    if(t)return{txn:t,ym};
+  }
+  return null;
+}
+// Find candidate original expenses for a given refund transaction.
+// Candidates: same account, outflow, within 90 days before the refund, not already refund-linked.
+// Sorted by closest amount match first.
+function findRefundCandidates(refund){
+  if(!refund)return[];
+  const refundDate=new Date(refund.date);
+  const ninetyDaysAgo=new Date(refundDate.getTime()-90*24*60*60*1000);
+  const allTxnsList=Object.values(S.txnCache).flat();
+  const candidates=allTxnsList.filter(t=>{
+    if(t.id===refund.id)return false;
+    if(txDir(t)!=='out')return false;
+    if(t.accountId!==refund.accountId)return false;
+    if(t.refundedBy||t.refundedTxnId)return false;
+    const tDate=new Date(t.date);
+    if(tDate>refundDate)return false; // expense must be before refund
+    if(tDate<ninetyDaysAgo)return false;
+    return true;
+  });
+  // Sort: exact amount match first, then closest amount, then most recent
+  return candidates.sort((a,b)=>{
+    const ad=Math.abs(a.amount-refund.amount);
+    const bd=Math.abs(b.amount-refund.amount);
+    if(ad!==bd)return ad-bd;
+    return b.date.localeCompare(a.date);
+  });
 }
 function calcRunningBalance(txns,openingBal){
   // Returns a Map: txn.id -> running balance after that txn
@@ -2529,8 +2624,8 @@ async function rOv(){
   const n=months.length;
 
   // Core metrics
-  const inc=tx.filter(t=>t.type==='income'&&txDir(t)==='in').reduce((s,t)=>s+t.amount,0);
-  const exp=tx.filter(t=>txDir(t)==='out'&&t.type==='expense').reduce((s,t)=>s+t.amount,0);
+  const inc=tx.filter(t=>t.type==='income'&&txDir(t)==='in'&&!isRefundLinked(t)).reduce((s,t)=>s+t.amount,0);
+  const exp=tx.filter(t=>txDir(t)==='out'&&t.type==='expense'&&!isRefundLinked(t)).reduce((s,t)=>s+t.amount,0);
   const inv=tx.filter(t=>txDir(t)==='out'&&t.type==='investment').reduce((s,t)=>s+t.amount,0);
   const ext=tx.filter(t=>txDir(t)==='out'&&t.type==='external_transfer').reduce((s,t)=>s+t.amount,0);
   const net=inc-exp-ext-inv;
@@ -2559,7 +2654,7 @@ async function rOv(){
   const dtiCol=dti<30?'c-ok':dti<=40?'c-warn':'c-bad';
 
   // Prev period metrics for burn rate
-  const prevExp=pTx.filter(t=>txDir(t)==='out'&&t.type==='expense').reduce((s,t)=>s+t.amount,0);
+  const prevExp=pTx.filter(t=>txDir(t)==='out'&&t.type==='expense'&&!isRefundLinked(t)).reduce((s,t)=>s+t.amount,0);
   // Use days elapsed in the viewed month, not today's calendar day
   const isCurrentMonth=S.month===getYM(new Date());
   const daysThis=isCurrentMonth?new Date().getDate():new Date(S.month.split('-')[0],S.month.split('-')[1],0).getDate();
@@ -2569,14 +2664,14 @@ async function rOv(){
   const burnDiff=burnPrev>0?Math.round((burnThis-burnPrev)/burnPrev*100):0;
 
   // MoM expense change
-  const thisMonthExp=(S.txnCache[S.month]||[]).filter(t=>txDir(t)==='out'&&t.type==='expense').reduce((s,t)=>s+t.amount,0);
-  const lastMonthExp=(S.txnCache[addM(S.month,-1)]||[]).filter(t=>txDir(t)==='out'&&t.type==='expense').reduce((s,t)=>s+t.amount,0);
+  const thisMonthExp=(S.txnCache[S.month]||[]).filter(t=>txDir(t)==='out'&&t.type==='expense'&&!isRefundLinked(t)).reduce((s,t)=>s+t.amount,0);
+  const lastMonthExp=(S.txnCache[addM(S.month,-1)]||[]).filter(t=>txDir(t)==='out'&&t.type==='expense'&&!isRefundLinked(t)).reduce((s,t)=>s+t.amount,0);
   const momDiff=lastMonthExp>0?Math.round((thisMonthExp-lastMonthExp)/lastMonthExp*100):null;
 
   // Spending by category — V3.0 #19: exclude debt payments by default
   const excludeDebt=S.ovExcludeDebt!==false; // default true
   const bc={};
-  tx.filter(t=>txDir(t)==='out'&&t.type==='expense'&&t.mainCatId&&getMC(t.mainCatId)&&(!excludeDebt||!t.debtId)).forEach(t=>{
+  tx.filter(t=>txDir(t)==='out'&&t.type==='expense'&&!isRefundLinked(t)&&t.mainCatId&&getMC(t.mainCatId)&&(!excludeDebt||!t.debtId)).forEach(t=>{
     const col=CAT_COLORS[t.mainCatId]||'#888';const name=getMC(t.mainCatId)?.name||'Other';
     bc[name]={amount:(bc[name]?.amount||0)+t.amount,color:col,id:t.mainCatId};
   });
@@ -2593,7 +2688,7 @@ async function rOv(){
 
   // Food split
   const foodSubs={groceries:0,delivery:0,dining:0};
-  tx.filter(t=>txDir(t)==='out'&&t.type==='expense').forEach(t=>{
+  tx.filter(t=>txDir(t)==='out'&&t.type==='expense'&&!isRefundLinked(t)).forEach(t=>{
     const sub=t.subCatId;
     if(['sub_groceries','sub_supermarket','sub_wholesale'].includes(sub))foodSubs.groceries+=t.amount;
     else if(['sub_food_delivery','sub_meal_kits'].includes(sub))foodSubs.delivery+=t.amount;
@@ -2602,7 +2697,7 @@ async function rOv(){
 
   // Top 3 this month vs last month
   const bcPrev={};
-  pTx.filter(t=>txDir(t)==='out'&&t.type==='expense'&&t.mainCatId&&getMC(t.mainCatId)).forEach(t=>{const name=getMC(t.mainCatId)?.name||'Other';bcPrev[name]=(bcPrev[name]||0)+t.amount;});
+  pTx.filter(t=>txDir(t)==='out'&&t.type==='expense'&&!isRefundLinked(t)&&t.mainCatId&&getMC(t.mainCatId)).forEach(t=>{const name=getMC(t.mainCatId)?.name||'Other';bcPrev[name]=(bcPrev[name]||0)+t.amount;});
   const top3=cl.slice(0,3).map(([name,{amount,color}])=>{
     const prev=bcPrev[name]||0;const pct=prev>0?Math.round((amount-prev)/prev*100):null;
     return`<div class="fg jb" style="padding:5px 0;border-bottom:1px solid var(--bg3)">
@@ -2615,8 +2710,8 @@ async function rOv(){
 
   // Chart data
   const cm=months.slice(-6);
-  const cI=cm.map(m=>(S.txnCache[m]||[]).filter(t=>t.type==='income'&&txDir(t)==='in').reduce((s,t)=>s+t.amount,0));
-  const cE=cm.map(m=>(S.txnCache[m]||[]).filter(t=>txDir(t)==='out'&&t.type==='expense').reduce((s,t)=>s+t.amount,0));
+  const cI=cm.map(m=>(S.txnCache[m]||[]).filter(t=>t.type==='income'&&txDir(t)==='in'&&!isRefundLinked(t)).reduce((s,t)=>s+t.amount,0));
+  const cE=cm.map(m=>(S.txnCache[m]||[]).filter(t=>txDir(t)==='out'&&t.type==='expense'&&!isRefundLinked(t)).reduce((s,t)=>s+t.amount,0));
   const cV=cm.map(m=>(S.txnCache[m]||[]).filter(t=>txDir(t)==='out'&&t.type==='investment').reduce((s,t)=>s+t.amount,0));
   const cDeficit=cm.map((m,i)=>cE[i]>cI[i]);
   const cL=cm.map(fmtYM);
@@ -2694,7 +2789,7 @@ async function rOv(){
   // L5: Use the same period months as the KPIs, not a hardcoded 3-month window
   const srMonths=months.length>0?months.slice(-Math.min(6,months.length)):mRange(addM(now,-2),now);
   const srBars=srMonths.map(m=>{
-    const mInc=(S.txnCache[m]||[]).filter(t=>t.type==='income'&&txDir(t)==='in').reduce((s,t)=>s+t.amount,0);
+    const mInc=(S.txnCache[m]||[]).filter(t=>t.type==='income'&&txDir(t)==='in'&&!isRefundLinked(t)).reduce((s,t)=>s+t.amount,0);
     const mExp=(S.txnCache[m]||[]).filter(t=>txDir(t)==='out'&&t.type!=='transfer').reduce((s,t)=>s+t.amount,0);
     const mSr=mInc>0?Math.round((mInc-mExp)/mInc*100):0;
     const col=mSr>=tgt?'#3D6B4F':mSr>=10?'#7A5E20':'#8B4040'; // Brand: Dusty Mint / Gold / Rose
@@ -2856,7 +2951,7 @@ async function rOv(){
     // V3.0 #22: Top 3 Categories Breakdown (excludes debt + finance & banking)
     const EXCLUDED=['cat_main_debt','cat_main_finance'];
     const catTotals={};
-    tx.filter(t=>txDir(t)==='out'&&t.type==='expense'&&t.mainCatId&&!EXCLUDED.includes(t.mainCatId)).forEach(t=>{
+    tx.filter(t=>txDir(t)==='out'&&t.type==='expense'&&!isRefundLinked(t)&&t.mainCatId&&!EXCLUDED.includes(t.mainCatId)).forEach(t=>{
       if(!catTotals[t.mainCatId])catTotals[t.mainCatId]={amount:0,subs:{}};
       catTotals[t.mainCatId].amount+=t.amount;
       const sid=t.subCatId||'_uncat';
@@ -2924,7 +3019,7 @@ async function rOv(){
   <!-- S5: INCOME TRACKING (V3.0 #23 — Received by sub-category, no Expected) -->
   <div class="slbl">Income</div>
   ${(()=>{
-    const periodInc=tx.filter(t=>t.type==='income'&&txDir(t)==='in');
+    const periodInc=tx.filter(t=>t.type==='income'&&txDir(t)==='in'&&!isRefundLinked(t));
     const totalRec=periodInc.reduce((s,t)=>s+t.amount,0);
     // Breakdown by sub-category (fallback: main cat name if no sub)
     const bySub={};
@@ -3044,7 +3139,7 @@ async function rOv(){
     const curM=getYM(new Date());
     // Last 3 months of transactions for variable bill averaging
     const last3=[addM(curM,-2),addM(curM,-1),curM];
-    const last3Txns=last3.flatMap(m=>S.txnCache[m]||[]).filter(t=>txDir(t)==='out'&&t.type==='expense');
+    const last3Txns=last3.flatMap(m=>S.txnCache[m]||[]).filter(t=>txDir(t)==='out'&&t.type==='expense'&&!isRefundLinked(t));
 
     // Layer 1: Loan installments (exact, from active debts)
     const loanRows=S.debts.filter(d=>d.status==='active'&&d.type!=='credit_card'&&d.installment>0).map(d=>({
@@ -3220,6 +3315,9 @@ let SP='preferences'; // current settings sub-page
 async function delTxn(id,ym){
   const ymk=ym||S.month;
   if(!S.txnCache[ymk])return;
+  // Find and clean up any refund link before deletion
+  const t=S.txnCache[ymk].find(x=>x.id===id);
+  if(t&&isRefundLinked(t)){await unlinkRefundInternal(t,ymk,false);}
   S.txnCache[ymk]=S.txnCache[ymk].filter(t=>t.id!==id);
   // Remove dangling matched pairs referencing the deleted transaction
   S.matchedPairs=(S.matchedPairs||[]).filter(p=>p.outId!==id&&p.inId!==id);
@@ -3443,6 +3541,91 @@ async function confirmAiCategorize(){
   await flushTxnQueue();await saveState();
   closeAiCategorizeModal();render();
   toast('Categorization applied');
+}
+
+// ─── REFUND LINKING MODAL ───
+let _refundLinkCtx=null;
+function openRefundLinkModal(refundId,ym){
+  const refund=(S.txnCache[ym]||[]).find(x=>x.id===refundId);
+  if(!refund){toast('Transaction not found',false);return;}
+  if(refund.type!=='income'){toast('Only income transactions can be linked as refunds',false);return;}
+  _refundLinkCtx={refundId,ym};
+  const candidates=findRefundCandidates(refund);
+  const acc=S.accounts.find(a=>a.id===refund.accountId);
+  let body='';
+  if(candidates.length===0){
+    body=`<div style="padding:14px;background:var(--bg2);border-radius:var(--rsm);font-size:var(--fs-xs);color:var(--text3);text-align:center">
+      No unlinked expenses found on this account within 90 days before the refund. Refund linking requires the original expense to be recorded on the same account.
+    </div>`;
+  } else {
+    // Match quality indicator per candidate
+    body=`<div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:8px">Candidates from same account within 90 days, closest amount first.</div>
+    <div class="tbl-wrap" style="max-height:340px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--rsm)">
+      <table class="tx-tbl" style="min-width:auto">
+        <thead><tr>
+          <th style="width:90px">Date</th>
+          <th>Description</th>
+          <th style="text-align:right;width:120px">Amount</th>
+          <th style="width:70px;text-align:center">Match</th>
+          <th style="width:70px"></th>
+        </tr></thead>
+        <tbody>
+        ${candidates.slice(0,20).map(c=>{
+          const diff=Math.abs(c.amount-refund.amount);
+          const pct=refund.amount>0?(diff/refund.amount)*100:0;
+          const matchLbl=diff<0.01?'Exact':pct<2?'±'+pct.toFixed(1)+'%':pct<10?'±'+pct.toFixed(0)+'%':'Loose';
+          const matchCol=diff<0.01?'var(--ok)':pct<2?'var(--ok)':pct<10?'var(--warn)':'var(--text3)';
+          const cYm=c.date.substr(0,7);
+          return`<tr>
+            <td style="font-size:var(--fs-xs);color:var(--text3)">${toDD(c.date)}</td>
+            <td style="font-size:var(--fs-xs)">${h(c.description||'')}</td>
+            <td style="text-align:right;font-weight:500;font-variant-numeric:tabular-nums;font-size:var(--fs-xs)">${fmtP(c.amount)}</td>
+            <td style="text-align:center;font-size:10px;color:${matchCol};font-weight:600">${matchLbl}</td>
+            <td><button class="btn btn-xs btn-p" onclick="confirmRefundLink('${c.id}','${cYm}')">Link</button></td>
+          </tr>`;
+        }).join('')}
+        </tbody>
+      </table>
+    </div>`;
+  }
+  const mo=document.createElement('div');
+  mo.id='refund-link-modal';mo.className='mo active';
+  mo.innerHTML=`
+    <div class="md" style="max-width:720px;width:94%;padding:0">
+      <div style="padding:1.1rem 1.3rem;border-bottom:1px solid var(--border)">
+        <div class="mdtitle" style="margin-bottom:2px">↔ Link refund to original expense</div>
+        <div style="font-size:var(--fs-xs);color:var(--text3)">Pair this refund with the expense it refunded. Both transactions stay in the ledger but are excluded from Income and Expense totals so your cash flow reports stay accurate.</div>
+      </div>
+      <div style="padding:1.1rem 1.3rem">
+        <!-- Refund snapshot -->
+        <div style="padding:10px 12px;background:color-mix(in srgb,var(--ok) 6%,transparent);border-radius:var(--rsm);margin-bottom:14px;font-size:var(--fs-xs)">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ok);margin-bottom:4px">Refund transaction</div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px">
+            <div style="font-weight:500">${h(refund.description||'')}</div>
+            <div style="font-weight:500;font-variant-numeric:tabular-nums;color:var(--ok)">+${fmtP(refund.amount)}</div>
+          </div>
+          <div style="color:var(--text3);font-size:10px;margin-top:2px">${toDD(refund.date)} · ${h(acc?.name||'—')}</div>
+        </div>
+        ${body}
+      </div>
+      <div style="padding:12px 1.3rem;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;background:var(--bg2)">
+        <button class="btn" onclick="closeRefundLinkModal()">Cancel</button>
+      </div>
+    </div>`;
+  document.body.appendChild(mo);
+}
+function closeRefundLinkModal(){
+  document.getElementById('refund-link-modal')?.remove();
+  _refundLinkCtx=null;
+}
+async function confirmRefundLink(origId,origYm){
+  const ctx=_refundLinkCtx;if(!ctx){closeRefundLinkModal();return;}
+  const ok=await linkRefund(ctx.refundId,ctx.ym,origId,origYm);
+  if(ok){
+    closeRefundLinkModal();
+    render();
+    toast('Refund linked — totals updated');
+  }
 }
 
 // ─── EDIT TRANSACTION ───
@@ -8457,8 +8640,8 @@ function buildFinancialSnapshot(){
   // Helper: get month totals
   function mTotals(ym){
     const txns=S.txnCache[ym]||[];
-    const inc=txns.filter(t=>t.type==='income'&&txDir(t)==='in').reduce((s,t)=>s+t.amount,0);
-    const exp=txns.filter(t=>txDir(t)==='out'&&t.type==='expense').reduce((s,t)=>s+t.amount,0);
+    const inc=txns.filter(t=>t.type==='income'&&txDir(t)==='in'&&!isRefundLinked(t)).reduce((s,t)=>s+t.amount,0);
+    const exp=txns.filter(t=>txDir(t)==='out'&&t.type==='expense'&&!isRefundLinked(t)).reduce((s,t)=>s+t.amount,0);
     const inv=txns.filter(t=>txDir(t)==='out'&&t.type==='investment').reduce((s,t)=>s+t.amount,0);
     const ext=txns.filter(t=>t.type==='external_transfer').reduce((s,t)=>s+t.amount,0);
     const sr=inc>0?Math.round((inc-exp-inv-ext)/inc*100):0;
@@ -8744,7 +8927,7 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps){
     :['date','desc','cat','acc','amount','balance','type',''];
   const labels={date:'Date',desc:'Description',cat:'Category / Sub-Category',acc:'Account',
     amount:'Amount',balance:'Balance',outstanding:'Outstanding',type:'Type','':''};
-  const widths={date:'110px',desc:'auto',cat:'230px',acc:'130px',amount:'140px',balance:'140px',outstanding:'140px',type:'90px','':'240px'};
+  const widths={date:'110px',desc:'auto',cat:'230px',acc:'130px',amount:'140px',balance:'140px',outstanding:'140px',type:'90px','':'270px'};
 
   const bulkCol=`<th style="width:32px;padding:8px 6px">${BulkMode?'<input type="checkbox" title="Select all displayed" onclick="if(this.checked)selectAllDisplayed();else clearBulkSelection()" style="cursor:pointer;width:15px;height:15px">':''}</th>`;
   const reconTh=hasRecon?`<th style="text-align:right;white-space:nowrap;font-size:var(--fs-xxs);color:var(--warn);width:110px">Stmt Bal</th>`:'';
@@ -8778,6 +8961,15 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps){
     const debtTag=debt?`<span style="font-size:10px;background:#FEF3C7;color:#92400E;border-radius:3px;padding:1px 5px;margin-left:4px">${h(debt.name)}</span>`:'';
     const linkedBill=t.billId?(S.bills||[]).find(b=>b.id===t.billId):null;
     const billTag=linkedBill?`<span style="font-size:10px;background:#E5EDF5;color:#1E3A6F;border-radius:3px;padding:1px 5px;margin-left:4px;font-weight:500" title="Linked to bill: ${h(linkedBill.name)}">↳ ${h(linkedBill.name)}</span>`:'';
+    // Refund link tag: badge on both sides of a linked pair
+    let refundTag='';
+    if(t.refundedTxnId){
+      // This transaction is the refund pointing at the original expense
+      refundTag=`<span style="font-size:10px;background:color-mix(in srgb, var(--ok) 14%, transparent);color:var(--ok);border-radius:3px;padding:1px 5px;margin-left:4px;font-weight:500;cursor:pointer" title="Refund linked — click to unlink" onclick="event.stopPropagation();unlinkRefund('${t.id}','${ym}')">↔ Refund linked</span>`;
+    } else if(t.refundedBy){
+      // This transaction is the original expense that got refunded
+      refundTag=`<span style="font-size:10px;background:color-mix(in srgb, var(--ok) 14%, transparent);color:var(--ok);border-radius:3px;padding:1px 5px;margin-left:4px;font-weight:500;cursor:pointer" title="Refunded — click to unlink" onclick="event.stopPropagation();unlinkRefund('${t.id}','${ym}')">↔ Refunded</span>`;
+    }
     const selCb=`<td style="padding:8px 6px;width:32px">${BulkMode?`<input type="checkbox" id="cb-${t.id}" class="tx-sel-cb" data-id="${t.id}" ${BulkSelected.has(t.id)?'checked':''} onclick="event.stopPropagation();toggleTxSel('${t.id}')" style="cursor:pointer;width:15px;height:15px">`:''}</td>`;
 
     // Reconciliation column
@@ -8808,7 +9000,7 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps){
 
     return`<tr style="${rowBg}">
       ${selCb}<td style="color:var(--text3);white-space:nowrap;font-size:var(--fs-xs)">${toDD(t.date)}</td>
-      <td><div class="tx-desc-clamp">${h(t.description)}${st}${ruleTag}${matchedTag}${toleranceTag}${pendingTag}${debtTag}${billTag}${t.notes?`<span class="tx-notes">${h(t.notes)}</span>`:''}</div></td>
+      <td><div class="tx-desc-clamp">${h(t.description)}${st}${ruleTag}${matchedTag}${toleranceTag}${pendingTag}${debtTag}${billTag}${refundTag}${t.notes?`<span class="tx-notes">${h(t.notes)}</span>`:''}</div></td>
       <td>${ch}</td>
       <td style="font-size:var(--fs-xs)">${acc?`<span style="font-weight:500">${h(acc.name)}</span>`:'--'}</td>
       <td style="text-align:right;font-weight:500;white-space:nowrap" class="${ac}">${dir==='in'?'+':'-'}${fmtP(t.amount)}</td>
@@ -8819,6 +9011,7 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps){
         <button class="btn btn-xs" onclick="openCP('${t.id}','${ym}','${t.mainCatId||''}','${t.subCatId||''}')">Cat</button>
         ${!t.isSub?`<button class="btn btn-xs" onclick="mkSub('${t.id}','${ym}')">Sub</button>`:''}
         <button class="btn btn-xs" onclick="openAiCategorize('${t.id}','${ym}')" title="AI-assisted categorization — add context for a suggested Type, Category, and Sub-Category" style="padding:2px 6px"><span style="color:var(--electric);font-weight:600">✨</span></button>
+        ${(t.type==='income'&&!isRefundLinked(t))?`<button class="btn btn-xs" onclick="openRefundLinkModal('${t.id}','${ym}')" title="Link this refund to its original expense — excludes the pair from Income and Expense totals" style="padding:2px 6px"><span style="color:var(--ok);font-weight:600">↔</span></button>`:''}
         <button class="btn btn-xs btn-d" onclick="delTxn('${t.id}','${ym}')">&#10005;</button>
       </td>
       ${reconTd}
