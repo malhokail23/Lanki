@@ -1428,7 +1428,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='6.8';
+const VERSION='7.0';
 let sKey=null,saveTimer=null,pinCb=null,catCb=null,activeGroup=null;
 
 // ─── CRYPTO ───
@@ -3558,6 +3558,328 @@ async function confirmAiCategorize(){
   await flushTxnQueue();await saveState();
   closeAiCategorizeModal();render();
   toast('Categorization applied');
+}
+
+// ─── BULK AI CATEGORIZATION ───
+// Apply a shared context across N selected transactions.
+// Each transaction gets its own API call (parallel with concurrency limit) so individual
+// classifications remain accurate. Results are shown in a review table before apply.
+const BULK_AI_MAX=20; // cap to protect from runaway cost
+const BULK_AI_CONCURRENCY=4; // parallel calls
+let _bulkAiResults=[]; // {txnId, ym, result, error} per selected txn
+
+function buildAiPrompts(t,context){
+  const mains=getActiveCats().map(c=>`${c.id} — ${c.name} (${c.type})`).join('\n');
+  const subsByParent=Object.entries(SUGGESTED).map(([mid,list])=>{
+    const m=MAIN_CATS.find(c=>c.id===mid);if(!m)return'';
+    const subList=(list||[]).map(sid=>{const s=SUB_CATS.find(x=>x.id===sid);return s?`${s.id} — ${s.name}`:null;}).filter(Boolean).join(', ');
+    return`- ${m.name} (${mid}): ${subList}`;
+  }).filter(Boolean).join('\n');
+  const allSubs=SUB_CATS.map(s=>`${s.id} — ${s.name}`).join('\n');
+  const acc=S.accounts.find(a=>a.id===t.accountId);
+  const systemPrompt=`You are a financial categorization assistant for Lanki, a personal finance dashboard used by a family in Saudi Arabia. You read a bank transaction plus user-provided context and return the most accurate Type, Main Category, and Sub-Category.
+
+AVAILABLE TYPES:
+- expense: purchases, bills, fees paid out
+- income: salary, refunds, investment returns, money received
+- transfer: between the user's own accounts (internal), credit card payments from own bank account
+- investment: outflows to investment platforms (Derayah, Tameed, Aseel, etc.)
+- external_transfer: outbound to a person or account outside the user's dashboard
+
+MAIN CATEGORIES (id — name — type):
+${mains}
+
+SUB-CATEGORIES (shortlist by main category):
+${subsByParent}
+
+ALL SUB-CATEGORIES (complete list, use any):
+${allSubs}
+
+RULES:
+- Output STRICT JSON only, no markdown or prose
+- Keys: type, mainCatId, subCatId, confidence (0-1), reasoning (one short sentence)
+- IDs must be copied exactly from the lists above — never invent new IDs
+- If the transaction amount direction contradicts an income/expense choice, respect the direction implied by the current type
+- The user-provided context is SHARED across a batch of related transactions. Use it to understand the theme, but classify each transaction based on its own specific merchant and amount
+- For medical / doctor / pharmacy → Personal Care & Health
+- For food delivery (Jahez, Chefz, Wingstop) → Food → food_delivery
+- For Sadad bills referencing utilities → Housing & Utilities
+- For Sadad bills referencing telecom → Subscriptions & Digital
+- For Apple Pay / online transactions, classify by the merchant, not the payment method`;
+
+  const userPrompt=`Transaction:
+- Description: "${t.description||''}"
+- Amount: SAR ${t.amount}
+- Date: ${t.date}
+- Account: ${acc?.name||'unknown'}
+- Current type: ${t.type||'unassigned'}
+- Existing notes: "${t.notes||''}"
+
+User context (shared across this batch): "${context}"
+
+Return the JSON object with type, mainCatId, subCatId, confidence, reasoning.`;
+  return{systemPrompt,userPrompt};
+}
+
+async function callAiForTxn(t,context){
+  const{systemPrompt,userPrompt}=buildAiPrompts(t,context);
+  const resp=await fetch('https://dgefsppkijrrvotggeom.supabase.co/functions/v1/ai-proxy',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRnZWZzcHBraWpycnZvdGdnZW9tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4MzYyOTAsImV4cCI6MjA5MTQxMjI5MH0._MWK5XL_CQAV3ybEWPv1UrArPb-Enu6FZognyImSYzg'},
+    body:JSON.stringify({
+      model:'claude-sonnet-4-20250514',
+      max_tokens:400,
+      system:systemPrompt,
+      messages:[{role:'user',content:userPrompt}]
+    })
+  });
+  const data=await resp.json();
+  if(data.error)throw new Error(data.error.message||'API error');
+  const raw=data.content?.[0]?.text||'';
+  if(!raw)throw new Error('Empty response');
+  const cleaned=raw.replace(/```json|```/g,'').trim();
+  const result=JSON.parse(cleaned);
+  // Validate
+  const validTypes=['expense','income','transfer','investment','external_transfer'];
+  if(!validTypes.includes(result.type))throw new Error('Invalid type: '+result.type);
+  if(!MAIN_CATS.find(c=>c.id===result.mainCatId))throw new Error('Invalid main: '+result.mainCatId);
+  if(result.subCatId&&!SUB_CATS.find(s=>s.id===result.subCatId))throw new Error('Invalid sub: '+result.subCatId);
+  return result;
+}
+
+// Wave-based bulk AI: when more than BULK_AI_MAX are selected, process in waves.
+// The shared context is preserved across waves so the user doesn't rewrite it.
+let _bulkAiPendingTxns=[]; // queue of {txn, ym} not yet processed
+let _bulkAiSharedContext=''; // retained between waves
+
+function openBulkAiCategorize(){
+  if(!BulkSelected.size){toast('No transactions selected',false);return;}
+  // Collect all selected across months
+  const selected=[];
+  Object.entries(S.txnCache).forEach(([ym,arr])=>{
+    (arr||[]).forEach(t=>{
+      if(BulkSelected.has(t.id))selected.push({txn:t,ym});
+    });
+  });
+  if(!selected.length){toast('Selected transactions not found',false);return;}
+  // Prime the queue with everything; first wave will slice the first 20
+  _bulkAiPendingTxns=selected;
+  _bulkAiSharedContext='';
+  _bulkAiResults=[];
+  openBulkAiWaveModal(selected.length);
+}
+
+function openBulkAiWaveModal(totalRemaining){
+  // Take the next wave of up to BULK_AI_MAX transactions
+  const waveSize=Math.min(BULK_AI_MAX,_bulkAiPendingTxns.length);
+  const wave=_bulkAiPendingTxns.slice(0,waveSize);
+  _bulkAiResults=wave.map(s=>({txnId:s.txn.id,ym:s.ym,txn:s.txn,result:null,error:null,applied:false,skip:false}));
+
+  const selectedCount=totalRemaining!=null?totalRemaining:_bulkAiPendingTxns.length;
+  const isMultiWave=selectedCount>BULK_AI_MAX;
+  const currentWaveNum=Math.ceil(selectedCount/BULK_AI_MAX)-Math.ceil((_bulkAiPendingTxns.length-waveSize)/BULK_AI_MAX);
+  const totalWaves=Math.ceil(selectedCount/BULK_AI_MAX);
+  const waveHeaderExtra=isMultiWave?` · Wave ${currentWaveNum} of ${totalWaves}`:'';
+
+  const existing=document.getElementById('bulk-ai-modal');
+  if(existing)existing.remove();
+
+  const mo=document.createElement('div');
+  mo.id='bulk-ai-modal';mo.className='mo active';
+  mo.innerHTML=`
+    <div class="md" style="max-width:880px;width:96%;padding:0;max-height:92vh;display:flex;flex-direction:column">
+      <div style="padding:1.1rem 1.3rem;border-bottom:1px solid var(--border)">
+        <div class="mdtitle" style="margin-bottom:2px">✨ AI categorize ${waveSize} transaction${waveSize===1?'':'s'}${waveHeaderExtra}</div>
+        <div style="font-size:var(--fs-xs);color:var(--text3)">${isMultiWave?`You selected ${selectedCount}, processing ${BULK_AI_MAX} per wave to stay within rate and cost limits. The context carries across waves.`:'Write one context that applies to all selected transactions. Claude analyzes each one individually using that shared context.'}</div>
+      </div>
+      <div style="padding:1.1rem 1.3rem;flex:1;overflow-y:auto">
+        <div style="margin-bottom:10px">
+          <label class="lbl">Shared context${isMultiWave&&currentWaveNum>1?' (carried from previous wave)':''}</label>
+          <textarea id="bulk-ai-context" rows="3" placeholder="e.g. Dubai business trip — meetings with client X, stayed 3 nights" style="width:100%;font-family:inherit;font-size:var(--fs-sm);resize:vertical">${h(_bulkAiSharedContext)}</textarea>
+        </div>
+        <div id="bulk-ai-progress" style="display:none;padding:10px 12px;background:var(--bg2);border-radius:var(--rsm);font-size:var(--fs-xs);color:var(--text3);text-align:center;margin-bottom:10px"></div>
+        <div id="bulk-ai-results" style="display:none"></div>
+      </div>
+      <div style="padding:12px 1.3rem;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:space-between;background:var(--bg2);align-items:center">
+        <div style="font-size:10px;color:var(--text3)">Each transaction is one API call. ${isMultiWave?`${_bulkAiPendingTxns.length} remaining across ${Math.ceil(_bulkAiPendingTxns.length/BULK_AI_MAX)} wave${Math.ceil(_bulkAiPendingTxns.length/BULK_AI_MAX)===1?'':'s'}.`:`Cap: ${BULK_AI_MAX} per batch.`}</div>
+        <div style="display:flex;gap:8px">
+          <button class="btn" onclick="closeBulkAiModal()">Cancel</button>
+          <button class="btn btn-p" id="bulk-ai-analyze-btn" onclick="runBulkAiCategorize()">Analyze wave</button>
+          <button class="btn btn-p" id="bulk-ai-apply-btn" onclick="applyBulkAiResults()" style="display:none">Apply & ${_bulkAiPendingTxns.length>waveSize?'continue':'finish'}</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(mo);
+  setTimeout(()=>document.getElementById('bulk-ai-context')?.focus(),50);
+}
+
+function closeBulkAiModal(){
+  document.getElementById('bulk-ai-modal')?.remove();
+  _bulkAiResults=[];
+  _bulkAiPendingTxns=[];
+  _bulkAiSharedContext='';
+}
+
+async function runBulkAiCategorize(){
+  const context=(document.getElementById('bulk-ai-context')?.value||'').trim();
+  if(!context){toast('Write a short context first',false);return;}
+  if(!_bulkAiResults.length){return;}
+  _bulkAiSharedContext=context; // retain for subsequent waves
+  const analyzeBtn=document.getElementById('bulk-ai-analyze-btn');
+  const progressEl=document.getElementById('bulk-ai-progress');
+  if(analyzeBtn){analyzeBtn.disabled=true;analyzeBtn.textContent='Analyzing...';}
+  if(progressEl){progressEl.style.display='block';progressEl.textContent=`Analyzing 0 of ${_bulkAiResults.length}...`;}
+
+  // Reset prior results
+  _bulkAiResults.forEach(r=>{r.result=null;r.error=null;});
+  // Run with concurrency limit
+  let completed=0;
+  const queue=[..._bulkAiResults];
+  async function worker(){
+    while(queue.length){
+      const job=queue.shift();
+      if(!job)break;
+      try{
+        job.result=await callAiForTxn(job.txn,context);
+      }catch(e){
+        job.error=e.message||String(e);
+      }
+      completed++;
+      if(progressEl)progressEl.textContent=`Analyzing ${completed} of ${_bulkAiResults.length}...`;
+    }
+  }
+  const workers=[];
+  for(let i=0;i<Math.min(BULK_AI_CONCURRENCY,_bulkAiResults.length);i++)workers.push(worker());
+  await Promise.all(workers);
+
+  if(progressEl)progressEl.style.display='none';
+  if(analyzeBtn){analyzeBtn.disabled=false;analyzeBtn.textContent='Re-analyze';}
+  renderBulkAiResults();
+  const applyBtn=document.getElementById('bulk-ai-apply-btn');
+  if(applyBtn)applyBtn.style.display='';
+}
+
+function renderBulkAiResults(){
+  const el=document.getElementById('bulk-ai-results');if(!el)return;
+  el.style.display='block';
+  const successCount=_bulkAiResults.filter(r=>r.result&&!r.skip).length;
+  const failCount=_bulkAiResults.filter(r=>r.error).length;
+  const typeOpts=(cur)=>['expense','income','transfer','investment','external_transfer'].map(tv=>`<option value="${tv}" ${tv===cur?'selected':''}>${tv.replace('_',' ')}</option>`).join('');
+  const mainOpts=(curId)=>getActiveCats().map(c=>`<option value="${c.id}" ${c.id===curId?'selected':''}>${h(c.name)}</option>`).join('');
+  const subOptsFor=(mainId,curSubId)=>'<option value="">-- None --</option>'+SUB_CATS.filter(s=>currentSubParent(s.id)===mainId).map(s=>`<option value="${s.id}" ${s.id===curSubId?'selected':''}>${h(s.name)}</option>`).join('');
+  const rows=_bulkAiResults.map((r,i)=>{
+    const t=r.txn;
+    if(r.error){
+      return`<tr style="background:color-mix(in srgb,var(--bad) 5%,transparent)">
+        <td style="padding:6px 8px;font-size:10px;color:var(--text3)">${toDD(t.date)}</td>
+        <td style="padding:6px 8px;font-size:var(--fs-xs)">${h(t.description||'')}</td>
+        <td style="padding:6px 8px;text-align:right;font-size:var(--fs-xs);font-variant-numeric:tabular-nums">${fmtP(t.amount)}</td>
+        <td colspan="4" style="padding:6px 8px;font-size:10px;color:var(--bad)">Failed: ${h(r.error)}</td>
+      </tr>`;
+    }
+    if(!r.result){
+      return`<tr><td colspan="7" style="padding:6px 8px;font-size:10px;color:var(--text3)">${h(t.description||'')}: pending</td></tr>`;
+    }
+    const confPct=Math.round((r.result.confidence||0.8)*100);
+    const confColor=confPct>=80?'var(--ok)':confPct>=60?'var(--warn)':'var(--bad)';
+    return`<tr id="bulk-row-${i}" style="${r.skip?'opacity:.45':''}">
+      <td style="padding:6px 8px;font-size:10px;color:var(--text3);white-space:nowrap">${toDD(t.date)}</td>
+      <td style="padding:6px 8px;font-size:var(--fs-xs)">${h((t.description||'').substr(0,32))}${(t.description||'').length>32?'…':''}</td>
+      <td style="padding:6px 8px;text-align:right;font-size:var(--fs-xs);font-variant-numeric:tabular-nums">${fmtP(t.amount)}</td>
+      <td style="padding:4px 6px"><select data-row="${i}" data-field="type" onchange="onBulkAiFieldChange(${i},'type',this.value)" style="font-size:var(--fs-xs);padding:2px 4px;width:100%">${typeOpts(r.result.type)}</select></td>
+      <td style="padding:4px 6px"><select data-row="${i}" data-field="main" onchange="onBulkAiFieldChange(${i},'main',this.value)" style="font-size:var(--fs-xs);padding:2px 4px;width:100%">${mainOpts(r.result.mainCatId)}</select></td>
+      <td style="padding:4px 6px"><select data-row="${i}" data-field="sub" onchange="onBulkAiFieldChange(${i},'sub',this.value)" style="font-size:var(--fs-xs);padding:2px 4px;width:100%">${subOptsFor(r.result.mainCatId,r.result.subCatId)}</select></td>
+      <td style="padding:4px 6px;text-align:center">
+        <div style="font-size:9px;color:${confColor};font-weight:600;margin-bottom:2px">${confPct}%</div>
+        <button class="btn btn-xs" onclick="toggleBulkAiSkip(${i})" title="${r.skip?'Include in apply':'Skip this row'}" style="padding:1px 6px;font-size:10px">${r.skip?'Include':'Skip'}</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  el.innerHTML=`
+    <div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:8px">${successCount} ready to apply${failCount>0?`, ${failCount} failed`:''}. Edit any row before applying.</div>
+    <div class="tbl-wrap" style="max-height:420px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--rsm)">
+      <table class="tx-tbl" style="min-width:auto;width:100%">
+        <thead><tr>
+          <th style="width:80px;padding:6px 8px">Date</th>
+          <th style="padding:6px 8px">Description</th>
+          <th style="width:100px;padding:6px 8px;text-align:right">Amount</th>
+          <th style="width:110px;padding:6px 6px">Type</th>
+          <th style="width:160px;padding:6px 6px">Main category</th>
+          <th style="width:200px;padding:6px 6px">Sub-category</th>
+          <th style="width:80px;padding:6px 6px;text-align:center">Conf</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+function onBulkAiFieldChange(idx,field,value){
+  const r=_bulkAiResults[idx];if(!r||!r.result)return;
+  if(field==='type')r.result.type=value;
+  if(field==='main'){
+    r.result.mainCatId=value;
+    // Reset sub to first valid option under new main
+    const subs=SUB_CATS.filter(s=>currentSubParent(s.id)===value);
+    r.result.subCatId=subs[0]?.id||null;
+    // Re-render this row's sub dropdown
+    const row=document.getElementById(`bulk-row-${idx}`);
+    const subSel=row?.querySelector('select[data-field="sub"]');
+    if(subSel){
+      subSel.innerHTML='<option value="">-- None --</option>'+subs.map(s=>`<option value="${s.id}" ${s.id===r.result.subCatId?'selected':''}>${h(s.name)}</option>`).join('');
+    }
+  }
+  if(field==='sub')r.result.subCatId=value||null;
+}
+function toggleBulkAiSkip(idx){
+  const r=_bulkAiResults[idx];if(!r)return;
+  r.skip=!r.skip;
+  renderBulkAiResults();
+}
+
+async function applyBulkAiResults(){
+  const toApply=_bulkAiResults.filter(r=>r.result&&!r.error&&!r.skip);
+  if(!toApply.length){toast('No rows to apply',false);return;}
+  const applyBtn=document.getElementById('bulk-ai-apply-btn');
+  if(applyBtn){applyBtn.disabled=true;applyBtn.textContent='Applying...';}
+  const affectedYms=new Set();
+  let applied=0;
+  const appliedIds=new Set();
+  toApply.forEach(r=>{
+    const t=(S.txnCache[r.ym]||[]).find(x=>x.id===r.txnId);
+    if(!t)return;
+    t.type=r.result.type;
+    t.mainCatId=r.result.mainCatId;
+    t.subCatId=r.result.subCatId||null;
+    delete t.prevCatName;delete t.prevCatReason;
+    t.ruleApplied=false;
+    try{learnTxnRule(t.description,r.result.mainCatId,r.result.subCatId,'ai_assist');}
+    catch(e){try{learnRule(t.raw_description||t.description,r.result.mainCatId,r.result.subCatId);}catch(_){}}
+    affectedYms.add(r.ym);
+    r.applied=true;
+    applied++;
+    appliedIds.add(r.txnId);
+  });
+  // Remove processed txns (applied + skipped) from the pending queue
+  const processedIds=new Set(_bulkAiResults.map(r=>r.txnId));
+  _bulkAiPendingTxns=_bulkAiPendingTxns.filter(s=>!processedIds.has(s.txn.id));
+  // Remove applied txns from selection so remaining waves don't re-process them
+  appliedIds.forEach(id=>BulkSelected.delete(id));
+  affectedYms.forEach(ym=>schedTxn(ym));
+  await flushTxnQueue();await saveState();
+
+  if(_bulkAiPendingTxns.length>0){
+    // More waves to go — reset results UI and open the next wave in the same modal
+    toast(`Applied ${applied} · ${_bulkAiPendingTxns.length} remaining`);
+    openBulkAiWaveModal(_bulkAiPendingTxns.length);
+  } else {
+    // Final wave done — clean up
+    closeBulkAiModal();
+    BulkSelected.clear();
+    BulkMode=false;
+    render();
+    toast(`Categorized ${applied} transaction${applied===1?'':'s'}`);
+  }
 }
 
 // ─── REFUND LINKING MODAL ───
@@ -9352,6 +9674,7 @@ function buildTxFilters(){
     <button class="btn btn-xs" onclick="clearBulkSelection()">Clear</button>
     <div style="flex:1"></div>
     <button class="btn btn-xs btn-p" onclick="applyBulkCategory()">Assign Category</button>
+    <button class="btn btn-xs" onclick="openBulkAiCategorize()" title="Use AI with shared context to categorize all selected transactions at once"><span style="color:var(--electric);font-weight:600">✨</span> AI Categorize</button>
   </div>
   <div class="fg" style="gap:8px;flex-wrap:nowrap;align-items:center;margin-bottom:1rem;overflow-x:auto">
     <input type="text" id="tx-search-input" placeholder="Search" value="${TF.q||''}" oninput="onTxSearchInput(this.value)" autocomplete="off" style="flex:1;min-width:140px">
