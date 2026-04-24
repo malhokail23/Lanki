@@ -583,6 +583,13 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overfl
 .tx-tbl{table-layout:fixed;width:100%;min-width:920px}
 .tx-tbl td,.tx-tbl th{overflow:hidden;text-overflow:ellipsis}
 .tx-tbl td>div{overflow:hidden;text-overflow:ellipsis}
+/* Transactions card: white elevated surface on Feather White page */
+.tx-card{padding:0;overflow:hidden}
+.tx-card .tbl-wrap{padding:0}
+.tx-card .tx-tbl th{background:transparent;padding:14px 16px;border-bottom:1px solid var(--border)}
+.tx-card .tx-tbl td{padding:14px 16px;border-bottom:1px solid var(--border)}
+.tx-card .tx-tbl tbody tr:last-child td{border-bottom:none}
+.tx-card .tx-tbl tbody tr:hover td{background:var(--bg2)}
 /* KPI row responsive: 5 cells on desktop, 3+2 on tablet, stacked on mobile */
 .kpi-row{grid-template-columns:repeat(5,1fr)}
 @media(max-width:900px){.kpi-row{grid-template-columns:repeat(3,1fr)}.kpi-row>div:nth-child(n+4){grid-column:span 1}}
@@ -592,7 +599,7 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overfl
 .tx-more summary::marker{content:''}
 .tx-more[open] summary{background:var(--bg2)}
 .tx-more>div>button:hover{background:var(--bg2)!important}
-@media(max-width:768px){th,td{padding:8px 8px}}
+@media(max-width:768px){th,td{padding:8px 8px}.tx-card .tx-tbl th,.tx-card .tx-tbl td{padding:10px 10px}}
 
 /* ── PROGRESS ─────────────────────────────────────────── */
 .pb{height:5px;background:var(--bg3);border-radius:3px;overflow:hidden;margin-top:4px}
@@ -1337,7 +1344,7 @@ const TAB_TO_GROUP={txbank:'transactions',txcards:'transactions',aiupload:'trans
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='4.6';
+const VERSION='4.7';
 let sKey=null,saveTimer=null,pinCb=null,catCb=null,activeGroup=null;
 
 // ─── CRYPTO ───
@@ -6471,7 +6478,7 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps){
       ${reconTd}
     </tr>`;}).join(''):`<tr><td colspan="${(showBalance?8:7)+1+(hasRecon?1:0)}" class="empty">No transactions found</td></tr>`;
 
-  return`<div class="tbl-wrap"><table class="tx-tbl">${thead}<tbody>${rows}</tbody></table></div>`;
+  return`<div class="card tx-card"><div class="tbl-wrap"><table class="tx-tbl">${thead}<tbody>${rows}</tbody></table></div></div>`;
 }
 
 // ─── SHARED TX HEADER (month nav + import + summary) ───
