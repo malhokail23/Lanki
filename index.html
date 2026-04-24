@@ -144,18 +144,18 @@ body{font-family:var(--font);background:var(--feather);color:var(--text);min-hei
 }
 .auth-inp:focus{border-color:var(--midnight);box-shadow:0 0 0 3px rgba(2,23,81,.08);}
 .auth-inp::placeholder{color:var(--text3)}
-/* Suppress browser autofill background tint AND force consistent typography */
-.auth-inp:-webkit-autofill,
-.auth-inp:-webkit-autofill:hover,
-.auth-inp:-webkit-autofill:focus,
-.auth-inp:autofill{
+/* Detect browser autofill via animation start event (JS listens for it) */
+@keyframes onAutoFillStart{from{}to{}}
+@keyframes onAutoFillCancel{from{}to{}}
+.auth-inp:-webkit-autofill{
+  animation-name:onAutoFillStart;
   -webkit-box-shadow:0 0 0 40px var(--bg) inset !important;
   -webkit-text-fill-color:var(--text) !important;
   border-color:var(--border) !important;
-  font-family:var(--font) !important;
-  font-size:var(--fs) !important;
-  font-weight:400 !important;
-  letter-spacing:normal !important;
+  transition:background-color 99999s ease-in-out 0s;
+}
+.auth-inp:not(:-webkit-autofill){
+  animation-name:onAutoFillCancel;
 }
 .pw-wrap{position:relative;margin-bottom:8px}
 .pw-toggle{
@@ -1440,7 +1440,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='7.4';
+const VERSION='7.5';
 let sKey=null,saveTimer=null,pinCb=null,catCb=null,activeGroup=null;
 
 // Populate version labels on all auth screens (login, unlock, setup) as soon as DOM is ready.
@@ -1448,6 +1448,36 @@ let sKey=null,saveTimer=null,pinCb=null,catCb=null,activeGroup=null;
   const fill=()=>{['ver-s-loading','ver-s-unlock','ver-s-setup'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent='v'+VERSION;});};
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',fill);
   else fill();
+})();
+
+// Browser password managers override input font when autofilling.
+// Chrome's :-webkit-autofill ignores font CSS overrides entirely, but we can detect
+// autofill via the animation hack and re-apply typography inline (which beats the browser default).
+(function(){
+  const applyFont=(el)=>{
+    if(!el)return;
+    el.style.setProperty('font-family','var(--font)','important');
+    el.style.setProperty('font-size','var(--fs)','important');
+    el.style.setProperty('font-weight','400','important');
+    el.style.setProperty('letter-spacing','normal','important');
+  };
+  const handler=(e)=>{
+    if(!e||!e.target)return;
+    if(e.animationName==='onAutoFillStart'||e.animationName==='onAutoFillCancel'){
+      applyFont(e.target);
+    }
+  };
+  const init=()=>{
+    document.addEventListener('animationstart',handler,true);
+    // Also apply on input event in case the animation fires before JS is ready
+    document.querySelectorAll('.auth-inp').forEach(inp=>{
+      applyFont(inp);
+      inp.addEventListener('input',()=>applyFont(inp));
+      inp.addEventListener('change',()=>applyFont(inp));
+    });
+  };
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);
+  else init();
 })();
 
 // ─── CRYPTO ───
