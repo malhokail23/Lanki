@@ -1428,7 +1428,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='7.2';
+const VERSION='7.3';
 let sKey=null,saveTimer=null,pinCb=null,catCb=null,activeGroup=null;
 
 // ─── CRYPTO ───
@@ -1717,6 +1717,16 @@ function fmtP(n){return S.privacy?`<span style="filter:blur(5px);user-select:non
 function fmtSP(n,sg=false){return S.privacy?`<span style="filter:blur(5px);user-select:none">${fmtS(n,sg)}</span>`:fmtS(n,sg);}
 function uid(){return'tx_'+(typeof crypto!=='undefined'&&crypto.randomUUID?crypto.randomUUID().replace(/-/g,'').substr(0,14):Math.random().toString(36).substr(2,9)+Date.now().toString(36));}
 function toast(msg,ok=true){const el=document.getElementById('toast');if(!el)return;el.textContent=msg;el.style.background=ok?'#111':'var(--bad)';el.classList.add('show');setTimeout(()=>el.classList.remove('show'),3200);}
+// Toast with an inline action link. Stays visible longer (6 seconds) and accepts a click handler.
+function toastAction(msg,actionLabel,onAction){
+  const el=document.getElementById('toast');if(!el)return;
+  el.innerHTML=`<span>${msg}</span> <span id="toast-action" style="margin-left:10px;padding:2px 8px;background:rgba(255,255,255,.18);border-radius:4px;cursor:pointer;font-weight:500">${actionLabel}</span>`;
+  el.style.background='#111';
+  el.classList.add('show');
+  const act=document.getElementById('toast-action');
+  if(act){act.onclick=()=>{el.classList.remove('show');onAction&&onAction();};}
+  setTimeout(()=>el.classList.remove('show'),6000);
+}
 function setSS(m,type){
   const e=document.getElementById('save-st');if(!e)return;
   e.textContent=m;
@@ -4874,6 +4884,9 @@ function sweepRules(scope,previewOnly){
   return{changes,affectedYms};
 }
 
+// Last auto-sweep history — allows the user to review and undo via the toast action.
+let _lastAutoSweep=null; // {changes: [{txnId, ym, before:{mainCatId,subCatId,type,ruleApplied}, after:{...}}], ts}
+
 // Called on every rule learn/upgrade when auto-sweep is enabled.
 // Silent unless it actually changes something. Debounced to avoid thrash during bulk operations.
 let _autoSweepTimer=null;
@@ -4884,13 +4897,112 @@ function scheduleAutoRuleSweep(){
   clearTimeout(_autoSweepTimer);
   _autoSweepTimer=setTimeout(async()=>{
     _autoSweepTimer=null;
-    const{changes,affectedYms}=sweepRules(null,false);
+    // Preview first so we can record before-state
+    const{changes}=sweepRules(null,true);
     if(changes.length===0)return;
+    // Record undo history (snapshot before-state) and apply
+    const history=changes.map(c=>({
+      txnId:c.t.id,
+      ym:c.ym,
+      before:{mainCatId:c.oldMainId,subCatId:c.oldSubId,type:c.t.type,ruleApplied:!!c.t.ruleApplied},
+      after:{mainCatId:c.newMainId,subCatId:c.newSubId,ruleName:c.rule&&c.rule._rule?c.rule._rule.pattern:''},
+      desc:c.t.description,date:c.t.date,amount:c.t.amount
+    }));
+    _lastAutoSweep={changes:history,ts:Date.now()};
+    const affectedYms=new Set();
+    changes.forEach(c=>{
+      c.t.mainCatId=c.newMainId;
+      if(c.rule&&c.rule.sid&&c.rule.sid.trim())c.t.subCatId=c.rule.sid;
+      c.t.ruleApplied=true;
+      c.t.type=typeFromCat(c.newMainId,c.t.type);
+      affectedYms.add(c.ym);
+    });
     affectedYms.forEach(ym=>schedTxn(ym));
     await flushTxnQueue();await saveState();
     render();
-    toast(`Auto-sweep: ${changes.length} transaction${changes.length===1?'':'s'} re-categorized`);
+    toastAction(
+      `Auto-sweep: ${changes.length} transaction${changes.length===1?'':'s'} re-categorized`,
+      'Review',
+      ()=>openAutoSweepReview()
+    );
   },800);
+}
+
+// Review modal for the most recent auto-sweep. Shows the diff and offers Undo all.
+function openAutoSweepReview(){
+  const snap=_lastAutoSweep;
+  if(!snap||!snap.changes.length){toast('No recent auto-sweep to review',false);return;}
+  const mo=document.createElement('div');
+  mo.id='auto-sweep-review-modal';mo.className='mo active';
+  const rows=snap.changes.map((c,i)=>{
+    const oldM=c.before.mainCatId?(getMC(c.before.mainCatId)?.name||c.before.mainCatId):'<em style="color:var(--text3)">uncategorized</em>';
+    const oldS=c.before.subCatId?' / '+(getSC(c.before.subCatId)?.name||c.before.subCatId):'';
+    const newM=getMC(c.after.mainCatId)?.name||c.after.mainCatId;
+    const newS=c.after.subCatId?' / '+(getSC(c.after.subCatId)?.name||c.after.subCatId):'';
+    return`<tr>
+      <td style="padding:6px 8px;font-size:10px;color:var(--text3);white-space:nowrap">${toDD(c.date)}</td>
+      <td style="padding:6px 8px;font-size:var(--fs-xs)">${h((c.desc||'').substr(0,46))}${(c.desc||'').length>46?'…':''}</td>
+      <td style="padding:6px 8px;font-size:10px;color:var(--text3)">${oldM}${oldS}</td>
+      <td style="padding:6px 8px;font-size:10px;color:var(--ok);font-weight:500">${h(newM)}${h(newS)}</td>
+      <td style="padding:6px 8px;text-align:right;font-variant-numeric:tabular-nums;font-size:var(--fs-xs)">${fmtP(c.amount)}</td>
+    </tr>`;
+  }).join('');
+  mo.innerHTML=`
+    <div class="md" style="max-width:900px;width:96%;padding:0;max-height:92vh;display:flex;flex-direction:column">
+      <div style="padding:1.1rem 1.3rem;border-bottom:1px solid var(--border)">
+        <div class="mdtitle" style="margin-bottom:2px">Auto-sweep review</div>
+        <div style="font-size:var(--fs-xs);color:var(--text3)">These ${snap.changes.length} transaction${snap.changes.length===1?'':'s'} were automatically re-categorized after a rule change. Review them below, or undo the entire sweep if anything looks wrong.</div>
+      </div>
+      <div style="padding:1.1rem 1.3rem;flex:1;overflow-y:auto">
+        <div class="tbl-wrap" style="max-height:480px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--rsm)">
+          <table class="tx-tbl" style="min-width:auto;width:100%">
+            <thead><tr>
+              <th style="width:80px;padding:6px 8px">Date</th>
+              <th style="padding:6px 8px">Description</th>
+              <th style="padding:6px 8px;width:200px">Before</th>
+              <th style="padding:6px 8px;width:200px">After</th>
+              <th style="padding:6px 8px;width:90px;text-align:right">Amount</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </div>
+      <div style="padding:12px 1.3rem;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:space-between;background:var(--bg2);align-items:center">
+        <div style="font-size:10px;color:var(--text3)">Undo reverts every change. Individual corrections can be made by editing transactions directly.</div>
+        <div style="display:flex;gap:8px">
+          <button class="btn" onclick="closeAutoSweepReview()">Close</button>
+          <button class="btn btn-d" onclick="undoLastAutoSweep()">Undo all</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(mo);
+}
+function closeAutoSweepReview(){
+  document.getElementById('auto-sweep-review-modal')?.remove();
+}
+async function undoLastAutoSweep(){
+  const snap=_lastAutoSweep;
+  if(!snap||!snap.changes.length){closeAutoSweepReview();return;}
+  _autoSweepSuppressed=true; // don't cascade during undo
+  const affectedYms=new Set();
+  let reverted=0;
+  snap.changes.forEach(c=>{
+    const t=(S.txnCache[c.ym]||[]).find(x=>x.id===c.txnId);
+    if(!t)return;
+    t.mainCatId=c.before.mainCatId||null;
+    t.subCatId=c.before.subCatId||null;
+    t.type=c.before.type;
+    t.ruleApplied=c.before.ruleApplied;
+    affectedYms.add(c.ym);
+    reverted++;
+  });
+  affectedYms.forEach(ym=>schedTxn(ym));
+  await flushTxnQueue();await saveState();
+  _autoSweepSuppressed=false;
+  _lastAutoSweep=null; // one-shot undo
+  closeAutoSweepReview();
+  render();
+  toast(`Reverted ${reverted} auto-sweep change${reverted===1?'':'s'}`);
 }
 
 // ─── MANUAL RULE SWEEP MODAL ───
