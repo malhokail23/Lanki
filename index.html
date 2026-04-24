@@ -1428,7 +1428,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='6.6';
+const VERSION='6.7';
 let sKey=null,saveTimer=null,pinCb=null,catCb=null,activeGroup=null;
 
 // ─── CRYPTO ───
@@ -1819,8 +1819,9 @@ function findTxnById(id){
   return null;
 }
 // Find candidate original expenses for a given refund transaction.
-// Candidates: same account, outflow, within 90 days before the refund, not already refund-linked.
-// Sorted by closest amount match first.
+// Candidates: any outflow within 90 days before the refund, not already refund-linked.
+// Cross-account matching is allowed (reimbursements often land on a different account than the original expense).
+// Sort priority: same-account first, then exact amount match, then closest amount, then most recent.
 function findRefundCandidates(refund){
   if(!refund)return[];
   const refundDate=new Date(refund.date);
@@ -1829,15 +1830,17 @@ function findRefundCandidates(refund){
   const candidates=allTxnsList.filter(t=>{
     if(t.id===refund.id)return false;
     if(txDir(t)!=='out')return false;
-    if(t.accountId!==refund.accountId)return false;
     if(t.refundedBy||t.refundedTxnId)return false;
     const tDate=new Date(t.date);
     if(tDate>refundDate)return false; // expense must be before refund
     if(tDate<ninetyDaysAgo)return false;
     return true;
   });
-  // Sort: exact amount match first, then closest amount, then most recent
+  // Sort: same-account preference, then closest amount, then most recent
   return candidates.sort((a,b)=>{
+    const aSame=a.accountId===refund.accountId?0:1;
+    const bSame=b.accountId===refund.accountId?0:1;
+    if(aSame!==bSame)return aSame-bSame;
     const ad=Math.abs(a.amount-refund.amount);
     const bd=Math.abs(b.amount-refund.amount);
     if(ad!==bd)return ad-bd;
@@ -3548,23 +3551,24 @@ let _refundLinkCtx=null;
 function openRefundLinkModal(refundId,ym){
   const refund=(S.txnCache[ym]||[]).find(x=>x.id===refundId);
   if(!refund){toast('Transaction not found',false);return;}
-  if(refund.type!=='income'||refund.subCatId!=='sub_refund'){toast('Only transactions categorized as Income → Refund can be linked',false);return;}
+  if(refund.type!=='income'||(refund.subCatId!=='sub_refund'&&refund.subCatId!=='sub_reimbursement')){toast('Only transactions categorized as Income → Refund or Income → Reimbursement can be linked',false);return;}
   _refundLinkCtx={refundId,ym};
   const candidates=findRefundCandidates(refund);
   const acc=S.accounts.find(a=>a.id===refund.accountId);
   let body='';
   if(candidates.length===0){
     body=`<div style="padding:14px;background:var(--bg2);border-radius:var(--rsm);font-size:var(--fs-xs);color:var(--text3);text-align:center">
-      No unlinked expenses found on this account within 90 days before the refund. Refund linking requires the original expense to be recorded on the same account.
+      No unlinked expenses found within 90 days before this transaction. The original expense must be on record in Lanki to link.
     </div>`;
   } else {
-    // Match quality indicator per candidate
-    body=`<div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:8px">Candidates from same account within 90 days, closest amount first.</div>
+    const isReimb=refund.subCatId==='sub_reimbursement';
+    body=`<div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:8px">Candidates within 90 days, sorted by same account first then closest amount.${isReimb?' Cross-account matches are included since reimbursements often land on a different account.':''}</div>
     <div class="tbl-wrap" style="max-height:340px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--rsm)">
       <table class="tx-tbl" style="min-width:auto">
         <thead><tr>
           <th style="width:90px">Date</th>
           <th>Description</th>
+          <th style="width:110px">Account</th>
           <th style="text-align:right;width:120px">Amount</th>
           <th style="width:70px;text-align:center">Match</th>
           <th style="width:70px"></th>
@@ -3576,9 +3580,12 @@ function openRefundLinkModal(refundId,ym){
           const matchLbl=diff<0.01?'Exact':pct<2?'±'+pct.toFixed(1)+'%':pct<10?'±'+pct.toFixed(0)+'%':'Loose';
           const matchCol=diff<0.01?'var(--ok)':pct<2?'var(--ok)':pct<10?'var(--warn)':'var(--text3)';
           const cYm=c.date.substr(0,7);
+          const cAcc=S.accounts.find(a=>a.id===c.accountId);
+          const sameAcc=c.accountId===refund.accountId;
           return`<tr>
             <td style="font-size:var(--fs-xs);color:var(--text3)">${toDD(c.date)}</td>
             <td style="font-size:var(--fs-xs)">${h(c.description||'')}</td>
+            <td style="font-size:10px;color:${sameAcc?'var(--text2)':'var(--text3)'}">${h(cAcc?.name||'—')}${sameAcc?'':' <span style="font-size:9px;opacity:.7">(other)</span>'}</td>
             <td style="text-align:right;font-weight:500;font-variant-numeric:tabular-nums;font-size:var(--fs-xs)">${fmtP(c.amount)}</td>
             <td style="text-align:center;font-size:10px;color:${matchCol};font-weight:600">${matchLbl}</td>
             <td><button class="btn btn-xs btn-p" onclick="confirmRefundLink('${c.id}','${cYm}')">Link</button></td>
@@ -3590,16 +3597,17 @@ function openRefundLinkModal(refundId,ym){
   }
   const mo=document.createElement('div');
   mo.id='refund-link-modal';mo.className='mo active';
+  const isReimb=refund.subCatId==='sub_reimbursement';
   mo.innerHTML=`
-    <div class="md" style="max-width:720px;width:94%;padding:0">
+    <div class="md" style="max-width:780px;width:94%;padding:0">
       <div style="padding:1.1rem 1.3rem;border-bottom:1px solid var(--border)">
-        <div class="mdtitle" style="margin-bottom:2px">↔ Link refund to original expense</div>
-        <div style="font-size:var(--fs-xs);color:var(--text3)">Pair this refund with the expense it refunded. Both transactions stay in the ledger but are excluded from Income and Expense totals so your cash flow reports stay accurate.</div>
+        <div class="mdtitle" style="margin-bottom:2px">↔ Link ${isReimb?'reimbursement':'refund'} to original expense</div>
+        <div style="font-size:var(--fs-xs);color:var(--text3)">Pair this ${isReimb?'reimbursement':'refund'} with the expense it offsets. Both transactions stay in the ledger but are excluded from Income and Expense totals so your cash flow reports stay accurate.</div>
       </div>
       <div style="padding:1.1rem 1.3rem">
         <!-- Refund snapshot -->
         <div style="padding:10px 12px;background:color-mix(in srgb,var(--ok) 6%,transparent);border-radius:var(--rsm);margin-bottom:14px;font-size:var(--fs-xs)">
-          <div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ok);margin-bottom:4px">Refund transaction</div>
+          <div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ok);margin-bottom:4px">${isReimb?'Reimbursement':'Refund'} transaction</div>
           <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px">
             <div style="font-weight:500">${h(refund.description||'')}</div>
             <div style="font-weight:500;font-variant-numeric:tabular-nums;color:var(--ok)">+${fmtP(refund.amount)}</div>
@@ -8995,14 +9003,15 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps){
         staffTag=`<span style="font-size:10px;background:color-mix(in srgb,var(--midnight) 10%,transparent);color:var(--midnight);border-radius:3px;padding:1px 5px;margin-left:4px;font-weight:500" title="Household staff: ${h(stm.name)}">👤 ${h(firstName)}</span>`;
       }
     }
-    // Refund link tag: badge on both sides of a linked pair
+    // Refund/Reimbursement link tag: badge on both sides of a linked pair
     let refundTag='';
     if(t.refundedTxnId){
-      // This transaction is the refund pointing at the original expense
-      refundTag=`<span style="font-size:10px;background:color-mix(in srgb, var(--ok) 14%, transparent);color:var(--ok);border-radius:3px;padding:1px 5px;margin-left:4px;font-weight:500;cursor:pointer" title="Refund linked — click to unlink" onclick="event.stopPropagation();unlinkRefund('${t.id}','${ym}')">↔ Refund linked</span>`;
+      // This transaction is the inflow pointing at the original expense
+      const lbl=t.subCatId==='sub_reimbursement'?'Reimbursement linked':'Refund linked';
+      refundTag=`<span style="font-size:10px;background:color-mix(in srgb, var(--ok) 14%, transparent);color:var(--ok);border-radius:3px;padding:1px 5px;margin-left:4px;font-weight:500;cursor:pointer" title="${lbl} — click to unlink" onclick="event.stopPropagation();unlinkRefund('${t.id}','${ym}')">↔ ${lbl}</span>`;
     } else if(t.refundedBy){
-      // This transaction is the original expense that got refunded
-      refundTag=`<span style="font-size:10px;background:color-mix(in srgb, var(--ok) 14%, transparent);color:var(--ok);border-radius:3px;padding:1px 5px;margin-left:4px;font-weight:500;cursor:pointer" title="Refunded — click to unlink" onclick="event.stopPropagation();unlinkRefund('${t.id}','${ym}')">↔ Refunded</span>`;
+      // This transaction is the original expense that got refunded/reimbursed
+      refundTag=`<span style="font-size:10px;background:color-mix(in srgb, var(--ok) 14%, transparent);color:var(--ok);border-radius:3px;padding:1px 5px;margin-left:4px;font-weight:500;cursor:pointer" title="Offset by refund/reimbursement — click to unlink" onclick="event.stopPropagation();unlinkRefund('${t.id}','${ym}')">↔ Offset</span>`;
     }
     const selCb=`<td style="padding:8px 6px;width:32px">${BulkMode?`<input type="checkbox" id="cb-${t.id}" class="tx-sel-cb" data-id="${t.id}" ${BulkSelected.has(t.id)?'checked':''} onclick="event.stopPropagation();toggleTxSel('${t.id}')" style="cursor:pointer;width:15px;height:15px">`:''}</td>`;
 
@@ -9045,7 +9054,7 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps){
         <button class="btn btn-xs" onclick="openCP('${t.id}','${ym}','${t.mainCatId||''}','${t.subCatId||''}')">Cat</button>
         ${!t.isSub?`<button class="btn btn-xs" onclick="mkSub('${t.id}','${ym}')">Sub</button>`:''}
         <button class="btn btn-xs" onclick="openAiCategorize('${t.id}','${ym}')" title="AI-assisted categorization — add context for a suggested Type, Category, and Sub-Category" style="padding:2px 6px"><span style="color:var(--electric);font-weight:600">✨</span></button>
-        ${(t.type==='income'&&t.subCatId==='sub_refund'&&!isRefundLinked(t))?`<button class="btn btn-xs" onclick="openRefundLinkModal('${t.id}','${ym}')" title="Link this refund to its original expense — excludes the pair from Income and Expense totals" style="padding:2px 6px"><span style="color:var(--ok);font-weight:600">↔</span></button>`:''}
+        ${(t.type==='income'&&(t.subCatId==='sub_refund'||t.subCatId==='sub_reimbursement')&&!isRefundLinked(t))?`<button class="btn btn-xs" onclick="openRefundLinkModal('${t.id}','${ym}')" title="Link this refund/reimbursement to its original expense — excludes the pair from Income and Expense totals" style="padding:2px 6px"><span style="color:var(--ok);font-weight:600">↔</span></button>`:''}
         <button class="btn btn-xs btn-d" onclick="delTxn('${t.id}','${ym}')">&#10005;</button>
       </td>
       ${reconTd}
