@@ -122,6 +122,10 @@ body{font-family:var(--font);background:var(--feather);color:var(--text);min-hei
   font-size:10px;letter-spacing:.2em;text-transform:uppercase;
   color:var(--text3);font-weight:400;margin-top:2px;
 }
+.auth-version{
+  font-size:9px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--text3);font-weight:500;margin-top:6px;opacity:.55;
+}
 .auth-subtitle{
   font-size:13px;color:var(--text3);
   text-align:center;margin-bottom:1.75rem;
@@ -140,13 +144,18 @@ body{font-family:var(--font);background:var(--feather);color:var(--text);min-hei
 }
 .auth-inp:focus{border-color:var(--midnight);box-shadow:0 0 0 3px rgba(2,23,81,.08);}
 .auth-inp::placeholder{color:var(--text3)}
-/* Suppress browser autofill background tint */
+/* Suppress browser autofill background tint AND force consistent typography */
 .auth-inp:-webkit-autofill,
 .auth-inp:-webkit-autofill:hover,
-.auth-inp:-webkit-autofill:focus{
+.auth-inp:-webkit-autofill:focus,
+.auth-inp:autofill{
   -webkit-box-shadow:0 0 0 40px var(--bg) inset !important;
   -webkit-text-fill-color:var(--text) !important;
   border-color:var(--border) !important;
+  font-family:var(--font) !important;
+  font-size:var(--fs) !important;
+  font-weight:400 !important;
+  letter-spacing:normal !important;
 }
 .pw-wrap{position:relative;margin-bottom:8px}
 .pw-toggle{
@@ -999,6 +1008,7 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overfl
     </svg>
     <div class="auth-wordmark">lanki</div>
     <div class="auth-tagline">Intelligence for the family that builds.</div>
+    <div class="auth-version" id="ver-s-loading"></div>
   </div>
   <div class="auth-spin"></div>
   <div class="auth-ltxt" id="load-msg">Connecting to vault…</div>
@@ -1014,6 +1024,7 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overfl
     </svg>
     <div class="auth-wordmark">lanki</div>
     <div class="auth-tagline">Intelligence for the family that builds.</div>
+    <div class="auth-version" id="ver-s-setup"></div>
   </div>
   <div class="auth-subtitle">Create your secure vault</div>
   <div class="auth-form">
@@ -1040,6 +1051,7 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overfl
     </svg>
     <div class="auth-wordmark">lanki</div>
     <div class="auth-tagline">Intelligence for the family that builds.</div>
+    <div class="auth-version" id="ver-s-unlock"></div>
   </div>
   <div class="auth-form">
     <div id="ul-id-wrap" style="margin-bottom:8px">
@@ -1428,8 +1440,15 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='7.3';
+const VERSION='7.4';
 let sKey=null,saveTimer=null,pinCb=null,catCb=null,activeGroup=null;
+
+// Populate version labels on all auth screens (login, unlock, setup) as soon as DOM is ready.
+(function(){
+  const fill=()=>{['ver-s-loading','ver-s-unlock','ver-s-setup'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent='v'+VERSION;});};
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',fill);
+  else fill();
+})();
 
 // ─── CRYPTO ───
 function h2b(h){const b=new Uint8Array(h.length/2);for(let i=0;i<h.length;i+=2)b[i/2]=parseInt(h.substr(i,2),16);return b;}
