@@ -615,6 +615,13 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overfl
 .acc-section-row:hover td{background:var(--bg2)!important}
 .acc-section-label{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em}
 .acc-section-count{font-weight:500;color:var(--text3);opacity:.7;margin-left:2px}
+/* Reimbursement settlement cards: accordion pattern */
+.reimb-settlement{border-bottom:1px solid var(--border)}
+.reimb-settlement:last-child{border-bottom:none}
+.reimb-settlement .reimb-settlement-body{display:none}
+.reimb-settlement:not(.collapsed) .reimb-settlement-body{display:block}
+.reimb-settlement:not(.collapsed) .reimb-chevron{transform:rotate(90deg)}
+.reimb-settlement-head:hover{background:var(--bg2)}
 
 /* ── PROGRESS ─────────────────────────────────────────── */
 .pb{height:5px;background:var(--bg3);border-radius:3px;overflow:hidden;margin-top:4px}
@@ -1381,7 +1388,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='5.1';
+const VERSION='5.2';
 let sKey=null,saveTimer=null,pinCb=null,catCb=null,activeGroup=null;
 
 // ─── CRYPTO ───
@@ -8249,6 +8256,46 @@ async function dismissSubmission(id){
 
 async function checkReimbursementMatch(importedTxns){
   await loadSubmissions();
+  // First: check if any imported external_transfer duplicates a recent manual settlement.
+  // This happens when the user marks as paid before the bank statement imports, then the statement
+  // finally arrives — the external_transfer would double-count without this guard.
+  const paidGroups={};
+  (_submissions||[]).filter(s=>s.status==='paid'&&s.reimbursement_group_id&&s.paid_at).forEach(s=>{
+    const gid=s.reimbursement_group_id;
+    if(!paidGroups[gid])paidGroups[gid]={person:s.submitter_name,paidDate:s.paid_at.substr(0,10),total:0,payment_txn_id:s.payment_txn_id};
+    paidGroups[gid].total=Math.round((paidGroups[gid].total+parseFloat(s.amount))*100)/100;
+  });
+  const settlementTotals=Object.values(paidGroups).filter(g=>!g.payment_txn_id); // only groups without a linked txn can be duplicate-targets
+  const dupsToRemove=[];
+  for(const t of importedTxns){
+    if(t.type!=='external_transfer')continue;
+    for(const g of settlementTotals){
+      if(Math.abs(t.amount-g.total)>=0.01)continue;
+      // Same-person match (best effort — description contains person name)
+      const desc=(t.description||'').toLowerCase();
+      if(!desc.includes(g.person.toLowerCase().split(' ')[0]))continue;
+      // Payment date within 14 days of settlement date (real bank posting lag)
+      const dayDiff=Math.abs((new Date(t.date)-new Date(g.paidDate))/(1000*60*60*24));
+      if(dayDiff>14)continue;
+      dupsToRemove.push({txnId:t.id,person:g.person,total:g.total});
+      break;
+    }
+  }
+  // Silently delete duplicate external_transfers from txnCache
+  if(dupsToRemove.length){
+    const affectedYms=new Set();
+    const dupIds=new Set(dupsToRemove.map(d=>d.txnId));
+    Object.keys(S.txnCache||{}).forEach(ym=>{
+      const before=S.txnCache[ym].length;
+      S.txnCache[ym]=S.txnCache[ym].filter(t=>!dupIds.has(t.id));
+      if(S.txnCache[ym].length!==before){affectedYms.add(ym);schedTxn(ym);}
+    });
+    await flushTxnQueue();
+    const names=[...new Set(dupsToRemove.map(d=>d.person))].join(', ');
+    toast(`Auto-removed ${dupsToRemove.length} duplicate transfer${dupsToRemove.length===1?'':'s'} to ${names} — already recorded as settled reimbursements`);
+  }
+
+  // Second: run the existing auto-match flow for still-approved items
   const approved=_submissions.filter(s=>s.status==='approved');
   if(!approved.length)return;
   const bySubmitter={};
@@ -8258,7 +8305,7 @@ async function checkReimbursementMatch(importedTxns){
   });
   for(const [name,subs] of Object.entries(bySubmitter)){
     const total=Math.round(subs.reduce((s,x)=>s+parseFloat(x.amount),0)*100)/100;
-    const matches=importedTxns.filter(t=>t.type==='external_transfer'&&Math.abs(t.amount-total)<0.01);
+    const matches=importedTxns.filter(t=>t.type==='external_transfer'&&Math.abs(t.amount-total)<0.01&&!dupsToRemove.some(d=>d.txnId===t.id));
     if(matches.length===1){
       await markReimbursementPaid(name,subs,matches[0],total);
     }else if(matches.length>1){
@@ -8302,19 +8349,257 @@ async function markReimbursementPaid(name,subs,paymentTxn,total){
   });
 }
 
+// ─── MANUAL REIMBURSEMENT SETTLEMENT ───
+// Opens a modal to settle a person's approved items proactively (before the bank statement imports).
+// User picks the payment date, account, and optionally links an existing external_transfer.
+function openSettlementModal(name){
+  const approved=_submissions.filter(s=>s.status==='approved'&&s.submitter_name===name);
+  if(!approved.length){toast('Nothing to settle for '+name,false);return;}
+  const total=Math.round(approved.reduce((s,x)=>s+parseFloat(x.amount),0)*100)/100;
+
+  // Category breakdown preview
+  const catTotals={};
+  approved.forEach(s=>{
+    const rc=REIMB_CATS.find(r=>r.hint===s.category_hint)||REIMB_CATS[REIMB_CATS.length-1];
+    const key=rc.label;
+    if(!catTotals[key])catTotals[key]=0;
+    catTotals[key]=Math.round((catTotals[key]+parseFloat(s.amount))*100)/100;
+  });
+  const breakdownHtml=Object.entries(catTotals)
+    .sort((a,b)=>b[1]-a[1])
+    .map(([label,amt])=>`<div class="fg jb" style="padding:4px 0;font-size:var(--fs-xs)"><span style="color:var(--text2)">${h(label)}</span><span style="font-weight:600;font-variant-numeric:tabular-nums">${fmtP(amt)}</span></div>`)
+    .join('');
+
+  // Candidate bank transactions — external transfers with EXACT amount match in the last 60 days
+  const today=new Date();
+  const cutoff=new Date();cutoff.setDate(today.getDate()-60);
+  const candidates=[];
+  Object.entries(S.txnCache||{}).forEach(([ym,arr])=>{
+    (arr||[]).forEach(t=>{
+      if(t.type!=='external_transfer')return;
+      if(Math.abs(t.amount-total)>=0.01)return; // exact match, no tolerance
+      if(t.reimbGroupId)return; // already part of a settlement
+      const d=new Date(t.date);
+      if(d<cutoff||d>today)return;
+      candidates.push({id:t.id,ym,date:t.date,description:t.description,accountId:t.accountId});
+    });
+  });
+  candidates.sort((a,b)=>b.date.localeCompare(a.date));
+
+  // Account options — all non-archived bank accounts
+  const bankAccs=(S.accounts||[]).filter(a=>BANK_ACC_TYPES.has(a.type)&&!a.archived);
+
+  const todayStr=new Date().toISOString().substr(0,10);
+  document.getElementById('settle-modal')?.remove();
+  const mo=document.createElement('div');
+  mo.id='settle-modal';
+  mo.className='mo active';
+  mo.innerHTML=`
+    <div class="md" style="max-width:620px;width:94%;max-height:88vh;display:flex;flex-direction:column;padding:0">
+      <div style="padding:1.25rem 1.4rem;border-bottom:1px solid var(--border)">
+        <div class="mdtitle" style="margin-bottom:2px">Mark as paid</div>
+        <div style="font-size:var(--fs-xs);color:var(--text3);line-height:1.5">Settle ${approved.length} approved item${approved.length===1?'':'s'} for ${h(name)} · <span style="font-weight:600;color:var(--text1);font-variant-numeric:tabular-nums">${fmtP(total)}</span></div>
+      </div>
+      <div style="flex:1;overflow-y:auto;min-height:0;padding:1.25rem 1.4rem">
+        <div class="fr" style="margin-bottom:14px">
+          <div>
+            <label class="lbl">Payment date</label>
+            <div class="date-inp-wrap"><input type="text" id="st-date" class="date-inp" value="${toDD(todayStr)}" maxlength="10"><button type="button" class="cal-btn" onclick="openCal('st-date')" title="Pick date">📅</button></div>
+          </div>
+          <div>
+            <label class="lbl">Paid from account</label>
+            <select id="st-account">
+              ${bankAccs.map(a=>`<option value="${a.id}">${h(a.name)}</option>`).join('')}
+              <option value="">Cash / Other</option>
+            </select>
+          </div>
+        </div>
+        ${candidates.length?`
+        <div style="margin-bottom:14px">
+          <label class="lbl">Link to existing bank transaction (optional)</label>
+          <select id="st-linked" onchange="onSettlementLinkedChange()">
+            <option value="">— None · create fresh expense entries —</option>
+            ${candidates.map(c=>{
+              const acc=S.accounts.find(a=>a.id===c.accountId);
+              return`<option value="${c.id}" data-account="${c.accountId||''}" data-ym="${c.ym}">${toDD(c.date)} · ${h(c.description||'Transfer')} · ${acc?h(acc.name):'—'}</option>`;
+            }).join('')}
+          </select>
+          <div style="font-size:var(--fs-xxs);color:var(--text3);margin-top:4px;line-height:1.5">If linked, the bank transfer will be replaced by the itemized expenses on your chosen payment date.</div>
+        </div>`:`
+        <div style="margin-bottom:14px;padding:10px 12px;background:var(--bg2);border-radius:var(--rsm);font-size:var(--fs-xxs);color:var(--text3);line-height:1.5">
+          No matching bank transfer found in the last 60 days. Itemized expenses will be created directly. When the bank statement imports later, the matching external transfer will be auto-removed to avoid double counting.
+        </div>`}
+        <div style="margin-bottom:14px">
+          <label class="lbl">Notes (optional)</label>
+          <input type="text" id="st-notes" placeholder="e.g. SARIE transfer" maxlength="120">
+        </div>
+        <div style="background:var(--bg2);border-radius:var(--rsm);padding:12px 14px">
+          <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Category breakdown preview</div>
+          ${breakdownHtml}
+          <div class="fg jb" style="padding:8px 0 0;border-top:1px solid var(--border);margin-top:6px;font-size:var(--fs-sm)"><span style="font-weight:600">Total</span><span style="font-weight:700;font-variant-numeric:tabular-nums">${fmtP(total)}</span></div>
+          <div style="font-size:var(--fs-xxs);color:var(--text3);margin-top:8px;line-height:1.5">To change a category, close this modal and click the item on the approved card to edit it.</div>
+        </div>
+      </div>
+      <div style="padding:12px 1.4rem;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;background:var(--bg2);flex-shrink:0">
+        <button class="btn" onclick="document.getElementById('settle-modal').remove()">Cancel</button>
+        <button class="btn btn-p" onclick='confirmSettlement(${JSON.stringify(name)})'>Confirm payment</button>
+      </div>
+    </div>`;
+  document.body.appendChild(mo);
+  // Auto-select account of the first linked candidate if available
+  if(candidates.length){
+    const firstAcc=candidates[0].accountId;
+    const accSel=document.getElementById('st-account');
+    if(firstAcc&&accSel&&bankAccs.some(a=>a.id===firstAcc)){accSel.value=firstAcc;}
+  }
+}
+// Linked txn dropdown changed — auto-update account selector to match
+function onSettlementLinkedChange(){
+  const sel=document.getElementById('st-linked');
+  const opt=sel.options[sel.selectedIndex];
+  const accId=opt?.dataset?.account;
+  if(accId){
+    const accSel=document.getElementById('st-account');
+    if(accSel&&[...accSel.options].some(o=>o.value===accId))accSel.value=accId;
+  }
+}
+// Confirm and execute the settlement.
+async function confirmSettlement(name){
+  const dateVal=document.getElementById('st-date').value.trim();
+  const paidDate=fromDD(dateVal);
+  if(!paidDate){toast('Enter a valid payment date',false);return;}
+  const accountId=document.getElementById('st-account').value||null;
+  const linkedTxnId=document.getElementById('st-linked')?.value||null;
+  const notes=document.getElementById('st-notes').value.trim();
+  const approved=_submissions.filter(s=>s.status==='approved'&&s.submitter_name===name);
+  if(!approved.length){toast('Nothing to settle',false);return;}
+  const total=Math.round(approved.reduce((s,x)=>s+parseFloat(x.amount),0)*100)/100;
+
+  // If linking to an existing txn, confirm via PIN since it's destructive
+  const execute=async()=>{
+    const groupId='reimb_'+Date.now();
+    const paidAt=new Date().toISOString();
+    const ym=paidDate.substr(0,7);
+
+    // Patch Supabase submissions to paid
+    for(const s of approved){
+      await fetch(`${SB}/rest/v1/pending_submissions?id=eq.${s.id}`,{
+        method:'PATCH',
+        headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json'},
+        body:JSON.stringify({status:'paid',paid_at:paidAt,payment_txn_id:linkedTxnId||null,reimbursement_group_id:groupId})
+      });
+    }
+
+    // Remove linked external_transfer (if any) — its balance impact gets replaced by itemized expenses
+    if(linkedTxnId){
+      Object.keys(S.txnCache||{}).forEach(ymk=>{
+        const before=S.txnCache[ymk].length;
+        S.txnCache[ymk]=S.txnCache[ymk].filter(t=>t.id!==linkedTxnId);
+        if(S.txnCache[ymk].length!==before)schedTxn(ymk);
+      });
+      S.matchedPairs=(S.matchedPairs||[]).filter(p=>p.outId!==linkedTxnId&&p.inId!==linkedTxnId);
+    }
+
+    // Create one expense transaction per approved item, all dated paidDate
+    if(!S.txnCache[ym])S.txnCache[ym]=[];
+    approved.forEach(s=>{
+      const rc=REIMB_CATS.find(r=>r.hint===s.category_hint)||REIMB_CATS[REIMB_CATS.length-1];
+      S.txnCache[ym].push({
+        id:uid(),date:paidDate,description:s.description,raw_description:s.description,
+        amount:parseFloat(s.amount),type:'expense',direction:'out',
+        mainCatId:rc.mid,subCatId:rc.sid,
+        accountId:accountId||null,debtId:null,
+        notes:`Reimbursement to ${name} — part of SAR ${total.toFixed(2)}${notes?' · '+notes:''}`,
+        flagged:false,ruleApplied:false,reimbGroupId:groupId
+      });
+    });
+    S.txnCache[ym].sort((a,b)=>a.date.localeCompare(b.date));
+    schedTxn(ym);
+    await flushTxnQueue();
+    await saveState();
+    await loadSubmissions();
+
+    document.getElementById('settle-modal')?.remove();
+    toast(`Settled ${approved.length} item${approved.length===1?'':'s'} · ${fmtP(total)} paid to ${name}`);
+    render();
+  };
+
+  if(linkedTxnId){
+    reqPin('Confirm settlement with bank transfer',`This will remove the linked bank transfer and replace it with ${approved.length} itemized expense${approved.length===1?'':'s'} on ${toDD(paidDate)}. Continue?`,execute);
+  }else{
+    execute();
+  }
+}
+
+// Unsettle — rollback a settlement. Restores submissions to approved status and removes the created expense transactions.
+async function unsettleReimbursement(groupId){
+  const items=_submissions.filter(s=>s.reimbursement_group_id===groupId);
+  if(!items.length){toast('Settlement not found',false);return;}
+  const total=items.reduce((s,x)=>s+parseFloat(x.amount),0);
+  if(!confirm(`Unsettle this payment? ${items.length} item${items.length===1?'':'s'} totaling ${fmtP(total)} will return to pending payment.\n\nThe itemized expense transactions will be removed. The original bank transfer (if it was linked) will NOT be restored — you'll need to re-import or add manually.`))return;
+  // Revert submissions to approved
+  for(const s of items){
+    await fetch(`${SB}/rest/v1/pending_submissions?id=eq.${s.id}`,{
+      method:'PATCH',
+      headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json'},
+      body:JSON.stringify({status:'approved',paid_at:null,payment_txn_id:null,reimbursement_group_id:null})
+    });
+  }
+  // Remove the itemized expense transactions
+  const affectedYms=new Set();
+  Object.keys(S.txnCache||{}).forEach(ym=>{
+    const before=S.txnCache[ym].length;
+    S.txnCache[ym]=S.txnCache[ym].filter(t=>t.reimbGroupId!==groupId);
+    if(S.txnCache[ym].length!==before)affectedYms.add(ym);
+  });
+  affectedYms.forEach(ym=>schedTxn(ym));
+  await flushTxnQueue();
+  await saveState();
+  await loadSubmissions();
+  toast(`Unsettled · ${items.length} item${items.length===1?'':'s'} returned to pending`);
+  render();
+}
+
+// Toggle expansion of items list in approved/settlement cards
+function toggleReimbCard(cardId){
+  const el=document.getElementById(cardId);
+  if(!el)return;
+  el.classList.toggle('collapsed');
+}
+
 async function rReimbursements(){
   await loadSubmissions();
   const all=_submissions.filter(s=>s.status!=='dismissed');
   const pending=all.filter(s=>s.status==='pending');
   const approved=all.filter(s=>s.status==='approved');
-  const paid=_submissions.filter(s=>s.status==='paid').slice(0,30);
+  const paid=_submissions.filter(s=>s.status==='paid');
+
+  // --- APPROVED GROUPED BY PERSON ---
   const approvedByName={};
   approved.forEach(s=>{
     if(!approvedByName[s.submitter_name])approvedByName[s.submitter_name]={items:[],total:0};
     approvedByName[s.submitter_name].items.push(s);
     approvedByName[s.submitter_name].total=Math.round((approvedByName[s.submitter_name].total+parseFloat(s.amount))*100)/100;
   });
-  const grandTotal=Object.values(approvedByName).reduce((s,v)=>s+v.total,0);
+  // Sort people by total descending — highest pending first
+  const approvedEntries=Object.entries(approvedByName).sort((a,b)=>b[1].total-a[1].total);
+  const grandTotal=approvedEntries.reduce((s,[,v])=>s+v.total,0);
+
+  // --- PAID GROUPED BY SETTLEMENT (reimbursement_group_id) ---
+  const settlementGroups={};
+  paid.forEach(s=>{
+    const gid=s.reimbursement_group_id||'legacy_'+s.id;
+    if(!settlementGroups[gid])settlementGroups[gid]={gid,person:s.submitter_name,paidDate:s.paid_at?s.paid_at.substr(0,10):'',items:[],total:0,legacy:!s.reimbursement_group_id};
+    settlementGroups[gid].items.push(s);
+    settlementGroups[gid].total=Math.round((settlementGroups[gid].total+parseFloat(s.amount))*100)/100;
+    // Keep the most complete paidDate (could be multiple if data is inconsistent)
+    if(s.paid_at&&!settlementGroups[gid].paidDate)settlementGroups[gid].paidDate=s.paid_at.substr(0,10);
+  });
+  const allSettlements=Object.values(settlementGroups).sort((a,b)=>(b.paidDate||'').localeCompare(a.paidDate||''));
+  const recentSettlements=allSettlements.slice(0,3);
+  const olderSettlementsCount=Math.max(0,allSettlements.length-3);
+
+  // --- PENDING REVIEW TABLE ---
   const pendRows=pending.length?pending.map(s=>`
     <tr>
       <td style="color:var(--text3);font-size:var(--fs-xs);white-space:nowrap">${s.submitted_at?s.submitted_at.substr(0,10):''}</td>
@@ -8328,41 +8613,93 @@ async function rReimbursements(){
         <button class="btn btn-xs btn-d" onclick="dismissSubmission('${s.id}')">Dismiss</button>
       </td>
     </tr>`).join(''):`<tr><td colspan="7" class="empty">No pending submissions</td></tr>`;
-  const approvedCards=Object.entries(approvedByName).length?
-    Object.entries(approvedByName).map(([name,{items,total}])=>`
-    <div class="card card-bordered" style="margin-bottom:.75rem">
-      <div class="fg jb" style="flex-wrap:wrap;gap:8px;margin-bottom:10px">
-        <div>
-          <div style="font-size:15px;font-weight:600">${h(name)}</div>
-          <div style="font-size:var(--fs-xs);color:var(--text3)">${items.length} item${items.length!==1?'s':''} approved · pending payment</div>
+
+  // --- APPROVED PERSON CARDS (collapsible after 5 items) ---
+  const approvedCards=approvedEntries.length
+    ?approvedEntries.map(([name,{items,total}])=>{
+      const cardId='approved-card-'+name.replace(/\W+/g,'-');
+      const collapseAfter=5;
+      const collapsible=items.length>collapseAfter;
+      // Build per-item rows
+      const allRows=items.map(s=>{
+        const catLabel=REIMB_CATS.find(r=>r.hint===s.category_hint)?.label||'';
+        return`<div class="fg jb reimb-item" style="font-size:var(--fs-xs);padding:7px 0;border-bottom:1px solid var(--border);gap:10px">
+          <span style="color:var(--text3);white-space:nowrap;min-width:90px">${s.submitted_at?s.submitted_at.substr(0,10):''}</span>
+          <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(s.description)}</span>
+          <span style="color:var(--text3);font-size:11px;white-space:nowrap">${h(catLabel)}</span>
+          <span style="font-weight:500;white-space:nowrap;font-variant-numeric:tabular-nums;min-width:80px;text-align:right">${fmtP(s.amount)}</span>
+        </div>`;
+      }).join('');
+      return`<div class="card card-bordered" style="margin-bottom:.75rem" id="${cardId}">
+        <div class="fg jb" style="flex-wrap:wrap;gap:12px;margin-bottom:10px;align-items:flex-start">
+          <div style="min-width:0;flex:1">
+            <div style="font-size:15px;font-weight:600">${h(name)}</div>
+            <div style="font-size:var(--fs-xs);color:var(--text3)">${items.length} item${items.length!==1?'s':''} approved · pending payment</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">
+            <div style="font-size:22px;font-weight:700;color:var(--warn);font-variant-numeric:tabular-nums">${fmtP(total)}</div>
+            <button class="btn btn-sm btn-p" onclick='openSettlementModal(${JSON.stringify(name)})'>Mark as paid</button>
+          </div>
         </div>
-        <div style="font-size:22px;font-weight:700;color:var(--warn)">${fmtP(total)}</div>
-      </div>
-      ${items.map(s=>`<div class="fg jb" style="font-size:var(--fs-xs);padding:5px 0;border-bottom:1px solid var(--bg2)">
-        <span style="color:var(--text3);white-space:nowrap;margin-right:8px">${s.submitted_at?s.submitted_at.substr(0,10):''}</span>
-        <span style="flex:1">${h(s.description)}</span>
-        <span style="margin-left:8px;color:var(--text3);font-size:11px">${REIMB_CATS.find(r=>r.hint===s.category_hint)?.label||''}</span>
-        <span style="margin-left:8px;font-weight:500;white-space:nowrap">${fmtP(s.amount)}</span>
-      </div>`).join('')}
-      <div style="font-size:var(--fs-xxs);color:var(--info);margin-top:8px;padding:6px 10px;background:#EFF6FF;border-radius:var(--rsm)">
-        Auto-matches when SAR ${total.toFixed(2)} is imported as an external transfer to ${h(name)}.
-      </div>
-    </div>`).join('')
+        <div class="reimb-items-wrap ${collapsible?'has-more':''}" style="max-height:${collapsible?'280px':'none'};overflow-y:${collapsible?'auto':'visible'}">
+          ${allRows}
+        </div>
+        ${collapsible?`<div style="font-size:10px;color:var(--text3);margin-top:6px;text-align:center">Scroll to see all ${items.length} items</div>`:''}
+      </div>`;
+    }).join('')
     :'<div class="card"><div class="empty">No approved submissions awaiting payment</div></div>';
-  const paidRows=paid.length?paid.map(s=>`
-    <tr>
-      <td style="color:var(--text3);font-size:var(--fs-xs);white-space:nowrap">${s.paid_at?s.paid_at.substr(0,10):''}</td>
-      <td style="font-size:var(--fs-xs);font-weight:500">${h(s.submitter_name)}</td>
-      <td>${h(s.description)}</td>
-      <td style="font-size:var(--fs-xs)">${REIMB_CATS.find(r=>r.hint===s.category_hint)?.label||''}</td>
-      <td style="text-align:right;font-weight:500;white-space:nowrap" class="c-ok">${fmtP(s.amount)}</td>
-      <td><span class="badge" style="background:#DCFCE7;color:#166534">Paid</span></td>
-    </tr>`).join(''):`<tr><td colspan="6" class="empty">No paid history yet</td></tr>`;
+
+  // --- SETTLEMENT CARD RENDERER ---
+  const renderSettlementCard=(g)=>{
+    // Category breakdown (top 3 for collapsed header)
+    const catTotals={};
+    g.items.forEach(s=>{
+      const label=REIMB_CATS.find(r=>r.hint===s.category_hint)?.label||'Other';
+      if(!catTotals[label])catTotals[label]=0;
+      catTotals[label]+=parseFloat(s.amount);
+    });
+    const catList=Object.entries(catTotals).sort((a,b)=>b[1]-a[1]);
+    const topCats=catList.slice(0,3).map(([label,amt])=>{
+      const pct=Math.round(amt/g.total*100);
+      return`<span style="font-size:10px;color:var(--text3)">${h(label)} <span style="color:var(--text1);font-weight:600">${pct}%</span></span>`;
+    }).join(' · ');
+    const extraCats=catList.length>3?` · <span style="font-size:10px;color:var(--text3)">+${catList.length-3} more</span>`:'';
+
+    const itemRows=g.items.map(s=>{
+      const catLabel=REIMB_CATS.find(r=>r.hint===s.category_hint)?.label||'';
+      return`<div class="fg jb" style="font-size:var(--fs-xs);padding:6px 0;border-bottom:1px solid var(--border);gap:10px">
+        <span style="color:var(--text3);white-space:nowrap;min-width:90px">${s.submitted_at?s.submitted_at.substr(0,10):''}</span>
+        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(s.description)}</span>
+        <span style="color:var(--text3);font-size:11px;white-space:nowrap">${h(catLabel)}</span>
+        <span style="font-weight:500;white-space:nowrap;font-variant-numeric:tabular-nums;min-width:80px;text-align:right">${fmtP(s.amount)}</span>
+      </div>`;
+    }).join('');
+
+    const cardId='settle-card-'+g.gid.replace(/\W+/g,'-');
+    return`<div class="reimb-settlement collapsed" id="${cardId}">
+      <div class="reimb-settlement-head" onclick="toggleReimbCard('${cardId}')" style="cursor:pointer;padding:12px 14px;display:flex;align-items:center;gap:12px">
+        <span class="reimb-chevron" style="color:var(--text3);font-size:10px;transition:transform .15s">▶</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:var(--fs-sm);font-weight:600">${h(g.person)}<span style="color:var(--text3);font-weight:400;font-size:var(--fs-xs)"> · ${g.paidDate?toDD(g.paidDate):'—'} · ${g.items.length} item${g.items.length===1?'':'s'}</span></div>
+          <div style="margin-top:3px">${topCats}${extraCats}</div>
+        </div>
+        <div style="font-weight:600;font-variant-numeric:tabular-nums;flex-shrink:0">${fmtP(g.total)}</div>
+      </div>
+      <div class="reimb-settlement-body" style="padding:0 14px 12px">
+        <div style="padding-top:8px;border-top:1px solid var(--border)">${itemRows}</div>
+        ${g.legacy?'':`<div style="margin-top:10px;display:flex;justify-content:flex-end"><button class="btn btn-xs" onclick='unsettleReimbursement(${JSON.stringify(g.gid)})'>Unsettle</button></div>`}
+      </div>
+    </div>`;
+  };
+  const settlementsHtml=recentSettlements.length
+    ?recentSettlements.map(renderSettlementCard).join('')
+    :'';
+
   return`
   <div class="pg-header-row">
     <div>
       <div class="pg-header-title">Reimbursements</div>
-      <div class="pg-header-sub">Submitted via the Lanki Reimbursement page. Approve items, then import the matching bank transfer to auto-record.</div>
+      <div class="pg-header-sub">Submitted via the Lanki Reimbursement page. Approve items, then mark as paid to record itemized expenses.</div>
     </div>
     <a href="submit.html" target="_blank" class="btn btn-sm">Open Submit Page ↗</a>
   </div>
@@ -8371,30 +8708,44 @@ async function rReimbursements(){
     <div class="fg jb" style="flex-wrap:wrap;gap:12px">
       <div>
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text3);margin-bottom:4px">Total Pending Payment</div>
-        <div style="font-size:28px;font-weight:700;color:var(--warn);letter-spacing:-.03em">${fmtP(grandTotal)}</div>
-        <div style="font-size:var(--fs-xs);color:var(--text3)">${Object.keys(approvedByName).length} person${Object.keys(approvedByName).length!==1?'s':''} · auto-matches on import</div>
+        <div style="font-size:28px;font-weight:700;color:var(--warn);letter-spacing:-.03em;font-variant-numeric:tabular-nums">${fmtP(grandTotal)}</div>
+        <div style="font-size:var(--fs-xs);color:var(--text3)">${approvedEntries.length} person${approvedEntries.length!==1?'':''} · Mark as paid on each card when you've settled</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:8px;min-width:180px">
-        ${Object.entries(approvedByName).map(([n,{total:t}])=>`
+        ${approvedEntries.map(([n,{total:t}])=>`
         <div class="fg jb" style="gap:20px">
           <span style="font-size:var(--fs-xs);font-weight:500">${h(n)}</span>
-          <span style="font-size:var(--fs-sm);font-weight:700;color:var(--warn)">${fmtP(t)}</span>
+          <span style="font-size:var(--fs-sm);font-weight:700;color:var(--warn);font-variant-numeric:tabular-nums">${fmtP(t)}</span>
         </div>`).join('')}
       </div>
     </div>
   </div>`:''}
-  <div class="slbl" style="margin-top:0">Pending Review (${pending.length})</div>
+  ${pending.length?`<div class="slbl" style="margin-top:0">Pending Review (${pending.length})</div>
   <div class="card"><div class="tbl-wrap"><table>
     <thead><tr><th>Date</th><th>From</th><th>Description</th><th>Category</th><th>Notes</th><th style="text-align:right">Amount</th><th></th></tr></thead>
     <tbody>${pendRows}</tbody>
-  </table></div></div>
-  <div class="slbl">Approved — Awaiting Payment (${approved.length})</div>
-  ${approvedCards}
-  <div class="slbl">Paid History</div>
-  <div class="card"><div class="tbl-wrap"><table>
-    <thead><tr><th>Paid</th><th>Person</th><th>Description</th><th>Category</th><th style="text-align:right">Amount</th><th>Status</th></tr></thead>
-    <tbody>${paidRows}</tbody>
-  </table></div></div>`;
+  </table></div></div>`:''}
+  ${approvedEntries.length?`<div class="slbl">Approved — Awaiting Payment (${approved.length})</div>
+  ${approvedCards}`:''}
+  ${allSettlements.length?`<div class="slbl">Recent Settlements${allSettlements.length>3?' ('+recentSettlements.length+' of '+allSettlements.length+')':' ('+allSettlements.length+')'}</div>
+  <div class="card" style="padding:0;overflow:hidden">
+    ${settlementsHtml}
+  </div>
+  ${olderSettlementsCount>0?`<div style="margin-top:10px;text-align:center"><button class="btn btn-sm" onclick="toggleAllSettlements()" id="all-settlements-btn">View all ${allSettlements.length} settlements</button></div>
+  <div id="all-settlements-wrap" style="display:none;margin-top:10px">
+    <div class="card" style="padding:0;overflow:hidden">${allSettlements.slice(3).map(renderSettlementCard).join('')}</div>
+  </div>`:''}`:''}
+  ${!pending.length&&!approvedEntries.length&&!allSettlements.length?`<div class="card"><div class="empty">No reimbursement activity yet.</div></div>`:''}`;
+}
+
+// Toggle full settlement history visibility
+function toggleAllSettlements(){
+  const wrap=document.getElementById('all-settlements-wrap');
+  const btn=document.getElementById('all-settlements-btn');
+  if(!wrap||!btn)return;
+  const open=wrap.style.display!=='none';
+  wrap.style.display=open?'none':'block';
+  btn.textContent=open?`View all settlements`:`Collapse`;
 }
 
 
