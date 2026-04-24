@@ -1423,7 +1423,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='6.1';
+const VERSION='6.2';
 let sKey=null,saveTimer=null,pinCb=null,catCb=null,activeGroup=null;
 
 // ─── CRYPTO ───
@@ -3229,6 +3229,217 @@ async function mkSub(id,ym){
   const t=(S.txnCache[ymk]||[]).find(x=>x.id===id);if(t)t.isSub=true;
   schedTxn(ymk);render();toast('Marked as subscription');
 }
+// ─── AI-ASSISTED CATEGORIZATION ───
+// Opens a modal where the user describes what the transaction actually was.
+// Claude Sonnet reads the bank description + user context and returns suggested Type / Main / Sub.
+// User reviews, edits if needed, and confirms — same learning hook as manual categorization.
+let _aiCatTxnRef=null;
+function openAiCategorize(id,ym){
+  const ymk=ym||S.month;
+  const t=(S.txnCache[ymk]||[]).find(x=>x.id===id);
+  if(!t){toast('Transaction not found',false);return;}
+  _aiCatTxnRef={txnId:id,ym:ymk};
+  const acc=S.accounts.find(a=>a.id===t.accountId);
+  const mo=document.createElement('div');
+  mo.id='ai-cat-modal';mo.className='mo active';
+  mo.innerHTML=`
+    <div class="md" style="max-width:560px;width:94%;padding:0">
+      <div style="padding:1.1rem 1.3rem;border-bottom:1px solid var(--border)">
+        <div class="mdtitle" style="margin-bottom:2px">✨ AI-assisted categorization</div>
+        <div style="font-size:var(--fs-xs);color:var(--text3)">Add context about this transaction. Claude suggests the best Type, Category, and Sub-Category.</div>
+      </div>
+      <div style="padding:1.1rem 1.3rem">
+        <!-- Transaction snapshot -->
+        <div style="padding:10px 12px;background:var(--bg2);border-radius:var(--rsm);margin-bottom:14px;font-size:var(--fs-xs)">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:4px">
+            <div style="font-weight:500;color:var(--text1)">${h(t.description||'')}</div>
+            <div style="font-weight:500;font-variant-numeric:tabular-nums;color:${t.type==='income'?'var(--ok)':'var(--bad)'}">${t.type==='income'?'+':'−'}${fmtP(t.amount)}</div>
+          </div>
+          <div style="color:var(--text3);font-size:10px">${toDD(t.date)} · ${h(acc?.name||'—')}${t.notes?` · Notes: ${h(t.notes)}`:''}</div>
+        </div>
+        <!-- Context input -->
+        <div style="margin-bottom:10px">
+          <label class="lbl">What was this transaction for?</label>
+          <textarea id="ai-cat-context" rows="3" placeholder="e.g. Doctor appointment in Dubai to renew my prescription" style="width:100%;font-family:inherit;font-size:var(--fs-sm);resize:vertical"></textarea>
+        </div>
+        <!-- Suggestion area (populated after Analyze) -->
+        <div id="ai-cat-suggestion" style="display:none"></div>
+      </div>
+      <div style="padding:12px 1.3rem;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;background:var(--bg2)">
+        <button class="btn" onclick="closeAiCategorizeModal()">Cancel</button>
+        <button class="btn btn-p" id="ai-cat-analyze-btn" onclick="runAiCategorize()">Analyze</button>
+        <button class="btn btn-p" id="ai-cat-confirm-btn" onclick="confirmAiCategorize()" style="display:none">Confirm</button>
+      </div>
+    </div>`;
+  document.body.appendChild(mo);
+  setTimeout(()=>document.getElementById('ai-cat-context')?.focus(),50);
+}
+function closeAiCategorizeModal(){
+  document.getElementById('ai-cat-modal')?.remove();
+  _aiCatTxnRef=null;
+}
+
+async function runAiCategorize(){
+  const ref=_aiCatTxnRef;if(!ref){closeAiCategorizeModal();return;}
+  const t=(S.txnCache[ref.ym]||[]).find(x=>x.id===ref.txnId);
+  if(!t){toast('Transaction not found',false);closeAiCategorizeModal();return;}
+  const context=(document.getElementById('ai-cat-context')?.value||'').trim();
+  if(!context){toast('Write a short context first',false);return;}
+  const btn=document.getElementById('ai-cat-analyze-btn');
+  if(btn){btn.disabled=true;btn.textContent='Analyzing...';}
+  const sugEl=document.getElementById('ai-cat-suggestion');
+  if(sugEl){sugEl.style.display='block';sugEl.innerHTML=`<div style="padding:14px;text-align:center;color:var(--text3);font-size:var(--fs-xs)">Claude is analyzing the transaction...</div>`;}
+
+  // Build category reference (names only, IDs preserved for lookup)
+  const mains=getActiveCats().map(c=>`${c.id} — ${c.name} (${c.type})`).join('\n');
+  const subsByParent=Object.entries(SUGGESTED).map(([mid,list])=>{
+    const m=MAIN_CATS.find(c=>c.id===mid);if(!m)return'';
+    const subList=(list||[]).map(sid=>{const s=SUB_CATS.find(x=>x.id===sid);return s?`${s.id} — ${s.name}`:null;}).filter(Boolean).join(', ');
+    return`- ${m.name} (${mid}): ${subList}`;
+  }).filter(Boolean).join('\n');
+  // Also include all subs as a flat fallback (not just shortlist)
+  const allSubs=SUB_CATS.map(s=>`${s.id} — ${s.name}`).join('\n');
+
+  const acc=S.accounts.find(a=>a.id===t.accountId);
+  const systemPrompt=`You are a financial categorization assistant for Lanki, a personal finance dashboard used by a family in Saudi Arabia. You read a bank transaction plus user-provided context and return the most accurate Type, Main Category, and Sub-Category.
+
+AVAILABLE TYPES:
+- expense: purchases, bills, fees paid out
+- income: salary, refunds, investment returns, money received
+- transfer: between the user's own accounts (internal), credit card payments from own bank account
+- investment: outflows to investment platforms (Derayah, Tameed, Aseel, etc.)
+- external_transfer: outbound to a person or account outside the user's dashboard
+
+MAIN CATEGORIES (id — name — type):
+${mains}
+
+SUB-CATEGORIES (shortlist by main category):
+${subsByParent}
+
+ALL SUB-CATEGORIES (complete list, use any):
+${allSubs}
+
+RULES:
+- Output STRICT JSON only, no markdown or prose
+- Keys: type, mainCatId, subCatId, confidence (0-1), reasoning (one short sentence)
+- IDs must be copied exactly from the lists above — never invent new IDs
+- If the transaction amount direction contradicts an income/expense choice, respect the direction implied by the current type
+- For medical / doctor / pharmacy → Personal Care & Health
+- For food delivery (Jahez, Chefz, Wingstop) → Food → food_delivery
+- For Sadad bills referencing utilities → Housing & Utilities
+- For Sadad bills referencing telecom → Subscriptions & Digital
+- For Apple Pay / online transactions, classify by the merchant, not the payment method`;
+
+  const userPrompt=`Transaction:
+- Description: "${t.description||''}"
+- Amount: SAR ${t.amount}
+- Date: ${t.date}
+- Account: ${acc?.name||'unknown'}
+- Current type: ${t.type||'unassigned'}
+- Existing notes: "${t.notes||''}"
+
+User context: "${context}"
+
+Return the JSON object with type, mainCatId, subCatId, confidence, reasoning.`;
+
+  try{
+    const resp=await fetch('https://dgefsppkijrrvotggeom.supabase.co/functions/v1/ai-proxy',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRnZWZzcHBraWpycnZvdGdnZW9tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4MzYyOTAsImV4cCI6MjA5MTQxMjI5MH0._MWK5XL_CQAV3ybEWPv1UrArPb-Enu6FZognyImSYzg'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:400,
+        system:systemPrompt,
+        messages:[{role:'user',content:userPrompt}]
+      })
+    });
+    const data=await resp.json();
+    if(data.error){throw new Error(data.error.message||'API error');}
+    const raw=data.content?.[0]?.text||'';
+    if(!raw)throw new Error('Empty response');
+    const cleaned=raw.replace(/```json|```/g,'').trim();
+    let result;
+    try{result=JSON.parse(cleaned);}
+    catch(e){throw new Error('Could not parse response');}
+
+    // Validate IDs
+    const validTypes=['expense','income','transfer','investment','external_transfer'];
+    if(!validTypes.includes(result.type))throw new Error('Invalid type: '+result.type);
+    const mainCat=MAIN_CATS.find(c=>c.id===result.mainCatId);
+    if(!mainCat)throw new Error('Invalid main category: '+result.mainCatId);
+    let subCat=null;
+    if(result.subCatId){
+      subCat=SUB_CATS.find(s=>s.id===result.subCatId);
+      if(!subCat)throw new Error('Invalid sub-category: '+result.subCatId);
+    }
+
+    renderAiSuggestion(result,mainCat,subCat);
+  }catch(err){
+    if(sugEl)sugEl.innerHTML=`<div style="padding:12px;background:color-mix(in srgb,var(--bad) 8%,transparent);border-radius:var(--rsm);font-size:var(--fs-xs);color:var(--bad)">Analysis failed: ${h(err.message||String(err))}</div>`;
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='Re-analyze';}
+  }
+}
+
+function renderAiSuggestion(result,mainCat,subCat){
+  const sugEl=document.getElementById('ai-cat-suggestion');if(!sugEl)return;
+  const confPct=Math.round((result.confidence||0.8)*100);
+  const confColor=confPct>=80?'var(--ok)':confPct>=60?'var(--warn)':'var(--bad)';
+  const typeOpts=['expense','income','transfer','investment','external_transfer'].map(tv=>`<option value="${tv}" ${tv===result.type?'selected':''}>${tv.replace('_',' ')}</option>`).join('');
+  const mainOpts=getActiveCats().map(c=>`<option value="${c.id}" ${c.id===mainCat.id?'selected':''}>${h(c.name)}</option>`).join('');
+  // Sub-cat dropdown scoped to FULL_SUB_PARENT of the chosen main
+  const subOpts=SUB_CATS.filter(s=>currentSubParent(s.id)===mainCat.id).map(s=>`<option value="${s.id}" ${subCat&&s.id===subCat.id?'selected':''}>${h(s.name)}</option>`).join('');
+  sugEl.innerHTML=`
+    <div style="margin-top:4px;padding-top:14px;border-top:1px solid var(--border)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text3)">✨ Claude's suggestion</div>
+        <div style="font-size:10px;color:${confColor};font-weight:500">${confPct}% confidence</div>
+      </div>
+      ${result.reasoning?`<div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:12px;font-style:italic">"${h(result.reasoning)}"</div>`:''}
+      <div class="fr" style="margin-bottom:10px">
+        <div style="flex:1"><label class="lbl">Type</label><select id="ai-cat-type">${typeOpts}</select></div>
+      </div>
+      <div class="fr" style="margin-bottom:10px">
+        <div style="flex:1"><label class="lbl">Main category</label><select id="ai-cat-main" onchange="onAiMainChange(this.value)">${mainOpts}</select></div>
+      </div>
+      <div class="fr" style="margin-bottom:4px">
+        <div style="flex:1"><label class="lbl">Sub-category</label><select id="ai-cat-sub"><option value="">-- None --</option>${subOpts}</select></div>
+      </div>
+    </div>`;
+  const confirmBtn=document.getElementById('ai-cat-confirm-btn');
+  if(confirmBtn)confirmBtn.style.display='';
+}
+
+// When user switches main category in the suggestion panel, refresh the sub-category dropdown
+function onAiMainChange(newMainId){
+  const subSel=document.getElementById('ai-cat-sub');if(!subSel)return;
+  const opts=SUB_CATS.filter(s=>currentSubParent(s.id)===newMainId).map(s=>`<option value="${s.id}">${h(s.name)}</option>`).join('');
+  subSel.innerHTML='<option value="">-- None --</option>'+opts;
+}
+
+async function confirmAiCategorize(){
+  const ref=_aiCatTxnRef;if(!ref){closeAiCategorizeModal();return;}
+  const t=(S.txnCache[ref.ym]||[]).find(x=>x.id===ref.txnId);
+  if(!t){toast('Transaction not found',false);closeAiCategorizeModal();return;}
+  const newType=document.getElementById('ai-cat-type')?.value;
+  const newMain=document.getElementById('ai-cat-main')?.value;
+  const newSub=document.getElementById('ai-cat-sub')?.value||null;
+  if(!newType||!newMain){toast('Pick a type and main category',false);return;}
+  // Apply
+  t.type=newType;
+  t.mainCatId=newMain;
+  t.subCatId=newSub;
+  delete t.prevCatName;delete t.prevCatReason;
+  t.ruleApplied=false;
+  // Learn from this confirmation — same hook as manual categorization
+  try{learnTxnRule(t.description,newMain,newSub,'ai_assist');}
+  catch(e){try{learnRule(t.raw_description||t.description,newMain,newSub);}catch(_){}}
+  schedTxn(ref.ym);
+  await flushTxnQueue();await saveState();
+  closeAiCategorizeModal();render();
+  toast('Categorization applied');
+}
+
 // ─── EDIT TRANSACTION ───
 function openEditTxn(id,ym){
   const ymk=ym||S.month;
@@ -8577,6 +8788,7 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps){
         <button class="btn btn-xs" onclick="openEditTxn('${t.id}','${ym}')">Edit</button>
         <button class="btn btn-xs" onclick="openCP('${t.id}','${ym}','${t.mainCatId||''}','${t.subCatId||''}')">Cat</button>
         ${!t.isSub?`<button class="btn btn-xs" onclick="mkSub('${t.id}','${ym}')">Sub</button>`:''}
+        <button class="btn btn-xs" onclick="openAiCategorize('${t.id}','${ym}')" title="AI-assisted categorization — add context for a suggested Type, Category, and Sub-Category" style="padding:2px 6px"><span style="color:var(--electric);font-weight:600">✨</span></button>
         <button class="btn btn-xs btn-d" onclick="delTxn('${t.id}','${ym}')">&#10005;</button>
       </td>
       ${reconTd}
