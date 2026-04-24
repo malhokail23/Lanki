@@ -1428,7 +1428,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='6.5';
+const VERSION='6.6';
 let sKey=null,saveTimer=null,pinCb=null,catCb=null,activeGroup=null;
 
 // ─── CRYPTO ───
@@ -3548,7 +3548,7 @@ let _refundLinkCtx=null;
 function openRefundLinkModal(refundId,ym){
   const refund=(S.txnCache[ym]||[]).find(x=>x.id===refundId);
   if(!refund){toast('Transaction not found',false);return;}
-  if(refund.type!=='income'){toast('Only income transactions can be linked as refunds',false);return;}
+  if(refund.type!=='income'||refund.subCatId!=='sub_refund'){toast('Only transactions categorized as Income → Refund can be linked',false);return;}
   _refundLinkCtx={refundId,ym};
   const candidates=findRefundCandidates(refund);
   const acc=S.accounts.find(a=>a.id===refund.accountId);
@@ -9045,7 +9045,7 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps){
         <button class="btn btn-xs" onclick="openCP('${t.id}','${ym}','${t.mainCatId||''}','${t.subCatId||''}')">Cat</button>
         ${!t.isSub?`<button class="btn btn-xs" onclick="mkSub('${t.id}','${ym}')">Sub</button>`:''}
         <button class="btn btn-xs" onclick="openAiCategorize('${t.id}','${ym}')" title="AI-assisted categorization — add context for a suggested Type, Category, and Sub-Category" style="padding:2px 6px"><span style="color:var(--electric);font-weight:600">✨</span></button>
-        ${(t.type==='income'&&!isRefundLinked(t))?`<button class="btn btn-xs" onclick="openRefundLinkModal('${t.id}','${ym}')" title="Link this refund to its original expense — excludes the pair from Income and Expense totals" style="padding:2px 6px"><span style="color:var(--ok);font-weight:600">↔</span></button>`:''}
+        ${(t.type==='income'&&t.subCatId==='sub_refund'&&!isRefundLinked(t))?`<button class="btn btn-xs" onclick="openRefundLinkModal('${t.id}','${ym}')" title="Link this refund to its original expense — excludes the pair from Income and Expense totals" style="padding:2px 6px"><span style="color:var(--ok);font-weight:600">↔</span></button>`:''}
         <button class="btn btn-xs btn-d" onclick="delTxn('${t.id}','${ym}')">&#10005;</button>
       </td>
       ${reconTd}
