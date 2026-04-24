@@ -1354,12 +1354,34 @@ const NAV_GROUPS={
 };
 const TAB_TO_GROUP={txbank:'transactions',txcards:'transactions',aiupload:'transactions',income:'recurring',bills:'recurring',subscriptions:'recurring',accounts:'',debts:'',goals:'',uncat:'inbox',transfers:'inbox',reimbursements:'inbox',rules:'inbox',sanity:'inbox',insights:'inbox',staff:'',familyinv:'',settings:''};
 
+// ─── SUBSCRIPTION CATEGORIES ───
+// 12 categories covering every kind of recurring consumer/professional subscription.
+const SUB_CATEGORIES=[
+  'AI & Software',
+  'Developer & Cloud',
+  'Education',
+  'Entertainment',
+  'Food & Delivery',
+  'Gaming',
+  'Health & Fitness',
+  'Home & Devices',
+  'Productivity',
+  'Shopping & Memberships',
+  'Transport',
+  'Other'
+];
+// Billing cycles: monthly is the default, annual matters for yearly renewals that look dormant otherwise.
+const SUB_CYCLE_DAYS={monthly:30,annual:365};
+const SUB_GRACE_DAYS={monthly:7,annual:14};
+// Fallback FX rate for USD baselines — matches the rest of the app.
+const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
+
 
 // ─── CONSTANTS ───
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='5.0';
+const VERSION='5.1';
 let sKey=null,saveTimer=null,pinCb=null,catCb=null,activeGroup=null;
 
 // ─── CRYPTO ───
@@ -4184,27 +4206,130 @@ async function cfmFlag(id,ym){
 }
 
 // ─── SUBSCRIPTIONS ───
+// ─── SUBSCRIPTION HELPERS ───
+// Normalize a string to a matching key (lowercase, trimmed, 30-char cap) — same shape used elsewhere.
+function subKey(s){return(s||'').toLowerCase().trim().substring(0,30);}
+
+// Migrate a legacy sub record to the extended schema. Safe to call repeatedly.
+function subMigrate(s){
+  if(!s)return s;
+  if(!s.patterns||!Array.isArray(s.patterns)){s.patterns=s.key?[s.key]:[subKey(s.name)];}
+  if(!s.patterns.length&&s.name)s.patterns=[subKey(s.name)];
+  if(!s.nativeCurrency)s.nativeCurrency=s.currency||'SAR';
+  if(s.nativeAmount==null&&s.amountUsd!=null)s.nativeAmount=s.amountUsd;
+  if(!s.cycle)s.cycle='monthly';
+  if(!s.category)s.category='Other';
+  if(!s.status)s.status='active';
+  return s;
+}
+
+// Return all transactions matching this sub's patterns, newest first.
+function subPayments(sub){
+  if(!sub)return[];
+  subMigrate(sub);
+  const set=new Set((sub.patterns||[]).map(p=>subKey(p)));
+  const out=[];
+  Object.values(S.txnCache||{}).forEach(arr=>arr.forEach(t=>{
+    if(t.type!=='expense')return;
+    if(set.has(subKey(t.description)))out.push(t);
+  }));
+  out.sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  return out;
+}
+
+// Baseline in SAR for variance comparisons. Falls back to null if no baseline defined.
+function subBaselineSAR(sub){
+  if(!sub||!sub.nativeAmount)return null;
+  const rate=SUB_FX_RATE[sub.nativeCurrency]||1;
+  return sub.nativeAmount*rate;
+}
+
+// Status engine: active | overdue | cancelled | paused
+// Overdue = no payment received within cycle + grace window since last seen.
+function subStatus(sub,payments){
+  subMigrate(sub);
+  if(sub.status==='cancelled'||sub.status==='paused')return sub.status;
+  const pays=payments||subPayments(sub);
+  if(!pays.length)return 'active'; // just confirmed, assume fine
+  const last=pays[0];
+  if(!last.date)return 'active';
+  const lastDate=new Date(last.date);
+  const today=new Date();
+  const daysSince=Math.floor((today-lastDate)/(1000*60*60*24));
+  const cycleDays=SUB_CYCLE_DAYS[sub.cycle]||30;
+  const graceDays=SUB_GRACE_DAYS[sub.cycle]||7;
+  if(daysSince>cycleDays+graceDays)return 'overdue';
+  return 'active';
+}
+
+// Monthly SAR equivalent — annual subs divided by 12.
+function subMonthlyEquivSAR(sub){
+  const baseline=subBaselineSAR(sub);
+  if(baseline==null){
+    // No explicit baseline — use recent average from payments
+    const pays=subPayments(sub);
+    if(!pays.length)return 0;
+    const recent=pays.slice(0,3);
+    const avg=recent.reduce((s,t)=>s+t.amount,0)/recent.length;
+    return sub.cycle==='annual'?avg/12:avg;
+  }
+  return sub.cycle==='annual'?baseline/12:baseline;
+}
+
+// Variance for a single payment — reuses the bill variance pattern but converts USD baselines.
+function subPaymentVariance(sub,paidSAR,priorPayments){
+  const tolerance=Math.max(1,paidSAR*0.02);
+  const baseline=subBaselineSAR(sub);
+  let ref=baseline,source=baseline!=null?'expected':null;
+  if(ref==null&&priorPayments&&priorPayments.length>=3){
+    const recent=priorPayments.slice(0,6);
+    ref=recent.reduce((s,t)=>s+t.amount,0)/recent.length;
+    source='avg';
+  }
+  if(ref==null)return{baseline:null,baselineSource:null,variance:0,tag:null};
+  const diff=paidSAR-ref;
+  let tag=null;
+  if(Math.abs(diff)>tolerance)tag=diff>0?'higher':'lower';
+  return{baseline:ref,baselineSource:source,variance:diff,tag};
+}
+
+// Detect likely native currency from a sample transaction — USD if notes contain the FX conversion tag,
+// otherwise SAR. Used only as a sensible default on Confirm; always editable afterward.
+function subInferCurrency(txn){
+  if(!txn)return'SAR';
+  const blob=((txn.notes||'')+' '+(txn.raw_description||'')).toLowerCase();
+  if(blob.includes('usd')||blob.includes('×3.75')||blob.includes('x 3.75')||blob.includes('* 3.75'))return'USD';
+  // If the originating account is a USD-billed charge card, default to USD
+  const acc=S.accounts.find(a=>a.id===txn.accountId);
+  if(acc&&(acc.billingCurrency==='USD'||acc.type==='charge_card'))return'USD';
+  return'SAR';
+}
+
+
 async function rSubs(){
   const all=allTxns();
+  const today=new Date();
+
+  // --- AUTO-DETECTION (existing logic, scoped to non-confirmed keys) ---
   const byM={};
   all.filter(t=>t.type==='expense').forEach(t=>{
-    const key=(t.description||'').toLowerCase().trim().substring(0,30);
+    const key=subKey(t.description);
     if(!byM[key])byM[key]=[];byM[key].push(t);
   });
-  // Build exclusion set from bills/staff/debts/income — never suggest these as subscriptions
   const subExclKeys=new Set();
-  (S.bills||[]).forEach(b=>{[b.name,b.provider].filter(Boolean).forEach(s=>subExclKeys.add(s.toLowerCase().trim().substr(0,30)));});
-  (S.staff||[]).forEach(s=>{[s.name].filter(Boolean).forEach(x=>subExclKeys.add(x.toLowerCase().trim().substr(0,30)));});
-  (S.debts||[]).forEach(d=>{[d.name,d.statementKeyword].filter(Boolean).forEach(s=>subExclKeys.add(s.toLowerCase().trim().substr(0,30)));});
-  (S.income||[]).forEach(i=>{[i.name,i.employer].filter(Boolean).forEach(s=>subExclKeys.add(s.toLowerCase().trim().substr(0,30)));});
+  (S.bills||[]).forEach(b=>{[b.name,b.provider].filter(Boolean).forEach(s=>subExclKeys.add(subKey(s)));});
+  (S.staff||[]).forEach(s=>{[s.name].filter(Boolean).forEach(x=>subExclKeys.add(subKey(x)));});
+  (S.debts||[]).forEach(d=>{[d.name,d.statementKeyword].filter(Boolean).forEach(s=>subExclKeys.add(subKey(s)));});
+  (S.income||[]).forEach(i=>{[i.name,i.employer].filter(Boolean).forEach(s=>subExclKeys.add(subKey(s)));});
+  // Exclude keys already absorbed by a confirmed sub's patterns
+  const confirmedKeys=new Set();
+  (S.subs||[]).forEach(s=>{subMigrate(s);(s.patterns||[]).forEach(p=>confirmedKeys.add(subKey(p)));});
 
   const detected=[];
   Object.entries(byM).forEach(([key,txns])=>{
-    // Skip if matches any bill/staff/debt/income name — require meaningful overlap,
-    // not just a short substring (e.g. "stc" should not exclude "stc internet cloud")
+    if(confirmedKeys.has(key))return;
     const excl=[...subExclKeys].some(k=>{
       if(!k||k.length<3)return false;
-      // Only exclude if the exclusion key is at least 6 chars, OR is an exact match
       if(k.length<6)return key===k;
       return key===k||key.startsWith(k)||k.startsWith(key);
     });
@@ -4214,118 +4339,237 @@ async function rSubs(){
     if(months.length<2)return;
     const latest=sortedT[sortedT.length-1];
     if(S.dismissed.includes(key)||latest.isSub)return;
-    // ±5 SAR fixed tolerance — amount must be consistent to within 5 SAR
     const amounts=sortedT.map(t=>t.amount);
     const minAmt=Math.min(...amounts),maxAmt=Math.max(...amounts);
     const amountsConsistent=minAmt>0&&(maxAmt-minAmt)<=5;
     if(!amountsConsistent)return;
-    // Check for consecutive months OR ~12-month gap
     let qualifies=false;
     for(let i=1;i<months.length;i++){
       const prev=months[i-1],curr=months[i];
       const gap=Math.round((new Date(curr+'-01')-new Date(prev+'-01'))/(1000*60*60*24*30));
       if(gap<=1||gap===12||gap===11||gap===13)qualifies=true;
     }
-    if(qualifies)detected.push({key,desc:latest.description,amount:latest.amount,count:months.length,lastDate:latest.date,avgAmount:Math.round(amounts.reduce((s,a)=>s+a,0)/amounts.length*100)/100});
+    if(qualifies)detected.push({key,desc:latest.description,amount:latest.amount,count:months.length,lastDate:latest.date,txn:latest});
   });
-  const confirmed=all.filter(t=>t.isSub);
-  const cMap2={};
-  confirmed.forEach(t=>{
-    const key=(t.description||'').toLowerCase().trim().substring(0,30);
-    if(!cMap2[key])cMap2[key]={desc:t.description,txns:[]};
-    cMap2[key].txns.push(t);
+
+  // --- CLASSIFY CONFIRMED SUBS ---
+  (S.subs||[]).forEach(subMigrate);
+  const subsWithData=(S.subs||[]).map(s=>{
+    const pays=subPayments(s);
+    const status=subStatus(s,pays);
+    const monthlyEquiv=subMonthlyEquivSAR(s);
+    let needsAttn=status==='overdue';
+    if(!needsAttn&&pays.length){
+      const last=pays[0];
+      const priors=pays.slice(1);
+      const v=subPaymentVariance(s,last.amount,priors);
+      if(v.tag)needsAttn=true;
+    }
+    return{sub:s,pays,status,monthlyEquiv,needsAttn};
   });
-  S.subs.forEach(s=>{
-    const key=(s.name||'').toLowerCase().trim().substring(0,30);
-    if(!cMap2[key])cMap2[key]={desc:s.name,txns:[],id:s.id,notes:s.notes,currency:s.currency,amountUsd:s.amountUsd};
-    else{cMap2[key].notes=cMap2[key].notes||s.notes;cMap2[key].currency=s.currency;cMap2[key].amountUsd=s.amountUsd;cMap2[key].id=s.id;}
+
+  const activeSubs=subsWithData.filter(x=>(x.status==='active'||x.status==='paused')&&!x.needsAttn);
+  const attnSubs=subsWithData.filter(x=>x.needsAttn||x.status==='overdue');
+  const cancelledSubs=subsWithData.filter(x=>x.status==='cancelled');
+
+  // --- TOTALS ---
+  const totalMonthly=subsWithData.filter(x=>x.status!=='cancelled').reduce((s,x)=>s+x.monthlyEquiv,0);
+  const totalAnnual=totalMonthly*12;
+  const byCategory={};
+  subsWithData.filter(x=>x.status!=='cancelled').forEach(x=>{
+    const c=x.sub.category||'Other';
+    if(!byCategory[c])byCategory[c]={count:0,monthly:0};
+    byCategory[c].count++;byCategory[c].monthly+=x.monthlyEquiv;
   });
-  const newDet=detected.filter(d=>!cMap2[d.key]);
-  const detRows=newDet.map(d=>`
-    <div class="srow">
-      <div>
+  const catRows=Object.entries(byCategory).sort((a,b)=>b[1].monthly-a[1].monthly);
+
+  // --- RENDERERS ---
+  const detRows=detected.map(d=>`
+    <div class="srow" style="padding:12px 14px;border-bottom:1px solid var(--border)">
+      <div style="flex:1;min-width:0">
         <div style="font-size:var(--fs-sm);font-weight:500">${h(d.desc)}</div>
         <div style="font-size:11px;color:var(--text3)">Found in ${d.count} months · Last: ${toDD(d.lastDate)}</div>
       </div>
-      <div class="fg" style="gap:6px">
-        <span style="font-size:15px;font-weight:500">${fmtP(d.amount)}</span>
+      <div class="fg" style="gap:6px;flex-shrink:0;align-items:center">
+        <span style="font-size:14px;font-weight:500;font-variant-numeric:tabular-nums">${fmtP(d.amount)}</span>
         <button class="btn btn-xs btn-p" onclick='cfmSub(${JSON.stringify(d.key)})'>Confirm</button>
         <button class="btn btn-xs" onclick='disSub(${JSON.stringify(d.key)})'>Not a subscription</button>
       </div>
     </div>`).join('');
-  const subCards=Object.entries(cMap2).map(([key,{desc,txns,notes,currency,amountUsd,id}])=>{
-    const sorted=(txns||[]).slice().sort((a,b)=>b.date.localeCompare(a.date));
-    // Use recent 3-month average so tier changes are reflected quickly
-    const recent=sorted.slice(0,3);
-    const recentAvg=recent.length?Math.round(recent.reduce((s,t)=>s+t.amount,0)/recent.length*100)/100:0;
-    const last=sorted[0];
-    return`<div class="card card-bordered" style="margin-bottom:.75rem">
-      <div class="fg jb" style="flex-wrap:wrap;gap:8px">
-        <div>
-          <div style="font-size:15px;font-weight:500">${h(desc)} <span class="badge b-sub">Sub</span></div>
-          <div style="font-size:11px;color:var(--text3);margin-top:2px">${sorted.length} payment${sorted.length!==1?'s':''} recorded${last?' · Last: '+toDD(last.date):''}</div>
-          ${notes?`<div style="font-size:var(--fs-xs);color:var(--text3);margin-top:2px">${h(notes)}</div>`:''}
-          ${currency==='USD'?`<div style="font-size:11px;color:var(--text3)">USD ${amountUsd||'?'} &#8776; ${fmtP((amountUsd||0)*3.75)} at 3.75</div>`:''}
+
+  const renderSubCard=({sub,pays,status,monthlyEquiv,needsAttn})=>{
+    subMigrate(sub);
+    const last=pays[0];
+    const first=pays[pays.length-1];
+    const baseline=subBaselineSAR(sub);
+    const shown=pays.slice(0,6);
+    const statusDot=status==='overdue'?'<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--warn);margin-right:6px;vertical-align:middle" title="Overdue"></span>'
+      :status==='cancelled'?'<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--text3);margin-right:6px;vertical-align:middle" title="Cancelled"></span>'
+      :status==='paused'?'<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--info);margin-right:6px;vertical-align:middle" title="Paused"></span>'
+      :'<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--ok);margin-right:6px;vertical-align:middle" title="Active"></span>';
+    let attnLabel='';
+    if(needsAttn){
+      if(status==='overdue'){
+        const daysSince=last?Math.floor((today-new Date(last.date))/(1000*60*60*24)):null;
+        attnLabel=`<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:3px;background:color-mix(in srgb,var(--warn) 18%,transparent);color:color-mix(in srgb,var(--warn) 70%,var(--midnight));letter-spacing:.03em">Overdue${daysSince?` · ${daysSince}d since last`:''}</span>`;
+      }else if(last){
+        const priors=pays.slice(1);
+        const v=subPaymentVariance(sub,last.amount,priors);
+        if(v.tag){
+          const isHigher=v.tag==='higher';
+          const color=isHigher?'color-mix(in srgb,var(--warn) 18%,transparent)':'color-mix(in srgb,var(--ok) 15%,transparent)';
+          const text=isHigher?'color-mix(in srgb,var(--warn) 70%,var(--midnight))':'var(--ok)';
+          attnLabel=`<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:3px;background:${color};color:${text};letter-spacing:.03em">${isHigher?'Price up':'Price down'} · ${fmt(Math.abs(v.variance))}</span>`;
+        }
+      }
+    }
+    const nativeStr=sub.nativeCurrency&&sub.nativeCurrency!=='SAR'&&sub.nativeAmount
+      ?`<div style="font-size:11px;color:var(--text3);margin-top:2px">${sub.nativeCurrency} ${sub.nativeAmount.toFixed(2)} · ≈ ${fmtP((sub.nativeAmount||0)*(SUB_FX_RATE[sub.nativeCurrency]||1))}</div>`
+      :'';
+    const mainAmount=baseline!=null?fmtP(baseline):(last?fmtP(last.amount):'--');
+    const paysHtml=pays.length?`<div style="border:1px solid var(--border);border-radius:var(--rsm);overflow:hidden;margin-top:10px">
+      ${shown.map((t,i)=>{
+        const priors=pays.slice(pays.indexOf(t)+1);
+        const v=subPaymentVariance(sub,t.amount,priors);
+        const varTag=v.tag?(()=>{
+          const isHigher=v.tag==='higher';
+          const color=isHigher?'color-mix(in srgb,var(--warn) 18%,transparent)':'color-mix(in srgb,var(--ok) 15%,transparent)';
+          const text=isHigher?'color-mix(in srgb,var(--warn) 70%,var(--midnight))':'var(--ok)';
+          const label=isHigher?'Higher':'Lower';
+          const avgSuffix=v.baselineSource==='avg'?' vs 6-mo avg':'';
+          return`<span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;background:${color};color:${text};letter-spacing:.03em">${label} by ${fmt(Math.abs(v.variance))}${avgSuffix}</span>`;
+        })():(v.baselineSource==='avg'?`<span style="font-size:9px;color:var(--text3)">vs 6-mo avg</span>`:'');
+        return`<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;${i<shown.length-1?'border-bottom:1px solid var(--border);':''}">
+          <div style="flex-shrink:0;min-width:80px;font-size:11px;color:var(--text3)">${toDD(t.date)}</div>
+          <div style="flex:1;min-width:0;font-size:12px;color:var(--text1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(t.description||'--')}</div>
+          <div style="flex-shrink:0">${varTag}</div>
+          <div style="flex-shrink:0;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums">−${fmtP(t.amount)}</div>
+        </div>`;
+      }).join('')}
+      ${pays.length>6?`<div style="padding:6px 12px;font-size:10px;color:var(--text3);text-align:center;border-top:1px solid var(--border)">+ ${pays.length-6} earlier payment${pays.length-6===1?'':'s'}</div>`:''}
+    </div>`:`<div style="font-size:11px;color:var(--text3);padding:8px 0;line-height:1.6">No payments yet. Will link automatically when a transaction matches.</div>`;
+    const patternsList=(sub.patterns||[]).length>1?`<div style="font-size:10px;color:var(--text3);margin-top:4px">Matches: ${(sub.patterns||[]).slice(0,3).map(p=>'<code style="background:var(--bg2);padding:1px 5px;border-radius:3px;font-size:10px">'+h(p)+'</code>').join(' ')}${sub.patterns.length>3?` +${sub.patterns.length-3} more`:''}</div>`:'';
+    return`<div class="card card-bordered" style="margin-bottom:.75rem" id="sub-card-${sub.id}">
+      <div class="fg jb" style="flex-wrap:wrap;gap:10px;align-items:flex-start">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:15px;font-weight:500;display:flex;align-items:center;flex-wrap:wrap;gap:6px">
+            ${statusDot}<span>${h(sub.name)}</span>${attnLabel}
+          </div>
+          <div style="font-size:11px;color:var(--text3);margin-top:3px">${h(sub.category||'Other')} · ${sub.cycle==='annual'?'Annual':'Monthly'}${pays.length?` · ${pays.length} payment${pays.length===1?'':'s'}`:''}${first&&first!==last?` · Since ${toDD(first.date)}`:last?` · First seen ${toDD(last.date)}`:''}${last?` · Last: ${toDD(last.date)}`:''}</div>
+          ${sub.notes?`<div style="font-size:var(--fs-xs);color:var(--text3);margin-top:4px">${h(sub.notes)}</div>`:''}
+          ${patternsList}
         </div>
-        <div style="text-align:right">
-          <div style="font-size:17px;font-weight:500">${fmtP(recentAvg)}<span style="font-size:11px;font-weight:400;color:var(--text3)">/mo</span></div>
-          ${sorted.length>3?`<div style="font-size:10px;color:var(--text3)">last 3-month avg</div>`:''}
-          <div class="fg" style="gap:6px;margin-top:6px;justify-content:flex-end">
-            <button class="btn btn-xs" onclick='editSubNote(${JSON.stringify(key)},${JSON.stringify(id||'')})'>Add Note</button>
-            <button class="btn btn-xs btn-d" onclick='unSub(${JSON.stringify(key)})'>Remove</button>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-size:17px;font-weight:500;font-variant-numeric:tabular-nums">${mainAmount}<span style="font-size:11px;font-weight:400;color:var(--text3)">/${sub.cycle==='annual'?'yr':'mo'}</span></div>
+          ${nativeStr}
+          ${sub.cycle==='annual'?`<div style="font-size:10px;color:var(--text3)">≈ ${fmtP(monthlyEquiv)}/mo</div>`:''}
+          <div class="fg" style="gap:6px;margin-top:8px;justify-content:flex-end">
+            <button class="btn btn-xs" onclick="openEditSub('${sub.id}')">Edit</button>
+            <button class="btn btn-xs" onclick="toggleSubStatus('${sub.id}','${status==='cancelled'?'active':'cancelled'}')">${status==='cancelled'?'Reactivate':'Cancel'}</button>
+            <button class="btn btn-xs btn-d" onclick="deleteSub('${sub.id}')">&#10005;</button>
           </div>
         </div>
       </div>
-      ${sorted.slice(0,3).map(t=>`<div class="fg jb" style="font-size:var(--fs-xs);padding:3px 0;color:var(--text3)"><span>${toDD(t.date)}</span><span class="c-bad">-${fmtP(t.amount)}</span></div>`).join('')}
-      ${sorted.length>3?`<div style="font-size:11px;color:var(--text3)">+${sorted.length-3} more payments</div>`:''}
-    </div>`;}).join('');
+      ${paysHtml}
+    </div>`;
+  };
+
+  const sectionLabel=(title,count,tone)=>`<div style="display:flex;align-items:center;gap:8px;margin:1.25rem 0 .5rem"><div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">${title}${count?` (${count})`:''}</div>${tone==='warn'?'<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--warn)"></span>':tone==='ok'?'<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--ok)"></span>':''}</div>`;
+
+  const activeCount=subsWithData.filter(x=>x.status!=='cancelled').length;
+  const totalsBar=activeCount?`<div class="card" style="padding:1rem 1.25rem;margin-bottom:1rem">
+    <div style="display:flex;gap:2rem;flex-wrap:wrap;align-items:baseline">
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Monthly equivalent</div>
+        <div style="font-size:24px;font-weight:500;font-variant-numeric:tabular-nums;margin-top:2px">${fmtP(totalMonthly)}</div>
+      </div>
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Annual projection</div>
+        <div style="font-size:24px;font-weight:500;font-variant-numeric:tabular-nums;margin-top:2px">${fmtP(totalAnnual)}</div>
+      </div>
+      <div style="flex:1"></div>
+      <div style="font-size:11px;color:var(--text3)">${activeCount} active subscription${activeCount===1?'':'s'}</div>
+    </div>
+    ${catRows.length?`<div style="margin-top:.9rem;padding-top:.75rem;border-top:1px solid var(--border);display:flex;flex-wrap:wrap;gap:1rem 1.5rem">
+      ${catRows.map(([cat,{count,monthly}])=>`<div style="font-size:11px"><span style="color:var(--text3)">${h(cat)}</span> · <span style="font-weight:600;font-variant-numeric:tabular-nums">${fmtP(monthly)}</span> <span style="color:var(--text3)">(${count})</span></div>`).join('')}
+    </div>`:''}
+  </div>`:'';
+
   return`
   <div class="pg-header-row">
     <div>
       <div class="pg-header-title">Subscriptions</div>
-      <div class="pg-header-sub">Auto-detected recurring payments. Confirm or dismiss each suggestion.</div>
+      <div class="pg-header-sub">Track what you pay for. Confirm auto-detected subscriptions to surface trends, variance, and renewals.</div>
     </div>
     <div class="fg" style="gap:6px;flex-wrap:wrap">
       <button class="btn btn-sm" onclick="downloadTemplate('subscriptions')">&#8595; Template</button>
       <label class="btn btn-sm" style="cursor:pointer">&#8593; Upload Excel<input type="file" accept=".xlsx,.xls" onchange="uploadTemplate('subscriptions',this)" style="display:none"></label>
-      <button class="btn btn-sm btn-p" onclick="tp('addsub-panel')">+ Add Manually</button>
+      <button class="btn btn-sm btn-p" onclick="openAddSub()">+ Add Manually</button>
     </div>
   </div>
   <div id="addsub-panel" class="panel">
     <div class="chdr">Add Subscription Manually</div>
-    <div class="fr">
-      <div><label class="lbl">Service name</label><input type="text" id="sb-name" placeholder="e.g. Netflix, Claude.ai, ChatGPT"></div>
-      <div><label class="lbl">Currency</label><select id="sb-curr"><option value="SAR">SAR</option><option value="USD">USD</option></select></div>
+    <div class="fr3">
+      <div><label class="lbl">Service name</label><input type="text" id="sb-name" placeholder="e.g. Netflix, Claude.ai"></div>
+      <div><label class="lbl">Category</label><select id="sb-cat">${SUB_CATEGORIES.map(c=>`<option value="${h(c)}">${h(c)}</option>`).join('')}</select></div>
+      <div><label class="lbl">Billing cycle</label><select id="sb-cycle"><option value="monthly">Monthly</option><option value="annual">Annual</option></select></div>
     </div>
-    <div class="fr" style="margin-top:8px">
-      <div><label class="lbl">Amount (in selected currency)</label><input type="number" id="sb-amt" placeholder="0.00" min="0" step="0.01"></div>
-      <div><label class="lbl">Typical deduction day</label><input type="number" id="sb-day" placeholder="e.g. 3" min="1" max="31"></div>
+    <div class="fr3" style="margin-top:8px">
+      <div><label class="lbl">Currency</label><select id="sb-curr"><option value="SAR">SAR</option><option value="USD">USD</option><option value="AED">AED</option><option value="EUR">EUR</option><option value="GBP">GBP</option></select></div>
+      <div><label class="lbl">Expected amount (native)</label><input type="number" id="sb-amt" placeholder="0.00" min="0" step="0.01"></div>
+      <div><label class="lbl">Typical day</label><input type="number" id="sb-day" placeholder="e.g. 3" min="1" max="31"></div>
     </div>
-    <div style="margin-top:8px"><label class="lbl">Notes (what this subscription is for)</label><input type="text" id="sb-notes" placeholder="e.g. AI writing assistant for personal use"></div>
+    <div style="margin-top:8px"><label class="lbl">Notes</label><input type="text" id="sb-notes" placeholder="Optional"></div>
     <div class="fg" style="margin-top:10px"><button class="btn btn-p" onclick="addSub()">Add Subscription</button><button class="btn" onclick="tp('addsub-panel')">Cancel</button></div>
   </div>
-  ${newDet.length?`
-  <div class="slbl" style="margin-top:0">Auto-Detected (${newDet.length})</div>
-  <div class="shint">These merchants appear in 2 or more months. Confirm or dismiss each one.</div>
-  <div class="card">${detRows}</div>`:''}
-  ${Object.keys(cMap2).length?`
-  <div class="slbl">Confirmed Subscriptions (${Object.keys(cMap2).length})</div>
-  ${subCards}`:`<div class="card"><div class="empty">No confirmed subscriptions yet. Import statements or add manually.</div></div>`}`;
+  ${totalsBar}
+  ${attnSubs.length?sectionLabel('Needs attention',attnSubs.length,'warn')+attnSubs.map(renderSubCard).join(''):''}
+  ${activeSubs.length?sectionLabel('Active',activeSubs.length,'ok')+activeSubs.map(renderSubCard).join(''):''}
+  ${cancelledSubs.length?sectionLabel('Cancelled',cancelledSubs.length)+cancelledSubs.map(renderSubCard).join(''):''}
+  ${detected.length?`${sectionLabel('Auto-detected',detected.length)}<div class="card" style="padding:0;overflow:hidden">${detRows}</div>`:''}
+  ${!subsWithData.length&&!detected.length?`<div class="card"><div class="empty">No subscriptions yet. Import statements to auto-detect, or add manually.</div></div>`:''}`;
 }
+// Confirm a detected subscription with sensible defaults (Option B: zero-friction).
+// User can Edit afterward to refine category, cycle, currency, expected amount.
 function cfmSub(key){
-  const k=(key||'').toLowerCase().trim();
+  const k=subKey(key);
   const affYms=new Set();
-  allTxns().filter(t=>(t.description||'').toLowerCase().trim().substring(0,30)===k).forEach(t=>{
-    t.isSub=true;if(t.date)affYms.add(t.date.substr(0,7));
-  });
-  if(!S.subs.find(s=>(s.name||'').toLowerCase().trim().substring(0,30)===k)){
-    const ex=allTxns().find(t=>(t.description||'').toLowerCase().trim().substring(0,30)===k);
-    S.subs.push({id:'sub_'+Math.random().toString(36).substr(2,6),name:ex?.description||k,key:k,notes:''});
+  const matching=allTxns().filter(t=>subKey(t.description)===k);
+  matching.forEach(t=>{t.isSub=true;if(t.date)affYms.add(t.date.substr(0,7));});
+  // Existing sub with this key already?
+  let existing=(S.subs||[]).find(s=>{subMigrate(s);return(s.patterns||[]).some(p=>subKey(p)===k);});
+  if(!existing){
+    // Create a new sub with inferred defaults. All editable afterward.
+    const sortedMatch=matching.slice().sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+    const firstTxn=sortedMatch[0];
+    const lastTxn=sortedMatch[sortedMatch.length-1];
+    const inferredCurrency=subInferCurrency(lastTxn);
+    const lastAmount=lastTxn?lastTxn.amount:0;
+    // For USD subs, convert SAR amount back to native USD estimate (divide by FX)
+    const nativeAmt=inferredCurrency==='SAR'?lastAmount:Math.round((lastAmount/3.75)*100)/100;
+    existing={
+      id:'sub_'+Math.random().toString(36).substr(2,6),
+      name:lastTxn?.description||k,
+      patterns:[k],
+      nativeCurrency:inferredCurrency,
+      nativeAmount:nativeAmt||null,
+      cycle:'monthly',
+      category:'Other',
+      status:'active',
+      notes:'',
+      firstSeen:firstTxn?.date||null
+    };
+    S.subs.push(existing);
+  }else{
+    // Add this key to existing sub's patterns if not already there (merge-on-confirm)
+    if(!(existing.patterns||[]).some(p=>subKey(p)===k)){
+      existing.patterns=[...(existing.patterns||[]),k];
+    }
   }
   affYms.forEach(ym=>schedTxn(ym));
   sched();render();toast('Subscription confirmed');
 }
-function disSub(key){const k=(key||'').toLowerCase().trim();if(!S.dismissed.includes(k))S.dismissed.push(k);sched();render();toast('Hidden from suggestions');}
+function disSub(key){const k=subKey(key);if(!S.dismissed.includes(k))S.dismissed.push(k);sched();render();toast('Hidden from suggestions');}
 function removeSub(id,ym){
   const ymk=ym||S.month;
   const t=(S.txnCache[ymk]||[]).find(x=>x.id===id);
@@ -4333,33 +4577,124 @@ function removeSub(id,ym){
   delete t.isSub;
   schedTxn(ymk);render();toast('Subscription tag removed');
 }
-function unSub(key){
-  // Collect affected months before modifying
+// Delete a confirmed sub — unsets t.isSub on linked transactions and removes the sub record.
+function deleteSub(id){
+  const sub=S.subs.find(s=>s.id===id);if(!sub)return;
+  if(!confirm(`Delete "${sub.name}" from subscriptions? Linked transactions stay in the vault.`))return;
+  subMigrate(sub);
+  const keys=new Set((sub.patterns||[]).map(subKey));
   const affectedYms=new Set();
-  allTxns().filter(t=>(t.raw_description||t.description||'').toLowerCase().trim().substring(0,30)===key).forEach(t=>{
+  allTxns().filter(t=>keys.has(subKey(t.description))).forEach(t=>{
     delete t.isSub;
     if(t.date)affectedYms.add(t.date.substr(0,7));
   });
-  S.subs=S.subs.filter(s=>(s.name||'').toLowerCase().trim().substring(0,30)!==key);
-  // Save each affected month's transactions
+  S.subs=S.subs.filter(s=>s.id!==id);
+  affectedYms.forEach(ym=>schedTxn(ym));
+  sched();render();toast('Subscription deleted');
+}
+// Legacy unSub — kept for backward compatibility with old data shapes. Routes to deleteSub by key.
+function unSub(key){
+  const k=subKey(key);
+  const sub=(S.subs||[]).find(s=>{subMigrate(s);return(s.patterns||[]).some(p=>subKey(p)===k);});
+  if(sub)return deleteSub(sub.id);
+  // Orphan txn-only case
+  const affectedYms=new Set();
+  allTxns().filter(t=>subKey(t.raw_description||t.description)===k).forEach(t=>{
+    delete t.isSub;if(t.date)affectedYms.add(t.date.substr(0,7));
+  });
   affectedYms.forEach(ym=>schedTxn(ym));
   sched();render();toast('Removed from subscriptions');
 }
+// Toggle status: active ↔ cancelled (or future: paused)
+function toggleSubStatus(id,newStatus){
+  const sub=S.subs.find(s=>s.id===id);if(!sub)return;
+  sub.status=newStatus;
+  sched();render();toast(newStatus==='cancelled'?'Marked cancelled':'Reactivated');
+}
+// Legacy: kept for compatibility with menu items that still call editSubNote.
 function editSubNote(key,id){
-  // L7: Replaced blocking prompt() with inline input via toast-style quick entry
-  const ex=S.subs.find(s=>s.id===id);
-  const current=ex?.notes||'';
-  const note=window.prompt('Add a note for this subscription:',current);
-  if(note===null)return; // user cancelled
-  if(ex){ex.notes=note;}else{const desc=allTxns().find(t=>(t.raw_description||t.description||'').toLowerCase().trim().substring(0,30)===key)?.description||key;S.subs.push({id:uid(),name:desc,notes:note,currency:'SAR',status:'active'});}
+  const sub=id?S.subs.find(s=>s.id===id):(S.subs||[]).find(s=>{subMigrate(s);return(s.patterns||[]).some(p=>subKey(p)===subKey(key));});
+  if(sub)return openEditSub(sub.id);
+  const note=window.prompt('Add a note for this subscription:','');
+  if(note===null)return;
+  const desc=allTxns().find(t=>subKey(t.raw_description||t.description)===subKey(key))?.description||key;
+  S.subs.push(subMigrate({id:uid(),name:desc,notes:note,patterns:[subKey(key)]}));
   sched();render();toast('Note saved');
+}
+// Opens the manual-add panel (resets fields)
+function openAddSub(){
+  ['sb-name','sb-amt','sb-day','sb-notes'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  const cat=document.getElementById('sb-cat');if(cat)cat.value='Other';
+  const cyc=document.getElementById('sb-cycle');if(cyc)cyc.value='monthly';
+  const cur=document.getElementById('sb-curr');if(cur)cur.value='SAR';
+  tp('addsub-panel');
+  const p=document.getElementById('addsub-panel');if(p&&!p.classList.contains('open')){p.classList.add('open');p.scrollIntoView({behavior:'smooth'});}
 }
 function addSub(){
   const name=document.getElementById('sb-name').value.trim();if(!name){toast('Name required',false);return;}
-  const curr=document.getElementById('sb-curr').value;
-  const amt=parseFloat(document.getElementById('sb-amt').value)||0;
-  S.subs.push({id:uid(),name,currency:curr,amountUsd:curr==='USD'?amt:null,amount:curr==='USD'?Math.round(amt*3.75*100)/100:amt,expectedDay:document.getElementById('sb-day').value,notes:document.getElementById('sb-notes').value.trim(),status:'active'});
+  const cat=document.getElementById('sb-cat').value||'Other';
+  const cycle=document.getElementById('sb-cycle').value||'monthly';
+  const curr=document.getElementById('sb-curr').value||'SAR';
+  const amt=parseFloat(document.getElementById('sb-amt').value)||null;
+  const day=document.getElementById('sb-day').value;
+  const notes=document.getElementById('sb-notes').value.trim();
+  S.subs.push({
+    id:uid(),name,
+    patterns:[subKey(name)],
+    category:cat,cycle,
+    nativeCurrency:curr,
+    nativeAmount:amt,
+    expectedDay:day,
+    notes,
+    status:'active'
+  });
   sched();tp('addsub-panel');render();toast('Subscription added');
+}
+// Edit modal for a confirmed sub
+function openEditSub(id){
+  const sub=S.subs.find(s=>s.id===id);if(!sub)return;
+  subMigrate(sub);
+  document.getElementById('esub-modal')?.remove();
+  const mo=document.createElement('div');
+  mo.id='esub-modal';
+  mo.className='mo active';
+  mo.innerHTML=`
+    <div class="md" style="max-width:560px;width:94%">
+      <div class="mdtitle">Edit subscription</div>
+      <div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:1rem">Refine details for better tracking and variance detection.</div>
+      <div class="fr" style="margin-bottom:8px">
+        <div><label class="lbl">Service name</label><input type="text" id="esub-name" value="${h(sub.name||'')}"></div>
+        <div><label class="lbl">Category</label><select id="esub-cat">${SUB_CATEGORIES.map(c=>`<option value="${h(c)}" ${sub.category===c?'selected':''}>${h(c)}</option>`).join('')}</select></div>
+      </div>
+      <div class="fr3" style="margin-bottom:8px">
+        <div><label class="lbl">Billing cycle</label><select id="esub-cycle"><option value="monthly" ${sub.cycle!=='annual'?'selected':''}>Monthly</option><option value="annual" ${sub.cycle==='annual'?'selected':''}>Annual</option></select></div>
+        <div><label class="lbl">Currency</label><select id="esub-curr">${['SAR','USD','AED','EUR','GBP'].map(c=>`<option value="${c}" ${sub.nativeCurrency===c?'selected':''}>${c}</option>`).join('')}</select></div>
+        <div><label class="lbl">Expected amount</label><input type="number" id="esub-amt" value="${sub.nativeAmount||''}" min="0" step="0.01" placeholder="0.00"></div>
+      </div>
+      <div class="fr" style="margin-bottom:8px">
+        <div><label class="lbl">Status</label><select id="esub-status"><option value="active" ${sub.status==='active'?'selected':''}>Active</option><option value="paused" ${sub.status==='paused'?'selected':''}>Paused</option><option value="cancelled" ${sub.status==='cancelled'?'selected':''}>Cancelled</option></select></div>
+        <div><label class="lbl">Website / account URL</label><input type="text" id="esub-url" value="${h(sub.url||'')}" placeholder="Optional"></div>
+      </div>
+      <div style="margin-bottom:12px"><label class="lbl">Notes</label><input type="text" id="esub-notes" value="${h(sub.notes||'')}" placeholder="Optional"></div>
+      <div class="fg"><button class="btn btn-p f1" onclick="saveSub('${sub.id}')">Save changes</button><button class="btn" onclick="document.getElementById('esub-modal').remove()">Cancel</button></div>
+    </div>`;
+  document.body.appendChild(mo);
+  setTimeout(()=>document.getElementById('esub-name')?.focus(),50);
+}
+function saveSub(id){
+  const sub=S.subs.find(s=>s.id===id);if(!sub)return;
+  subMigrate(sub);
+  sub.name=document.getElementById('esub-name').value.trim()||sub.name;
+  sub.category=document.getElementById('esub-cat').value||'Other';
+  sub.cycle=document.getElementById('esub-cycle').value||'monthly';
+  sub.nativeCurrency=document.getElementById('esub-curr').value||'SAR';
+  const amt=parseFloat(document.getElementById('esub-amt').value);
+  sub.nativeAmount=isNaN(amt)?null:amt;
+  sub.status=document.getElementById('esub-status').value||'active';
+  sub.url=document.getElementById('esub-url').value.trim();
+  sub.notes=document.getElementById('esub-notes').value.trim();
+  document.getElementById('esub-modal')?.remove();
+  sched();render();toast('Subscription updated');
 }
 
 // --- INCOME ---
