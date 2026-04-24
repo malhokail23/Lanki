@@ -580,7 +580,7 @@ td{padding:9px 10px;border-bottom:1px solid var(--bg2);vertical-align:middle}
 tr:last-child td{border-bottom:none}
 tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
 /* Apple-grade transactions table: fixed column widths prevent shift between months */
-.tx-tbl{table-layout:fixed;width:100%;min-width:1100px}
+.tx-tbl{table-layout:fixed;width:100%;min-width:1160px}
 .tx-tbl td,.tx-tbl th{overflow:hidden;text-overflow:ellipsis}
 .tx-tbl td>div{overflow:hidden;text-overflow:ellipsis}
 /* Description cell: clamp to 2 lines max, notes appear inline as a secondary line */
@@ -694,6 +694,8 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overfl
 .dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
 .mo{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:800;align-items:center;justify-content:center}
 .mo.active{display:flex}
+/* When a secondary modal opens above an already-open modal, lift it above */
+.mo.mo-stacked{z-index:900}
 .md{
   background:var(--bg);border-radius:14px;
   padding:1.5rem;max-width:460px;width:94%;
@@ -1340,6 +1342,9 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overfl
       <button class="btn btn-p f1" onclick="confirmCat()">Confirm</button>
       <button class="btn" onclick="closeCatM()">Cancel</button>
     </div>
+    <div id="catm-escalate" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);text-align:center">
+      <a href="#" onclick="event.preventDefault();escalateToEdit()" style="font-size:11px;color:var(--electric);text-decoration:none;font-weight:500">Need more fields? Edit full transaction &rarr;</a>
+    </div>
   </div>
 </div>
 
@@ -1423,7 +1428,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='6.2';
+const VERSION='6.3';
 let sKey=null,saveTimer=null,pinCb=null,catCb=null,activeGroup=null;
 
 // ─── CRYPTO ───
@@ -3522,7 +3527,11 @@ function openCPEditTxn(){
       }
     }
   };
-  document.getElementById('cat-modal').classList.add('active');
+  const esc=document.getElementById('catm-escalate');
+  if(esc)esc.style.display='none'; // hide escalation when Cat is opened from within Edit
+  const cm=document.getElementById('cat-modal');
+  cm.classList.add('active');
+  cm.classList.add('mo-stacked'); // lift above the Edit modal
 }
 async function saveEditTxn(){
   const id=document.getElementById('etxn-id').value;
@@ -3996,6 +4005,7 @@ function setTxSort(col){
   render();
 }
 function openNTCat(){
+  _catModalTxnCtx=null;
   const curM=document.getElementById('nt-mc')?.value||null;
   const curS=document.getElementById('nt-sc')?.value||null;
   buildCM(curM,curS);
@@ -4023,6 +4033,8 @@ function openNTCat(){
       }
     }
   };
+  const escNT=document.getElementById('catm-escalate');
+  if(escNT)escNT.style.display='none';
   document.getElementById('cat-modal').classList.add('active');
 }
 function autoDir(type, dirElId){
@@ -4305,7 +4317,10 @@ function pSugg(id){
   const ss=document.getElementById('catm-sub');if(ss)ss.value=id;
   document.querySelectorAll('.spill').forEach(p=>p.classList.toggle('sel',p.dataset.sid===id));
 }
+// Escalation state: set when Cat modal is opened from a transaction row, cleared otherwise.
+let _catModalTxnCtx=null;
 function openCP(txnId,ym,curM,curS){
+  _catModalTxnCtx={txnId,ym:ym||S.month};
   buildCM(curM||null,curS||null);
   catCb=async(m,s)=>{
     const ymk=ym||S.month;
@@ -4321,9 +4336,12 @@ function openCP(txnId,ym,curM,curS){
     }
     schedTxn(ymk);sched();render();toast('Category saved');
   };
+  const esc=document.getElementById('catm-escalate');
+  if(esc)esc.style.display='block';
   document.getElementById('cat-modal').classList.add('active');
 }
 function openCPNew(){
+  _catModalTxnCtx=null;
   buildCM(null,null);
   catCb=(m,s)=>{
     document.getElementById('nt-mc').value=m;
@@ -4331,7 +4349,16 @@ function openCPNew(){
     const mc=getMC(m),sc=getSC(s);
     document.getElementById('nt-cat-btn').textContent=(mc?.name||'?')+(sc?' / '+sc.name:'');
   };
+  const esc=document.getElementById('catm-escalate');
+  if(esc)esc.style.display='none';
   document.getElementById('cat-modal').classList.add('active');
+}
+// Escalation handler — closes Cat modal and opens full Edit on the same transaction
+function escalateToEdit(){
+  const ctx=_catModalTxnCtx;
+  closeCatM();
+  if(!ctx)return;
+  openEditTxn(ctx.txnId,ctx.ym);
 }
 function confirmCat(){
   // BUG FIX 4.1: capture cb before closeCatM nullifies it
@@ -4341,7 +4368,7 @@ function confirmCat(){
   closeCatM();
   if(cb)cb(m,s);
 }
-function closeCatM(){document.getElementById('cat-modal').classList.remove('active');catCb=null;}
+function closeCatM(){const cm=document.getElementById('cat-modal');cm.classList.remove('active');cm.classList.remove('mo-stacked');catCb=null;}
 
 // ─── UNCATEGORIZED ───
 
@@ -5446,6 +5473,7 @@ function billVariance(bill,paidAmount,historyExcluding){
   return{baseline,baselineSource:source,variance:diff,tag};
 }
 function openBillCat(){
+  _catModalTxnCtx=null;
   const curM=document.getElementById('bl-mc')?.value||null;
   const curS=document.getElementById('bl-sc')?.value||null;
   buildCM(curM,curS);
@@ -5455,6 +5483,8 @@ function openBillCat(){
     const lbl=document.getElementById('bl-cat-label');
     if(lbl){const mm=getMC(m),ss=getSC(s);lbl.textContent=(mm?.name||'-- No category --')+(ss?' / '+ss.name:'');}
   };
+  const escBl=document.getElementById('catm-escalate');
+  if(escBl)escBl.style.display='none';
   document.getElementById('cat-modal').classList.add('active');
 }
 
@@ -8714,7 +8744,7 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps){
     :['date','desc','cat','acc','amount','balance','type',''];
   const labels={date:'Date',desc:'Description',cat:'Category / Sub-Category',acc:'Account',
     amount:'Amount',balance:'Balance',outstanding:'Outstanding',type:'Type','':''};
-  const widths={date:'110px',desc:'auto',cat:'230px',acc:'130px',amount:'140px',balance:'140px',outstanding:'140px',type:'90px','':'180px'};
+  const widths={date:'110px',desc:'auto',cat:'230px',acc:'130px',amount:'140px',balance:'140px',outstanding:'140px',type:'90px','':'240px'};
 
   const bulkCol=`<th style="width:32px;padding:8px 6px">${BulkMode?'<input type="checkbox" title="Select all displayed" onclick="if(this.checked)selectAllDisplayed();else clearBulkSelection()" style="cursor:pointer;width:15px;height:15px">':''}</th>`;
   const reconTh=hasRecon?`<th style="text-align:right;white-space:nowrap;font-size:var(--fs-xxs);color:var(--warn);width:110px">Stmt Bal</th>`:'';
@@ -9699,6 +9729,7 @@ function updateBulkBar(){
 
 function applyBulkCategory(){
   if(!BulkSelected.size){toast('No transactions selected',false);return;}
+  _catModalTxnCtx=null;
   // Open cat picker — callback will apply to all selected
   buildCM(null,null);
   catCb=(m,s)=>{
@@ -9727,6 +9758,8 @@ function applyBulkCategory(){
     render();
     toast(count+' transaction'+(count!==1?'s':'')+' updated');
   };
+  const escBk=document.getElementById('catm-escalate');
+  if(escBk)escBk.style.display='none';
   document.getElementById('cat-modal').classList.add('active');
 }
 
