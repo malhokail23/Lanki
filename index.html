@@ -1420,7 +1420,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='5.7';
+const VERSION='5.8';
 let sKey=null,saveTimer=null,pinCb=null,catCb=null,activeGroup=null;
 
 // ─── CRYPTO ───
@@ -1605,7 +1605,7 @@ function lockApp(){sKey=null;
   // H2: Clear decrypted state from memory
   S.accounts=[];S.debts=[];S.goals=[];S.income=[];S.bills=[];S.subs=[];
   S.staff=[];S.rules=[];S.txnRules=[];S.dismissed=[];S.deletedCats=[];S.deletedSubs=[];
-  S.customMainCats=[];S.customSubCats=[];S.catNameOverrides={};S.catColorOverrides={};S.subNameOverrides={};
+  S.customMainCats=[];S.customSubCats=[];S.catNameOverrides={};S.catColorOverrides={};S.subNameOverrides={};S.subParentOverrides={};
   S.familyMembers=[];S.txnCache={};S.monthlyBal={};S.matchedPairs=[];S.settings={};
   // M7: restore category colors for next unlock
   Object.keys(CAT_COLORS).forEach(k=>{if(!MAIN_CATS.find(m=>m.id===k))delete CAT_COLORS[k];});
@@ -1699,7 +1699,7 @@ function mRange(from,to){const r=[];let c=from;while(c<=to){r.push(c);c=addM(c,1
 let S={
   tab:'overview',month:addM(getYM(new Date()),-1),privacy:false,ovPeriod:'month',
   accounts:[],debts:[],goals:[],income:[],bills:[],subs:[],staff:[],
-  rules:[],dismissed:[],deletedCats:[],deletedSubs:[],customMainCats:[],customSubCats:[],catNameOverrides:{},catColorOverrides:{},subNameOverrides:{},txnCache:{},monthlyBal:{},matchedPairs:[],submitters:[],
+  rules:[],dismissed:[],deletedCats:[],deletedSubs:[],customMainCats:[],customSubCats:[],catNameOverrides:{},catColorOverrides:{},subNameOverrides:{},subParentOverrides:{},txnCache:{},monthlyBal:{},matchedPairs:[],submitters:[],
   settings:{currency:'SAR',savingsTarget:20,backupReminderMonths:2,lastBackup:null},
   version:VERSION
 };
@@ -1887,7 +1887,7 @@ function getMainP(){
     version:VERSION,
     accounts:S.accounts,debts:S.debts,goals:S.goals,income:S.income,
     bills:S.bills,subs:S.subs,staff:S.staff,rules:S.rules,txnRules:S.txnRules,dismissed:S.dismissed,
-    deletedCats:S.deletedCats,deletedSubs:S.deletedSubs,customMainCats:S.customMainCats,customSubCats:S.customSubCats,catNameOverrides:S.catNameOverrides,catColorOverrides:S.catColorOverrides,subNameOverrides:S.subNameOverrides,familyMembers:S.familyMembers,settings:S.settings,monthlyBal:S.monthlyBal,matchedPairs:S.matchedPairs,submitters:S.submitters
+    deletedCats:S.deletedCats,deletedSubs:S.deletedSubs,customMainCats:S.customMainCats,customSubCats:S.customSubCats,catNameOverrides:S.catNameOverrides,catColorOverrides:S.catColorOverrides,subNameOverrides:S.subNameOverrides,subParentOverrides:S.subParentOverrides,familyMembers:S.familyMembers,settings:S.settings,monthlyBal:S.monthlyBal,matchedPairs:S.matchedPairs,submitters:S.submitters
   };
 }
 function restoreS(d){
@@ -1920,7 +1920,7 @@ function restoreS(d){
   S.txnRules=merged.sort((a,b)=>(b.lastUsed||0)-(a.lastUsed||0)).slice(0,300);
   S.deletedCats=d.deletedCats||[];S.deletedSubs=d.deletedSubs||[];
   S.customMainCats=d.customMainCats||[];S.customSubCats=d.customSubCats||[];
-  S.catNameOverrides=d.catNameOverrides||{};S.catColorOverrides=d.catColorOverrides||{};S.subNameOverrides=d.subNameOverrides||{};
+  S.catNameOverrides=d.catNameOverrides||{};S.catColorOverrides=d.catColorOverrides||{};S.subNameOverrides=d.subNameOverrides||{};S.subParentOverrides=d.subParentOverrides||{};
     S.familyMembers=d.familyMembers||[];
   S.settings={currency:'SAR',savingsTarget:20,backupReminderMonths:2,lastBackup:null,...(d.settings||{})};  S.monthlyBal=d.monthlyBal||{};  S.matchedPairs=d.matchedPairs||[];
   S.submitters=d.submitters||[];
@@ -1991,6 +1991,17 @@ function applyCatCustomizations(){
   Object.entries(S.catColorOverrides||{}).forEach(([id,color])=>{
     const m=MAIN_CATS.find(x=>x.id===id);if(m)m.color=color;
     CAT_COLORS[id]=color;
+  });
+  // Apply sub parent overrides — move each sub to the user-chosen parent (remove from all other SUGGESTED arrays)
+  Object.entries(S.subParentOverrides||{}).forEach(([subId,newParentId])=>{
+    // Strip from every parent
+    Object.keys(SUGGESTED).forEach(mid=>{
+      SUGGESTED[mid]=(SUGGESTED[mid]||[]).filter(x=>x!==subId);
+    });
+    // Add to the new parent
+    if(SUGGESTED[newParentId]&&SUB_CATS.find(x=>x.id===subId)){
+      if(!SUGGESTED[newParentId].includes(subId))SUGGESTED[newParentId].push(subId);
+    }
   });
 }
 // MAIN_CATS is never mutated — use getActiveCats() to get the filtered list
@@ -7484,6 +7495,45 @@ function renameMainCat(id,newName){
   sched();
   return true;
 }
+// Return the current parent main cat ID for a given sub.
+// Priority: explicit override → custom sub's parentMainId → first SUGGESTED entry that contains it → null.
+function currentSubParent(subId){
+  if(S.subParentOverrides&&S.subParentOverrides[subId])return S.subParentOverrides[subId];
+  const cs=(S.customSubCats||[]).find(c=>c.id===subId);
+  if(cs&&cs.parentMainId)return cs.parentMainId;
+  for(const [mid,list] of Object.entries(SUGGESTED)){
+    if((list||[]).includes(subId))return mid;
+  }
+  return null;
+}
+// Move a sub-category to a different main category.
+// Removes it from every SUGGESTED bucket and adds to the new parent's bucket.
+// For custom subs, updates parentMainId directly; for built-in subs, records the choice in S.subParentOverrides.
+// Existing transactions are NOT touched — they keep their current mainCatId assignments.
+async function changeSubParent(subId,newParentId){
+  if(!subId||!newParentId){toast('Parent category required',false);return false;}
+  if(!MAIN_CATS.find(c=>c.id===newParentId)){toast('Target category not found',false);return false;}
+  if(!SUB_CATS.find(s=>s.id===subId)){toast('Sub-category not found',false);return false;}
+  const oldParent=currentSubParent(subId);
+  if(oldParent===newParentId)return true; // no-op
+  // Strip from every SUGGESTED bucket
+  Object.keys(SUGGESTED).forEach(mid=>{
+    SUGGESTED[mid]=(SUGGESTED[mid]||[]).filter(x=>x!==subId);
+  });
+  // Add to the new parent
+  if(!SUGGESTED[newParentId])SUGGESTED[newParentId]=[];
+  if(!SUGGESTED[newParentId].includes(subId))SUGGESTED[newParentId].push(subId);
+  // Persist the choice
+  if(isCustomSub(subId)){
+    const cc=S.customSubCats.find(c=>c.id===subId);
+    if(cc)cc.parentMainId=newParentId;
+  }else{
+    S.subParentOverrides[subId]=newParentId;
+  }
+  await saveState();
+  return true;
+}
+
 function renameSubCat(id,newName){
   newName=(newName||'').trim();
   if(!newName){toast('Name required',false);return false;}
@@ -7897,16 +7947,25 @@ function submitAddSubCat(){
 function openEditSubCatModal(id){
   const s=SUB_CATS.find(x=>x.id===id);if(!s)return;
   closeCatModal();
+  const locked=isTierCSub(id);
+  const curParent=currentSubParent(id);
+  const txnCount=countTxnsWithSubCat(id);
+  // Parent dropdown options
+  const parentOpts=MAIN_CATS.map(c=>`<option value="${c.id}" ${c.id===curParent?'selected':''}>${h(c.name)}</option>`).join('');
   const mo=document.createElement('div');
   mo.id='cat-modal';mo.className='mo active';
   mo.innerHTML=`
-    <div class="md" style="max-width:480px;width:94%;padding:0">
+    <div class="md" style="max-width:520px;width:94%;padding:0">
       <div style="padding:1.1rem 1.3rem;border-bottom:1px solid var(--border)">
         <div class="mdtitle" style="margin-bottom:2px">Edit sub-category</div>
-        <div style="font-size:var(--fs-xs);color:var(--text3)">${isTierCSub(id)?'Core sub-category — rename only. Deletion locked.':isCustomSub(id)?'Custom sub-category':'Standard sub-category'}</div>
+        <div style="font-size:var(--fs-xs);color:var(--text3)">${locked?'Core sub-category — rename and reparent only. Deletion locked.':isCustomSub(id)?'Custom sub-category':'Standard sub-category'}</div>
       </div>
       <div style="padding:1.1rem 1.3rem">
-        <div><label class="lbl">Name</label><input type="text" id="sube-name" value="${h(s.name)}" maxlength="40"></div>
+        <div style="margin-bottom:14px"><label class="lbl">Name</label><input type="text" id="sube-name" value="${h(s.name)}" maxlength="40"></div>
+        <div style="margin-bottom:10px"><label class="lbl">Parent category</label><select id="sube-parent">${parentOpts}</select></div>
+        <div style="padding:8px 12px;background:var(--bg2);border-radius:var(--rsm);font-size:var(--fs-xxs);color:var(--text3);line-height:1.5">
+          Changing the parent moves this sub-category's pill shortcut to appear under a different main in the category picker. ${txnCount>0?`Your ${txnCount} existing transaction${txnCount===1?'':'s'} tagged with this sub-category keep their current main category — they are not moved.`:'No existing transactions use this sub-category.'}
+        </div>
       </div>
       <div style="padding:12px 1.3rem;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;background:var(--bg2)">
         <button class="btn" onclick="closeCatModal()">Cancel</button>
@@ -7916,9 +7975,15 @@ function openEditSubCatModal(id){
   document.body.appendChild(mo);
   setTimeout(()=>document.getElementById('sube-name')?.focus(),50);
 }
-function submitEditSubCat(id){
+async function submitEditSubCat(id){
   const newName=document.getElementById('sube-name').value;
-  if(renameSubCat(id,newName)){closeCatModal();render();toast('Sub-category updated');}
+  const newParent=document.getElementById('sube-parent').value;
+  const curParent=currentSubParent(id);
+  const s=SUB_CATS.find(x=>x.id===id);if(!s)return;
+  let okName=true,okParent=true;
+  if(newName!==s.name){okName=renameSubCat(id,newName);}
+  if(okName&&newParent&&newParent!==curParent){okParent=await changeSubParent(id,newParent);}
+  if(okName&&okParent){closeCatModal();render();toast('Sub-category updated');}
 }
 
 function openDeleteSubCatModal(id){
