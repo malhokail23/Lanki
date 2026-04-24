@@ -1428,7 +1428,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='6.7';
+const VERSION='6.8';
 let sKey=null,saveTimer=null,pinCb=null,catCb=null,activeGroup=null;
 
 // ─── CRYPTO ───
@@ -1819,13 +1819,15 @@ function findTxnById(id){
   return null;
 }
 // Find candidate original expenses for a given refund transaction.
-// Candidates: any outflow within 90 days before the refund, not already refund-linked.
+// Candidates: any outflow within 180 days before the refund, not already refund-linked.
 // Cross-account matching is allowed (reimbursements often land on a different account than the original expense).
+// Card purchases count as outflows in txnCache (stored as type='expense', direction='out'), so they're automatically included.
 // Sort priority: same-account first, then exact amount match, then closest amount, then most recent.
 function findRefundCandidates(refund){
   if(!refund)return[];
   const refundDate=new Date(refund.date);
-  const ninetyDaysAgo=new Date(refundDate.getTime()-90*24*60*60*1000);
+  const windowMs=180*24*60*60*1000;
+  const cutoff=new Date(refundDate.getTime()-windowMs);
   const allTxnsList=Object.values(S.txnCache).flat();
   const candidates=allTxnsList.filter(t=>{
     if(t.id===refund.id)return false;
@@ -1833,16 +1835,28 @@ function findRefundCandidates(refund){
     if(t.refundedBy||t.refundedTxnId)return false;
     const tDate=new Date(t.date);
     if(tDate>refundDate)return false; // expense must be before refund
-    if(tDate<ninetyDaysAgo)return false;
+    if(tDate<cutoff)return false;
     return true;
   });
-  // Sort: same-account preference, then closest amount, then most recent
+  // Sort priority:
+  //  1) Exact amount match (≤1 halala) — these are the real hits
+  //  2) Near-exact (≤2%) — strong likely matches
+  //  3) Same account preference within loose matches
+  //  4) Closest amount
+  //  5) Most recent
   return candidates.sort((a,b)=>{
+    const ad=Math.abs(a.amount-refund.amount);
+    const bd=Math.abs(b.amount-refund.amount);
+    const aExact=ad<0.01?0:1;
+    const bExact=bd<0.01?0:1;
+    if(aExact!==bExact)return aExact-bExact;
+    const refAmt=refund.amount||1;
+    const aNear=ad/refAmt<=0.02?0:1;
+    const bNear=bd/refAmt<=0.02?0:1;
+    if(aNear!==bNear)return aNear-bNear;
     const aSame=a.accountId===refund.accountId?0:1;
     const bSame=b.accountId===refund.accountId?0:1;
     if(aSame!==bSame)return aSame-bSame;
-    const ad=Math.abs(a.amount-refund.amount);
-    const bd=Math.abs(b.amount-refund.amount);
     if(ad!==bd)return ad-bd;
     return b.date.localeCompare(a.date);
   });
@@ -3558,23 +3572,23 @@ function openRefundLinkModal(refundId,ym){
   let body='';
   if(candidates.length===0){
     body=`<div style="padding:14px;background:var(--bg2);border-radius:var(--rsm);font-size:var(--fs-xs);color:var(--text3);text-align:center">
-      No unlinked expenses found within 90 days before this transaction. The original expense must be on record in Lanki to link.
+      No unlinked expenses found within 180 days before this transaction. The original expense must be on record in Lanki (bank accounts or cards) to link.
     </div>`;
   } else {
     const isReimb=refund.subCatId==='sub_reimbursement';
-    body=`<div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:8px">Candidates within 90 days, sorted by same account first then closest amount.${isReimb?' Cross-account matches are included since reimbursements often land on a different account.':''}</div>
-    <div class="tbl-wrap" style="max-height:340px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--rsm)">
+    body=`<div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:8px">Candidates from all accounts and cards within 180 days. Exact amount matches ranked first.${isReimb?' Reimbursements often match a prior card charge on a different account — both are included.':''}</div>
+    <div class="tbl-wrap" style="max-height:380px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--rsm)">
       <table class="tx-tbl" style="min-width:auto">
         <thead><tr>
           <th style="width:90px">Date</th>
           <th>Description</th>
-          <th style="width:110px">Account</th>
+          <th style="width:130px">Account</th>
           <th style="text-align:right;width:120px">Amount</th>
           <th style="width:70px;text-align:center">Match</th>
           <th style="width:70px"></th>
         </tr></thead>
         <tbody>
-        ${candidates.slice(0,20).map(c=>{
+        ${candidates.slice(0,50).map(c=>{
           const diff=Math.abs(c.amount-refund.amount);
           const pct=refund.amount>0?(diff/refund.amount)*100:0;
           const matchLbl=diff<0.01?'Exact':pct<2?'±'+pct.toFixed(1)+'%':pct<10?'±'+pct.toFixed(0)+'%':'Loose';
@@ -3582,10 +3596,11 @@ function openRefundLinkModal(refundId,ym){
           const cYm=c.date.substr(0,7);
           const cAcc=S.accounts.find(a=>a.id===c.accountId);
           const sameAcc=c.accountId===refund.accountId;
+          const isCard=cAcc&&(cAcc.type==='credit_card'||cAcc.type==='charge_card'||cAcc.type==='debit_card'||cAcc.type==='prepaid_card');
           return`<tr>
             <td style="font-size:var(--fs-xs);color:var(--text3)">${toDD(c.date)}</td>
             <td style="font-size:var(--fs-xs)">${h(c.description||'')}</td>
-            <td style="font-size:10px;color:${sameAcc?'var(--text2)':'var(--text3)'}">${h(cAcc?.name||'—')}${sameAcc?'':' <span style="font-size:9px;opacity:.7">(other)</span>'}</td>
+            <td style="font-size:10px;color:${sameAcc?'var(--text2)':'var(--text3)'}">${h(cAcc?.name||'—')}${isCard?' <span style="font-size:9px;opacity:.7">(card)</span>':sameAcc?'':' <span style="font-size:9px;opacity:.7">(other)</span>'}</td>
             <td style="text-align:right;font-weight:500;font-variant-numeric:tabular-nums;font-size:var(--fs-xs)">${fmtP(c.amount)}</td>
             <td style="text-align:center;font-size:10px;color:${matchCol};font-weight:600">${matchLbl}</td>
             <td><button class="btn btn-xs btn-p" onclick="confirmRefundLink('${c.id}','${cYm}')">Link</button></td>
