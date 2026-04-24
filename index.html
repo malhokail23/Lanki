@@ -5397,8 +5397,10 @@ function rStaff(){
     const totalPaid=payments.reduce((s,t)=>s+(txDir(t)==='out'?t.amount:0),0);
     const lastPayment=payments[0];
     const paymentsToShow=payments.slice(0,6);
-    // Staff variance: baseline = salary - planned deduction for that payment's month
+    // Staff variance: baseline = salary - planned deduction for that payment's month.
+    // Only applies to salary payments — advance payments are a separate type and are excluded.
     const stfVariance=(t)=>{
+      if(t.advanceId)return{baseline:null,variance:0,tag:null,isAdvance:true};
       const ym=(t.date||'').substr(0,7);
       const planned=advPlannedForMonth(st,ym);
       const baseline=Math.max(0,(st.salary||0)-planned);
@@ -5418,17 +5420,21 @@ function rStaff(){
         <div style="border:1px solid var(--border);border-radius:var(--rsm);overflow:hidden">
           ${paymentsToShow.map((t,i)=>{
             const v=stfVariance(t);
-            const varTag=v.tag?(()=>{
+            let tagHtml='';
+            if(v.isAdvance){
+              // Advance payment — show a neutral informational tag instead of variance
+              tagHtml=`<span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;background:color-mix(in srgb,var(--electric) 12%,transparent);color:var(--electric);letter-spacing:.03em">Advance payment</span>`;
+            }else if(v.tag){
               const isHigher=v.tag==='higher';
               const color=isHigher?'color-mix(in srgb,var(--warn) 18%,transparent)':'color-mix(in srgb,var(--ok) 15%,transparent)';
               const text=isHigher?'color-mix(in srgb,var(--warn) 70%,var(--midnight))':'var(--ok)';
               const label=isHigher?'Higher':'Lower';
-              return`<span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;background:${color};color:${text};letter-spacing:.03em">${label} by ${fmt(Math.abs(v.variance))}</span>`;
-            })():'';
+              tagHtml=`<span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;background:${color};color:${text};letter-spacing:.03em">${label} by ${fmt(Math.abs(v.variance))}</span>`;
+            }
             return`<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;${i<paymentsToShow.length-1?'border-bottom:1px solid var(--border);':''}">
               <div style="flex-shrink:0;min-width:80px;font-size:11px;color:var(--text3)">${toDD(t.date)}</div>
               <div style="flex:1;min-width:0;font-size:12px;color:var(--text1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(t.description||'--')}</div>
-              <div style="flex-shrink:0">${varTag}</div>
+              <div style="flex-shrink:0">${tagHtml}</div>
               <div style="flex-shrink:0;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;color:${txDir(t)==='out'?'var(--text1)':'var(--ok)'}">${txDir(t)==='out'?'−':'+'}${fmtP(t.amount)}</div>
             </div>`;
           }).join('')}
