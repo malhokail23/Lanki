@@ -1428,7 +1428,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='7.0';
+const VERSION='7.1';
 let sKey=null,saveTimer=null,pinCb=null,catCb=null,activeGroup=null;
 
 // ─── CRYPTO ───
@@ -4677,8 +4677,17 @@ async function doImport(directPayload){
     const rule=!matchedBill?getRule(cleanDesc):null;
     let ruleApplied=false;
     if(rule){
-      if(!mid||mid!==rule.mid){mid=rule.mid;sid=rule.sid;ruleApplied=true;}
-      else if(mid===rule.mid&&(!sid||sid!==rule.sid)){sid=rule.sid;ruleApplied=true;}
+      // Rules overwrite main category, and sub ONLY if the rule has one.
+      // If the rule was learned without a sub (empty string), preserve whatever the extractor provided.
+      const ruleHasSub=rule.sid&&rule.sid.trim();
+      if(!mid||mid!==rule.mid){
+        mid=rule.mid;
+        if(ruleHasSub)sid=rule.sid;
+        ruleApplied=true;
+      }else if(mid===rule.mid&&ruleHasSub&&(!sid||sid!==rule.sid)){
+        sid=rule.sid;
+        ruleApplied=true;
+      }
       // Touch the rule to update lastUsed
       if(ruleApplied&&rule._rule){rule._rule.lastUsed=Date.now();rule._rule.useCount=(rule._rule.useCount||0)+1;}
     }
