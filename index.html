@@ -580,9 +580,12 @@ td{padding:9px 10px;border-bottom:1px solid var(--bg2);vertical-align:middle}
 tr:last-child td{border-bottom:none}
 tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
 /* Apple-grade transactions table: fixed column widths prevent shift between months */
-.tx-tbl{table-layout:fixed;width:100%;min-width:920px}
+.tx-tbl{table-layout:fixed;width:100%;min-width:1100px}
 .tx-tbl td,.tx-tbl th{overflow:hidden;text-overflow:ellipsis}
 .tx-tbl td>div{overflow:hidden;text-overflow:ellipsis}
+/* Description cell: clamp to 2 lines max, notes appear inline as a secondary line */
+.tx-desc-clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;line-height:1.4}
+.tx-desc-clamp .tx-notes{display:block;font-size:10px;color:var(--text3);margin-top:2px}
 /* Transactions card: white elevated surface on Feather White page */
 .tx-card{padding:0;overflow:hidden}
 .tx-card .tbl-wrap{padding:0}
@@ -1356,7 +1359,7 @@ const TAB_TO_GROUP={txbank:'transactions',txcards:'transactions',aiupload:'trans
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='4.8';
+const VERSION='4.9';
 let sKey=null,saveTimer=null,pinCb=null,catCb=null,activeGroup=null;
 
 // ─── CRYPTO ───
@@ -1658,8 +1661,9 @@ function h(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/
 function ctag(mid,sid){
   const m=getMC(mid),s=getSC(sid);
   const col=CAT_COLORS[mid]||'#888';
-  let out=`<span class="ctag" style="background:${col}22;color:${col}">${m?.name||'--'}</span>`;
-  if(s)out+=` <span style="font-size:11px;color:var(--text3)">${s.name}</span>`;
+  let out=`<div style="line-height:1.3"><span class="ctag" style="background:${col}22;color:${col}">${m?.name||'--'}</span>`;
+  if(s)out+=`<div style="font-size:11px;color:var(--text3);margin-top:3px">${s.name}</div>`;
+  out+='</div>';
   return out;
 }
 function txDir(t){
@@ -1717,6 +1721,104 @@ function getAccountOpeningBal(accId,ym,_depth=0){
   return null;
 }
 function tbadge(t){const m={income:'<span class="badge b-in">Income</span>',expense:'<span class="badge b-out">Expense</span>',transfer:'<span class="badge b-tr">Transfer</span>',investment:'<span class="badge b-inv">Investment</span>',external_transfer:'<span class="badge b-ext">External Transfer</span>'};return m[t]||`<span class="badge b-grey">${t}</span>`;}
+
+// ─── ORPHAN DETECTION ───
+// A transaction is "orphaned" when its accountId is null, missing, or points to a non-existent account.
+// Orphans are hidden from Bank Accounts and Cards tabs and surfaced via a banner for cleanup.
+function isOrphan(t){
+  if(!t.accountId)return true;
+  const acc=S.accounts.find(a=>a.id===t.accountId);
+  return !acc;
+}
+function listOrphans(){
+  const out=[];
+  Object.keys(S.txnCache||{}).forEach(ym=>{
+    (S.txnCache[ym]||[]).forEach(t=>{if(isOrphan(t))out.push({ym,t});});
+  });
+  out.sort((a,b)=>(b.t.date||'').localeCompare(a.t.date||''));
+  return out;
+}
+function openOrphanModal(){
+  const orphans=listOrphans();
+  document.getElementById('orphan-modal')?.remove();
+  const mo=document.createElement('div');
+  mo.id='orphan-modal';
+  mo.className='mo active';
+  mo.innerHTML=`
+    <div class="mo-bd" style="max-width:720px">
+      <div class="mo-h">
+        <div>
+          <div style="font-size:16px;font-weight:600">Orphan transactions</div>
+          <div style="font-size:var(--fs-xs);color:var(--text3);margin-top:2px">${orphans.length} transaction${orphans.length===1?'':'s'} have no valid account. Assign each to an account, or delete.</div>
+        </div>
+        <button class="btn" onclick="document.getElementById('orphan-modal').remove()">&#10005;</button>
+      </div>
+      <div class="mo-bg" style="padding:0">
+        ${orphans.length===0?'<div class="empty" style="padding:2rem">No orphan transactions found.</div>':`
+        <div style="max-height:50vh;overflow-y:auto">
+          ${orphans.map(({ym,t})=>`
+            <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:12px">
+              <div style="flex-shrink:0;min-width:80px;font-size:11px;color:var(--text3)">${toDD(t.date)}</div>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:var(--fs-sm);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(t.description||'--')}</div>
+                <div style="font-size:10px;color:var(--text3);margin-top:2px">${fmtS(txDir(t)==='in'?t.amount:-t.amount)} &middot; ${fmtYM(ym)}</div>
+              </div>
+              <div style="flex-shrink:0;display:flex;gap:6px;align-items:center">
+                <select onchange="assignOrphan('${t.id}','${ym}',this.value)" style="font-size:11px;padding:4px 6px;min-width:140px">
+                  <option value="">Assign to...</option>
+                  ${S.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}">${h(a.name)}</option>`).join('')}
+                </select>
+                <button class="btn btn-xs btn-d" onclick="deleteOrphan('${t.id}','${ym}')">Delete</button>
+              </div>
+            </div>`).join('')}
+        </div>
+        <div style="padding:12px 16px;border-top:2px solid var(--border);display:flex;gap:8px;justify-content:flex-end;background:var(--bg2)">
+          <button class="btn btn-sm btn-d" onclick="deleteAllOrphans()">Delete all ${orphans.length}</button>
+        </div>`}
+      </div>
+    </div>`;
+  document.body.appendChild(mo);
+}
+async function assignOrphan(id,ym,accId){
+  if(!accId)return;
+  const t=(S.txnCache[ym]||[]).find(x=>x.id===id);
+  if(!t)return;
+  t.accountId=accId;
+  txnSaveQueue[ym]=true;
+  await flushTxnQueue();
+  await saveState();
+  toast('Transaction assigned');
+  openOrphanModal(); // refresh list
+  render();
+}
+async function deleteOrphan(id,ym){
+  if(!confirm('Delete this orphan transaction permanently?'))return;
+  S.txnCache[ym]=(S.txnCache[ym]||[]).filter(t=>t.id!==id);
+  S.matchedPairs=(S.matchedPairs||[]).filter(p=>p.outId!==id&&p.inId!==id);
+  txnSaveQueue[ym]=true;
+  await flushTxnQueue();
+  await saveState();
+  toast('Orphan deleted');
+  openOrphanModal();
+  render();
+}
+async function deleteAllOrphans(){
+  const orphans=listOrphans();
+  if(!orphans.length)return;
+  if(!confirm(`Delete all ${orphans.length} orphan transactions permanently? This cannot be undone.`))return;
+  const affectedYms=new Set();
+  orphans.forEach(({ym,t})=>{
+    S.txnCache[ym]=(S.txnCache[ym]||[]).filter(x=>x.id!==t.id);
+    S.matchedPairs=(S.matchedPairs||[]).filter(p=>p.outId!==t.id&&p.inId!==t.id);
+    affectedYms.add(ym);
+  });
+  affectedYms.forEach(ym=>{txnSaveQueue[ym]=true;});
+  await flushTxnQueue();
+  await saveState();
+  toast(`Deleted ${orphans.length} orphan transactions`);
+  document.getElementById('orphan-modal')?.remove();
+  render();
+}
 
 // ─── PERSIST (V1.2: separate txn storage) ───
 function getMainP(){
@@ -3618,6 +3720,14 @@ async function doImport(directPayload){
   }
   let rId=accOverride||data.account_id||data.accountId||null;
   if(!rId&&data.account_number){const an=(data.account_number||'').replace(/\s/g,'');const f=S.accounts.find(a=>a.accountNumber&&a.accountNumber.replace(/\s/g,'')===an);if(f)rId=f.id;}
+  // Guard: refuse to import without a resolved account — prevents orphan creation
+  if(!rId){
+    const msg='No account selected or matched. Pick an account in the dropdown before importing.';
+    if(directPayload){toast(msg,false);return;}
+    const errEl=document.getElementById('imp-err');
+    errEl.textContent=msg;errEl.style.display='block';
+    return;
+  }
   if(!S.txnCache[ym])S.txnCache[ym]=[];
   const txns=S.txnCache[ym];
   const preImportIds=new Set(txns.map(t=>t.id));
@@ -6444,7 +6554,7 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps){
     :['date','desc','cat','acc','amount','balance','type',''];
   const labels={date:'Date',desc:'Description',cat:'Category / Sub-Category',acc:'Account',
     amount:'Amount',balance:'Balance',outstanding:'Outstanding',type:'Type','':''};
-  const widths={date:'90px',desc:'auto',cat:'170px',acc:'130px',amount:'110px',balance:'110px',outstanding:'110px',type:'90px','':'160px'};
+  const widths={date:'110px',desc:'auto',cat:'230px',acc:'130px',amount:'140px',balance:'140px',outstanding:'140px',type:'90px','':'180px'};
 
   const bulkCol=`<th style="width:32px;padding:8px 6px">${BulkMode?'<input type="checkbox" title="Select all displayed" onclick="if(this.checked)selectAllDisplayed();else clearBulkSelection()" style="cursor:pointer;width:15px;height:15px">':''}</th>`;
   const reconTh=hasRecon?`<th style="text-align:right;white-space:nowrap;font-size:var(--fs-xxs);color:var(--warn);width:110px">Stmt Bal</th>`:'';
@@ -6506,7 +6616,7 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps){
 
     return`<tr style="${rowBg}">
       ${selCb}<td style="color:var(--text3);white-space:nowrap;font-size:var(--fs-xs)">${toDD(t.date)}</td>
-      <td><div>${h(t.description)}${st}${ruleTag}${matchedTag}${toleranceTag}${pendingTag}${debtTag}</div>${t.notes?`<div style="font-size:10px;color:var(--text3)">${h(t.notes)}</div>`:''}</td>
+      <td><div class="tx-desc-clamp">${h(t.description)}${st}${ruleTag}${matchedTag}${toleranceTag}${pendingTag}${debtTag}${t.notes?`<span class="tx-notes">${h(t.notes)}</span>`:''}</div></td>
       <td>${ch}</td>
       <td style="font-size:var(--fs-xs)">${acc?`<span style="font-weight:500">${h(acc.name)}</span>`:'--'}</td>
       <td style="text-align:right;font-weight:500;white-space:nowrap" class="${ac}">${dir==='in'?'+':'-'}${fmtP(t.amount)}</td>
@@ -6533,6 +6643,16 @@ function buildTxHeader(fl, scopedAcc, accountPills, tabLabel){
   const inc=fl.filter(t=>txDir(t)==='in'&&(!excludeMatched||!isMatched(t.id))).reduce((s,t)=>s+t.amount,0);
   const out=fl.filter(t=>txDir(t)==='out'&&(!excludeMatched||!isMatched(t.id))).reduce((s,t)=>s+t.amount,0);
   const net=inc-out;
+  // Orphan count for banner
+  const orphanCount=listOrphans().length;
+  const orphanBanner=orphanCount>0?`<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#FEF3C7;border:1px solid #F59E0B;border-radius:var(--r);margin-bottom:1rem">
+    <div style="font-size:16px;flex-shrink:0">⚠️</div>
+    <div style="flex:1">
+      <div style="font-size:var(--fs-xs);font-weight:600;color:#92400E">${orphanCount} transaction${orphanCount===1?'':'s'} have no account linked</div>
+      <div style="font-size:var(--fs-xxs);color:#78350F;margin-top:2px;line-height:1.5">These are hidden from Bank Accounts and Cards views. Assign them to an account or delete them.</div>
+    </div>
+    <button class="btn btn-sm" onclick="openOrphanModal()" style="flex-shrink:0">Review</button>
+  </div>`:'';
   // Opening / Closing: meaningful only when scoped to a single account for the current month
   let openingStr='—',closingStr='—';
   if(scopedAcc&&!TF.allMonths){
@@ -6548,6 +6668,7 @@ function buildTxHeader(fl, scopedAcc, accountPills, tabLabel){
     }
   }
   return`
+  ${orphanBanner}
   <div style="margin-bottom:1.5rem">
     <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Account</div>
     <div class="fg" style="gap:6px;flex-wrap:wrap">
@@ -6563,7 +6684,6 @@ function buildTxHeader(fl, scopedAcc, accountPills, tabLabel){
         <summary class="btn btn-sm" style="list-style:none;cursor:pointer">&#8943;</summary>
         <div style="position:absolute;right:0;top:calc(100% + 4px);background:var(--bg1);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 4px 16px rgba(2,23,81,0.08);padding:4px;min-width:200px;z-index:50;display:flex;flex-direction:column;gap:2px">
           <button class="btn btn-sm" style="justify-content:flex-start;text-align:left;background:transparent;border:none" onclick="this.closest('details').open=false;tp('imp-panel');setTimeout(prefillOpeningBal,50)">Import JSON</button>
-          <button class="btn btn-sm" style="justify-content:flex-start;text-align:left;background:transparent;border:none" onclick="this.closest('details').open=false;toggleBulkSelect()" id="bulk-sel-btn">Select multiple</button>
           <button class="btn btn-sm btn-d" style="justify-content:flex-start;text-align:left;background:transparent;border:none;color:var(--bad)" onclick="this.closest('details').open=false;clearMonthTxns()">Clear this month</button>
         </div>
       </details>
@@ -6661,7 +6781,13 @@ async function rTxBank(){
 
   const bankAccs=S.accounts.filter(a=>BANK_ACC_TYPES.has(a.type)&&!a.archived);
   const txns=S.txnCache[S.month]||[];
-  const bankTxns=txns.filter(t=>!t.accountId||bankAccs.some(a=>a.id===t.accountId));
+  // Only include transactions whose accountId resolves to a non-archived bank account.
+  // Orphans (accountId null or pointing to a card/deleted account) are surfaced separately via the orphan banner.
+  const bankTxns=txns.filter(t=>{
+    if(!t.accountId)return false;
+    const acc=S.accounts.find(a=>a.id===t.accountId);
+    return acc&&BANK_ACC_TYPES.has(acc.type)&&!acc.archived;
+  });
   const scopedAcc=TF.txnAcc&&bankAccs.some(a=>a.id===TF.txnAcc)?TF.txnAcc:null;
   // V3.0 #6: allMonths mode reads all months, not just S.month
   const bankSource=TF.allMonths?Object.values(S.txnCache).flat().filter(t=>{const acc=S.accounts.find(a=>a.id===t.accountId);return acc&&acc.accountClass!=='credit_card'&&acc.type!=='credit_card'&&acc.type!=='charge_card';}):bankTxns;
@@ -6761,6 +6887,18 @@ async function rTxCards(){
 }
 
 // ─── SHARED FILTER BAR ───
+// Debounced search — prevents focus loss on every keystroke by throttling re-renders
+let _txSearchTimer=null;
+function onTxSearchInput(v){
+  TF.q=v;
+  clearTimeout(_txSearchTimer);
+  _txSearchTimer=setTimeout(async()=>{
+    await render();
+    // Restore focus + cursor to end of input after re-render
+    const el=document.getElementById('tx-search-input');
+    if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length);}
+  },250);
+}
 function buildTxFilters(){
   return`
   <!-- Bulk action bar — hidden until transactions are selected -->
@@ -6772,7 +6910,7 @@ function buildTxFilters(){
     <button class="btn btn-xs btn-p" onclick="applyBulkCategory()">Assign Category</button>
   </div>
   <div class="fg" style="gap:8px;flex-wrap:nowrap;align-items:center;margin-bottom:1rem;overflow-x:auto">
-    <input type="text" placeholder="Search" value="${TF.q||''}" oninput="TF.q=this.value;render()" autocomplete="off" style="flex:2;min-width:200px">
+    <input type="text" id="tx-search-input" placeholder="Search" value="${TF.q||''}" oninput="onTxSearchInput(this.value)" autocomplete="off" style="flex:1;min-width:140px">
     <select onchange="TF.type=this.value;render()" style="min-width:130px;flex:1">
       <option value="" ${!TF.type?'selected':''}>All Types</option>
       <option value="income" ${TF.type==='income'?'selected':''}>Income</option>
@@ -6794,6 +6932,7 @@ function buildTxFilters(){
       All months
     </label>
     <button class="btn btn-sm" onclick="TF.type='';TF.mc='';TF.sub='';TF.q='';TF.allMonths=false;TF.sortCol='';TF.sortDir=1;render()">Clear</button>
+    <button class="btn btn-sm ${BulkMode?'btn-p':''}" id="bulk-sel-btn" onclick="toggleBulkSelect()" style="white-space:nowrap">${BulkMode?'Exit Select':'Select'}</button>
   </div>`;
 }
 
@@ -8679,6 +8818,11 @@ function clearMonthAndMark(ym,accountId){
 
 async function commitAIImport(){
   if(!_aiState.extracted.length)return;
+  if(!_aiState.accountId){
+    _aiState.error='Select an account before importing. Use the Account dropdown above.';
+    render();
+    return;
+  }
   _aiState.error='';
 
   const payload={
