@@ -6728,9 +6728,12 @@ function onDebtTypeChange(v){
   }
 }
 function rFamilyInv(){
-  // All investment and income transactions across all months (all-time)
+  // All investment outflows (capital deployed) and all income transactions (potential returns).
+  // For the Self card, we only count untagged income with an investment sub-category (so salary/refunds don't inflate returns).
+  // For named family members, we trust the user's explicit beneficiary tag regardless of sub-category.
   const allInvTxns=Object.values(S.txnCache).flat().filter(t=>t.type==='investment'&&txDir(t)==='out');
-  const allRetTxns=Object.values(S.txnCache).flat().filter(t=>t.type==='income'&&t.beneficiaryId);
+  const allIncomeTxns=Object.values(S.txnCache).flat().filter(t=>t.type==='income');
+  const INV_INCOME_SUBS=new Set(['sub_investment_return','sub_dividends']);
 
   // Build member cards — named members + Unassigned
   const members=[...(S.familyMembers||[])];
@@ -6741,8 +6744,8 @@ function rFamilyInv(){
       ? allInvTxns.filter(t=>!t.beneficiaryId)
       : allInvTxns.filter(t=>t.beneficiaryId===mid);
     const retTxns=isUnassigned
-      ? allRetTxns.filter(t=>!t.beneficiaryId)
-      : allRetTxns.filter(t=>t.beneficiaryId===mid);
+      ? allIncomeTxns.filter(t=>!t.beneficiaryId&&INV_INCOME_SUBS.has(t.subCatId))
+      : allIncomeTxns.filter(t=>t.beneficiaryId===mid);
     const deployed=invTxns.reduce((s,t)=>s+t.amount,0);
     const returns=retTxns.reduce((s,t)=>s+t.amount,0);
     const lastVal=m?.lastRecordedValue||null;
