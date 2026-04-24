@@ -1420,7 +1420,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='5.9';
+const VERSION='6.0';
 let sKey=null,saveTimer=null,pinCb=null,catCb=null,activeGroup=null;
 
 // ─── CRYPTO ───
@@ -1605,7 +1605,7 @@ function lockApp(){sKey=null;
   // H2: Clear decrypted state from memory
   S.accounts=[];S.debts=[];S.goals=[];S.income=[];S.bills=[];S.subs=[];
   S.staff=[];S.rules=[];S.txnRules=[];S.dismissed=[];S.deletedCats=[];S.deletedSubs=[];
-  S.customMainCats=[];S.customSubCats=[];S.catNameOverrides={};S.catColorOverrides={};S.subNameOverrides={};S.subParentOverrides={};
+  S.customMainCats=[];S.customSubCats=[];S.catNameOverrides={};S.catColorOverrides={};S.subNameOverrides={};S.subParentOverrides={};S.billRules=[];
   S.familyMembers=[];S.txnCache={};S.monthlyBal={};S.matchedPairs=[];S.settings={};
   // M7: restore category colors for next unlock
   Object.keys(CAT_COLORS).forEach(k=>{if(!MAIN_CATS.find(m=>m.id===k))delete CAT_COLORS[k];});
@@ -1699,7 +1699,7 @@ function mRange(from,to){const r=[];let c=from;while(c<=to){r.push(c);c=addM(c,1
 let S={
   tab:'overview',month:addM(getYM(new Date()),-1),privacy:false,ovPeriod:'month',
   accounts:[],debts:[],goals:[],income:[],bills:[],subs:[],staff:[],
-  rules:[],dismissed:[],deletedCats:[],deletedSubs:[],customMainCats:[],customSubCats:[],catNameOverrides:{},catColorOverrides:{},subNameOverrides:{},subParentOverrides:{},txnCache:{},monthlyBal:{},matchedPairs:[],submitters:[],
+  rules:[],dismissed:[],deletedCats:[],deletedSubs:[],customMainCats:[],customSubCats:[],catNameOverrides:{},catColorOverrides:{},subNameOverrides:{},subParentOverrides:{},billRules:[],txnCache:{},monthlyBal:{},matchedPairs:[],submitters:[],
   settings:{currency:'SAR',savingsTarget:20,backupReminderMonths:2,lastBackup:null},
   version:VERSION
 };
@@ -1887,7 +1887,7 @@ function getMainP(){
     version:VERSION,
     accounts:S.accounts,debts:S.debts,goals:S.goals,income:S.income,
     bills:S.bills,subs:S.subs,staff:S.staff,rules:S.rules,txnRules:S.txnRules,dismissed:S.dismissed,
-    deletedCats:S.deletedCats,deletedSubs:S.deletedSubs,customMainCats:S.customMainCats,customSubCats:S.customSubCats,catNameOverrides:S.catNameOverrides,catColorOverrides:S.catColorOverrides,subNameOverrides:S.subNameOverrides,subParentOverrides:S.subParentOverrides,familyMembers:S.familyMembers,settings:S.settings,monthlyBal:S.monthlyBal,matchedPairs:S.matchedPairs,submitters:S.submitters
+    deletedCats:S.deletedCats,deletedSubs:S.deletedSubs,customMainCats:S.customMainCats,customSubCats:S.customSubCats,catNameOverrides:S.catNameOverrides,catColorOverrides:S.catColorOverrides,subNameOverrides:S.subNameOverrides,subParentOverrides:S.subParentOverrides,billRules:S.billRules,familyMembers:S.familyMembers,settings:S.settings,monthlyBal:S.monthlyBal,matchedPairs:S.matchedPairs,submitters:S.submitters
   };
 }
 function restoreS(d){
@@ -1920,7 +1920,7 @@ function restoreS(d){
   S.txnRules=merged.sort((a,b)=>(b.lastUsed||0)-(a.lastUsed||0)).slice(0,300);
   S.deletedCats=d.deletedCats||[];S.deletedSubs=d.deletedSubs||[];
   S.customMainCats=d.customMainCats||[];S.customSubCats=d.customSubCats||[];
-  S.catNameOverrides=d.catNameOverrides||{};S.catColorOverrides=d.catColorOverrides||{};S.subNameOverrides=d.subNameOverrides||{};S.subParentOverrides=d.subParentOverrides||{};
+  S.catNameOverrides=d.catNameOverrides||{};S.catColorOverrides=d.catColorOverrides||{};S.subNameOverrides=d.subNameOverrides||{};S.subParentOverrides=d.subParentOverrides||{};S.billRules=d.billRules||[];
     S.familyMembers=d.familyMembers||[];
   S.settings={currency:'SAR',savingsTarget:20,backupReminderMonths:2,lastBackup:null,...(d.settings||{})};  S.monthlyBal=d.monthlyBal||{};  S.matchedPairs=d.matchedPairs||[];
   S.submitters=d.submitters||[];
@@ -3331,9 +3331,12 @@ async function saveEditTxn(){
   t.debtId=document.getElementById('etxn-debt').value||null;
   t.beneficiaryId=document.getElementById('etxn-beneficiary')?.value||null;
   // Bill tag — only meaningful for Housing/Subscriptions categories
+  const prevBillId=t.billId||null;
   const newBillId=document.getElementById('etxn-bill')?.value||null;
   if(BILL_CATEGORY_IDS.has(t.mainCatId))t.billId=newBillId||null;
   else delete t.billId; // category changed away from bill-eligible → drop the link
+  // Learn manual bill link → so future similar descriptions auto-link without prompting
+  if(newBillId&&newBillId!==prevBillId)learnBillRule(t.description,newBillId);
   // Staff tag — only meaningful for Household Staff category, but we preserve selection regardless
   const prevStaffId=t.staffId||null;
   const newStaffId=document.getElementById('etxn-staff')?.value||null;
@@ -3950,9 +3953,19 @@ async function doImport(directPayload){
     );
     if(isDup)continue;
     const txnItem={id:uid(),date:t.date,description:cleanDesc,raw_description:rawDesc,amount:amt,type:txnType,direction:dir,mainCatId:mid,subCatId:sid,accountId:ai,debtId:di,notes:(t.notes||'').trim(),flagged:!!t.flagged,ruleApplied:ruleApplied||false,statementBal:t.statement_balance!=null?parseFloat(t.statement_balance):undefined};
-    // Auto-match to bill if category is Housing & Utilities or Subscriptions & Digital AND description contains Sadad code or account number
+    // Auto-match to bill — high-confidence ID matches now run before category gating, so we may need to set the category.
     const linkBill=matchTransactionToBill(txnItem);
-    if(linkBill)txnItem.billId=linkBill.id;
+    if(linkBill){
+      txnItem.billId=linkBill.id;
+      // If the matcher landed on this transaction without a bill-eligible category, adopt the bill's category.
+      // The match is high-confidence (Sadad code or account number), so the AI's category guess is overruled.
+      if(!txnItem.mainCatId||!BILL_CATEGORY_IDS.has(txnItem.mainCatId)){
+        if(linkBill.mainCatId&&BILL_CATEGORY_IDS.has(linkBill.mainCatId)){
+          txnItem.mainCatId=linkBill.mainCatId;
+          if(linkBill.subCatId)txnItem.subCatId=linkBill.subCatId;
+        }
+      }
+    }
     if(txnYm!==ym){
       targetCache.push(txnItem);
       crossMonthCount=(crossMonthCount||0)+1;
@@ -5142,18 +5155,41 @@ function openEditBill(id){
 
 // ─── TRANSACTION ↔ BILL LINKING ───
 const BILL_CATEGORY_IDS=new Set(['cat_main_housing','cat_main_subscriptions']);
-// Match a transaction to a bill. Criteria (category gated):
-// 1. Transaction main category must be Housing & Utilities or Subscriptions & Digital
-// 2. Description or notes contains the bill's Sadad code (e.g., "Sadad 001") OR the bill's account number
+// Persist a learned (description → bill) mapping. Called when the user manually links a bill in the Edit modal.
+// On future imports, transactions whose description contains this key will auto-link to the same bill.
+function learnBillRule(description,billId){
+  if(!description||!billId)return;
+  const desc=(description||'').trim();
+  if(desc.length<3)return;
+  S.billRules=S.billRules||[];
+  // Drop any existing rule with the same descKey (latest wins)
+  S.billRules=S.billRules.filter(r=>(r.descKey||'').toLowerCase()!==desc.toLowerCase());
+  S.billRules.push({descKey:desc,billId,learnedAt:new Date().toISOString()});
+  // Cap at 200 entries — drop oldest
+  if(S.billRules.length>200)S.billRules=S.billRules.slice(-200);
+}
+// Match a transaction to a bill. Two-pass:
+//  Pass 1 — high-confidence ID match (Sadad code or account number) — runs regardless of category.
+//  Pass 2 — learned (description → bill) rule from previous manual links.
 function matchTransactionToBill(t){
-  if(!t||!t.mainCatId||!BILL_CATEGORY_IDS.has(t.mainCatId))return null;
+  if(!t)return null;
   const hay=((t.description||'')+' '+(t.notes||'')+' '+(t.raw_description||'')).toLowerCase();
   if(!hay.trim())return null;
+  // Pass 1 — high-confidence ID match (Sadad code or account number). Runs regardless of category.
   for(const b of(S.bills||[])){
     const code=(b.sadadCode||'').trim();
     const acno=(b.accountNo||'').trim();
-    if(code&&hay.includes(code.toLowerCase()))return b;
+    if(code&&code.length>=4&&hay.includes(code.toLowerCase()))return b;
     if(acno&&acno.length>=4&&hay.includes(acno.toLowerCase()))return b;
+  }
+  // Pass 2 — learned rule (user previously linked a similar description to a bill)
+  const desc=(t.description||'').toLowerCase().trim();
+  if(desc){
+    const learned=(S.billRules||[]).find(r=>desc.includes((r.descKey||'').toLowerCase())||(r.descKey||'').toLowerCase().includes(desc));
+    if(learned){
+      const lb=(S.bills||[]).find(b=>b.id===learned.billId);
+      if(lb)return lb;
+    }
   }
   return null;
 }
@@ -8495,6 +8531,8 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps){
     const rb=showBalance&&t.accountId&&rbMaps[t.accountId]?rbMaps[t.accountId].get(t.id):null;
     const ym=t.date?t.date.substr(0,7):S.month;
     const debtTag=debt?`<span style="font-size:10px;background:#FEF3C7;color:#92400E;border-radius:3px;padding:1px 5px;margin-left:4px">${h(debt.name)}</span>`:'';
+    const linkedBill=t.billId?(S.bills||[]).find(b=>b.id===t.billId):null;
+    const billTag=linkedBill?`<span style="font-size:10px;background:#E5EDF5;color:#1E3A6F;border-radius:3px;padding:1px 5px;margin-left:4px;font-weight:500" title="Linked to bill: ${h(linkedBill.name)}">↳ ${h(linkedBill.name)}</span>`:'';
     const selCb=`<td style="padding:8px 6px;width:32px">${BulkMode?`<input type="checkbox" id="cb-${t.id}" class="tx-sel-cb" data-id="${t.id}" ${BulkSelected.has(t.id)?'checked':''} onclick="event.stopPropagation();toggleTxSel('${t.id}')" style="cursor:pointer;width:15px;height:15px">`:''}</td>`;
 
     // Reconciliation column
@@ -8525,7 +8563,7 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps){
 
     return`<tr style="${rowBg}">
       ${selCb}<td style="color:var(--text3);white-space:nowrap;font-size:var(--fs-xs)">${toDD(t.date)}</td>
-      <td><div class="tx-desc-clamp">${h(t.description)}${st}${ruleTag}${matchedTag}${toleranceTag}${pendingTag}${debtTag}${t.notes?`<span class="tx-notes">${h(t.notes)}</span>`:''}</div></td>
+      <td><div class="tx-desc-clamp">${h(t.description)}${st}${ruleTag}${matchedTag}${toleranceTag}${pendingTag}${debtTag}${billTag}${t.notes?`<span class="tx-notes">${h(t.notes)}</span>`:''}</div></td>
       <td>${ch}</td>
       <td style="font-size:var(--fs-xs)">${acc?`<span style="font-weight:500">${h(acc.name)}</span>`:'--'}</td>
       <td style="text-align:right;font-weight:500;white-space:nowrap" class="${ac}">${dir==='in'?'+':'-'}${fmtP(t.amount)}</td>
