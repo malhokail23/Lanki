@@ -1388,7 +1388,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='5.2';
+const VERSION='5.3';
 let sKey=null,saveTimer=null,pinCb=null,catCb=null,activeGroup=null;
 
 // ─── CRYPTO ───
@@ -5181,7 +5181,16 @@ function advDelete(sid,ai){
   const a=st.advances[ai];
   const ledgerCount=(a.ledger||[]).length;
   const warning=ledgerCount>0?`\n\nThis advance has ${ledgerCount} ledger entr${ledgerCount===1?'y':'ies'} which will also be deleted.`:'';
-  if(!confirm(`Delete advance of ${fmt(a.amount)} given ${toDD(a.dateGiven)||'--'}?${warning}\n\nThis cannot be undone.`))return;
+  const txnWarning=a.txnId?`\n\nThe linked expense transaction (${fmtP(a.amount)} on ${toDD(a.dateGiven)}) will also be deleted.`:'';
+  if(!confirm(`Delete advance of ${fmt(a.amount)} given ${toDD(a.dateGiven)||'--'}?${warning}${txnWarning}\n\nThis cannot be undone.`))return;
+  // Remove the linked expense transaction if any
+  if(a.txnId){
+    Object.keys(S.txnCache||{}).forEach(ym=>{
+      const before=S.txnCache[ym].length;
+      S.txnCache[ym]=S.txnCache[ym].filter(t=>t.id!==a.txnId);
+      if(S.txnCache[ym].length!==before)schedTxn(ym);
+    });
+  }
   st.advances.splice(ai,1);
   sched();saveState();render();toast('Advance deleted');
 }
@@ -5345,6 +5354,7 @@ function rStaff(){
                 ${statusBadge[st2]||''}
               </div>
               <div style="font-size:11px;color:var(--text3);margin-top:3px">Given ${toDD(a.dateGiven)||'--'} · ${fmtP(a.monthlyDeduct)}/mo · Starts ${fmtYM(a.deductStart)}</div>
+              ${a.txnId?`<div style="font-size:10px;color:var(--ok);margin-top:2px;display:flex;align-items:center;gap:4px"><span style="font-size:9px">●</span> Recorded in transactions</div>`:a.txnExempt?`<div style="font-size:10px;color:var(--text3);margin-top:2px;display:flex;align-items:center;gap:4px"><span style="font-size:9px">●</span> Historical — no transaction</div>`:`<div style="font-size:10px;color:var(--warn);margin-top:2px;display:flex;align-items:center;gap:4px"><span style="font-size:9px">●</span> Not in transactions — <a href="#" onclick="event.preventDefault();openBackfillModal()" style="color:var(--electric);text-decoration:underline">link now</a></div>`}
               ${a.notes?`<div style="font-size:11px;color:var(--text3);margin-top:1px">${h(a.notes)}</div>`:''}
             </div>
             <div style="text-align:right">
@@ -5459,6 +5469,7 @@ function rStaff(){
     <div class="pg-header-title">Household Staff</div>
     <button class="btn btn-p btn-sm" onclick="openAddStaff()">+ Add staff</button>
   </div>
+  ${advBackfillBanner()}
   <div id="addstf-panel-anchor">
   <div id="addstf-panel" class="panel">
     <div class="chdr" id="stf-ptitle">Add staff member</div>
@@ -5766,6 +5777,93 @@ function addStaff(){
   sched();closeStaffForm();render();
 }
 function delStaff(id){S.staff=S.staff.filter(x=>x.id!==id);sched();render();}
+// ─── ADVANCE TRANSACTION HELPERS ───
+// Map human-readable staff role to sub-category ID for staff advance expense transactions
+const STAFF_ROLE_TO_SUBCAT={
+  'Maid & Cleaner':'sub_staff_maid',
+  'Driver':'sub_staff_driver',
+  'Nanny & Babysitter':'sub_staff_nanny',
+  'Cook & Chef':'sub_staff_cook',
+  'Gardener':'sub_staff_gardener',
+  'Security Guard':'sub_staff_guard',
+  'Other':'sub_staff_other'
+};
+function staffSubCat(st){return STAFF_ROLE_TO_SUBCAT[st?.role]||'sub_staff_other';}
+
+// Find external_transfer candidates in S.txnCache that could match an advance amount around dateGiven
+function findAdvanceTxnCandidates(amount,dateGiven){
+  const target=new Date(dateGiven);
+  const candidates=[];
+  Object.entries(S.txnCache||{}).forEach(([ym,arr])=>{
+    (arr||[]).forEach(t=>{
+      if(t.type!=='external_transfer'&&t.type!=='expense')return;
+      if(Math.abs(t.amount-amount)>=0.01)return;
+      if(t.advanceId)return; // already linked to another advance
+      if(t.reimbGroupId)return; // part of a reimbursement settlement
+      const diff=Math.abs((new Date(t.date)-target)/(1000*60*60*24));
+      if(diff>14)return;
+      candidates.push({id:t.id,ym,date:t.date,description:t.description,accountId:t.accountId,type:t.type});
+    });
+  });
+  candidates.sort((a,b)=>{
+    const da=Math.abs(new Date(a.date)-target),db=Math.abs(new Date(b.date)-target);
+    return da-db;
+  });
+  return candidates;
+}
+
+// Create the expense transaction for a new advance
+function createAdvanceTxn(st,advance,accountId){
+  const ym=advance.dateGiven.substr(0,7);
+  if(!S.txnCache[ym])S.txnCache[ym]=[];
+  const newTxn={
+    id:uid(),
+    date:advance.dateGiven,
+    description:`Advance paid to ${st.name.split(' ')[0]}`,
+    raw_description:`Staff advance — ${st.name}`,
+    amount:advance.amount,
+    type:'expense',
+    direction:'out',
+    mainCatId:'cat_main_staff',
+    subCatId:staffSubCat(st),
+    accountId:accountId||null,
+    debtId:null,
+    notes:`Advance: ${fmtP(advance.amount)} · repay ${fmtP(advance.monthlyDeduct)}/mo${advance.notes?' · '+advance.notes:''}`,
+    flagged:false,
+    ruleApplied:false,
+    staffId:st.id,
+    advanceId:advance.id
+  };
+  S.txnCache[ym].push(newTxn);
+  S.txnCache[ym].sort((a,b)=>a.date.localeCompare(b.date));
+  schedTxn(ym);
+  return newTxn;
+}
+
+// Re-categorize an existing transaction as a staff advance and tag it
+function linkTxnToAdvance(txnId,st,advance,accountId){
+  let linkedTxn=null,ymFound=null;
+  Object.entries(S.txnCache||{}).forEach(([ym,arr])=>{
+    const found=(arr||[]).find(t=>t.id===txnId);
+    if(found){linkedTxn=found;ymFound=ym;}
+  });
+  if(!linkedTxn)return null;
+  linkedTxn.type='expense';
+  linkedTxn.direction='out';
+  linkedTxn.mainCatId='cat_main_staff';
+  linkedTxn.subCatId=staffSubCat(st);
+  linkedTxn.staffId=st.id;
+  linkedTxn.advanceId=advance.id;
+  if(accountId)linkedTxn.accountId=accountId;
+  linkedTxn.notes=`Advance: ${fmtP(advance.amount)} · repay ${fmtP(advance.monthlyDeduct)}/mo${advance.notes?' · '+advance.notes:''}`;
+  // Re-sort the month
+  S.txnCache[ymFound].sort((a,b)=>a.date.localeCompare(b.date));
+  schedTxn(ymFound);
+  // Remove from matched pairs since it's no longer a transfer
+  S.matchedPairs=(S.matchedPairs||[]).filter(p=>p.outId!==txnId&&p.inId!==txnId);
+  return linkedTxn;
+}
+
 function logAdv(sid){
   const st=S.staff.find(x=>x.id===sid);if(!st)return;
   const panelId='adv-panel-'+sid;
@@ -5774,18 +5872,29 @@ function logAdv(sid){
   const now=new Date();
   const nextM=new Date(now.getFullYear(),now.getMonth()+1,1);
   const defDeductStart=String(nextM.getMonth()+1).padStart(2,'0')+'/'+nextM.getFullYear();
+  // Build bank account dropdown — only non-archived bank accounts
+  const bankAccs=(S.accounts||[]).filter(a=>BANK_ACC_TYPES.has(a.type)&&!a.archived);
+  const accOptions=bankAccs.map(a=>`<option value="${a.id}">${h(a.name)}</option>`).join('');
   const div=document.createElement('div');
   div.id=panelId;
   div.className='panel';div.style.display='block';div.style.marginTop='8px';
   div.innerHTML=`
     <div class="chdr">Log Advance — ${h(st.name)}</div>
     <div class="fr3" style="margin-bottom:8px">
-      <div><label class="lbl">Amount (SAR)</label><input type="number" id="${panelId}-amt" placeholder="0.00" min="0" step="0.01" oninput="advPreviewUpdate('${panelId}')"></div>
-      <div><label class="lbl">Date given (DD/MM/YYYY)</label><div class="date-inp-wrap"><input type="text" id="${panelId}-date" class="date-inp" maxlength="10" value="${toDD(now.toISOString().substr(0,10))}"><button type="button" class="cal-btn" onclick="openCal('${panelId}-date')" title="Pick date">📅</button></div></div>
+      <div><label class="lbl">Amount (SAR)</label><input type="number" id="${panelId}-amt" placeholder="0.00" min="0" step="0.01" oninput="advPreviewUpdate('${panelId}');advRefreshCandidates('${panelId}','${sid}')"></div>
+      <div><label class="lbl">Date given (DD/MM/YYYY)</label><div class="date-inp-wrap"><input type="text" id="${panelId}-date" class="date-inp" maxlength="10" value="${toDD(now.toISOString().substr(0,10))}" oninput="advRefreshCandidates('${panelId}','${sid}')"><button type="button" class="cal-btn" onclick="openCal('${panelId}-date')" title="Pick date">📅</button></div></div>
       <div><label class="lbl">Deduction starts (MM/YYYY)</label><input type="text" id="${panelId}-start" value="${defDeductStart}" oninput="advPreviewUpdate('${panelId}')"></div>
     </div>
     <div class="fr" style="margin-bottom:10px">
       <div><label class="lbl">Monthly deduction (SAR)</label><input type="number" id="${panelId}-monthly" placeholder="e.g. 300" min="0" step="0.01" oninput="advPreviewUpdate('${panelId}')"></div>
+      <div><label class="lbl">Paid from account</label><select id="${panelId}-account">${accOptions}<option value="">Cash / Other</option><option value="__historical__">Historical — before using Lanki</option></select></div>
+    </div>
+    <div id="${panelId}-link-row" style="display:none;margin-bottom:10px">
+      <label class="lbl">Link to existing transaction (optional)</label>
+      <select id="${panelId}-linked" onchange="advOnLinkedChange('${panelId}')">
+        <option value="">— None · create a new transaction —</option>
+      </select>
+      <div style="font-size:var(--fs-xxs);color:var(--text3);margin-top:4px;line-height:1.5">If linked, the existing transaction will be re-categorized as a staff advance instead of creating a duplicate.</div>
     </div>
     <div id="${panelId}-preview" style="padding:10px 12px;background:var(--bg2);border-radius:var(--rsm);margin-bottom:10px;font-size:var(--fs-xs);color:var(--text2);min-height:40px;line-height:1.7">
       Enter an amount and monthly deduction to see the repayment plan.
@@ -5797,6 +5906,35 @@ function logAdv(sid){
   if(btn&&btn.parentNode){btn.parentNode.insertBefore(div,btn.nextSibling);}
   else{document.getElementById('page-content').appendChild(div);}
   initDateInputs();
+}
+// Refresh candidate list when amount or date changes
+function advRefreshCandidates(panelId,sid){
+  const amt=parseFloat(document.getElementById(panelId+'-amt')?.value)||0;
+  const dateVal=document.getElementById(panelId+'-date')?.value;
+  const dateGiven=fromDD(dateVal);
+  const linkRow=document.getElementById(panelId+'-link-row');
+  const linkSel=document.getElementById(panelId+'-linked');
+  if(!amt||!dateGiven||!linkRow||!linkSel){if(linkRow)linkRow.style.display='none';return;}
+  const candidates=findAdvanceTxnCandidates(amt,dateGiven);
+  if(!candidates.length){linkRow.style.display='none';return;}
+  const curr=linkSel.value;
+  linkSel.innerHTML='<option value="">— None · create a new transaction —</option>'+
+    candidates.map(c=>{
+      const acc=S.accounts.find(a=>a.id===c.accountId);
+      return`<option value="${c.id}" data-account="${c.accountId||''}">${toDD(c.date)} · ${h(c.description||'Transfer')} · ${acc?h(acc.name):'—'}</option>`;
+    }).join('');
+  if(curr)linkSel.value=curr;
+  linkRow.style.display='block';
+}
+// Auto-select the linked transaction's account
+function advOnLinkedChange(panelId){
+  const sel=document.getElementById(panelId+'-linked');
+  const opt=sel?.options[sel.selectedIndex];
+  const accId=opt?.dataset?.account;
+  if(accId){
+    const accSel=document.getElementById(panelId+'-account');
+    if(accSel&&[...accSel.options].some(o=>o.value===accId))accSel.value=accId;
+  }
 }
 // Live schedule preview — runs on every input change
 function advPreviewUpdate(panelId){
@@ -5841,22 +5979,206 @@ function saveLogAdv(sid,panelId){
   const monthly=parseFloat(document.getElementById(panelId+'-monthly').value)||0;
   if(monthly<=0){toast('Enter monthly deduction',false);return;}
   const notes=(document.getElementById(panelId+'-notes')?.value||'').trim();
+  const accountRaw=document.getElementById(panelId+'-account')?.value||'';
+  const linkedTxnId=document.getElementById(panelId+'-linked')?.value||'';
+  const isHistorical=accountRaw==='__historical__';
+  const accountId=isHistorical?null:(accountRaw||null);
   let deductStart=getYM(new Date());
   if(deductStartRaw&&deductStartRaw.includes('/')){const[m,y]=deductStartRaw.split('/');if(m&&y)deductStart=y+'-'+m.padStart(2,'0');}
   if(!st.advances)st.advances=[];
-  // New ledger-based advance
-  const newAdvance={id:uid(),amount:amt,dateGiven:fromDD(dateGiven),deductStart,monthlyDeduct:monthly,status:'active',notes,ledger:[]};
+  const dateGivenISO=fromDD(dateGiven);
+  // New ledger-based advance — extended with accountId, txnId, txnExempt for historical cases
+  const newAdvance={
+    id:uid(),
+    amount:amt,
+    dateGiven:dateGivenISO,
+    deductStart,
+    monthlyDeduct:monthly,
+    status:'active',
+    notes,
+    ledger:[],
+    accountId:accountId,
+    txnId:null,
+    txnExempt:isHistorical
+  };
   st.advances.push(newAdvance);
+  // Create or link the expense transaction unless historical
+  let txnMsg='';
+  if(!isHistorical){
+    if(linkedTxnId){
+      const linked=linkTxnToAdvance(linkedTxnId,st,newAdvance,accountId);
+      if(linked){
+        newAdvance.txnId=linked.id;
+        txnMsg=` · existing transaction linked`;
+      }else{
+        // Link failed — fall back to creating new
+        const newTxn=createAdvanceTxn(st,newAdvance,accountId);
+        newAdvance.txnId=newTxn.id;
+        txnMsg=` · transaction created`;
+      }
+    }else{
+      const newTxn=createAdvanceTxn(st,newAdvance,accountId);
+      newAdvance.txnId=newTxn.id;
+      txnMsg=` · transaction created`;
+    }
+  }else{
+    txnMsg=` · no transaction (historical)`;
+  }
   // Back-scan tagged salary transactions for months in the plan — auto-record historic deductions
   const backfilled=backfillAdvanceFromTaggedTxns(st,newAdvance);
   document.getElementById(panelId)?.remove();
   sched();render();
-  if(backfilled>0)toast(`Advance logged · ${backfilled} historic deduction${backfilled===1?'':'s'} auto-recorded from tagged salary payments`);
-  else toast('Advance logged');
+  const parts=['Advance logged'+txnMsg];
+  if(backfilled>0)parts.push(`${backfilled} historic deduction${backfilled===1?'':'s'} auto-recorded`);
+  toast(parts.join(' · '));
+}
+
+// ─── ADVANCE BACKFILL — legacy advances without a transaction ───
+// Returns the banner HTML if any advance needs backfill, empty string otherwise
+function advBackfillBanner(){
+  const pending=advsNeedingBackfill();
+  if(!pending.length)return'';
+  const total=pending.reduce((s,p)=>s+p.adv.amount,0);
+  return`<div class="card" style="background:color-mix(in srgb,var(--warn) 6%,white);border:1px solid color-mix(in srgb,var(--warn) 20%,transparent);margin-bottom:1rem;padding:14px 16px">
+    <div class="fg jb" style="flex-wrap:wrap;gap:12px;align-items:flex-start">
+      <div style="min-width:0;flex:1">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Advances need a transaction</div>
+        <div style="font-size:var(--fs-sm);color:var(--text1);line-height:1.5">${pending.length} advance${pending.length===1?'':'s'} totaling <strong>${fmtP(total)}</strong> ${pending.length===1?'has':'have'} no expense transaction recorded. Link ${pending.length===1?'it':'them'} to an existing bank transaction or create a new one so your cash flow is accurate.</div>
+      </div>
+      <button class="btn btn-sm btn-p" onclick="openBackfillModal()">Review ${pending.length}</button>
+    </div>
+  </div>`;
+}
+// Returns [{st, adv}] for every advance that lacks a txnId and is not marked as historical/exempt
+function advsNeedingBackfill(){
+  const result=[];
+  (S.staff||[]).forEach(st=>{
+    (st.advances||[]).forEach(adv=>{
+      if(!adv.txnId&&!adv.txnExempt){result.push({st,adv});}
+    });
+  });
+  return result.sort((a,b)=>(b.adv.dateGiven||'').localeCompare(a.adv.dateGiven||''));
+}
+// Open the backfill review modal — user processes advances one at a time
+function openBackfillModal(){
+  const pending=advsNeedingBackfill();
+  if(!pending.length){toast('No advances need backfill');return;}
+  _backfillQueue=pending;
+  _backfillIndex=0;
+  renderBackfillModal();
+}
+let _backfillQueue=[];
+let _backfillIndex=0;
+function renderBackfillModal(){
+  if(_backfillIndex>=_backfillQueue.length){
+    document.getElementById('backfill-modal')?.remove();
+    render();
+    toast('Backfill review complete');
+    return;
+  }
+  const {st,adv}=_backfillQueue[_backfillIndex];
+  const candidates=findAdvanceTxnCandidates(adv.amount,adv.dateGiven);
+  const bankAccs=(S.accounts||[]).filter(a=>BANK_ACC_TYPES.has(a.type)&&!a.archived);
+  const accOptions=bankAccs.map(a=>`<option value="${a.id}" ${adv.accountId===a.id?'selected':''}>${h(a.name)}</option>`).join('');
+
+  document.getElementById('backfill-modal')?.remove();
+  const mo=document.createElement('div');
+  mo.id='backfill-modal';
+  mo.className='mo active';
+  mo.innerHTML=`
+    <div class="md" style="max-width:580px;width:94%;max-height:88vh;display:flex;flex-direction:column;padding:0">
+      <div style="padding:1.1rem 1.3rem;border-bottom:1px solid var(--border)">
+        <div class="fg jb" style="align-items:flex-start;gap:10px;margin-bottom:6px">
+          <div class="mdtitle" style="margin-bottom:0">Link transaction for advance</div>
+          <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap">${_backfillIndex+1} of ${_backfillQueue.length}</div>
+        </div>
+        <div style="font-size:var(--fs-xs);color:var(--text2);line-height:1.5">${h(st.name)} · ${fmtP(adv.amount)} on ${toDD(adv.dateGiven)}${adv.notes?' · '+h(adv.notes):''}</div>
+      </div>
+      <div style="flex:1;overflow-y:auto;min-height:0;padding:1.1rem 1.3rem">
+        <div style="font-size:var(--fs-xs);color:var(--text2);line-height:1.6;margin-bottom:14px">
+          Choose how to record the cash outflow for this advance. It was given on ${toDD(adv.dateGiven)} and hasn't been linked to a transaction yet.
+        </div>
+        ${candidates.length?`
+        <div style="margin-bottom:14px">
+          <label class="lbl">Link to existing transaction</label>
+          <select id="bf-linked">
+            <option value="">— Don't link — create a new transaction —</option>
+            ${candidates.map(c=>{
+              const acc=S.accounts.find(a=>a.id===c.accountId);
+              return`<option value="${c.id}" data-account="${c.accountId||''}">${toDD(c.date)} · ${h(c.description||'Transfer')} · ${acc?h(acc.name):'—'}</option>`;
+            }).join('')}
+          </select>
+          <div style="font-size:var(--fs-xxs);color:var(--text3);margin-top:4px;line-height:1.5">${candidates.length} matching transaction${candidates.length===1?'':'s'} found within 14 days of ${toDD(adv.dateGiven)}.</div>
+        </div>`:`
+        <div style="margin-bottom:14px;padding:10px 12px;background:var(--bg2);border-radius:var(--rsm);font-size:var(--fs-xxs);color:var(--text3);line-height:1.5">
+          No matching transactions found in your ledger within 14 days of ${toDD(adv.dateGiven)}. A new expense transaction will be created.
+        </div>`}
+        <div style="margin-bottom:14px">
+          <label class="lbl">Paid from account</label>
+          <select id="bf-account">${accOptions}<option value="">Cash / Other</option></select>
+        </div>
+      </div>
+      <div style="padding:12px 1.3rem;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:space-between;background:var(--bg2);flex-shrink:0;flex-wrap:wrap">
+        <button class="btn btn-d" onclick="backfillSkip(true)" title="Mark this advance as historical — paid before using Lanki or in cash. No transaction will be created.">Skip · Historical</button>
+        <div class="fg" style="gap:8px">
+          <button class="btn" onclick="backfillSkip(false)">Skip for now</button>
+          <button class="btn btn-p" onclick="backfillConfirm()">Confirm</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(mo);
+  // Auto-select account of the first candidate if available
+  if(candidates.length&&candidates[0].accountId){
+    const accSel=document.getElementById('bf-account');
+    if(accSel&&[...accSel.options].some(o=>o.value===candidates[0].accountId))accSel.value=candidates[0].accountId;
+  }
+  // When user picks a linked txn, auto-update account
+  const linkSel=document.getElementById('bf-linked');
+  if(linkSel){
+    linkSel.onchange=()=>{
+      const opt=linkSel.options[linkSel.selectedIndex];
+      const accId=opt?.dataset?.account;
+      if(accId){
+        const accSel=document.getElementById('bf-account');
+        if(accSel&&[...accSel.options].some(o=>o.value===accId))accSel.value=accId;
+      }
+    };
+  }
+}
+// User confirmed — link or create txn for this advance
+async function backfillConfirm(){
+  const {st,adv}=_backfillQueue[_backfillIndex];
+  const linkedTxnId=document.getElementById('bf-linked')?.value||'';
+  const accountId=document.getElementById('bf-account').value||null;
+  if(linkedTxnId){
+    const linked=linkTxnToAdvance(linkedTxnId,st,adv,accountId);
+    if(linked){adv.txnId=linked.id;adv.accountId=accountId;}
+    else{
+      const newTxn=createAdvanceTxn(st,adv,accountId);
+      adv.txnId=newTxn.id;adv.accountId=accountId;
+    }
+  }else{
+    const newTxn=createAdvanceTxn(st,adv,accountId);
+    adv.txnId=newTxn.id;adv.accountId=accountId;
+  }
+  await flushTxnQueue();
+  await saveState();
+  _backfillIndex++;
+  renderBackfillModal();
+}
+// Skip this advance. permanent=true marks as historical/exempt (no transaction needed, don't prompt again).
+// permanent=false just moves on — advance will appear in the banner again next render.
+async function backfillSkip(permanent){
+  const {adv}=_backfillQueue[_backfillIndex];
+  if(permanent){
+    adv.txnExempt=true;
+    await saveState();
+  }
+  _backfillIndex++;
+  renderBackfillModal();
 }
 
 
-// --- ACCOUNTS ---
 const ATG=[{g:'Bank Accounts',o:[{v:'main_account',l:'Main Account'},{v:'savings_account',l:'Savings Account'},{v:'sub_account',l:'Sub Account'}]},{g:'Cards',o:[{v:'debit_card',l:'Debit Card'},{v:'credit_card',l:'Credit Card'},{v:'charge_card',l:'Charge Card'},{v:'prepaid_card',l:'Prepaid Card'}]},{g:'Investments',o:[{v:'brokerage_account',l:'Brokerage Account'},{v:'fund_account',l:'Fund Account'},{v:'gold_account',l:'Gold Account'},{v:'crypto_wallet',l:'Crypto Wallet'},{v:'real_estate_fund',l:'Real Estate Fund'},{v:'direct_investment',l:'Direct Investment'}]},{g:'Other',o:[{v:'cash',l:'Cash'},{v:'other',l:'Other'}]}];
 const ATL=ATG.flatMap(g=>g.o).reduce((m,o)=>{m[o.v]=o.l;return m;},{});
 const ATS=ATG.map(g=>`<optgroup label="${g.g}">${g.o.map(o=>`<option value="${o.v}">${o.l}</option>`).join('')}</optgroup>`).join('');
@@ -8256,7 +8578,7 @@ async function dismissSubmission(id){
 
 async function checkReimbursementMatch(importedTxns){
   await loadSubmissions();
-  // First: check if any imported external_transfer duplicates a recent manual settlement.
+  // --- PASS 1: detect and remove duplicate bank transfers that match a recent manual settlement ---
   // This happens when the user marks as paid before the bank statement imports, then the statement
   // finally arrives — the external_transfer would double-count without this guard.
   const paidGroups={};
@@ -8277,25 +8599,57 @@ async function checkReimbursementMatch(importedTxns){
       // Payment date within 14 days of settlement date (real bank posting lag)
       const dayDiff=Math.abs((new Date(t.date)-new Date(g.paidDate))/(1000*60*60*24));
       if(dayDiff>14)continue;
-      dupsToRemove.push({txnId:t.id,person:g.person,total:g.total});
+      dupsToRemove.push({txnId:t.id,reason:'reimbursement',person:g.person,total:g.total});
       break;
     }
   }
-  // Silently delete duplicate external_transfers from txnCache
+
+  // --- PASS 2: detect duplicate bank transfers that match an existing advance transaction ---
+  // When user logs an advance via "Log Advance" form, Lanki creates the expense txn immediately.
+  // Later when the bank statement imports, the external_transfer would duplicate that outflow.
+  // Match criteria: same amount + within 14 days of the advance's dateGiven.
+  const advanceRefs=[];
+  (S.staff||[]).forEach(st=>{
+    (st.advances||[]).forEach(adv=>{
+      if(adv.txnId){advanceRefs.push({staff:st,adv});}
+    });
+  });
+  for(const t of importedTxns){
+    if(t.type!=='external_transfer')continue;
+    if(dupsToRemove.some(d=>d.txnId===t.id))continue; // already flagged by pass 1
+    for(const {staff,adv} of advanceRefs){
+      if(Math.abs(t.amount-adv.amount)>=0.01)continue;
+      const dayDiff=Math.abs((new Date(t.date)-new Date(adv.dateGiven))/(1000*60*60*24));
+      if(dayDiff>14)continue;
+      dupsToRemove.push({txnId:t.id,reason:'advance',person:staff.name,total:adv.amount});
+      break;
+    }
+  }
+
+  // Silently delete flagged duplicates from txnCache
   if(dupsToRemove.length){
-    const affectedYms=new Set();
     const dupIds=new Set(dupsToRemove.map(d=>d.txnId));
     Object.keys(S.txnCache||{}).forEach(ym=>{
       const before=S.txnCache[ym].length;
       S.txnCache[ym]=S.txnCache[ym].filter(t=>!dupIds.has(t.id));
-      if(S.txnCache[ym].length!==before){affectedYms.add(ym);schedTxn(ym);}
+      if(S.txnCache[ym].length!==before)schedTxn(ym);
     });
     await flushTxnQueue();
-    const names=[...new Set(dupsToRemove.map(d=>d.person))].join(', ');
-    toast(`Auto-removed ${dupsToRemove.length} duplicate transfer${dupsToRemove.length===1?'':'s'} to ${names} — already recorded as settled reimbursements`);
+    const reimbDups=dupsToRemove.filter(d=>d.reason==='reimbursement');
+    const advDups=dupsToRemove.filter(d=>d.reason==='advance');
+    const parts=[];
+    if(reimbDups.length){
+      const names=[...new Set(reimbDups.map(d=>d.person))].join(', ');
+      parts.push(`${reimbDups.length} reimbursement transfer${reimbDups.length===1?'':'s'} to ${names}`);
+    }
+    if(advDups.length){
+      const names=[...new Set(advDups.map(d=>d.person))].join(', ');
+      parts.push(`${advDups.length} advance transfer${advDups.length===1?'':'s'} to ${names}`);
+    }
+    toast(`Auto-removed duplicates: ${parts.join(' · ')} — already recorded`);
   }
 
-  // Second: run the existing auto-match flow for still-approved items
+  // --- PASS 3: auto-match approved reimbursements to bank transfers ---
   const approved=_submissions.filter(s=>s.status==='approved');
   if(!approved.length)return;
   const bySubmitter={};
