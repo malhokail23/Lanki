@@ -615,6 +615,38 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overfl
 .acc-section-row:hover td{background:var(--bg2)!important}
 .acc-section-label{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em}
 .acc-section-count{font-weight:500;color:var(--text3);opacity:.7;margin-left:2px}
+/* --- Categories settings page --- */
+.cat-group{margin-top:18px}
+.cat-group:first-child{margin-top:0}
+.cat-group-label{display:flex;align-items:center;gap:6px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px}
+.cat-group-sub{font-size:var(--fs-xxs);color:var(--text3);margin-bottom:10px;line-height:1.5}
+.cat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.cat-card{background:var(--surface-elevated,#fff);border:1px solid var(--border);border-radius:var(--rlg,10px);padding:12px 14px;transition:border-color .15s}
+.cat-card:hover{border-color:color-mix(in srgb,var(--electric) 30%,var(--border))}
+.cat-card-row{display:flex;align-items:flex-start;gap:10px}
+.cat-swatch{width:28px;height:28px;border-radius:6px;flex-shrink:0;margin-top:2px}
+.cat-swatch-sm{width:12px;height:12px;border-radius:3px;flex-shrink:0}
+.cat-info{flex:1;min-width:0}
+.cat-name{font-size:var(--fs-sm);font-weight:500;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.cat-meta{font-size:var(--fs-xxs);color:var(--text3);margin-top:2px;line-height:1.5}
+.cat-reason{font-size:var(--fs-xxs);color:var(--text3);margin-top:4px;line-height:1.5;font-style:normal;opacity:.85}
+.cat-lock{color:var(--text3);flex-shrink:0;opacity:.7}
+.cat-badge-custom{font-size:9px;font-weight:700;letter-spacing:.08em;padding:1px 5px;border-radius:3px;background:color-mix(in srgb,var(--electric) 10%,transparent);color:var(--electric)}
+.cat-actions{display:flex;gap:4px;flex-shrink:0}
+.cat-subs-group{margin-top:14px;padding:10px 12px;background:var(--bg2);border-radius:var(--rsm)}
+.cat-subs-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.cat-subs-list{display:flex;flex-direction:column;gap:4px}
+.cat-sub-row{display:flex;align-items:center;gap:10px;padding:6px 8px;background:var(--surface-elevated,#fff);border-radius:var(--rsm);font-size:var(--fs-xs)}
+.cat-sub-name{flex:1;display:flex;align-items:center;gap:4px;min-width:0}
+.cat-sub-meta{font-size:10px;color:var(--text3);flex-shrink:0}
+.cat-sub-actions{display:flex;gap:4px;flex-shrink:0}
+.cat-radio-row{display:flex;align-items:flex-start;gap:8px;cursor:pointer;padding:4px 0}
+.cat-radio-row input[type="radio"]{margin-top:3px;flex-shrink:0}
+.cat-swatches{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;margin-top:6px}
+.cat-swatch-btn{width:100%;aspect-ratio:1;border-radius:6px;border:2px solid transparent;cursor:pointer;transition:transform .1s,border-color .1s;padding:0}
+.cat-swatch-btn:hover{transform:scale(1.08)}
+.cat-swatch-btn.active{border-color:var(--text1);box-shadow:0 0 0 2px var(--surface-elevated,#fff) inset}
+.cat-swatch-preview{width:28px;height:28px;border-radius:6px;border:1px solid var(--border);flex-shrink:0}
 /* Reimbursement settlement cards: accordion pattern */
 .reimb-settlement{border-bottom:1px solid var(--border)}
 .reimb-settlement:last-child{border-bottom:none}
@@ -1388,7 +1420,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='5.6';
+const VERSION='5.7';
 let sKey=null,saveTimer=null,pinCb=null,catCb=null,activeGroup=null;
 
 // ─── CRYPTO ───
@@ -1573,6 +1605,7 @@ function lockApp(){sKey=null;
   // H2: Clear decrypted state from memory
   S.accounts=[];S.debts=[];S.goals=[];S.income=[];S.bills=[];S.subs=[];
   S.staff=[];S.rules=[];S.txnRules=[];S.dismissed=[];S.deletedCats=[];S.deletedSubs=[];
+  S.customMainCats=[];S.customSubCats=[];S.catNameOverrides={};S.catColorOverrides={};S.subNameOverrides={};
   S.familyMembers=[];S.txnCache={};S.monthlyBal={};S.matchedPairs=[];S.settings={};
   // M7: restore category colors for next unlock
   Object.keys(CAT_COLORS).forEach(k=>{if(!MAIN_CATS.find(m=>m.id===k))delete CAT_COLORS[k];});
@@ -1666,7 +1699,7 @@ function mRange(from,to){const r=[];let c=from;while(c<=to){r.push(c);c=addM(c,1
 let S={
   tab:'overview',month:addM(getYM(new Date()),-1),privacy:false,ovPeriod:'month',
   accounts:[],debts:[],goals:[],income:[],bills:[],subs:[],staff:[],
-  rules:[],dismissed:[],deletedCats:[],deletedSubs:[],txnCache:{},monthlyBal:{},matchedPairs:[],submitters:[],
+  rules:[],dismissed:[],deletedCats:[],deletedSubs:[],customMainCats:[],customSubCats:[],catNameOverrides:{},catColorOverrides:{},subNameOverrides:{},txnCache:{},monthlyBal:{},matchedPairs:[],submitters:[],
   settings:{currency:'SAR',savingsTarget:20,backupReminderMonths:2,lastBackup:null},
   version:VERSION
 };
@@ -1854,7 +1887,7 @@ function getMainP(){
     version:VERSION,
     accounts:S.accounts,debts:S.debts,goals:S.goals,income:S.income,
     bills:S.bills,subs:S.subs,staff:S.staff,rules:S.rules,txnRules:S.txnRules,dismissed:S.dismissed,
-    deletedCats:S.deletedCats,deletedSubs:S.deletedSubs,familyMembers:S.familyMembers,settings:S.settings,monthlyBal:S.monthlyBal,matchedPairs:S.matchedPairs,submitters:S.submitters
+    deletedCats:S.deletedCats,deletedSubs:S.deletedSubs,customMainCats:S.customMainCats,customSubCats:S.customSubCats,catNameOverrides:S.catNameOverrides,catColorOverrides:S.catColorOverrides,subNameOverrides:S.subNameOverrides,familyMembers:S.familyMembers,settings:S.settings,monthlyBal:S.monthlyBal,matchedPairs:S.matchedPairs,submitters:S.submitters
   };
 }
 function restoreS(d){
@@ -1886,11 +1919,79 @@ function restoreS(d){
   // Cap at TXN_RULES_MAX — prevents corrupted/large backups from blowing memory
   S.txnRules=merged.sort((a,b)=>(b.lastUsed||0)-(a.lastUsed||0)).slice(0,300);
   S.deletedCats=d.deletedCats||[];S.deletedSubs=d.deletedSubs||[];
+  S.customMainCats=d.customMainCats||[];S.customSubCats=d.customSubCats||[];
+  S.catNameOverrides=d.catNameOverrides||{};S.catColorOverrides=d.catColorOverrides||{};S.subNameOverrides=d.subNameOverrides||{};
     S.familyMembers=d.familyMembers||[];
   S.settings={currency:'SAR',savingsTarget:20,backupReminderMonths:2,lastBackup:null,...(d.settings||{})};  S.monthlyBal=d.monthlyBal||{};  S.matchedPairs=d.matchedPairs||[];
   S.submitters=d.submitters||[];
   // txnCache stays separate - loaded in loadS
   applyDeletions();
+  applyCatCustomizations();
+}
+// ─── CATEGORY TIER DEFINITIONS ───
+// Tier C — locked from deletion because hardcoded business logic depends on these IDs.
+// Rename and color change are still allowed.
+const TIER_C_MAIN_IDS=new Set([
+  'cat_main_income',          // income detection invariant
+  'cat_main_transfers',       // CC payments, internal transfer matching, reimbursement + advance dedup
+  'cat_main_staff',           // staff advances, payment tagging, variance
+  'cat_main_finance',         // debt detection with sub_loan_installment
+  'cat_main_housing',         // bill matching gate
+  'cat_main_subscriptions',   // bill matching gate, subscription detection
+  'cat_main_food'             // food breakdown analytics on insights
+]);
+const TIER_C_SUB_IDS=new Set([
+  'sub_staff_maid','sub_staff_driver','sub_staff_nanny','sub_staff_cook','sub_staff_gardener','sub_staff_guard','sub_staff_other',
+  'sub_loan_installment',
+  'sub_cc_payment',
+  'sub_internal_transfer','sub_external_individual',
+  'sub_dining','sub_fine_dining','sub_fast_food','sub_coffee','sub_bakery','sub_catering'
+]);
+// Map each locked main cat to the single dependency shown in the tooltip
+const TIER_C_MAIN_REASON={
+  'cat_main_income':'Used by income detection across reports and KPIs',
+  'cat_main_transfers':'Used by CC payments, internal transfers, reimbursements, and advance tracking',
+  'cat_main_staff':'Used by the Staff module and advance transactions',
+  'cat_main_finance':'Used by debt detection and loan installment tracking',
+  'cat_main_housing':'Used by bill matching',
+  'cat_main_subscriptions':'Used by bill matching and subscription tracking',
+  'cat_main_food':'Used by food analytics on the Insights page'
+};
+function isTierCMain(id){return TIER_C_MAIN_IDS.has(id);}
+function isTierCSub(id){return TIER_C_SUB_IDS.has(id);}
+function isCustomMain(id){return (S.customMainCats||[]).some(c=>c.id===id);}
+function isCustomSub(id){return (S.customSubCats||[]).some(c=>c.id===id);}
+// Rehydrate user customizations into the in-memory category registries. Idempotent.
+function applyCatCustomizations(){
+  // Merge custom main cats (idempotent — check for existing ID)
+  (S.customMainCats||[]).forEach(c=>{
+    if(!MAIN_CATS.find(x=>x.id===c.id)){
+      MAIN_CATS.push({id:c.id,name:c.name,type:c.type||'expense',color:c.color});
+    }
+    CAT_COLORS[c.id]=c.color;
+    if(!SUGGESTED[c.id])SUGGESTED[c.id]=[];
+  });
+  // Merge custom sub cats
+  (S.customSubCats||[]).forEach(s=>{
+    if(!SUB_CATS.find(x=>x.id===s.id)){
+      SUB_CATS.push({id:s.id,name:s.name});
+    }
+    if(s.parentMainId&&SUGGESTED[s.parentMainId]&&!SUGGESTED[s.parentMainId].includes(s.id)){
+      SUGGESTED[s.parentMainId].push(s.id);
+    }
+  });
+  // Apply name overrides
+  Object.entries(S.catNameOverrides||{}).forEach(([id,name])=>{
+    const m=MAIN_CATS.find(x=>x.id===id);if(m)m.name=name;
+  });
+  Object.entries(S.subNameOverrides||{}).forEach(([id,name])=>{
+    const s=SUB_CATS.find(x=>x.id===id);if(s)s.name=name;
+  });
+  // Apply color overrides
+  Object.entries(S.catColorOverrides||{}).forEach(([id,color])=>{
+    const m=MAIN_CATS.find(x=>x.id===id);if(m)m.color=color;
+    CAT_COLORS[id]=color;
+  });
 }
 // MAIN_CATS is never mutated — use getActiveCats() to get the filtered list
 function getActiveCats(){return MAIN_CATS.filter(c=>!(S.deletedCats||[]).includes(c.id));}
@@ -3238,6 +3339,8 @@ async function saveEditTxn(){
   const newSid=document.getElementById('etxn-sc').value||null;
   t.mainCatId=newMid;t.subCatId=newSid;
   if(newMid){
+    // Clear breadcrumb — transaction is no longer uncategorized from a deletion
+    delete t.prevCatName;delete t.prevCatReason;
     const prevDir=t.direction;
     t.type=typeFromCat(newMid,t.type);
     if(prevDir==='in'||prevDir==='out')t.direction=prevDir;
@@ -3973,6 +4076,7 @@ function openCP(txnId,ym,curM,curS){
     if(t){
       t.mainCatId=m||null;t.subCatId=s||null;t.ruleApplied=false;
       if(m){
+        delete t.prevCatName;delete t.prevCatReason;
         t.type=typeFromCat(m,t.type); // sync type with category
         learnRule(t.raw_description||t.description,m,s);
       }
@@ -4167,9 +4271,10 @@ async function rUncat(){
   const uRows=uncat.length?uncat.map(t=>{
     const acc=S.accounts.find(a=>a.id===t.accountId);
     const ym=t.date?t.date.substr(0,7):S.month;
+    const breadcrumb=t.prevCatName?` <span style="display:inline-block;font-size:10px;font-weight:500;padding:1px 6px;border-radius:3px;background:var(--bg2);color:var(--text3);letter-spacing:.02em;margin-left:4px" title="Became uncategorized when the original category was deleted">was: ${h(t.prevCatName)}</span>`:'';
     return`<tr>
       <td style="color:var(--text3);font-size:var(--fs-xs);white-space:nowrap">${toDD(t.date)}</td>
-      <td>${h(t.description)}</td>
+      <td>${h(t.description)}${breadcrumb}</td>
       <td style="font-size:var(--fs-xs)">${acc?.name||'--'}</td>
       <td style="text-align:right;font-weight:500" class="${t.type==='income'?'c-ok':'c-bad'}">${t.type==='income'?'+':'−'}${fmtP(t.amount)}</td>
       <td><button class="btn btn-xs btn-p" onclick="openCP('${t.id}','${ym}','','')">Assign</button><button class="btn btn-xs" onclick="openEditTxn('${t.id}','${ym}')">Edit</button></td>
@@ -7184,6 +7289,7 @@ function delGoal(id){S.goals=S.goals.filter(x=>x.id!==id);sched();render();}
 function rSettings(){
   const SETTINGS_PAGES=[
     {id:'preferences',label:'Preferences',icon:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>'},
+    {id:'categories',label:'Categories',icon:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h18M3 12h18M3 17h18"/></svg>'},
     {id:'household',label:'Household',icon:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>'},
     {id:'security',label:'Security',icon:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>'},
     {id:'data',label:'Data',icon:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>'},
@@ -7202,6 +7308,8 @@ function rSettings(){
       <div class="settings-section-label">Statement Parser</div>
       <div class="settings-row" style="align-items:flex-start"><div class="settings-row-label"><div class="settings-row-title">Edge Function URL</div><div class="settings-row-sub">Your Supabase Edge Function endpoint for AI extraction. See deployment guide.</div></div><div class="settings-row-ctrl" style="min-width:240px"><input type="text" placeholder="https://xxx.supabase.co/functions/v1/extract" value="${S.settings.edgeFnUrl||''}" onchange="S.settings.edgeFnUrl=this.value.trim();sched()" style="width:100%;font-size:11px;font-family:monospace"></div></div>
     </div>`;
+  }else if(SP==='categories'){
+    pageContent=rCategoriesSettings();
   }else if(SP==='household'){
     const fmRows=(S.familyMembers||[]).map(m=>`<div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">${h(m.name)}</div><div class="settings-row-sub">${m.relationship||'—'}</div></div><div class="settings-row-ctrl"><button class="btn btn-xs btn-d" onclick="delFamilyMember('${m.id}')">Remove</button></div></div>`).join('');
     const subRows=(S.submitters||[]).map((sub,si)=>`<div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">${h(sub.name)}</div><div class="settings-row-sub">PIN: ••••</div></div><div class="settings-row-ctrl"><button class="btn btn-xs btn-d" onclick="delSubmitter(${si})">Remove</button></div></div>`).join('');
@@ -7311,12 +7419,602 @@ function addFamilyMemberSettings(){
   sched();render();toast('Family member added');
 }
 function delRule(m){S.rules=S.rules.filter(r=>r.m!==m);sched();render();}
-function addMainCat(){const name=document.getElementById('cm-name').value.trim();if(!name){toast('Name required',false);return;}const id='cat_main_'+name.toLowerCase().replace(/[^a-z0-9]/g,'_').slice(0,15)+'_'+Math.random().toString(36).substr(2,4);const color=document.getElementById('cm-color').value;MAIN_CATS.push({id,name,type:'expense',color});CAT_COLORS[id]=color;SUGGESTED[id]=[];document.getElementById('cm-name').value='';sched();render();toast('Category added');}
-function delMainCat(id){const i=MAIN_CATS.findIndex(m=>m.id===id);if(i>=0)MAIN_CATS.splice(i,1);delete CAT_COLORS[id];delete SUGGESTED[id];if(!S.deletedCats.includes(id))S.deletedCats.push(id);sched();render();toast('Category removed. Affected transactions now appear in Uncategorized.');}
-function addSubCat(){const name=document.getElementById('cs-name').value.trim();if(!name){toast('Name required',false);return;}const id='sub_'+name.toLowerCase().replace(/[^a-z0-9]/g,'_').slice(0,15)+'_'+Math.random().toString(36).substr(2,4);SUB_CATS.push({id,name});document.getElementById('cs-name').value='';render();toast('Sub-category added');}
-function delSubCat(id){const i=SUB_CATS.findIndex(s=>s.id===id);if(i>=0)SUB_CATS.splice(i,1);if(!S.deletedSubs.includes(id))S.deletedSubs.push(id);sched();render();toast('Sub-category removed');}
+// ─── CATEGORY MANAGEMENT (Settings > Categories) ───
+// Helpers
+function countTxnsWithMainCat(catId){
+  let n=0;
+  Object.values(S.txnCache||{}).forEach(arr=>{(arr||[]).forEach(t=>{if(t.mainCatId===catId)n++;});});
+  return n;
+}
+function countTxnsWithSubCat(subId){
+  let n=0;
+  Object.values(S.txnCache||{}).forEach(arr=>{(arr||[]).forEach(t=>{if(t.subCatId===subId)n++;});});
+  return n;
+}
+// Lanki palette (preset swatches for the color picker)
+const LANKI_PALETTE=['#021751','#0077C1','#A3BCD7','#8FA9A3','#B5CBB7','#C98E8B','#D6C88F','#A690A4','#C9B9A3','#D9A59A','#F0997B','#534AB7','#378ADD','#1D9E75','#D4537E','#607D8B'];
+function nextUnusedPaletteColor(){
+  const used=new Set(MAIN_CATS.map(c=>c.color?.toUpperCase()));
+  return LANKI_PALETTE.find(c=>!used.has(c.toUpperCase()))||LANKI_PALETTE[0];
+}
 
-// --- EXPORT / BACKUP ---
+// Add custom main category
+function addCustomMainCat(name,type,color){
+  name=(name||'').trim();
+  if(!name){toast('Name required',false);return false;}
+  if(MAIN_CATS.some(c=>c.name.toLowerCase()===name.toLowerCase())){toast('A category with that name already exists',false);return false;}
+  const id='cat_main_custom_'+Math.random().toString(36).substr(2,6);
+  const cat={id,name,type:type||'expense',color:color||nextUnusedPaletteColor()};
+  MAIN_CATS.push(cat);
+  CAT_COLORS[id]=cat.color;
+  SUGGESTED[id]=[];
+  S.customMainCats.push(cat);
+  sched();
+  toast(`Added "${name}"`);
+  return true;
+}
+// Add custom sub category
+function addCustomSubCat(name,parentMainId){
+  name=(name||'').trim();
+  if(!name){toast('Name required',false);return false;}
+  if(!parentMainId||!MAIN_CATS.find(c=>c.id===parentMainId)){toast('Pick a parent category',false);return false;}
+  if(SUB_CATS.some(s=>s.name.toLowerCase()===name.toLowerCase())){toast('A sub-category with that name already exists',false);return false;}
+  const id='sub_custom_'+Math.random().toString(36).substr(2,6);
+  SUB_CATS.push({id,name});
+  S.customSubCats.push({id,name,parentMainId});
+  if(!SUGGESTED[parentMainId])SUGGESTED[parentMainId]=[];
+  SUGGESTED[parentMainId].push(id);
+  sched();
+  toast(`Added "${name}"`);
+  return true;
+}
+// Rename — works on any main cat (built-in or custom)
+function renameMainCat(id,newName){
+  newName=(newName||'').trim();
+  if(!newName){toast('Name required',false);return false;}
+  const m=MAIN_CATS.find(c=>c.id===id);
+  if(!m){toast('Category not found',false);return false;}
+  if(MAIN_CATS.some(c=>c.id!==id&&c.name.toLowerCase()===newName.toLowerCase())){toast('Another category already uses that name',false);return false;}
+  m.name=newName;
+  if(isCustomMain(id)){
+    const cc=S.customMainCats.find(c=>c.id===id);if(cc)cc.name=newName;
+  }else{
+    S.catNameOverrides[id]=newName;
+  }
+  sched();
+  return true;
+}
+function renameSubCat(id,newName){
+  newName=(newName||'').trim();
+  if(!newName){toast('Name required',false);return false;}
+  const s=SUB_CATS.find(x=>x.id===id);
+  if(!s){toast('Sub-category not found',false);return false;}
+  if(SUB_CATS.some(x=>x.id!==id&&x.name.toLowerCase()===newName.toLowerCase())){toast('Another sub-category already uses that name',false);return false;}
+  s.name=newName;
+  if(isCustomSub(id)){
+    const cc=S.customSubCats.find(c=>c.id===id);if(cc)cc.name=newName;
+  }else{
+    S.subNameOverrides[id]=newName;
+  }
+  sched();
+  return true;
+}
+// Color change — any main cat
+function recolorMainCat(id,newColor){
+  if(!newColor||!/^#[0-9A-Fa-f]{6}$/.test(newColor)){toast('Invalid hex color',false);return false;}
+  newColor=newColor.toUpperCase();
+  const m=MAIN_CATS.find(c=>c.id===id);
+  if(!m){toast('Category not found',false);return false;}
+  m.color=newColor;
+  CAT_COLORS[id]=newColor;
+  if(isCustomMain(id)){
+    const cc=S.customMainCats.find(c=>c.id===id);if(cc)cc.color=newColor;
+  }else{
+    S.catColorOverrides[id]=newColor;
+  }
+  sched();
+  return true;
+}
+// Delete a main cat — Tier C is locked. Tier B (built-in but not locked) and Custom are deletable.
+// Transactions with the mainCatId are either reassigned (reassignToId) or unassigned (mainCatId=null).
+// When unassigned, prevCatName is recorded on each transaction as a breadcrumb.
+async function deleteMainCat(id,reassignToId){
+  if(isTierCMain(id)){toast('This category is locked — cannot be deleted',false);return false;}
+  const m=MAIN_CATS.find(c=>c.id===id);
+  if(!m){toast('Category not found',false);return false;}
+  const prevName=m.name;
+  const affectedYms=new Set();
+  let touched=0;
+  Object.entries(S.txnCache||{}).forEach(([ym,arr])=>{
+    (arr||[]).forEach(t=>{
+      if(t.mainCatId!==id)return;
+      if(reassignToId){
+        t.mainCatId=reassignToId;
+        // Check if existing subCat still belongs to new parent via SUGGESTED — if not, clear it
+        if(t.subCatId){
+          const allowed=SUGGESTED[reassignToId]||[];
+          if(!allowed.includes(t.subCatId))t.subCatId=null;
+        }
+      }else{
+        t.prevCatName=prevName;
+        t.prevCatReason='category_deleted';
+        t.mainCatId=null;
+        t.subCatId=null;
+      }
+      touched++;
+      affectedYms.add(ym);
+    });
+  });
+  // Remove from MAIN_CATS, registries
+  const i=MAIN_CATS.findIndex(c=>c.id===id);
+  if(i>=0)MAIN_CATS.splice(i,1);
+  delete CAT_COLORS[id];
+  delete SUGGESTED[id];
+  // Clean from custom tracker or add to deletedCats tombstone
+  if(isCustomMain(id)){
+    S.customMainCats=S.customMainCats.filter(c=>c.id!==id);
+  }else{
+    if(!S.deletedCats.includes(id))S.deletedCats.push(id);
+  }
+  delete S.catNameOverrides[id];
+  delete S.catColorOverrides[id];
+  // REIMB_CATS cleanup — if the deleted category was referenced, drop those entries
+  for(let k=REIMB_CATS.length-1;k>=0;k--){
+    if(REIMB_CATS[k].mid===id){REIMB_CATS.splice(k,1);}
+  }
+  // Persist
+  affectedYms.forEach(ym=>schedTxn(ym));
+  await flushTxnQueue();
+  await saveState();
+  const msg=reassignToId
+    ?`Deleted "${prevName}" — ${touched} transaction${touched===1?'':'s'} reassigned`
+    :`Deleted "${prevName}"${touched>0?` — ${touched} transaction${touched===1?'':'s'} moved to Uncategorized`:''}`;
+  toast(msg);
+  return true;
+}
+// Delete a sub cat. If Tier C locked, abort. If reassignToSubId given, reassign; otherwise clear subCatId only (main stays).
+async function deleteSubCat(id,reassignToSubId){
+  if(isTierCSub(id)){toast('This sub-category is locked — cannot be deleted',false);return false;}
+  const s=SUB_CATS.find(x=>x.id===id);
+  if(!s){toast('Sub-category not found',false);return false;}
+  const prevName=s.name;
+  const affectedYms=new Set();
+  let touched=0;
+  Object.entries(S.txnCache||{}).forEach(([ym,arr])=>{
+    (arr||[]).forEach(t=>{
+      if(t.subCatId!==id)return;
+      t.subCatId=reassignToSubId||null;
+      touched++;
+      affectedYms.add(ym);
+    });
+  });
+  const i=SUB_CATS.findIndex(x=>x.id===id);
+  if(i>=0)SUB_CATS.splice(i,1);
+  // Remove from SUGGESTED everywhere
+  Object.keys(SUGGESTED).forEach(mid=>{SUGGESTED[mid]=(SUGGESTED[mid]||[]).filter(x=>x!==id);});
+  if(isCustomSub(id)){
+    S.customSubCats=S.customSubCats.filter(c=>c.id!==id);
+  }else{
+    if(!S.deletedSubs.includes(id))S.deletedSubs.push(id);
+  }
+  delete S.subNameOverrides[id];
+  // REIMB_CATS cleanup — drop entries using this sid
+  for(let k=REIMB_CATS.length-1;k>=0;k--){
+    if(REIMB_CATS[k].sid===id){REIMB_CATS.splice(k,1);}
+  }
+  affectedYms.forEach(ym=>schedTxn(ym));
+  await flushTxnQueue();
+  await saveState();
+  toast(`Deleted "${prevName}"${touched>0?` — ${touched} transaction${touched===1?'':'s'} updated`:''}`);
+  return true;
+}
+
+// ─── CATEGORIES SETTINGS PAGE ───
+function rCategoriesSettings(){
+  // Three tiers of main cats
+  const tierC=MAIN_CATS.filter(c=>isTierCMain(c.id));
+  const tierAB=MAIN_CATS.filter(c=>!isTierCMain(c.id)&&!isCustomMain(c.id));
+  const custom=MAIN_CATS.filter(c=>isCustomMain(c.id));
+
+  // Sub-counts grouped by parent main
+  const subsByMain={};
+  MAIN_CATS.forEach(m=>{subsByMain[m.id]=[];});
+  SUB_CATS.forEach(s=>{
+    // A sub can belong to multiple mains via SUGGESTED — show it under all parents
+    let assigned=false;
+    Object.entries(SUGGESTED).forEach(([mid,list])=>{
+      if((list||[]).includes(s.id)&&subsByMain[mid]){subsByMain[mid].push(s);assigned=true;}
+    });
+    if(!assigned){
+      // Orphan sub — attach to a virtual "Unassigned" bucket
+      if(!subsByMain['_unassigned'])subsByMain['_unassigned']=[];
+      subsByMain['_unassigned'].push(s);
+    }
+  });
+
+  const renderMainCard=(c,opts={})=>{
+    const locked=opts.locked;
+    const custom=opts.custom;
+    const reason=locked?(TIER_C_MAIN_REASON[c.id]||'Locked — tied to system dependencies'):'';
+    const subCount=(subsByMain[c.id]||[]).length;
+    const txnCount=countTxnsWithMainCat(c.id);
+    const typeLabel={expense:'Expense',income:'Income',transfer:'Transfer',investment:'Investment'}[c.type]||c.type;
+    return`<div class="cat-card" data-cat="${c.id}">
+      <div class="cat-card-row">
+        <div class="cat-swatch" style="background:${c.color}"></div>
+        <div class="cat-info">
+          <div class="cat-name">${h(c.name)}${locked?` <svg class="cat-lock" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`:''}${custom?` <span class="cat-badge-custom">CUSTOM</span>`:''}</div>
+          <div class="cat-meta">${h(typeLabel)} · ${subCount} sub-categor${subCount===1?'y':'ies'} · ${txnCount} transaction${txnCount===1?'':'s'}</div>
+          ${locked?`<div class="cat-reason">${h(reason)}</div>`:''}
+        </div>
+        <div class="cat-actions">
+          <button class="btn btn-xs" onclick="openEditMainCatModal('${c.id}')">Edit</button>
+          ${locked
+            ?`<button class="btn btn-xs" disabled title="${h(reason)}" style="opacity:.4;cursor:not-allowed">Delete</button>`
+            :`<button class="btn btn-xs btn-d" onclick="openDeleteMainCatModal('${c.id}')">Delete</button>`}
+        </div>
+      </div>
+    </div>`;
+  };
+
+  return`<div class="settings-page-title">Categories</div>
+  <div class="settings-section">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px">
+      <div>
+        <div class="settings-section-label" style="margin-bottom:4px">Main Categories</div>
+        <div style="font-size:var(--fs-xs);color:var(--text3);line-height:1.5">Rename, change colors, or add your own. Core categories power essential system features and cannot be deleted.</div>
+      </div>
+      <button class="btn btn-sm btn-p" onclick="openAddMainCatModal()">+ Add category</button>
+    </div>
+
+    ${tierC.length?`
+    <div class="cat-group">
+      <div class="cat-group-label"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Core · ${tierC.length}</div>
+      <div class="cat-group-sub">Essential system categories. Rename or recolor as needed.</div>
+      <div class="cat-grid">${tierC.map(c=>renderMainCard(c,{locked:true})).join('')}</div>
+    </div>`:''}
+
+    ${tierAB.length?`
+    <div class="cat-group">
+      <div class="cat-group-label">Standard · ${tierAB.length}</div>
+      <div class="cat-grid">${tierAB.map(c=>renderMainCard(c,{})).join('')}</div>
+    </div>`:''}
+
+    ${custom.length?`
+    <div class="cat-group">
+      <div class="cat-group-label">Custom · ${custom.length}</div>
+      <div class="cat-grid">${custom.map(c=>renderMainCard(c,{custom:true})).join('')}</div>
+    </div>`:''}
+  </div>
+
+  <div class="settings-section">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px">
+      <div>
+        <div class="settings-section-label" style="margin-bottom:4px">Sub-Categories</div>
+        <div style="font-size:var(--fs-xs);color:var(--text3);line-height:1.5">Grouped by parent category. Locked sub-categories are required by specific features.</div>
+      </div>
+      <button class="btn btn-sm btn-p" onclick="openAddSubCatModal()">+ Add sub-category</button>
+    </div>
+    ${MAIN_CATS.map(m=>{
+      const subs=subsByMain[m.id]||[];
+      if(!subs.length)return'';
+      return`<div class="cat-subs-group">
+        <div class="cat-subs-head">
+          <div class="cat-swatch-sm" style="background:${m.color}"></div>
+          <span style="font-weight:500;font-size:var(--fs-sm)">${h(m.name)}</span>
+          <span style="font-size:var(--fs-xxs);color:var(--text3);margin-left:auto">${subs.length}</span>
+        </div>
+        <div class="cat-subs-list">
+          ${subs.map(s=>{
+            const locked=isTierCSub(s.id);
+            const cust=isCustomSub(s.id);
+            const cnt=countTxnsWithSubCat(s.id);
+            return`<div class="cat-sub-row">
+              <div class="cat-sub-name">${h(s.name)}${locked?` <svg class="cat-lock" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`:''}${cust?` <span class="cat-badge-custom">CUSTOM</span>`:''}</div>
+              <div class="cat-sub-meta">${cnt} txn${cnt===1?'':'s'}</div>
+              <div class="cat-sub-actions">
+                <button class="btn btn-xs" onclick="openEditSubCatModal('${s.id}')">Edit</button>
+                ${locked
+                  ?`<button class="btn btn-xs" disabled title="Locked — required by system features" style="opacity:.4;cursor:not-allowed">Delete</button>`
+                  :`<button class="btn btn-xs btn-d" onclick="openDeleteSubCatModal('${s.id}')">Delete</button>`}
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+// ─── CATEGORY MODALS ───
+function closeCatModal(){document.getElementById('cat-modal')?.remove();}
+
+function openAddMainCatModal(){
+  closeCatModal();
+  const defColor=nextUnusedPaletteColor();
+  const mo=document.createElement('div');
+  mo.id='cat-modal';mo.className='mo active';
+  mo.innerHTML=`
+    <div class="md" style="max-width:520px;width:94%;padding:0">
+      <div style="padding:1.1rem 1.3rem;border-bottom:1px solid var(--border)">
+        <div class="mdtitle" style="margin-bottom:2px">Add main category</div>
+        <div style="font-size:var(--fs-xs);color:var(--text3)">A new top-level category to organize your transactions.</div>
+      </div>
+      <div style="padding:1.1rem 1.3rem">
+        <div style="margin-bottom:14px"><label class="lbl">Name</label><input type="text" id="catm-name" placeholder="e.g. Business Travel" maxlength="40"></div>
+        <div style="margin-bottom:14px"><label class="lbl">Type</label><select id="catm-type"><option value="expense">Expense</option><option value="income">Income</option><option value="transfer">Transfer</option></select></div>
+        <div><label class="lbl">Color</label>${renderColorPicker('catm-color',defColor)}</div>
+      </div>
+      <div style="padding:12px 1.3rem;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;background:var(--bg2)">
+        <button class="btn" onclick="closeCatModal()">Cancel</button>
+        <button class="btn btn-p" onclick="submitAddMainCat()">Add</button>
+      </div>
+    </div>`;
+  document.body.appendChild(mo);
+  setTimeout(()=>document.getElementById('catm-name')?.focus(),50);
+}
+function submitAddMainCat(){
+  const name=document.getElementById('catm-name').value;
+  const type=document.getElementById('catm-type').value;
+  const color=document.getElementById('catm-color').value;
+  if(addCustomMainCat(name,type,color)){closeCatModal();render();}
+}
+
+function openEditMainCatModal(id){
+  const m=MAIN_CATS.find(c=>c.id===id);if(!m)return;
+  closeCatModal();
+  const locked=isTierCMain(id);
+  const custom=isCustomMain(id);
+  const mo=document.createElement('div');
+  mo.id='cat-modal';mo.className='mo active';
+  mo.innerHTML=`
+    <div class="md" style="max-width:520px;width:94%;padding:0">
+      <div style="padding:1.1rem 1.3rem;border-bottom:1px solid var(--border)">
+        <div class="mdtitle" style="margin-bottom:2px">Edit category</div>
+        <div style="font-size:var(--fs-xs);color:var(--text3)">${locked?'Core category — rename and recolor allowed. Deletion locked.':custom?'Custom category':'Standard category'}</div>
+      </div>
+      <div style="padding:1.1rem 1.3rem">
+        <div style="margin-bottom:14px"><label class="lbl">Name</label><input type="text" id="cate-name" value="${h(m.name)}" maxlength="40"></div>
+        <div><label class="lbl">Color</label>${renderColorPicker('cate-color',m.color)}</div>
+      </div>
+      <div style="padding:12px 1.3rem;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;background:var(--bg2)">
+        <button class="btn" onclick="closeCatModal()">Cancel</button>
+        <button class="btn btn-p" onclick="submitEditMainCat('${id}')">Save</button>
+      </div>
+    </div>`;
+  document.body.appendChild(mo);
+  setTimeout(()=>document.getElementById('cate-name')?.focus(),50);
+}
+function submitEditMainCat(id){
+  const newName=document.getElementById('cate-name').value;
+  const newColor=document.getElementById('cate-color').value;
+  const m=MAIN_CATS.find(c=>c.id===id);if(!m)return;
+  let ok=true;
+  if(newName!==m.name){ok=renameMainCat(id,newName)&&ok;}
+  if(ok&&newColor!==m.color){ok=recolorMainCat(id,newColor)&&ok;}
+  if(ok){closeCatModal();render();toast('Category updated');}
+}
+
+function openDeleteMainCatModal(id){
+  if(isTierCMain(id))return; // extra guard
+  const m=MAIN_CATS.find(c=>c.id===id);if(!m)return;
+  closeCatModal();
+  const count=countTxnsWithMainCat(id);
+  // Build reassign options — all other main cats of similar spirit (same type preferred)
+  const candidates=MAIN_CATS.filter(c=>c.id!==id);
+  const sameType=candidates.filter(c=>c.type===m.type);
+  const others=candidates.filter(c=>c.type!==m.type);
+  const buildOptions=(list)=>list.map(c=>`<option value="${c.id}">${h(c.name)}</option>`).join('');
+  const mo=document.createElement('div');
+  mo.id='cat-modal';mo.className='mo active';
+  mo.innerHTML=`
+    <div class="md" style="max-width:560px;width:94%;padding:0">
+      <div style="padding:1.1rem 1.3rem;border-bottom:1px solid var(--border)">
+        <div class="mdtitle" style="margin-bottom:2px">Delete "${h(m.name)}"</div>
+        <div style="font-size:var(--fs-xs);color:var(--text3)">${count>0?`${count} transaction${count===1?'':'s'} use this category. Choose how to handle ${count===1?'it':'them'}.`:'No transactions use this category — safe to delete.'}</div>
+      </div>
+      <div style="padding:1.1rem 1.3rem">
+        ${count>0?`
+        <div style="margin-bottom:12px">
+          <label class="cat-radio-row">
+            <input type="radio" name="del-mode" value="reassign" checked onchange="document.getElementById('del-reassign-row').style.display='block'">
+            <div>
+              <div style="font-weight:500;font-size:var(--fs-sm)">Reassign to another category</div>
+              <div style="font-size:var(--fs-xxs);color:var(--text3);margin-top:2px">All ${count} transaction${count===1?'':'s'} will be moved to the category you pick. Sub-categories will clear if they don't belong under the new parent.</div>
+            </div>
+          </label>
+          <div id="del-reassign-row" style="margin:8px 0 0 26px">
+            <select id="del-reassign-target">
+              ${sameType.length?`<optgroup label="Same type (${m.type})">${buildOptions(sameType)}</optgroup>`:''}
+              ${others.length?`<optgroup label="Other types">${buildOptions(others)}</optgroup>`:''}
+            </select>
+          </div>
+        </div>
+        <div style="margin-bottom:12px">
+          <label class="cat-radio-row">
+            <input type="radio" name="del-mode" value="unassign" onchange="document.getElementById('del-reassign-row').style.display='none'">
+            <div>
+              <div style="font-weight:500;font-size:var(--fs-sm)">Leave uncategorized</div>
+              <div style="font-size:var(--fs-xxs);color:var(--text3);margin-top:2px">Transactions move to the Uncategorized Inbox for manual review. Each one will show a "was: ${h(m.name)}" tag so you can identify them.</div>
+            </div>
+          </label>
+        </div>`:''}
+        <div style="padding:10px 12px;background:var(--bg2);border-radius:var(--rsm);font-size:var(--fs-xxs);color:var(--text3);line-height:1.5">
+          The category and its ${(SUGGESTED[id]||[]).length} linked sub-category assignment${(SUGGESTED[id]||[]).length===1?'':'s'} will be removed. This cannot be undone from the interface${isCustomMain(id)?'':' (built-in categories can be restored by Lanki support if needed)'}.
+        </div>
+      </div>
+      <div style="padding:12px 1.3rem;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;background:var(--bg2)">
+        <button class="btn" onclick="closeCatModal()">Cancel</button>
+        <button class="btn btn-d" onclick="submitDeleteMainCat('${id}')">Delete</button>
+      </div>
+    </div>`;
+  document.body.appendChild(mo);
+}
+async function submitDeleteMainCat(id){
+  const count=countTxnsWithMainCat(id);
+  let reassignToId=null;
+  if(count>0){
+    const mode=document.querySelector('input[name="del-mode"]:checked')?.value||'unassign';
+    if(mode==='reassign'){
+      reassignToId=document.getElementById('del-reassign-target').value||null;
+      if(!reassignToId){toast('Pick a target category',false);return;}
+    }
+  }
+  const ok=await deleteMainCat(id,reassignToId);
+  if(ok){closeCatModal();render();}
+}
+
+// Sub-category modals
+function openAddSubCatModal(){
+  closeCatModal();
+  const mainOptions=MAIN_CATS.map(c=>`<option value="${c.id}">${h(c.name)}</option>`).join('');
+  const mo=document.createElement('div');
+  mo.id='cat-modal';mo.className='mo active';
+  mo.innerHTML=`
+    <div class="md" style="max-width:520px;width:94%;padding:0">
+      <div style="padding:1.1rem 1.3rem;border-bottom:1px solid var(--border)">
+        <div class="mdtitle" style="margin-bottom:2px">Add sub-category</div>
+        <div style="font-size:var(--fs-xs);color:var(--text3)">Sub-categories let you break down a main category into specific types.</div>
+      </div>
+      <div style="padding:1.1rem 1.3rem">
+        <div style="margin-bottom:14px"><label class="lbl">Name</label><input type="text" id="subm-name" placeholder="e.g. Office Supplies" maxlength="40"></div>
+        <div><label class="lbl">Parent category</label><select id="subm-parent">${mainOptions}</select></div>
+      </div>
+      <div style="padding:12px 1.3rem;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;background:var(--bg2)">
+        <button class="btn" onclick="closeCatModal()">Cancel</button>
+        <button class="btn btn-p" onclick="submitAddSubCat()">Add</button>
+      </div>
+    </div>`;
+  document.body.appendChild(mo);
+  setTimeout(()=>document.getElementById('subm-name')?.focus(),50);
+}
+function submitAddSubCat(){
+  const name=document.getElementById('subm-name').value;
+  const parent=document.getElementById('subm-parent').value;
+  if(addCustomSubCat(name,parent)){closeCatModal();render();}
+}
+
+function openEditSubCatModal(id){
+  const s=SUB_CATS.find(x=>x.id===id);if(!s)return;
+  closeCatModal();
+  const mo=document.createElement('div');
+  mo.id='cat-modal';mo.className='mo active';
+  mo.innerHTML=`
+    <div class="md" style="max-width:480px;width:94%;padding:0">
+      <div style="padding:1.1rem 1.3rem;border-bottom:1px solid var(--border)">
+        <div class="mdtitle" style="margin-bottom:2px">Edit sub-category</div>
+        <div style="font-size:var(--fs-xs);color:var(--text3)">${isTierCSub(id)?'Core sub-category — rename only. Deletion locked.':isCustomSub(id)?'Custom sub-category':'Standard sub-category'}</div>
+      </div>
+      <div style="padding:1.1rem 1.3rem">
+        <div><label class="lbl">Name</label><input type="text" id="sube-name" value="${h(s.name)}" maxlength="40"></div>
+      </div>
+      <div style="padding:12px 1.3rem;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;background:var(--bg2)">
+        <button class="btn" onclick="closeCatModal()">Cancel</button>
+        <button class="btn btn-p" onclick="submitEditSubCat('${id}')">Save</button>
+      </div>
+    </div>`;
+  document.body.appendChild(mo);
+  setTimeout(()=>document.getElementById('sube-name')?.focus(),50);
+}
+function submitEditSubCat(id){
+  const newName=document.getElementById('sube-name').value;
+  if(renameSubCat(id,newName)){closeCatModal();render();toast('Sub-category updated');}
+}
+
+function openDeleteSubCatModal(id){
+  if(isTierCSub(id))return;
+  const s=SUB_CATS.find(x=>x.id===id);if(!s)return;
+  closeCatModal();
+  const count=countTxnsWithSubCat(id);
+  // Find the parent main of this sub (first match in SUGGESTED)
+  let parentMid=null;
+  Object.entries(SUGGESTED).forEach(([mid,list])=>{if(!parentMid&&(list||[]).includes(id))parentMid=mid;});
+  // Reassignment candidates: other subs under the same parent
+  const siblings=parentMid?(SUGGESTED[parentMid]||[]).filter(x=>x!==id).map(x=>SUB_CATS.find(sx=>sx.id===x)).filter(Boolean):[];
+  const mo=document.createElement('div');
+  mo.id='cat-modal';mo.className='mo active';
+  mo.innerHTML=`
+    <div class="md" style="max-width:520px;width:94%;padding:0">
+      <div style="padding:1.1rem 1.3rem;border-bottom:1px solid var(--border)">
+        <div class="mdtitle" style="margin-bottom:2px">Delete "${h(s.name)}"</div>
+        <div style="font-size:var(--fs-xs);color:var(--text3)">${count>0?`${count} transaction${count===1?'':'s'} use this sub-category.`:'No transactions use this sub-category — safe to delete.'}</div>
+      </div>
+      <div style="padding:1.1rem 1.3rem">
+        ${count>0?`
+        <div style="margin-bottom:12px">
+          <label class="cat-radio-row">
+            <input type="radio" name="del-sub-mode" value="reassign" ${siblings.length?'checked':'disabled'} onchange="document.getElementById('del-sub-reassign-row').style.display='block'">
+            <div>
+              <div style="font-weight:500;font-size:var(--fs-sm)">Reassign to another sub-category${siblings.length?'':' (unavailable — no other sub-categories under the same parent)'}</div>
+            </div>
+          </label>
+          ${siblings.length?`<div id="del-sub-reassign-row" style="margin:8px 0 0 26px"><select id="del-sub-reassign-target">${siblings.map(x=>`<option value="${x.id}">${h(x.name)}</option>`).join('')}</select></div>`:''}
+        </div>
+        <div style="margin-bottom:12px">
+          <label class="cat-radio-row">
+            <input type="radio" name="del-sub-mode" value="clear" ${siblings.length?'':'checked'} onchange="document.getElementById('del-sub-reassign-row')&&(document.getElementById('del-sub-reassign-row').style.display='none')">
+            <div>
+              <div style="font-weight:500;font-size:var(--fs-sm)">Keep main category, clear sub</div>
+              <div style="font-size:var(--fs-xxs);color:var(--text3);margin-top:2px">Transactions stay in their main category but lose the sub-category assignment.</div>
+            </div>
+          </label>
+        </div>`:''}
+      </div>
+      <div style="padding:12px 1.3rem;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;background:var(--bg2)">
+        <button class="btn" onclick="closeCatModal()">Cancel</button>
+        <button class="btn btn-d" onclick="submitDeleteSubCat('${id}')">Delete</button>
+      </div>
+    </div>`;
+  document.body.appendChild(mo);
+}
+async function submitDeleteSubCat(id){
+  const count=countTxnsWithSubCat(id);
+  let reassignTo=null;
+  if(count>0){
+    const mode=document.querySelector('input[name="del-sub-mode"]:checked')?.value||'clear';
+    if(mode==='reassign'){
+      reassignTo=document.getElementById('del-sub-reassign-target')?.value||null;
+    }
+  }
+  const ok=await deleteSubCat(id,reassignTo);
+  if(ok){closeCatModal();render();}
+}
+
+// Color picker — swatches + hex input. Outputs into hidden input with given id.
+function renderColorPicker(inputId,initialColor){
+  const init=(initialColor||LANKI_PALETTE[0]).toUpperCase();
+  return`<input type="hidden" id="${inputId}" value="${init}">
+    <div class="cat-swatches">
+      ${LANKI_PALETTE.map(c=>`<button type="button" class="cat-swatch-btn ${c.toUpperCase()===init?'active':''}" data-color="${c}" style="background:${c}" onclick="pickColor('${inputId}','${c}')"></button>`).join('')}
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-top:10px">
+      <label style="font-size:var(--fs-xs);color:var(--text3);white-space:nowrap">Custom hex:</label>
+      <input type="text" id="${inputId}-hex" value="${init}" maxlength="7" placeholder="#RRGGBB" style="width:110px;font-family:var(--lanki-font-mono, monospace);font-size:12px" oninput="onHexChange('${inputId}',this.value)">
+      <div class="cat-swatch-preview" id="${inputId}-preview" style="background:${init}"></div>
+    </div>`;
+}
+function pickColor(inputId,color){
+  document.getElementById(inputId).value=color.toUpperCase();
+  const hex=document.getElementById(inputId+'-hex');if(hex)hex.value=color.toUpperCase();
+  const prev=document.getElementById(inputId+'-preview');if(prev)prev.style.background=color;
+  // Update active swatch border
+  document.querySelectorAll(`.cat-swatch-btn`).forEach(b=>{
+    if(b.dataset.color&&b.dataset.color.toUpperCase()===color.toUpperCase())b.classList.add('active');
+    else b.classList.remove('active');
+  });
+}
+function onHexChange(inputId,val){
+  let v=val.trim().toUpperCase();
+  if(!v.startsWith('#'))v='#'+v;
+  if(/^#[0-9A-F]{6}$/.test(v)){
+    document.getElementById(inputId).value=v;
+    const prev=document.getElementById(inputId+'-preview');if(prev)prev.style.background=v;
+    document.querySelectorAll(`.cat-swatch-btn`).forEach(b=>{
+      if(b.dataset.color&&b.dataset.color.toUpperCase()===v)b.classList.add('active');
+      else b.classList.remove('active');
+    });
+  }
+}
 function doRefExport(){
   const lines=['Lanki Platform — Capital OS Reference File','Generated: '+new Date().toLocaleDateString('en-GB'),'===========================================','','ACCOUNTS','| Name | Institution | Type | IBAN / Card | Account ID |','|---|---|---|---|---|'];
   S.accounts.forEach(a=>lines.push(`| ${a.name} | ${a.institution||''} | ${ATL[a.type]||a.type} | ${a.accountNumber||''} | ${a.id} |`));
