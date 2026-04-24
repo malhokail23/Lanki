@@ -1428,7 +1428,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='7.1';
+const VERSION='7.2';
 let sKey=null,saveTimer=null,pinCb=null,catCb=null,activeGroup=null;
 
 // ─── CRYPTO ───
@@ -2042,7 +2042,7 @@ function restoreS(d){
   S.customMainCats=d.customMainCats||[];S.customSubCats=d.customSubCats||[];
   S.catNameOverrides=d.catNameOverrides||{};S.catColorOverrides=d.catColorOverrides||{};S.subNameOverrides=d.subNameOverrides||{};S.subParentOverrides=d.subParentOverrides||{};S.billRules=d.billRules||[];
     S.familyMembers=d.familyMembers||[];
-  S.settings={currency:'SAR',savingsTarget:20,backupReminderMonths:2,lastBackup:null,...(d.settings||{})};  S.monthlyBal=d.monthlyBal||{};  S.matchedPairs=d.matchedPairs||[];
+  S.settings={currency:'SAR',savingsTarget:20,backupReminderMonths:2,lastBackup:null,autoRuleSweep:true,...(d.settings||{})};  S.monthlyBal=d.monthlyBal||{};  S.matchedPairs=d.matchedPairs||[];
   S.submitters=d.submitters||[];
   // txnCache stays separate - loaded in loadS
   applyDeletions();
@@ -4826,11 +4826,180 @@ function learnTxnRule(desc,mainCatId,subCatId,source='manual'){
     S.txnRules=S.txnRules.slice(-(TXN_RULES_MAX));
   }
   sched();
+  // Trigger background sweep — debounced, only runs when setting is enabled
+  scheduleAutoRuleSweep();
 }
 
 // Keep learnRule as an alias for backward compatibility (called from cfmSub etc.)
 function learnRule(desc,mid,sid){learnTxnRule(desc,mid,sid,'manual');}
 function delRule(pattern){S.txnRules=(S.txnRules||[]).filter(r=>r.pattern!==pattern);sched();render();}
+
+// ─── RULE SWEEP ───
+// Scans transactions and re-applies rules. Two modes:
+//   previewOnly=true  → returns {changes, unchanged} without mutating (for the preview modal)
+//   previewOnly=false → applies matched rules and returns {applied, skipped}
+// Only acts on safe targets: uncategorized transactions, or transactions where ruleApplied===true
+// (meaning they were auto-assigned and not manually touched since). Skips refund-linked txns.
+function sweepRules(scope,previewOnly){
+  // scope = {txnIds:Set<string>} to limit to specific txns, or null for all
+  const changes=[]; // {t, ym, newMainId, newSubId, oldMainId, oldSubId, rule}
+  const affectedYms=new Set();
+  for(const ym of Object.keys(S.txnCache||{})){
+    for(const t of(S.txnCache[ym]||[])){
+      if(scope&&scope.txnIds&&!scope.txnIds.has(t.id))continue;
+      // Safety gates
+      if(isRefundLinked(t))continue;
+      // Skip manually categorized (has a main cat AND not flagged as rule-applied)
+      if(t.mainCatId&&!t.ruleApplied)continue;
+      const rule=getRule(t.description||'');
+      if(!rule||!rule.mid)continue;
+      const ruleHasSub=rule.sid&&rule.sid.trim();
+      const newMain=rule.mid;
+      const newSub=ruleHasSub?rule.sid:(t.subCatId||null);
+      // Change only if different
+      if(t.mainCatId===newMain&&(t.subCatId||null)===(newSub||null))continue;
+      changes.push({t,ym,newMainId:newMain,newSubId:newSub||null,oldMainId:t.mainCatId||null,oldSubId:t.subCatId||null,rule});
+      if(!previewOnly){
+        t.mainCatId=newMain;
+        if(ruleHasSub)t.subCatId=rule.sid;
+        t.ruleApplied=true;
+        t.type=typeFromCat(newMain,t.type);
+        affectedYms.add(ym);
+      }
+    }
+  }
+  if(!previewOnly){
+    affectedYms.forEach(ym=>schedTxn(ym));
+  }
+  return{changes,affectedYms};
+}
+
+// Called on every rule learn/upgrade when auto-sweep is enabled.
+// Silent unless it actually changes something. Debounced to avoid thrash during bulk operations.
+let _autoSweepTimer=null;
+let _autoSweepSuppressed=false;
+function scheduleAutoRuleSweep(){
+  if(_autoSweepSuppressed)return;
+  if(!S.settings||S.settings.autoRuleSweep===false)return;
+  clearTimeout(_autoSweepTimer);
+  _autoSweepTimer=setTimeout(async()=>{
+    _autoSweepTimer=null;
+    const{changes,affectedYms}=sweepRules(null,false);
+    if(changes.length===0)return;
+    affectedYms.forEach(ym=>schedTxn(ym));
+    await flushTxnQueue();await saveState();
+    render();
+    toast(`Auto-sweep: ${changes.length} transaction${changes.length===1?'':'s'} re-categorized`);
+  },800);
+}
+
+// ─── MANUAL RULE SWEEP MODAL ───
+// scoped=true uses current BulkSelected, scoped=false sweeps every month.
+let _sweepChanges=[];
+let _sweepScoped=false;
+function openRuleSweepModal(scoped){
+  _sweepScoped=scoped;
+  // Build the scope set
+  let scope=null;
+  if(scoped){
+    if(!BulkSelected.size){toast('No transactions selected',false);return;}
+    scope={txnIds:new Set(BulkSelected)};
+  }
+  // Preview without mutation
+  const{changes}=sweepRules(scope,true);
+  _sweepChanges=changes;
+
+  const mo=document.createElement('div');
+  mo.id='rule-sweep-modal';mo.className='mo active';
+  let body='';
+  if(changes.length===0){
+    body=`<div style="padding:18px;background:var(--bg2);border-radius:var(--rsm);font-size:var(--fs-xs);color:var(--text3);text-align:center">
+      ${scoped?'None of the selected transactions match any rule, or they are all manually categorized (which rules never overwrite).':'All transactions are already up to date with your rules, or remaining ones are manually categorized.'}
+    </div>`;
+  }else{
+    body=`<div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:10px">Review the changes below. Untick any row you don't want to apply. Manual categorizations are never touched.</div>
+    <div class="tbl-wrap" style="max-height:420px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--rsm)">
+      <table class="tx-tbl" style="min-width:auto;width:100%">
+        <thead><tr>
+          <th style="width:34px;padding:6px 6px"><input type="checkbox" id="sweep-all-cb" checked onclick="toggleAllSweepRows(this.checked)"></th>
+          <th style="width:80px;padding:6px 8px">Date</th>
+          <th style="padding:6px 8px">Description</th>
+          <th style="padding:6px 8px;width:170px">Current</th>
+          <th style="padding:6px 8px;width:170px">After rule</th>
+          <th style="padding:6px 8px;width:90px;text-align:right">Amount</th>
+        </tr></thead>
+        <tbody>
+        ${changes.map((c,i)=>{
+          const oldM=c.oldMainId?(getMC(c.oldMainId)?.name||c.oldMainId):'<em style="color:var(--text3)">uncategorized</em>';
+          const oldS=c.oldSubId?' / '+(getSC(c.oldSubId)?.name||c.oldSubId):'';
+          const newM=getMC(c.newMainId)?.name||c.newMainId;
+          const newS=c.newSubId?' / '+(getSC(c.newSubId)?.name||c.newSubId):'';
+          return`<tr>
+            <td style="padding:6px 6px"><input type="checkbox" class="sweep-row-cb" data-idx="${i}" checked></td>
+            <td style="padding:6px 8px;font-size:10px;color:var(--text3);white-space:nowrap">${toDD(c.t.date)}</td>
+            <td style="padding:6px 8px;font-size:var(--fs-xs)">${h((c.t.description||'').substr(0,44))}${(c.t.description||'').length>44?'…':''}</td>
+            <td style="padding:6px 8px;font-size:10px;color:var(--text3)">${oldM}${oldS}</td>
+            <td style="padding:6px 8px;font-size:10px;color:var(--ok);font-weight:500">${h(newM)}${h(newS)}</td>
+            <td style="padding:6px 8px;text-align:right;font-variant-numeric:tabular-nums;font-size:var(--fs-xs)">${fmtP(c.t.amount)}</td>
+          </tr>`;
+        }).join('')}
+        </tbody>
+      </table>
+    </div>`;
+  }
+  mo.innerHTML=`
+    <div class="md" style="max-width:900px;width:96%;padding:0;max-height:92vh;display:flex;flex-direction:column">
+      <div style="padding:1.1rem 1.3rem;border-bottom:1px solid var(--border)">
+        <div class="mdtitle" style="margin-bottom:2px">↻ Apply rules${scoped?' to selection':' (all transactions)'}</div>
+        <div style="font-size:var(--fs-xs);color:var(--text3)">Scans ${scoped?'the '+BulkSelected.size+' selected':'every'} transaction and applies learned rules to the ones that match. <strong>Manual categorizations are never overwritten.</strong></div>
+      </div>
+      <div style="padding:1.1rem 1.3rem;flex:1;overflow-y:auto">${body}</div>
+      <div style="padding:12px 1.3rem;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:space-between;background:var(--bg2);align-items:center">
+        <div style="font-size:10px;color:var(--text3)">${changes.length} transaction${changes.length===1?'':'s'} will be re-categorized.</div>
+        <div style="display:flex;gap:8px">
+          <button class="btn" onclick="closeRuleSweepModal()">${changes.length===0?'Close':'Cancel'}</button>
+          ${changes.length>0?`<button class="btn btn-p" onclick="applyRuleSweep()">Apply</button>`:''}
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(mo);
+}
+function closeRuleSweepModal(){
+  document.getElementById('rule-sweep-modal')?.remove();
+  _sweepChanges=[];
+  _sweepScoped=false;
+}
+function toggleAllSweepRows(checked){
+  document.querySelectorAll('.sweep-row-cb').forEach(cb=>{cb.checked=checked;});
+}
+async function applyRuleSweep(){
+  // Collect ticked rows
+  const toApply=[];
+  document.querySelectorAll('.sweep-row-cb').forEach(cb=>{
+    if(cb.checked){
+      const idx=parseInt(cb.getAttribute('data-idx'),10);
+      if(!isNaN(idx)&&_sweepChanges[idx])toApply.push(_sweepChanges[idx]);
+    }
+  });
+  if(!toApply.length){toast('Nothing selected to apply',false);return;}
+  const affectedYms=new Set();
+  // Suppress auto-sweep during manual apply so we don't double-run
+  _autoSweepSuppressed=true;
+  toApply.forEach(c=>{
+    c.t.mainCatId=c.newMainId;
+    if(c.newSubId!==c.oldSubId)c.t.subCatId=c.newSubId;
+    c.t.ruleApplied=true;
+    c.t.type=typeFromCat(c.newMainId,c.t.type);
+    affectedYms.add(c.ym);
+  });
+  affectedYms.forEach(ym=>schedTxn(ym));
+  await flushTxnQueue();await saveState();
+  _autoSweepSuppressed=false;
+  closeRuleSweepModal();
+  if(_sweepScoped){BulkSelected.clear();BulkMode=false;}
+  render();
+  toast(`Applied rules to ${toApply.length} transaction${toApply.length===1?'':'s'}`);
+}
 
 // ─── CAT PICKER (Bug 4.1 fix: capture catCb before clearing) ───
 function buildCM(curM,curS){
@@ -8191,6 +8360,7 @@ function rSettings(){
     </div>
     <div class="settings-section">
       <div class="settings-section-label">Statement Parser</div>
+      <div class="settings-row" style="align-items:flex-start"><div class="settings-row-label"><div class="settings-row-title">Auto-apply Rules</div><div class="settings-row-sub">When enabled, Lanki re-runs your learned rules across all transactions in the background whenever a rule is created or upgraded. It only touches uncategorized transactions or ones previously auto-assigned by rules — manual categorizations are never overwritten. Turn off if you prefer to apply rules only at statement import or via the Apply Rules button.</div></div><div class="settings-row-ctrl"><input type="checkbox" ${S.settings.autoRuleSweep!==false?'checked':''} onchange="S.settings.autoRuleSweep=this.checked;sched();toast(this.checked?'Auto-apply Rules enabled':'Auto-apply Rules disabled')" style="cursor:pointer;width:18px;height:18px"></div></div>
       <div class="settings-row" style="align-items:flex-start"><div class="settings-row-label"><div class="settings-row-title">Edge Function URL</div><div class="settings-row-sub">Your Supabase Edge Function endpoint for AI extraction. See deployment guide.</div></div><div class="settings-row-ctrl" style="min-width:240px"><input type="text" placeholder="https://xxx.supabase.co/functions/v1/extract" value="${S.settings.edgeFnUrl||''}" onchange="S.settings.edgeFnUrl=this.value.trim();sched()" style="width:100%;font-size:11px;font-family:monospace"></div></div>
     </div>`;
   }else if(SP==='categories'){
@@ -9684,6 +9854,7 @@ function buildTxFilters(){
     <div style="flex:1"></div>
     <button class="btn btn-xs btn-p" onclick="applyBulkCategory()">Assign Category</button>
     <button class="btn btn-xs" onclick="openBulkAiCategorize()" title="Use AI with shared context to categorize all selected transactions at once"><span style="color:var(--electric);font-weight:600">✨</span> AI Categorize</button>
+    <button class="btn btn-xs" onclick="openRuleSweepModal(true)" title="Apply learned rules to selected transactions (only touches uncategorized or previously rule-applied rows — manual categorizations are protected)">↻ Apply Rules</button>
   </div>
   <div class="fg" style="gap:8px;flex-wrap:nowrap;align-items:center;margin-bottom:1rem;overflow-x:auto">
     <input type="text" id="tx-search-input" placeholder="Search" value="${TF.q||''}" oninput="onTxSearchInput(this.value)" autocomplete="off" style="flex:1;min-width:140px">
@@ -9709,6 +9880,7 @@ function buildTxFilters(){
     </label>
     <button class="btn btn-sm" onclick="TF.type='';TF.mc='';TF.sub='';TF.q='';TF.allMonths=false;TF.sortCol='';TF.sortDir=1;render()">Clear</button>
     <button class="btn btn-sm ${BulkMode?'btn-p':''}" id="bulk-sel-btn" onclick="toggleBulkSelect()" style="white-space:nowrap">${BulkMode?'Exit Select':'Select'}</button>
+    <button class="btn btn-sm" onclick="openRuleSweepModal(false)" style="white-space:nowrap" title="Scan all transactions and apply learned rules. Manual categorizations are protected.">↻ Apply Rules</button>
   </div>`;
 }
 
@@ -10317,6 +10489,7 @@ function applyBulkCategory(){
   buildCM(null,null);
   catCb=(m,s)=>{
     let count=0;
+    _autoSweepSuppressed=true; // don't cascade-sweep during bulk manual apply
     BulkSelected.forEach(id=>{
       // Find transaction across all months
       for(const ym of Object.keys(S.txnCache)){
@@ -10338,6 +10511,8 @@ function applyBulkCategory(){
     sched();
     BulkSelected.clear();
     BulkMode=false;
+    _autoSweepSuppressed=false;
+    scheduleAutoRuleSweep(); // one sweep covering any newly-learned rules
     render();
     toast(count+' transaction'+(count!==1?'s':'')+' updated');
   };
