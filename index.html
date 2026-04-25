@@ -1449,7 +1449,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='7.6';
+const VERSION='7.8';
 let sKey=null,saveTimer=null,pinCb=null,catCb=null,activeGroup=null;
 
 // Populate version labels on all auth screens (login, unlock, setup) as soon as DOM is ready.
@@ -3952,64 +3952,33 @@ async function applyBulkAiResults(){
 
 // ─── REFUND LINKING MODAL ───
 let _refundLinkCtx=null;
+// Refund link modal state — held while modal is open
+let _refundLinkAllCandidates=[]; // full candidate pool (cached, sorted)
+let _refundLinkRefund=null; // the refund txn being linked
+let _refundLinkShowAll=false; // toggle for wider pool
+let _refundLinkSearch=''; // search query (description text or amount)
+
 function openRefundLinkModal(refundId,ym){
   const refund=(S.txnCache[ym]||[]).find(x=>x.id===refundId);
   if(!refund){toast('Transaction not found',false);return;}
   if(refund.type!=='income'||(refund.subCatId!=='sub_refund'&&refund.subCatId!=='sub_reimbursement')){toast('Only transactions categorized as Income → Refund or Income → Reimbursement can be linked',false);return;}
   _refundLinkCtx={refundId,ym};
-  const candidates=findRefundCandidates(refund);
+  _refundLinkRefund=refund;
+  _refundLinkAllCandidates=findRefundCandidates(refund);
+  _refundLinkShowAll=false;
+  _refundLinkSearch='';
   const acc=S.accounts.find(a=>a.id===refund.accountId);
-  let body='';
-  if(candidates.length===0){
-    body=`<div style="padding:14px;background:var(--bg2);border-radius:var(--rsm);font-size:var(--fs-xs);color:var(--text3);text-align:center">
-      No unlinked expenses found within 180 days before this transaction. The original expense must be on record in Lanki (bank accounts or cards) to link.
-    </div>`;
-  } else {
-    const isReimb=refund.subCatId==='sub_reimbursement';
-    body=`<div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:8px">Candidates from all accounts and cards within 180 days. Exact amount matches ranked first.${isReimb?' Reimbursements often match a prior card charge on a different account — both are included.':''}</div>
-    <div class="tbl-wrap" style="max-height:380px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--rsm)">
-      <table class="tx-tbl" style="min-width:auto">
-        <thead><tr>
-          <th style="width:90px">Date</th>
-          <th>Description</th>
-          <th style="width:130px">Account</th>
-          <th style="text-align:right;width:120px">Amount</th>
-          <th style="width:70px;text-align:center">Match</th>
-          <th style="width:70px"></th>
-        </tr></thead>
-        <tbody>
-        ${candidates.slice(0,50).map(c=>{
-          const diff=Math.abs(c.amount-refund.amount);
-          const pct=refund.amount>0?(diff/refund.amount)*100:0;
-          const matchLbl=diff<0.01?'Exact':pct<2?'±'+pct.toFixed(1)+'%':pct<10?'±'+pct.toFixed(0)+'%':'Loose';
-          const matchCol=diff<0.01?'var(--ok)':pct<2?'var(--ok)':pct<10?'var(--warn)':'var(--text3)';
-          const cYm=c.date.substr(0,7);
-          const cAcc=S.accounts.find(a=>a.id===c.accountId);
-          const sameAcc=c.accountId===refund.accountId;
-          const isCard=cAcc&&(cAcc.type==='credit_card'||cAcc.type==='charge_card'||cAcc.type==='debit_card'||cAcc.type==='prepaid_card');
-          return`<tr>
-            <td style="font-size:var(--fs-xs);color:var(--text3)">${toDD(c.date)}</td>
-            <td style="font-size:var(--fs-xs)">${h(c.description||'')}</td>
-            <td style="font-size:10px;color:${sameAcc?'var(--text2)':'var(--text3)'}">${h(cAcc?.name||'—')}${isCard?' <span style="font-size:9px;opacity:.7">(card)</span>':sameAcc?'':' <span style="font-size:9px;opacity:.7">(other)</span>'}</td>
-            <td style="text-align:right;font-weight:500;font-variant-numeric:tabular-nums;font-size:var(--fs-xs)">${fmtP(c.amount)}</td>
-            <td style="text-align:center;font-size:10px;color:${matchCol};font-weight:600">${matchLbl}</td>
-            <td><button class="btn btn-xs btn-p" onclick="confirmRefundLink('${c.id}','${cYm}')">Link</button></td>
-          </tr>`;
-        }).join('')}
-        </tbody>
-      </table>
-    </div>`;
-  }
+  const isReimb=refund.subCatId==='sub_reimbursement';
+
   const mo=document.createElement('div');
   mo.id='refund-link-modal';mo.className='mo active';
-  const isReimb=refund.subCatId==='sub_reimbursement';
   mo.innerHTML=`
-    <div class="md" style="max-width:780px;width:94%;padding:0">
+    <div class="md" style="max-width:820px;width:94%;padding:0;max-height:92vh;display:flex;flex-direction:column">
       <div style="padding:1.1rem 1.3rem;border-bottom:1px solid var(--border)">
         <div class="mdtitle" style="margin-bottom:2px">↔ Link ${isReimb?'reimbursement':'refund'} to original expense</div>
         <div style="font-size:var(--fs-xs);color:var(--text3)">Pair this ${isReimb?'reimbursement':'refund'} with the expense it offsets. Both transactions stay in the ledger but are excluded from Income and Expense totals so your cash flow reports stay accurate.</div>
       </div>
-      <div style="padding:1.1rem 1.3rem">
+      <div style="padding:1.1rem 1.3rem;flex:1;overflow-y:auto">
         <!-- Refund snapshot -->
         <div style="padding:10px 12px;background:color-mix(in srgb,var(--ok) 6%,transparent);border-radius:var(--rsm);margin-bottom:14px;font-size:var(--fs-xs)">
           <div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ok);margin-bottom:4px">${isReimb?'Reimbursement':'Refund'} transaction</div>
@@ -4019,17 +3988,119 @@ function openRefundLinkModal(refundId,ym){
           </div>
           <div style="color:var(--text3);font-size:10px;margin-top:2px">${toDD(refund.date)} · ${h(acc?.name||'—')}</div>
         </div>
-        ${body}
+        <!-- Search + toggle row -->
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+          <input type="text" id="refund-link-search" placeholder="Search by description or amount (e.g. Hotel or 1700)" oninput="onRefundLinkSearch(this.value)" style="flex:1;min-width:220px;font-family:inherit;font-size:var(--fs-xs);padding:7px 10px;border:1px solid var(--border);border-radius:var(--rsm);background:var(--bg)">
+          <label style="display:flex;align-items:center;gap:6px;font-size:var(--fs-xs);color:var(--text3);cursor:pointer;white-space:nowrap">
+            <input type="checkbox" id="refund-link-showall" onchange="onRefundLinkShowAll(this.checked)" style="cursor:pointer">
+            Show all expenses
+          </label>
+        </div>
+        <div id="refund-link-list-wrap"></div>
       </div>
       <div style="padding:12px 1.3rem;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;background:var(--bg2)">
         <button class="btn" onclick="closeRefundLinkModal()">Cancel</button>
       </div>
     </div>`;
   document.body.appendChild(mo);
+  renderRefundLinkList();
+}
+
+// Re-render the candidate table based on current search + show-all state.
+function renderRefundLinkList(){
+  const wrap=document.getElementById('refund-link-list-wrap');
+  if(!wrap||!_refundLinkRefund)return;
+  const refund=_refundLinkRefund;
+  const isReimb=refund.subCatId==='sub_reimbursement';
+
+  // Build the working pool. Default: top 50 sorted candidates (current behavior).
+  // Show all: every candidate within the 180-day window.
+  let pool=_refundLinkShowAll?_refundLinkAllCandidates:_refundLinkAllCandidates.slice(0,50);
+
+  // Apply search filter — text matches description, numeric matches amount within ±5%.
+  const q=(_refundLinkSearch||'').trim().toLowerCase();
+  if(q){
+    const numQ=parseFloat(q.replace(/,/g,''));
+    const isNum=!isNaN(numQ)&&numQ>0;
+    pool=pool.filter(c=>{
+      const descMatch=(c.description||'').toLowerCase().includes(q);
+      let amountMatch=false;
+      if(isNum){
+        const tolerance=Math.max(numQ*0.05,1); // ±5% with min ±1 SAR
+        amountMatch=Math.abs(c.amount-numQ)<=tolerance;
+      }
+      return descMatch||amountMatch;
+    });
+  }
+
+  if(pool.length===0){
+    wrap.innerHTML=`<div style="padding:14px;background:var(--bg2);border-radius:var(--rsm);font-size:var(--fs-xs);color:var(--text3);text-align:center">
+      ${q?'No expenses match your search.':_refundLinkShowAll?'No expenses found within 180 days before this transaction.':'No close-amount matches. Try the search box above or enable "Show all expenses" to widen the pool.'}
+    </div>`;
+    return;
+  }
+
+  const helperLine=_refundLinkShowAll
+    ?`<div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:8px">Showing all ${pool.length} expense${pool.length===1?'':'s'} within 180 days. Use search to narrow.</div>`
+    :`<div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:8px">Top ${pool.length} candidate${pool.length===1?'':'s'} by amount match.${isReimb?' Cross-account matches are included since reimbursements often land on a different account.':''}</div>`;
+
+  // Cap rendered rows for performance — the typical case shows what's needed
+  const rendered=pool.slice(0,200);
+  const overflow=pool.length>rendered.length?`<div style="padding:8px;font-size:10px;color:var(--text3);text-align:center;border-top:1px solid var(--border)">${pool.length-rendered.length} more not shown — refine your search</div>`:'';
+
+  wrap.innerHTML=`${helperLine}
+    <div class="tbl-wrap" style="max-height:380px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--rsm)">
+      <table class="tx-tbl" style="min-width:auto">
+        <thead><tr>
+          <th style="width:90px">Date</th>
+          <th>Description</th>
+          <th style="width:140px">Account</th>
+          <th style="text-align:right;width:120px">Amount</th>
+          <th style="width:80px;text-align:center">Match</th>
+          <th style="width:70px"></th>
+        </tr></thead>
+        <tbody>
+        ${rendered.map(c=>{
+          const diff=Math.abs(c.amount-refund.amount);
+          const pct=refund.amount>0?(diff/refund.amount)*100:0;
+          // Match label widened to handle the partial-reimbursement case explicitly
+          const matchLbl=diff<0.01?'Exact':pct<2?'±'+pct.toFixed(1)+'%':pct<10?'±'+pct.toFixed(0)+'%':pct<30?'±'+pct.toFixed(0)+'%':'Loose';
+          const matchCol=diff<0.01?'var(--ok)':pct<2?'var(--ok)':pct<10?'var(--warn)':pct<30?'var(--warn)':'var(--text3)';
+          const cYm=c.date.substr(0,7);
+          const cAcc=S.accounts.find(a=>a.id===c.accountId);
+          const sameAcc=c.accountId===refund.accountId;
+          const isCard=cAcc&&(cAcc.type==='credit_card'||cAcc.type==='charge_card'||cAcc.type==='debit_card'||cAcc.type==='prepaid_card');
+          // If refund amount is significantly less than expense, show "partial" indicator
+          const partialBadge=(c.amount>refund.amount*1.1&&c.amount<refund.amount*3)?` <span style="font-size:9px;opacity:.75;color:var(--electric);font-weight:500">partial</span>`:'';
+          return`<tr>
+            <td style="font-size:var(--fs-xs);color:var(--text3)">${toDD(c.date)}</td>
+            <td style="font-size:var(--fs-xs)">${h(c.description||'')}${partialBadge}</td>
+            <td style="font-size:10px;color:${sameAcc?'var(--text2)':'var(--text3)'}">${h(cAcc?.name||'—')}${isCard?' <span style="font-size:9px;opacity:.7">(card)</span>':sameAcc?'':' <span style="font-size:9px;opacity:.7">(other)</span>'}</td>
+            <td style="text-align:right;font-weight:500;font-variant-numeric:tabular-nums;font-size:var(--fs-xs)">${fmtP(c.amount)}</td>
+            <td style="text-align:center;font-size:10px;color:${matchCol};font-weight:600">${matchLbl}</td>
+            <td><button class="btn btn-xs btn-p" onclick="confirmRefundLink('${c.id}','${cYm}')">Link</button></td>
+          </tr>`;
+        }).join('')}
+        </tbody>
+      </table>
+      ${overflow}
+    </div>`;
+}
+function onRefundLinkSearch(val){
+  _refundLinkSearch=val||'';
+  renderRefundLinkList();
+}
+function onRefundLinkShowAll(checked){
+  _refundLinkShowAll=!!checked;
+  renderRefundLinkList();
 }
 function closeRefundLinkModal(){
   document.getElementById('refund-link-modal')?.remove();
   _refundLinkCtx=null;
+  _refundLinkRefund=null;
+  _refundLinkAllCandidates=[];
+  _refundLinkShowAll=false;
+  _refundLinkSearch='';
 }
 async function confirmRefundLink(origId,origYm){
   const ctx=_refundLinkCtx;if(!ctx){closeRefundLinkModal();return;}
@@ -5244,7 +5315,7 @@ function confirmCat(){
   closeCatM();
   if(cb)cb(m,s);
 }
-function closeCatM(){const cm=document.getElementById('cat-modal');cm.classList.remove('active');cm.classList.remove('mo-stacked');catCb=null;}
+function closeCatM(){const cm=document.getElementById('cat-modal');cm.classList.remove('active');cm.classList.remove('mo-stacked');document.getElementById('catm-mixed-hint')?.remove();catCb=null;}
 
 // ─── UNCATEGORIZED ───
 
@@ -10711,8 +10782,52 @@ function updateBulkBar(){
 function applyBulkCategory(){
   if(!BulkSelected.size){toast('No transactions selected',false);return;}
   _catModalTxnCtx=null;
-  // Open cat picker — callback will apply to all selected
-  buildCM(null,null);
+  // Compute the most common (main, sub) pairing across selected transactions.
+  // If everything agrees, pre-select that pair. If selection is mixed, pre-select the most common.
+  const mainCounts={},subCounts={},pairCounts={};
+  let totalCounted=0;
+  let uniqueMains=new Set();
+  Object.values(S.txnCache).flat().forEach(t=>{
+    if(!BulkSelected.has(t.id))return;
+    totalCounted++;
+    const mid=t.mainCatId||'';
+    const sid=t.subCatId||'';
+    if(mid){
+      mainCounts[mid]=(mainCounts[mid]||0)+1;
+      uniqueMains.add(mid);
+      const pair=mid+'|'+sid;
+      pairCounts[pair]=(pairCounts[pair]||0)+1;
+      if(sid)subCounts[sid]=(subCounts[sid]||0)+1;
+    }
+  });
+  // Determine pre-fill values
+  let preMain=null,preSub=null;
+  const mainEntries=Object.entries(mainCounts);
+  if(mainEntries.length>0){
+    mainEntries.sort((a,b)=>b[1]-a[1]);
+    preMain=mainEntries[0][0];
+    // For the chosen main, find the most common sub among transactions in that main
+    const pairsForMain=Object.entries(pairCounts).filter(([k])=>k.startsWith(preMain+'|'));
+    pairsForMain.sort((a,b)=>b[1]-a[1]);
+    if(pairsForMain.length){
+      const subPart=pairsForMain[0][0].split('|')[1];
+      if(subPart)preSub=subPart;
+    }
+  }
+  buildCM(preMain,preSub);
+  // Add a mixed-state hint inside the cat-modal if applicable
+  const mixedHintId='catm-mixed-hint';
+  document.getElementById(mixedHintId)?.remove();
+  if(uniqueMains.size>1){
+    const ms=document.getElementById('catm-main');
+    if(ms&&ms.parentNode){
+      const hint=document.createElement('div');
+      hint.id=mixedHintId;
+      hint.style.cssText='margin-top:6px;font-size:10px;color:var(--warn);font-weight:500';
+      hint.innerHTML=`<span style="opacity:.85">⚠ Mixed selection: ${uniqueMains.size} different main categories among ${totalCounted} transactions. Confirming will overwrite all of them.</span>`;
+      ms.parentNode.appendChild(hint);
+    }
+  }
   catCb=(m,s)=>{
     let count=0;
     _autoSweepSuppressed=true; // don't cascade-sweep during bulk manual apply
