@@ -602,6 +602,15 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overfl
 .tx-card .tx-tbl td{padding:14px 16px;border-bottom:1px solid var(--border)}
 .tx-card .tx-tbl tbody tr:last-child td{border-bottom:none}
 .tx-card .tx-tbl tbody tr:hover td{background:var(--bg2)}
+/* Apple-grade row selection: cursor + tinted state, smooth transitions */
+.tx-card.tx-select-mode .tx-tbl tbody tr.tx-row{cursor:pointer}
+.tx-card.tx-select-mode .tx-tbl tbody tr.tx-row td{transition:background-color .12s ease-out}
+.tx-card.tx-select-mode .tx-tbl tbody tr.tx-row.tx-row-selected td{background:color-mix(in srgb,var(--midnight) 7%,transparent)}
+.tx-card.tx-select-mode .tx-tbl tbody tr.tx-row.tx-row-selected:hover td{background:color-mix(in srgb,var(--midnight) 10%,transparent)}
+/* Subtle left edge accent on selected rows for unmistakable state */
+.tx-card.tx-select-mode .tx-tbl tbody tr.tx-row.tx-row-selected td:first-child{box-shadow:inset 3px 0 0 var(--midnight)}
+/* Prevent text selection while clicking rows in select mode (avoids "blue flash" on drag) */
+.tx-card.tx-select-mode .tx-tbl tbody{user-select:none}
 /* KPI row responsive: 5 cells on desktop, 3+2 on tablet, stacked on mobile */
 .kpi-row{grid-template-columns:repeat(5,1fr)}
 @media(max-width:900px){.kpi-row{grid-template-columns:repeat(3,1fr)}.kpi-row>div:nth-child(n+4){grid-column:span 1}}
@@ -1440,7 +1449,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='7.5';
+const VERSION='7.6';
 let sKey=null,saveTimer=null,pinCb=null,catCb=null,activeGroup=null;
 
 // Populate version labels on all auth screens (login, unlock, setup) as soon as DOM is ready.
@@ -9716,9 +9725,9 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps){
 
     const rowBg=reconDivergenceIds.has(t.id+'_first')?'background:color-mix(in srgb,var(--bad) 4%,transparent);'
       :reconDivergenceIds.has(t.id)?'background:color-mix(in srgb,var(--bad) 2%,transparent);'
-      :(BulkMode&&BulkSelected.has(t.id)?'background:color-mix(in srgb,var(--midnight) 5%,transparent)':'');
-
-    return`<tr style="${rowBg}">
+      :'';
+    const rowSelectedClass=(BulkMode&&BulkSelected.has(t.id))?' tx-row-selected':'';
+    return`<tr class="tx-row${rowSelectedClass}" data-tx-id="${t.id}" data-tx-ym="${ym}" style="${rowBg}">
       ${selCb}<td style="color:var(--text3);white-space:nowrap;font-size:var(--fs-xs)">${toDD(t.date)}</td>
       <td><div class="tx-desc-clamp">${h(t.description)}${st}${ruleTag}${matchedTag}${toleranceTag}${pendingTag}${debtTag}${billTag}${staffTag}${refundTag}${t.notes?`<span class="tx-notes">${h(t.notes)}</span>`:''}</div></td>
       <td>${ch}</td>
@@ -9737,7 +9746,7 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps){
       ${reconTd}
     </tr>`;}).join(''):`<tr><td colspan="${(showBalance?8:7)+1+(hasRecon?1:0)}" class="empty">No transactions found</td></tr>`;
 
-  return`<div class="card tx-card"><div class="tbl-wrap"><table class="tx-tbl">${thead}<tbody>${rows}</tbody></table></div></div>`;
+  return`<div class="card tx-card${BulkMode?' tx-select-mode':''}" id="tx-card-main"><div class="tbl-wrap"><table class="tx-tbl">${thead}<tbody>${rows}</tbody></table></div></div>`;
 }
 
 // ─── SHARED TX HEADER (month nav + import + summary) ───
@@ -10603,8 +10612,60 @@ let BulkMode=false;         // Whether selection mode is active
 function toggleBulkSelect(){
   BulkMode=!BulkMode;
   BulkSelected.clear();
+  _bulkLastClickedId=null; // reset shift-click anchor
   render();
 }
+
+// Anchor for Shift-click range selection
+let _bulkLastClickedId=null;
+
+// Single delegated handler for click anywhere on a transaction row in select mode.
+// Smart-skip when click target is an interactive element (button, input, link, badge with onclick).
+function onTxRowClick(event){
+  if(!BulkMode)return;
+  const row=event.target.closest('tr.tx-row');
+  if(!row)return;
+  // Skip if click landed on a button, input, label, link, or anything with explicit onclick
+  // (refund unlink badges, bill tags, etc. all bubble through here — they handle their own action)
+  const interactive=event.target.closest('button, input, label, a, [onclick]');
+  if(interactive&&row.contains(interactive))return;
+  const id=row.getAttribute('data-tx-id');
+  if(!id)return;
+  // Shift-click: range select from last anchor to this row
+  if(event.shiftKey&&_bulkLastClickedId&&_bulkLastClickedId!==id){
+    const tbody=row.parentNode;
+    const rows=Array.from(tbody.querySelectorAll('tr.tx-row'));
+    const anchorIdx=rows.findIndex(r=>r.getAttribute('data-tx-id')===_bulkLastClickedId);
+    const targetIdx=rows.indexOf(row);
+    if(anchorIdx>=0&&targetIdx>=0){
+      const [from,to]=anchorIdx<targetIdx?[anchorIdx,targetIdx]:[targetIdx,anchorIdx];
+      // Determine target state from the clicked row's current state — if it was selected, we deselect range; if not, we select
+      const willSelect=!BulkSelected.has(id);
+      for(let i=from;i<=to;i++){
+        const rid=rows[i].getAttribute('data-tx-id');
+        if(!rid)continue;
+        if(willSelect)BulkSelected.add(rid);
+        else BulkSelected.delete(rid);
+        // Visual update
+        const cb=document.getElementById('cb-'+rid);
+        if(cb)cb.checked=willSelect;
+        rows[i].classList.toggle('tx-row-selected',willSelect);
+      }
+      _bulkLastClickedId=id;
+      updateBulkBar();
+      return;
+    }
+  }
+  // Plain click: toggle this row only
+  if(BulkSelected.has(id)){BulkSelected.delete(id);row.classList.remove('tx-row-selected');}
+  else{BulkSelected.add(id);row.classList.add('tx-row-selected');}
+  const cb=document.getElementById('cb-'+id);
+  if(cb)cb.checked=BulkSelected.has(id);
+  _bulkLastClickedId=id;
+  updateBulkBar();
+}
+// Mount the delegated listener once at boot
+if(!window._txRowClickWired){document.addEventListener('click',onTxRowClick);window._txRowClickWired=true;}
 
 function toggleTxSel(id){
   if(BulkSelected.has(id))BulkSelected.delete(id);
@@ -10612,6 +10673,10 @@ function toggleTxSel(id){
   // Update checkbox state without full re-render
   const cb=document.getElementById('cb-'+id);
   if(cb)cb.checked=BulkSelected.has(id);
+  // Update row visual state
+  const row=document.querySelector(`tr.tx-row[data-tx-id="${id}"]`);
+  if(row)row.classList.toggle('tx-row-selected',BulkSelected.has(id));
+  _bulkLastClickedId=id;
   updateBulkBar();
 }
 
