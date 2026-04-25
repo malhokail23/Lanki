@@ -1710,7 +1710,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='8.11';
+const VERSION='8.12';
 // IS_DEMO: when true, the entire app runs in a sandboxed sample-data mode.
 // No vault is loaded, no Supabase calls happen, and saveState/flushTxnQueue are no-ops.
 // Activated by URL param ?demo=1 or hash #demo. Cannot be flipped at runtime — the only
@@ -4779,18 +4779,29 @@ function manualMatch(outId,inId){
   let fxTxnId=null;
   let fxNote='';
   if(Math.abs(amtDiff)>=0.01){
-    // Direction logic: if outflow > inflow, the gap is an FX expense (you "lost"
-    // value). If outflow < inflow, the gap is FX income (you "gained" value).
+    // V8.12 fix: FX variance lands on the RECEIVING account (the `in` side),
+    // NOT the account with the larger movement. Reasoning:
+    //   • Bank statements are authoritative — both accounts' recorded amounts
+    //     reflect what the bank/CC actually moved
+    //   • The variance exists because conversion happened on the foreign-currency
+    //     side (typically the receiving CC for AmEx-style payments)
+    //   • Putting variance on the source (e.g. SAR bank) corrupts that account's
+    //     reconciled balance vs its statement. Source side is in local currency
+    //     and matches the statement exactly.
+    //   • Receiving side is where the FX rate cost/benefit landed
+    // Sign:
+    //   • out > in → receiver got less than sent → expense on receiver
+    //   • out < in → receiver got more than sent → income on receiver
     fxTxnId=uid();
-    const isExpense=amtDiff>0; // out > in → expense
+    const isExpense=amtDiff>0; // out > in → receiver short → expense
     const fxAmt=Math.abs(amtDiff);
-    const fxAcc=isExpense?out.accountId:inn.accountId;
-    const fxYm=out.date.substr(0,7);
+    const fxAcc=inn.accountId; // ALWAYS the receiving account
+    const fxYm=inn.date.substr(0,7); // date the variance posted = receiver's date
     const outAcc=S.accounts.find(a=>a.id===out.accountId);
     const inAcc=S.accounts.find(a=>a.id===inn.accountId);
     const fxTxn={
       id:fxTxnId,
-      date:out.date,
+      date:inn.date,
       description:`FX variance · ${outAcc?.name||'?'} → ${inAcc?.name||'?'}`,
       amount:fxAmt,
       type:isExpense?'expense':'income',
@@ -4806,7 +4817,7 @@ function manualMatch(outId,inId){
     if(!S.txnCache[fxYm])S.txnCache[fxYm]=[];
     S.txnCache[fxYm].push(fxTxn);
     schedTxn(fxYm);
-    fxNote=`FX variance ${isExpense?'expense':'income'} of SAR ${fxAmt.toFixed(2)} recorded`;
+    fxNote=`FX variance ${isExpense?'expense':'income'} of SAR ${fxAmt.toFixed(2)} recorded on ${inAcc?.name||'receiving account'}`;
   }
   S.matchedPairs.push({
     id:pairId,
@@ -11628,18 +11639,18 @@ const MIGRATIONS=[
         if(!out||!inn)continue;
         const amtDiff=Math.round((out.amount-inn.amount)*100)/100;
         if(Math.abs(amtDiff)<0.01)continue; // amounts already match
-        // Apply the same FX variance logic as manualMatch (V8.8)
+        // Apply the V8.12 corrected FX variance logic (lands on receiving account)
         const fxTxnId=uid();
         const isExpense=amtDiff>0;
         const fxAmt=Math.abs(amtDiff);
-        const fxAcc=isExpense?out.accountId:inn.accountId;
-        const fxYm=(out.date||'').substr(0,7);
+        const fxAcc=inn.accountId; // V8.12: ALWAYS receiving account
+        const fxYm=(inn.date||'').substr(0,7);
         if(!fxYm)continue;
         const outAcc=S.accounts.find(a=>a.id===out.accountId);
         const inAcc=S.accounts.find(a=>a.id===inn.accountId);
         const fxTxn={
           id:fxTxnId,
-          date:out.date,
+          date:inn.date,
           description:`FX variance · ${outAcc?.name||'?'} → ${inAcc?.name||'?'}`,
           amount:fxAmt,
           type:isExpense?'expense':'income',
@@ -11670,6 +11681,45 @@ const MIGRATIONS=[
         setTimeout(()=>toast(`Backfilled FX variance for ${created} historical match${created===1?'':'es'} — total: SAR ${totalImpact.toFixed(2)}. Net Flow now reconciles with Cash Position.`),700);
       }
       return{count:created,impact:totalImpact};
+    }
+  },
+  {
+    id:'v8_12_fxRelocateToReceiver',
+    description:'Relocate existing FX variance transactions from source account to receiving account (V8.11 used wrong account assignment)',
+    removeAfter:'V9.0',
+    run:()=>{
+      // V8.11 placed FX variance on the account with the larger movement. That was wrong:
+      // bank statements are authoritative for the bank side, so adding a variance there
+      // corrupts that account's reconciled balance. The variance belongs on the receiving
+      // (foreign-currency-settled) account where the rate cost actually landed.
+      //
+      // This migration finds every transaction tagged with fxPairId, looks up the pair,
+      // and moves the variance to the matched pair's `inAccId` if it isn't already there.
+      const pairs=S.matchedPairs||[];
+      if(!pairs.length)return{count:0};
+      const pairById=new Map(pairs.map(p=>[p.id,p]));
+      let moved=0;
+      const affectedYms=new Set();
+      for(const ym in S.txnCache){
+        for(const t of(S.txnCache[ym]||[])){
+          if(!t.fxPairId)continue;
+          const p=pairById.get(t.fxPairId);
+          if(!p)continue;
+          // Only relocate if currently on the wrong account
+          if(t.accountId===p.inAccId)continue;
+          t.accountId=p.inAccId;
+          t.notes=(t.notes||'')+` [V8.12: relocated to receiving account]`;
+          affectedYms.add(ym);
+          moved++;
+        }
+      }
+      if(moved>0){
+        affectedYms.forEach(ym=>schedTxn(ym));
+        sched();
+        console.log(`[migration v8_12_fxRelocateToReceiver] Moved ${moved} FX variance transactions to receiving accounts`);
+        setTimeout(()=>toast(`Corrected ${moved} FX variance transaction${moved===1?'':'s'} — now posted on receiving accounts (CC side, not bank side).`),1100);
+      }
+      return{count:moved};
     }
   }
 ];
