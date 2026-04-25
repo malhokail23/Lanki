@@ -1304,7 +1304,7 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overfl
 <div id="app">
   <!-- Demo banner (only visible in URL demo mode) -->
   <div id="demo-banner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:700;background:var(--midnight);color:var(--feather);padding:8px 16px;font-size:12px;font-weight:500;letter-spacing:.01em;text-align:center;border-bottom:1px solid color-mix(in srgb,var(--feather) 20%,transparent)">
-    <span style="opacity:.8">DEMO MODE</span> · Sample data only, nothing is saved · <a href="/" style="color:var(--feather);text-decoration:underline;font-weight:600">Exit demo →</a>
+    <span style="opacity:.8">DEMO MODE</span> · You're viewing a sample dashboard with anonymized data. Nothing is saved.
   </div>
   <!-- Burger top bar (mobile only) -->
   <div class="burger-bar" id="burger-bar">
@@ -1499,7 +1499,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='8.2';
+const VERSION='8.3';
 // IS_DEMO: when true, the entire app runs in a sandboxed sample-data mode.
 // No vault is loaded, no Supabase calls happen, and saveState/flushTxnQueue are no-ops.
 // Activated by URL param ?demo=1 or hash #demo. Cannot be flipped at runtime — the only
@@ -1669,6 +1669,10 @@ async function initAuth(){
         if(nav)nav.style.paddingTop='34px';
         document.body.style.paddingTop='34px';
       }
+      // Hide vault-related buttons — public demo visitors should have no path back to the vault
+      const dBtn=document.getElementById('demo-btn');
+      if(dBtn)dBtn.style.display='none';
+      document.querySelectorAll('.nav-lock').forEach(el=>el.style.display='none');
       // Render
       await render();
       return;
@@ -1766,8 +1770,8 @@ showModules();
   }
 }
 function lockApp(){
-  // In URL demo mode, "Lock" navigates back to login instead of clearing vault state (there is none)
-  if(IS_DEMO){window.location.href='/';return;}
+  // In URL demo mode, no vault exists to lock and we don't expose the login screen to visitors
+  if(IS_DEMO)return;
   sKey=null;
   window._cd=null; // M3: clear sensitive chart data from memory on lock
   // H2: Clear decrypted state from memory
