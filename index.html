@@ -1710,7 +1710,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='8.8';
+const VERSION='8.9';
 // IS_DEMO: when true, the entire app runs in a sandboxed sample-data mode.
 // No vault is loaded, no Supabase calls happen, and saveState/flushTxnQueue are no-ops.
 // Activated by URL param ?demo=1 or hash #demo. Cannot be flipped at runtime — the only
@@ -2095,7 +2095,7 @@ function fmtSP(n,sg=false){return`<span class="fmt-money">${fmtS(n,sg)}</span>`;
 // Convenience for non-money sensitive numbers (counts, percentages on personal data).
 function isPrivate(){return!!S.privacy;}
 function uid(){return'tx_'+(typeof crypto!=='undefined'&&crypto.randomUUID?crypto.randomUUID().replace(/-/g,'').substr(0,14):Math.random().toString(36).substr(2,9)+Date.now().toString(36));}
-function toast(msg,ok=true){const el=document.getElementById('toast');if(!el)return;el.textContent=msg;el.style.background=ok?'#111':'var(--bad)';el.classList.add('show');setTimeout(()=>el.classList.remove('show'),3200);}
+function toast(msg,ok=true){const el=document.getElementById('toast');if(!el)return;el.textContent=msg;el.style.background=ok?'#111':'var(--bad)';el.classList.add('show');setTimeout(()=>el.classList.remove('show'),ok?5000:6000);}
 // Toast with an inline action link. Stays visible longer (6 seconds) and accepts a click handler.
 function toastAction(msg,actionLabel,onAction){
   const el=document.getElementById('toast');if(!el)return;
@@ -4623,8 +4623,15 @@ async function saveEditTxn(){
     // Clear breadcrumb — transaction is no longer uncategorized from a deletion
     delete t.prevCatName;delete t.prevCatReason;
     const prevDir=t.direction;
-    t.type=typeFromCat(newMid,t.type);
+    const prevType=t.type;
+    // Use sub-aware resolver so sub_external_individual etc. correctly drive type
+    t.type=resolveType(newMid,newSid,t.type);
     if(prevDir==='in'||prevDir==='out')t.direction=prevDir;
+    // Surface auto-type-sync to user (silent changes break trust)
+    if(prevType!==t.type){
+      const typeLabels={income:'Income',expense:'Expense',transfer:'Transfer',external_transfer:'External Transfer',investment:'Investment'};
+      toast(`Type updated from ${typeLabels[prevType]||prevType} to ${typeLabels[t.type]||t.type} to match category`);
+    }
     // Learn from manual correction — unified rule system
     learnTxnRule(t.description,newMid,newSid,'manual');
     t.ruleApplied=false;
@@ -5349,7 +5356,7 @@ async function doImport(directPayload){
     }
     const di=t.debt_id||t.debtId||null;
     let txnType=t.type||'expense';
-    if(mid){txnType=typeFromCat(mid,txnType);}
+    if(mid){txnType=resolveType(mid,sid,txnType);}
     // direction: AI-provided value is authoritative. Only fall back when truly absent.
     // NEVER derive direction from type — a refund is expense+in, not income+in.
     const rawDir=(t.direction||t.dir||'').toLowerCase().trim();
@@ -5519,7 +5526,7 @@ function sweepRules(scope,previewOnly){
         t.mainCatId=newMain;
         if(ruleHasSub)t.subCatId=rule.sid;
         t.ruleApplied=true;
-        t.type=typeFromCat(newMain,t.type);
+        t.type=resolveType(newMain,t.subCatId,t.type);
         affectedYms.add(ym);
       }
     }
@@ -5560,7 +5567,7 @@ function scheduleAutoRuleSweep(){
       c.t.mainCatId=c.newMainId;
       if(c.rule&&c.rule.sid&&c.rule.sid.trim())c.t.subCatId=c.rule.sid;
       c.t.ruleApplied=true;
-      c.t.type=typeFromCat(c.newMainId,c.t.type);
+      c.t.type=resolveType(c.newMainId,c.newSubId,c.t.type);
       affectedYms.add(c.ym);
     });
     affectedYms.forEach(ym=>schedTxn(ym));
@@ -5747,7 +5754,7 @@ async function applyRuleSweep(){
     c.t.mainCatId=c.newMainId;
     if(c.newSubId!==c.oldSubId)c.t.subCatId=c.newSubId;
     c.t.ruleApplied=true;
-    c.t.type=typeFromCat(c.newMainId,c.t.type);
+    c.t.type=resolveType(c.newMainId,c.newSubId,c.t.type);
     affectedYms.add(c.ym);
   });
   affectedYms.forEach(ym=>schedTxn(ym));
@@ -5794,11 +5801,20 @@ function openCP(txnId,ym,curM,curS){
       t.mainCatId=m||null;t.subCatId=s||null;t.ruleApplied=false;
       if(m){
         delete t.prevCatName;delete t.prevCatReason;
-        t.type=typeFromCat(m,t.type); // sync type with category
+        const prevType=t.type;
+        t.type=resolveType(m,s,t.type); // sub-aware type sync
+        if(prevType!==t.type){
+          const typeLabels={income:'Income',expense:'Expense',transfer:'Transfer',external_transfer:'External Transfer',investment:'Investment'};
+          toast(`Category saved · Type updated from ${typeLabels[prevType]||prevType} to ${typeLabels[t.type]||t.type}`);
+        }else{
+          toast('Category saved');
+        }
         learnRule(t.raw_description||t.description,m,s);
+      }else{
+        toast('Category saved');
       }
     }
-    schedTxn(ymk);sched();render();toast('Category saved');
+    schedTxn(ymk);sched();render();
   };
   const esc=document.getElementById('catm-escalate');
   if(esc)esc.style.display='block';
@@ -10924,6 +10940,29 @@ function rSanityCheck(){
     });
   });
 
+  // ── 1b. Type / Category drift (V8.9) ────────────────────────────────────────
+  // Detect transactions where the stored `type` doesn't match what the
+  // (mainCatId, subCatId) pair implies. Caused by historical edits when
+  // sub-aware type sync wasn't yet enforced.
+  const driftedTxns=all.filter(t=>{
+    if(!t.mainCatId)return false;
+    const expected=resolveType(t.mainCatId,t.subCatId,t.type);
+    return expected!==t.type;
+  });
+  if(driftedTxns.length){
+    const sample=driftedTxns.slice(0,3).map(t=>{
+      const expected=resolveType(t.mainCatId,t.subCatId,t.type);
+      const labels={income:'Income',expense:'Expense',transfer:'Transfer',external_transfer:'External Transfer',investment:'Investment'};
+      return`"${h(t.description.substr(0,50))}" — has ${labels[t.type]||t.type}, should be ${labels[expected]||expected}`;
+    }).join('; ');
+    issues.push({
+      severity:'warn',section:'Type vs Category drift',
+      message:`${driftedTxns.length} transaction${driftedTxns.length===1?'':'s'} have a Type that does not match their Category`,
+      hint:`Examples: ${sample}${driftedTxns.length>3?` and ${driftedTxns.length-3} more`:''}. Auto-fix re-syncs each Type to match its Category, preserving direction.`,
+      action:`<button class="btn btn-xs btn-p" onclick="autoFixTypeCategoryDrift()">Auto-fix all (${driftedTxns.length})</button>`
+    });
+  }
+
   // ── 2. Transaction rules that conflict with bills/staff/debts/income ────────
   (S.txnRules||[]).forEach(r=>{
     const conflicts=[];
@@ -11359,7 +11398,7 @@ function applyBulkCategory(){
           t.subCatId=s||null;
           t.ruleApplied=false;
           if(m){
-            t.type=typeFromCat(m,t.type); // sync type with category
+            t.type=resolveType(m,s,t.type); // sub-aware type sync
             learnRule(t.raw_description||t.description,m,s);
           }
           schedTxn(ym);
@@ -11408,6 +11447,24 @@ function closeSidebar(){
 
 
 // Derive transaction type from category — keeps type and category in sync
+// Sub-category → type override.
+// Some subs imply a specific type even when their parent main is generic
+// (e.g. sub_external_individual lives under cat_main_transfers but means
+// external_transfer; sub_investment_transfer lives under cat_main_finance
+// but means investment). This map is the source of truth — if a sub is
+// listed here, its type wins over main's type.
+const SUB_TYPE_OVERRIDE={
+  // External transfers (real money leaving to a third party)
+  'sub_external_individual':'external_transfer',
+  'sub_external_business':'external_transfer',
+  'sub_intl_wire':'external_transfer',
+  // Internal money movements (between own accounts)
+  'sub_internal_transfer':'transfer',
+  'sub_cc_payment':'transfer',
+  // Investments (money parked in investment vehicles)
+  'sub_investment_transfer':'investment',
+};
+
 function typeFromCat(mid, currentType){
   if(!mid) return currentType;
   const mc=getMC(mid);
@@ -11416,6 +11473,41 @@ function typeFromCat(mid, currentType){
   if(mc.type==='transfer') return currentType==='external_transfer'?'external_transfer':'transfer';
   if(mc.type==='investment') return 'investment';
   return 'expense'; // all expense categories
+}
+
+// Resolve the canonical type given (mainCatId, subCatId).
+// Sub override wins; otherwise fall through to main-based logic.
+// `currentType` is provided so we can preserve external_transfer when only main is set
+// (transfer main can mean either internal or external — sub disambiguates).
+function resolveType(mid, sid, currentType){
+  if(sid && SUB_TYPE_OVERRIDE[sid]) return SUB_TYPE_OVERRIDE[sid];
+  return typeFromCat(mid, currentType);
+}
+
+// Migration: scan all transactions, fix any where stored type doesn't match
+// what (mainCatId, subCatId) implies. Direction is preserved untouched.
+function autoFixTypeCategoryDrift(){
+  const all=allTxns();
+  const fixed=[];
+  const affectedYms=new Set();
+  for(const t of all){
+    if(!t.mainCatId)continue;
+    const expected=resolveType(t.mainCatId,t.subCatId,t.type);
+    if(expected!==t.type){
+      fixed.push({id:t.id,from:t.type,to:expected,desc:t.description});
+      t.type=expected;
+      const ym=(t.date||'').substr(0,7);
+      if(ym)affectedYms.add(ym);
+    }
+  }
+  if(!fixed.length){toast('No drift found — already in sync',true);return;}
+  affectedYms.forEach(ym=>schedTxn(ym));
+  sched();
+  // Re-sync debt payments since type changes affect debt linkage logic
+  try{syncDebtsFromTxns();}catch(e){}
+  render();
+  toast(`Auto-fixed ${fixed.length} transaction${fixed.length===1?'':'s'} · types now match categories`);
+  console.log('[V8.9] Type/category drift auto-fix:',fixed);
 }
 
 
