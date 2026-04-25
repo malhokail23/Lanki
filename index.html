@@ -1710,7 +1710,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='8.7';
+const VERSION='8.8';
 // IS_DEMO: when true, the entire app runs in a sandboxed sample-data mode.
 // No vault is loaded, no Supabase calls happen, and saveState/flushTxnQueue are no-ops.
 // Activated by URL param ?demo=1 or hash #demo. Cannot be flipped at runtime — the only
@@ -4747,23 +4747,74 @@ function manualMatch(outId,inId){
   if(!out||!inn){toast('Transaction not found',false);return;}
   // Remove any existing pending for these
   S.matchedPairs=S.matchedPairs.filter(p=>p.outId!==outId&&p.inId!==inId&&p.outId!==inId&&p.inId!==outId);
+  const pairId='mp_'+uid();
+  // FX variance: when out and in amounts differ, the difference must go somewhere
+  // for the books to balance. Record it as cat_main_finance / sub_fx on the
+  // account with the larger absolute movement (i.e. the source account).
+  const amtDiff=Math.round((out.amount-inn.amount)*100)/100;
+  let fxTxnId=null;
+  let fxNote='';
+  if(Math.abs(amtDiff)>=0.01){
+    // Direction logic: if outflow > inflow, the gap is an FX expense (you "lost"
+    // value). If outflow < inflow, the gap is FX income (you "gained" value).
+    fxTxnId=uid();
+    const isExpense=amtDiff>0; // out > in → expense
+    const fxAmt=Math.abs(amtDiff);
+    const fxAcc=isExpense?out.accountId:inn.accountId;
+    const fxYm=out.date.substr(0,7);
+    const outAcc=S.accounts.find(a=>a.id===out.accountId);
+    const inAcc=S.accounts.find(a=>a.id===inn.accountId);
+    const fxTxn={
+      id:fxTxnId,
+      date:out.date,
+      description:`FX variance · ${outAcc?.name||'?'} → ${inAcc?.name||'?'}`,
+      amount:fxAmt,
+      type:isExpense?'expense':'income',
+      direction:isExpense?'out':'in',
+      mainCatId:'cat_main_finance',
+      subCatId:'sub_fx',
+      accountId:fxAcc,
+      notes:`Auto-created on match: out ${out.amount.toFixed(2)} vs in ${inn.amount.toFixed(2)}. Pair ${pairId}.`,
+      flagged:false,
+      ruleApplied:false,
+      fxPairId:pairId // tag so we can clean up if pair is unmatched later
+    };
+    if(!S.txnCache[fxYm])S.txnCache[fxYm]=[];
+    S.txnCache[fxYm].push(fxTxn);
+    schedTxn(fxYm);
+    fxNote=`FX variance ${isExpense?'expense':'income'} of SAR ${fxAmt.toFixed(2)} recorded`;
+  }
   S.matchedPairs.push({
-    id:'mp_'+uid(),
+    id:pairId,
     outId,inId,
-    amount:out.amount,
+    amount:Math.min(out.amount,inn.amount), // record the smaller amount as the matched value
+    outAmount:out.amount,
+    inAmount:inn.amount,
     date:out.date,
     outAccId:out.accountId,
     inAccId:inn.accountId,
     matchedAt:new Date().toISOString(),
-    confirmedBy:'manual'
+    confirmedBy:'manual',
+    fxTxnId, // back-reference to the variance txn (for unmatch cleanup)
+    toleranceNote:fxTxnId?`FX variance: SAR ${Math.abs(amtDiff).toFixed(2)} recorded as ${amtDiff>0?'expense':'income'}`:null
   });
-  sched();render();toast('Transactions matched');
+  sched();render();
+  toast(fxTxnId?`Matched · ${fxNote}`:'Transactions matched');
 }
 
-// Unmatch a pair
+// Unmatch a pair — also removes any auto-created FX variance transaction
 function unmatch(pairId){
+  const pair=S.matchedPairs.find(p=>p.id===pairId);
+  if(pair?.fxTxnId){
+    // Remove the FX variance transaction created when this pair was matched
+    Object.keys(S.txnCache).forEach(ym=>{
+      S.txnCache[ym]=S.txnCache[ym].filter(t=>t.id!==pair.fxTxnId);
+      schedTxn(ym);
+    });
+  }
   S.matchedPairs=S.matchedPairs.filter(p=>p.id!==pairId);
-  sched();render();toast('Match removed');
+  sched();render();
+  toast(pair?.fxTxnId?'Match removed · FX variance reversed':'Match removed');
 }
 
 function closeMatchPopover(){
@@ -4924,53 +4975,142 @@ function rTransferMatching(){
 }
 
 let _matchPickerSourceId=null;
+// ─── MANUAL MATCH MODAL (V8.8) ───
+// Replaces the inline match-picker slide-down with a dedicated modal that
+// applies three filtering rules:
+//   1. Opposite direction (credit shows debits, debit shows credits)
+//   2. Date window: source date ±1 day
+//   3. Amount: exact OR within tolerance (default 5%)
+// On confirm, if amounts differ, auto-creates an FX variance transaction
+// tagged cat_main_finance / sub_fx so the books balance to the cent.
+let _matchModalSourceId=null;
+let _matchModalSourceYm=null;
+let _matchModalTolerancePct=5; // % tolerance for non-exact matches
+let _matchModalShowAll=false;  // expand to wider net if no candidates found
+
 function showMatchPicker(srcId){
-  _matchPickerSourceId=srcId;
+  // Find source transaction
   const allT=allTxns();
-  const src=allT.find(t=>t.id===srcId);if(!src)return;
+  const src=allT.find(t=>t.id===srcId);
+  if(!src){toast('Transaction not found',false);return;}
+  _matchModalSourceId=srcId;
+  _matchModalSourceYm=src.date.substr(0,7);
+  _matchModalShowAll=false;
+  renderMatchModal();
+}
+
+function renderMatchModal(){
+  // Close any prior instance
+  const old=document.getElementById('match-modal');if(old)old.remove();
+  const allT=allTxns();
+  const src=allT.find(t=>t.id===_matchModalSourceId);
+  if(!src)return;
   const srcDir=txDir(src);
   const srcDate=new Date(src.date);
+  const srcAcc=S.accounts.find(a=>a.id===src.accountId);
 
-  // Find candidates: opposite direction, different account, same amount ±5%, within ±3 days
+  // Apply the three rules to find candidates
+  const tolerancePct=_matchModalShowAll?15:_matchModalTolerancePct;
+  const dayWindow=_matchModalShowAll?3:1; // expand on "Show wider net"
   const candidates=allT.filter(t=>{
-    if(t.id===srcId)return false;
+    if(t.id===_matchModalSourceId)return false;
     if(isMatched(t.id))return false;
+    if(t.transferDismissed)return false;
+    // Rule 1: opposite direction. Source credit → show debits, source debit → show credits.
+    // Source must be a transfer-type (transfer or external_transfer); candidates same.
     if(t.type!=='transfer'&&t.type!=='external_transfer')return false;
-    if(t.accountId===src.accountId)return false;
     if(txDir(t)===srcDir)return false;
+    // Rule 2: date within ±N days
     const dayDiff=Math.abs((new Date(t.date)-srcDate)/(1000*60*60*24));
-    return dayDiff<=3;
-  }).sort((a,b)=>Math.abs(a.amount-src.amount)-Math.abs(b.amount-src.amount));
+    if(dayDiff>dayWindow)return false;
+    // Rule 3: amount tolerance — exact OR within %
+    const amtDiff=Math.abs(t.amount-src.amount);
+    const amtPct=(amtDiff/src.amount)*100;
+    if(amtPct>tolerancePct)return false;
+    // Different account (must be — moving money to/from same account is not a transfer)
+    if(t.accountId===src.accountId)return false;
+    return true;
+  }).sort((a,b)=>{
+    // Exact amount match wins, then closest amount, then closest date
+    const aDiff=Math.abs(a.amount-src.amount);
+    const bDiff=Math.abs(b.amount-src.amount);
+    if(Math.abs(aDiff-bDiff)>0.01)return aDiff-bDiff;
+    return Math.abs(new Date(a.date)-srcDate)-Math.abs(new Date(b.date)-srcDate);
+  });
 
-  const panel=document.getElementById('match-picker-panel');
-  const list=document.getElementById('match-picker-list');
-  const desc=document.getElementById('match-picker-desc');
-  if(!panel||!list||!desc)return;
+  const dirLabel=srcDir==='out'?'outflow':'inflow';
+  const oppositeLabel=srcDir==='out'?'inflows':'outflows';
 
-  desc.textContent=`Matching: ${src.description} — ${fmtS(src.amount)} on ${toDD(src.date)}. Select the other side:`;
+  // Build candidate rows
+  const rows=candidates.length?candidates.map(t=>{
+    const acc=S.accounts.find(a=>a.id===t.accountId);
+    const amtDiff=t.amount-src.amount;
+    const amtDiffAbs=Math.abs(amtDiff);
+    const isExact=amtDiffAbs<0.01;
+    const dayDiff=Math.round((new Date(t.date)-srcDate)/(1000*60*60*24));
+    const dayLabel=dayDiff===0?'same day':dayDiff>0?`+${dayDiff}d`:`${dayDiff}d`;
+    // FX variance preview
+    let varianceNote='';
+    if(!isExact){
+      // Sign convention: from the source's perspective, if my amount > their amount,
+      // I "lost" the difference. If my amount < their amount, I "gained" it.
+      const variance=Math.abs(src.amount-t.amount);
+      varianceNote=`<div style="font-size:10px;color:var(--warn);margin-top:3px;font-weight:500">↻ Will record SAR ${variance.toFixed(2)} as FX variance</div>`;
+    }
+    return`<div class="fg jb" style="padding:10px 12px;border-bottom:1px solid var(--border);align-items:flex-start;gap:8px">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:var(--fs-xs);font-weight:500;line-height:1.3">${h(t.description)}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:3px">${acc?.name||'--'} · ${toDD(t.date)} · ${dayLabel}</div>
+        <div style="font-size:13px;font-weight:600;color:${txDir(t)==='in'?'var(--ok)':'var(--bad)'};margin-top:4px">${txDir(t)==='in'?'+':'-'}${fmtP(t.amount)}${isExact?'<span style="font-size:10px;color:var(--ok);margin-left:6px;font-weight:500">EXACT</span>':''}</div>
+        ${varianceNote}
+      </div>
+      <button class="btn btn-xs btn-p" onclick="confirmManualMatch('${srcDir==='out'?_matchModalSourceId:t.id}','${srcDir==='in'?_matchModalSourceId:t.id}')" style="flex-shrink:0">Match</button>
+    </div>`;
+  }).join(''):`<div style="padding:24px;text-align:center;color:var(--text3);font-size:var(--fs-xs)">
+    ${_matchModalShowAll?'No candidates found even with a wider window. The other side may not be imported yet, or may need a transaction created manually.':'No candidates found within ±1 day and 5% amount tolerance.'}
+  </div>`;
 
-  if(!candidates.length){
-    list.innerHTML='<div style="font-size:var(--fs-xs);color:var(--text3);padding:8px 0">No candidates found. Import the other account statement first.</div>';
-  }else{
-    list.innerHTML=candidates.map(t=>{
-      const acc=S.accounts.find(a=>a.id===t.accountId);
-      const amtDiff=Math.abs(t.amount-src.amount);
-      return`<div class="fg jb" style="padding:8px 0;border-bottom:1px solid var(--bg3)">
-        <div>
-          <div style="font-size:var(--fs-xs);font-weight:500">${h(t.description)}</div>
-          <div style="font-size:11px;color:var(--text3)">${acc?.name||'--'} · ${toDD(t.date)} · ${fmtP(t.amount)}${amtDiff>0.01?` <span style="color:var(--warn)">(diff: ${fmtP(amtDiff)})</span>`:''}</div>
-        </div>
-        <button class="btn btn-xs btn-p" onclick="confirmManualMatch('${srcDir==='out'?srcId:t.id}','${srcDir==='in'?srcId:t.id}')">Match</button>
-      </div>`;}).join('');
-  }
-  panel.style.display='block';
-  panel.scrollIntoView({behavior:'smooth'});
+  const mo=document.createElement('div');
+  mo.id='match-modal';mo.className='mo active';
+  mo.innerHTML=`<div class="md" style="max-width:560px;padding:0;width:94%">
+    <div style="padding:18px 20px 14px;border-bottom:1px solid var(--border)">
+      <div class="mdtitle">Manual Match</div>
+      <div class="mddesc" style="margin-bottom:10px">Find the other side of this transfer</div>
+      <div style="background:var(--bg2);border-radius:var(--rsm);padding:10px 12px">
+        <div style="font-size:11px;color:var(--text3);font-weight:500;margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em">Source ${dirLabel}</div>
+        <div style="font-size:var(--fs-xs);font-weight:500">${h(src.description)}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${srcAcc?.name||'--'} · ${toDD(src.date)}</div>
+        <div style="font-size:14px;font-weight:600;color:${srcDir==='in'?'var(--ok)':'var(--bad)'};margin-top:4px">${srcDir==='in'?'+':'-'}${fmtP(src.amount)}</div>
+      </div>
+    </div>
+    <div style="padding:10px 14px;border-bottom:1px solid var(--border);background:var(--bg2)">
+      <div class="fg jb" style="font-size:11px;color:var(--text3)">
+        <span>Showing ${candidates.length} candidate ${oppositeLabel} · ±${dayWindow} day${dayWindow===1?'':'s'} · ±${tolerancePct}% amount</span>
+        <button class="btn btn-xs" onclick="_matchModalShowAll=${!_matchModalShowAll};renderMatchModal()" style="font-size:10px">${_matchModalShowAll?'Tighter (±1 day, ±5%)':'Show wider (±3 days, ±15%)'}</button>
+      </div>
+    </div>
+    <div style="max-height:50vh;overflow-y:auto">${rows}</div>
+    <div style="padding:12px 16px;border-top:1px solid var(--border);background:var(--bg2);display:flex;justify-content:flex-end">
+      <button class="btn btn-sm" onclick="closeMatchModal()">Cancel</button>
+    </div>
+  </div>`;
+  // Click-outside-to-close
+  mo.onclick=e=>{if(e.target===mo)closeMatchModal();};
+  document.body.appendChild(mo);
+}
+
+function closeMatchModal(){
+  const m=document.getElementById('match-modal');if(m)m.remove();
+  _matchModalSourceId=null;_matchModalSourceYm=null;_matchModalShowAll=false;
 }
 
 function confirmManualMatch(outId,inId){
-  document.getElementById('match-picker-panel').style.display='none';
+  closeMatchModal();
   manualMatch(outId,inId);
 }
+
+// Maintain backward compatibility with any callers expecting the old panel
+function _legacyMatchPickerNoOp(){}
 
 function dismissTransfer(txnId,ym){
   // Mark as dismissed so it no longer appears in pending
