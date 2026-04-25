@@ -621,6 +621,51 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overfl
 .tx-more[open] summary{background:var(--bg2)}
 .tx-more>div>button:hover{background:var(--bg2)!important}
 @media(max-width:768px){th,td{padding:8px 8px}.tx-card .tx-tbl th,.tx-card .tx-tbl td{padding:10px 10px}}
+/* ── STICKY TRANSACTIONS TOOLBAR ── */
+/* Container that pins the bulk action bar (when active) and the filter row to the top of the viewport on scroll. */
+.tx-sticky-toolbar{
+  position:sticky;top:0;
+  z-index:50;
+  margin:0 -2.25rem 1rem -2.25rem; /* extend edge-to-edge across the .pg padding */
+  padding:14px 2.25rem 4px 2.25rem;
+  background:color-mix(in srgb,var(--paper) 82%,transparent);
+  -webkit-backdrop-filter:blur(14px) saturate(1.6);
+  backdrop-filter:blur(14px) saturate(1.6);
+  border-bottom:1px solid transparent;
+  transition:border-color .18s ease, box-shadow .18s ease;
+}
+/* When the toolbar lifts off the page (scrolled), give it a soft elevation cue */
+.tx-sticky-toolbar.tx-stuck{
+  border-bottom-color:var(--border);
+  box-shadow:0 1px 0 color-mix(in srgb,var(--midnight) 4%,transparent), 0 6px 16px -8px color-mix(in srgb,var(--midnight) 8%,transparent);
+}
+/* Tablet/mobile: account for fixed burger bar (52px tall) on small screens */
+@media(max-width:768px){
+  .tx-sticky-toolbar{
+    top:52px; /* sits below burger bar */
+    margin:0 -1.25rem 0.75rem -1.25rem; /* tighter gutter on mobile */
+    padding:10px 1.25rem 4px 1.25rem;
+  }
+}
+/* Inside the sticky toolbar, the filter row needs to wrap on narrow screens instead of horizontal-scrolling */
+.tx-sticky-toolbar .fg{flex-wrap:wrap!important;overflow-x:visible!important;gap:8px}
+.tx-sticky-toolbar .fg>input,
+.tx-sticky-toolbar .fg>select{min-width:130px;flex:1 1 140px}
+/* On very narrow screens, let select dropdowns shrink further */
+@media(max-width:520px){
+  .tx-sticky-toolbar .fg>input,
+  .tx-sticky-toolbar .fg>select{flex:1 1 100%;min-width:0}
+  .tx-sticky-toolbar .fg label{flex:1 0 auto}
+  .tx-sticky-toolbar .fg button{flex:1 0 auto}
+}
+/* Bulk action bar: tighten on small screens, allow wrap */
+.tx-sticky-toolbar #bulk-action-bar{flex-wrap:wrap!important}
+@media(max-width:520px){
+  .tx-sticky-toolbar #bulk-action-bar{padding:8px 10px}
+  .tx-sticky-toolbar #bulk-action-bar #bulk-count{flex:1 0 100%}
+  .tx-sticky-toolbar #bulk-action-bar button{flex:1 1 calc(50% - 4px);font-size:11px}
+}
+/* When user zooms in heavily, sticky still works because top:0 references the visual viewport, not the layout viewport */
 /* Accounts & Cards: unified card with inline section headers (Apple Settings pattern) */
 .acc-card{padding:0;overflow:hidden}
 .acc-card-intro{font-size:var(--fs-xs);color:var(--text3);padding:1rem 1.4rem .75rem;border-bottom:1px solid var(--border);line-height:1.6}
@@ -1449,7 +1494,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='7.8';
+const VERSION='7.9';
 let sKey=null,saveTimer=null,pinCb=null,catCb=null,activeGroup=null;
 
 // Populate version labels on all auth screens (login, unlock, setup) as soon as DOM is ready.
@@ -2672,6 +2717,37 @@ async function render(){
   if(BulkMode)updateBulkBar();
   // V3.0 #4: init date inputs
   setTimeout(initDateInputs,0);
+  // Re-attach sticky-stuck observer after every render (DOM elements are recreated)
+  setTimeout(initStickyToolbar,0);
+}
+
+// ─── STICKY TOOLBAR OBSERVER ───
+// Attaches a sentinel above the toolbar; when sentinel scrolls out of view,
+// the toolbar is "stuck" and gets the elevation class for the shadow cue.
+let _stickyObserver=null;
+function initStickyToolbar(){
+  const bar=document.getElementById('tx-sticky-toolbar');
+  if(!bar)return;
+  // Tear down any prior observer (re-render created new elements)
+  if(_stickyObserver){_stickyObserver.disconnect();_stickyObserver=null;}
+  // Create or move a sentinel directly before the bar
+  let sentinel=document.getElementById('tx-sticky-sentinel');
+  if(!sentinel){
+    sentinel=document.createElement('div');
+    sentinel.id='tx-sticky-sentinel';
+    sentinel.style.cssText='height:1px;margin-bottom:-1px;pointer-events:none';
+  }
+  if(bar.previousElementSibling!==sentinel){
+    bar.parentNode.insertBefore(sentinel,bar);
+  }
+  // Observer watches the sentinel — when it leaves the viewport (above), we're stuck
+  // rootMargin matches the sticky offset (0 on desktop, 52 on mobile)
+  const isMobile=window.matchMedia('(max-width:768px)').matches;
+  const offset=isMobile?52:0;
+  _stickyObserver=new IntersectionObserver(([entry])=>{
+    bar.classList.toggle('tx-stuck',!entry.isIntersecting);
+  },{threshold:0,rootMargin:`-${offset}px 0px 0px 0px`});
+  _stickyObserver.observe(sentinel);
 }
 
 
@@ -10087,6 +10163,7 @@ function onTxSearchInput(v){
 }
 function buildTxFilters(){
   return`
+  <div class="tx-sticky-toolbar" id="tx-sticky-toolbar">
   <!-- Bulk action bar — hidden until transactions are selected -->
   <div id="bulk-action-bar" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;background:color-mix(in srgb,var(--midnight) 6%,transparent);border:1px solid color-mix(in srgb,var(--midnight) 18%,transparent);border-radius:var(--r);padding:10px 14px;margin-bottom:10px">
     <span id="bulk-count" style="font-size:var(--fs-xs);font-weight:600;color:var(--midnight)">0 selected</span>
@@ -10122,6 +10199,7 @@ function buildTxFilters(){
     <button class="btn btn-sm" onclick="TF.type='';TF.mc='';TF.sub='';TF.q='';TF.allMonths=false;TF.sortCol='';TF.sortDir=1;render()">Clear</button>
     <button class="btn btn-sm ${BulkMode?'btn-p':''}" id="bulk-sel-btn" onclick="toggleBulkSelect()" style="white-space:nowrap">${BulkMode?'Exit Select':'Select'}</button>
     <button class="btn btn-sm" onclick="openRuleSweepModal(false)" style="white-space:nowrap" title="Scan all transactions and apply learned rules. Manual categorizations are protected.">↻ Apply Rules</button>
+  </div>
   </div>`;
 }
 
