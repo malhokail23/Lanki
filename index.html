@@ -1710,7 +1710,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='8.9';
+const VERSION='8.10';
 // IS_DEMO: when true, the entire app runs in a sandboxed sample-data mode.
 // No vault is loaded, no Supabase calls happen, and saveState/flushTxnQueue are no-ops.
 // Activated by URL param ?demo=1 or hash #demo. Cannot be flipped at runtime — the only
@@ -2960,6 +2960,25 @@ async function render(){
   if(!sKey&&!IS_DEMO){lockApp();return;}
   // Sync body class with S.privacy — covers boot from saved state where privacy was on
   document.body.classList.toggle('privacy-on',!!S.privacy);
+  // V8.10 migration: Dismiss button was removed because there are no legitimate
+  // "stay-orphan" cases — every transfer with no counterpart should be re-typed.
+  // Clear any historical transferDismissed flags so those transactions return to
+  // the Pending list and force the user to make a real classification decision.
+  if(!S._migratedV810Dismiss){
+    let cleared=0;
+    for(const ym in S.txnCache){
+      for(const t of(S.txnCache[ym]||[])){
+        if(t.transferDismissed){delete t.transferDismissed;cleared++;}
+      }
+    }
+    S._migratedV810Dismiss=true;
+    if(cleared>0){
+      console.log(`[V8.10] Cleared transferDismissed flag from ${cleared} transactions`);
+      sched();
+      // Toast lasts longer (5s default per V8.9) so user has time to read
+      setTimeout(()=>toast(`${cleared} previously-dismissed transfer${cleared===1?'':'s'} restored to Pending list. Re-classify them via Edit if not actual transfers.`),300);
+    }
+  }
   // Prune stale matched pairs where one or both transaction IDs no longer exist
   if(S.matchedPairs?.length){
     const allIds=new Set(allTxns().map(t=>t.id));
@@ -4922,12 +4941,55 @@ function showMatchPopover(pairId,txnId,anchorEl){
 }
 
 // Render transfer matching tab section (called from rUncat or standalone)
+// Pending transfers sort state (V8.10).
+// Default sort: amount ascending (so 500 and -500 sit adjacent), then date ascending within ties.
+let _pendingSort={col:'amount',dir:1};
+
 function rTransferMatching(){
   const pending=getPendingTransfers();
   const pairs=S.matchedPairs;
 
+  // Sort pending list per current sort state.
+  // Amount sort uses absolute value so credit/debit pairs of equal magnitude sit together.
+  const sortedPending=[...pending].sort((a,b)=>{
+    const c=_pendingSort.col;
+    const d=_pendingSort.dir;
+    if(c==='amount'){
+      // Primary: |amount| (so 500 and -500 cluster)
+      const ax=Math.abs(a.amount),bx=Math.abs(b.amount);
+      if(ax!==bx)return(ax-bx)*d;
+      // Tiebreaker 1: date ascending — pairs likely on same/adjacent dates
+      const ad=(a.date||''),bd=(b.date||'');
+      if(ad!==bd)return ad.localeCompare(bd);
+      // Tiebreaker 2: direction (out before in keeps "natural" reading order)
+      return(txDir(a)==='out'?-1:1)-(txDir(b)==='out'?-1:1);
+    }
+    if(c==='date'){
+      const ad=(a.date||''),bd=(b.date||'');
+      if(ad!==bd)return ad.localeCompare(bd)*d;
+      // Tiebreaker: |amount| within same date
+      return(Math.abs(a.amount)-Math.abs(b.amount))*d;
+    }
+    if(c==='desc'){
+      return((a.description||'').localeCompare(b.description||''))*d;
+    }
+    if(c==='account'){
+      const aa=S.accounts.find(x=>x.id===a.accountId)?.name||'';
+      const ba=S.accounts.find(x=>x.id===b.accountId)?.name||'';
+      return aa.localeCompare(ba)*d;
+    }
+    return 0;
+  });
+
+  // Helper: render a sortable column header
+  function thSortable(col,label,extra=''){
+    const active=_pendingSort.col===col;
+    const arrow=active?(_pendingSort.dir===1?'\u2191':'\u2193'):'\u2195';
+    return`<th style="cursor:pointer;user-select:none;${extra}" onclick="setPendingSort('${col}')">${label} <span style="font-size:10px;opacity:${active?1:0.35}">${arrow}</span></th>`;
+  }
+
   // Pending section
-  const pendRows=pending.length?pending.map(t=>{
+  const pendRows=sortedPending.length?sortedPending.map(t=>{
     const acc=S.accounts.find(a=>a.id===t.accountId);
     const dir=txDir(t);
     const ym=t.date.substr(0,7);
@@ -4937,8 +4999,10 @@ function rTransferMatching(){
       <td style="font-size:var(--fs-xs)">${acc?.name||'--'}</td>
       <td class="${dir==='out'?'c-bad':'c-ok'}" style="text-align:right;font-weight:500;white-space:nowrap">${dir==='out'?'-':'+'}${fmtP(t.amount)}</td>
       <td><span class="badge" style="background:#FEF3C7;color:#92400E">Pending</span><div style="font-size:10px;color:var(--text3);margin-top:2px">Other account not yet imported</div></td>
-      <td><button class="btn btn-xs" onclick="showMatchPicker('${t.id}')">Match manually</button>
-          <button class="btn btn-xs btn-d" onclick="dismissTransfer('${t.id}','${ym}')">Dismiss</button></td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-xs" onclick="showMatchPicker('${t.id}')">Match manually</button>
+        <button class="btn btn-xs" onclick="openEditTxn('${t.id}','${ym}')">Edit</button>
+      </td>
     </tr>`;}).join(''):`<tr><td colspan="6" class="empty">&#10003; No pending unmatched transfers</td></tr>`;
 
   // Matched pairs section
@@ -4959,7 +5023,14 @@ function rTransferMatching(){
     <button class="btn btn-sm" onclick="rescanAllTransfers()">↻ Auto-match all</button>
   </div>
   <div class="card"><div class="tbl-wrap"><table>
-    <thead><tr><th>Date</th><th>Description</th><th>Account</th><th style="text-align:right">Amount</th><th>Status</th><th></th></tr></thead>
+    <thead><tr>
+      ${thSortable('date','Date')}
+      ${thSortable('desc','Description')}
+      ${thSortable('account','Account')}
+      ${thSortable('amount','Amount','text-align:right')}
+      <th>Status</th>
+      <th></th>
+    </tr></thead>
     <tbody>${pendRows}</tbody>
   </table></div></div>
 
@@ -5119,11 +5190,12 @@ function confirmManualMatch(outId,inId){
 // Maintain backward compatibility with any callers expecting the old panel
 function _legacyMatchPickerNoOp(){}
 
+// Removed in V8.10. Dismissing a pending transfer was unsafe — every transfer
+// with no counterpart actually belongs to a different type (expense, income,
+// external_transfer). Stub kept for any cached references; routes user to Edit.
 function dismissTransfer(txnId,ym){
-  // Mark as dismissed so it no longer appears in pending
-  const t=(S.txnCache[ym]||[]).find(x=>x.id===txnId);
-  if(t)t.transferDismissed=true;
-  schedTxn(ym);sched();render();toast('Transfer dismissed from pending list');
+  toast('Dismiss removed in V8.10 — open Edit to re-classify this transaction',false);
+  openEditTxn(txnId,ym);
 }
 
 function prefillOpeningBal(){
@@ -5193,6 +5265,13 @@ function setTxnAcc(id){TF.txnAcc=id;TF.sortCol='';render();}
 function setTxSort(col){
   if(TF.sortCol===col){TF.sortDir*=-1;}
   else{TF.sortCol=col;TF.sortDir=1;}
+  render();
+}
+// V8.10: Sort handler for the Pending Transfer Matches table.
+// Same toggle pattern as setTxSort — clicking a column twice flips direction.
+function setPendingSort(col){
+  if(_pendingSort.col===col){_pendingSort.dir*=-1;}
+  else{_pendingSort.col=col;_pendingSort.dir=1;}
   render();
 }
 function openNTCat(){
