@@ -1710,7 +1710,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='8.10';
+const VERSION='8.11';
 // IS_DEMO: when true, the entire app runs in a sandboxed sample-data mode.
 // No vault is loaded, no Supabase calls happen, and saveState/flushTxnQueue are no-ops.
 // Activated by URL param ?demo=1 or hash #demo. Cannot be flipped at runtime — the only
@@ -2960,25 +2960,23 @@ async function render(){
   if(!sKey&&!IS_DEMO){lockApp();return;}
   // Sync body class with S.privacy — covers boot from saved state where privacy was on
   document.body.classList.toggle('privacy-on',!!S.privacy);
-  // V8.10 migration: Dismiss button was removed because there are no legitimate
-  // "stay-orphan" cases — every transfer with no counterpart should be re-typed.
-  // Clear any historical transferDismissed flags so those transactions return to
-  // the Pending list and force the user to make a real classification decision.
-  if(!S._migratedV810Dismiss){
-    let cleared=0;
-    for(const ym in S.txnCache){
-      for(const t of(S.txnCache[ym]||[])){
-        if(t.transferDismissed){delete t.transferDismissed;cleared++;}
-      }
-    }
-    S._migratedV810Dismiss=true;
-    if(cleared>0){
-      console.log(`[V8.10] Cleared transferDismissed flag from ${cleared} transactions`);
-      sched();
-      // Toast lasts longer (5s default per V8.9) so user has time to read
-      setTimeout(()=>toast(`${cleared} previously-dismissed transfer${cleared===1?'':'s'} restored to Pending list. Re-classify them via Edit if not actual transfers.`),300);
-    }
-  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // MIGRATION REGISTRY — one-shot data fixes for retrofitting older vaults
+  // ─────────────────────────────────────────────────────────────────────────
+  // Each migration is gated by S._migrations[id] so it runs exactly once per vault.
+  // When a migration's data fix becomes irrelevant (because the bug it patched
+  // has been impossible for long enough that no vaults can still need it), the
+  // entire migration block can be deleted. The REMOVE_AFTER comment is the marker.
+  //
+  // To remove a migration cleanly: delete the whole `if(!S._migrations.<id>)` block,
+  // and optionally the corresponding flag from existing vaults (low priority — leftover
+  // flags are harmless, just one boolean per vault).
+  // ─────────────────────────────────────────────────────────────────────────
+  if(!S._migrations)S._migrations={};
+  runMigrations();
+  // ─────────────────────────────────────────────────────────────────────────
+
   // Prune stale matched pairs where one or both transaction IDs no longer exist
   if(S.matchedPairs?.length){
     const allIds=new Set(allTxns().map(t=>t.id));
@@ -11563,8 +11561,136 @@ function resolveType(mid, sid, currentType){
   return typeFromCat(mid, currentType);
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// MIGRATION REGISTRY
+// ────────────────────────────────────────────────────────────────────────────
+// Runs at boot (called from render). Each migration is gated by
+// S._migrations[id] so it executes exactly once per vault, even across reloads.
+//
+// Each migration entry includes:
+//   id           — unique key for the gate flag
+//   description  — short human-readable summary
+//   removeAfter  — the version at which this migration is safe to delete
+//                  (because the original bug it patches has been impossible
+//                  for long enough that no remaining vaults can need it)
+//   run          — the migration function itself (idempotent within a single call)
+//
+// To retire a migration:
+//   1. Confirm enough time has passed since its removeAfter version that no
+//      active vault could still be on a pre-fix data shape.
+//   2. Delete its entry from MIGRATIONS array.
+//   3. Optionally clean up the flag in S._migrations from existing vaults
+//      (low priority — leftover flags are inert).
+// ════════════════════════════════════════════════════════════════════════════
+const MIGRATIONS=[
+  {
+    id:'v8_10_clearTransferDismissed',
+    description:'Clear historical transferDismissed flags so previously-dismissed orphans surface in Pending list',
+    removeAfter:'V9.0', // Dismiss button removed in V8.10 — no new dismissals possible after that
+    run:()=>{
+      let cleared=0;
+      for(const ym in S.txnCache){
+        for(const t of(S.txnCache[ym]||[])){
+          if(t.transferDismissed){delete t.transferDismissed;cleared++;}
+        }
+      }
+      if(cleared>0){
+        console.log(`[migration v8_10_clearTransferDismissed] Cleared ${cleared} transactions`);
+        sched();
+        setTimeout(()=>toast(`${cleared} previously-dismissed transfer${cleared===1?'':'s'} restored to Pending list. Re-classify them via Edit if not actual transfers.`),300);
+      }
+      return{count:cleared};
+    }
+  },
+  {
+    id:'v8_11_fxBackfill',
+    description:'Backfill FX variance transactions for matched pairs created before V8.8 — closes silent reconciliation gap',
+    removeAfter:'V9.0', // After V8.8 every match auto-creates FX variance, so no new pairs lack fxTxnId
+    run:()=>{
+      const pairs=S.matchedPairs||[];
+      if(!pairs.length)return{count:0,impact:0};
+      // Build txn lookup once for performance
+      const txnIndex=new Map();
+      for(const ym in S.txnCache){
+        for(const t of(S.txnCache[ym]||[])){
+          txnIndex.set(t.id,t);
+        }
+      }
+      let created=0;
+      let totalImpact=0;
+      const affectedYms=new Set();
+      for(const p of pairs){
+        // Skip pairs that already have FX backfill (V8.8+ matches)
+        if(p.fxTxnId)continue;
+        const out=txnIndex.get(p.outId);
+        const inn=txnIndex.get(p.inId);
+        // Skip stale pairs (one side deleted) — render's prune step will clean those up
+        if(!out||!inn)continue;
+        const amtDiff=Math.round((out.amount-inn.amount)*100)/100;
+        if(Math.abs(amtDiff)<0.01)continue; // amounts already match
+        // Apply the same FX variance logic as manualMatch (V8.8)
+        const fxTxnId=uid();
+        const isExpense=amtDiff>0;
+        const fxAmt=Math.abs(amtDiff);
+        const fxAcc=isExpense?out.accountId:inn.accountId;
+        const fxYm=(out.date||'').substr(0,7);
+        if(!fxYm)continue;
+        const outAcc=S.accounts.find(a=>a.id===out.accountId);
+        const inAcc=S.accounts.find(a=>a.id===inn.accountId);
+        const fxTxn={
+          id:fxTxnId,
+          date:out.date,
+          description:`FX variance · ${outAcc?.name||'?'} → ${inAcc?.name||'?'}`,
+          amount:fxAmt,
+          type:isExpense?'expense':'income',
+          direction:isExpense?'out':'in',
+          mainCatId:'cat_main_finance',
+          subCatId:'sub_fx',
+          accountId:fxAcc,
+          notes:`Backfilled by V8.11 migration: out ${out.amount.toFixed(2)} vs in ${inn.amount.toFixed(2)}. Pair ${p.id}.`,
+          flagged:false,
+          ruleApplied:false,
+          fxPairId:p.id
+        };
+        if(!S.txnCache[fxYm])S.txnCache[fxYm]=[];
+        S.txnCache[fxYm].push(fxTxn);
+        affectedYms.add(fxYm);
+        // Update pair: store back-reference + add note + record original amounts
+        p.fxTxnId=fxTxnId;
+        p.outAmount=out.amount;
+        p.inAmount=inn.amount;
+        p.toleranceNote=`FX variance: SAR ${fxAmt.toFixed(2)} recorded as ${isExpense?'expense':'income'} (backfilled)`;
+        created++;
+        totalImpact+=fxAmt;
+      }
+      if(created>0){
+        affectedYms.forEach(ym=>schedTxn(ym));
+        sched();
+        console.log(`[migration v8_11_fxBackfill] Created ${created} FX variance transactions, total impact SAR ${totalImpact.toFixed(2)}`);
+        setTimeout(()=>toast(`Backfilled FX variance for ${created} historical match${created===1?'':'es'} — total: SAR ${totalImpact.toFixed(2)}. Net Flow now reconciles with Cash Position.`),700);
+      }
+      return{count:created,impact:totalImpact};
+    }
+  }
+];
+
+function runMigrations(){
+  for(const m of MIGRATIONS){
+    if(S._migrations[m.id])continue; // already ran
+    try{
+      m.run();
+      S._migrations[m.id]=true;
+    }catch(e){
+      console.error(`[migration ${m.id}] FAILED:`,e);
+      // Don't set the gate flag on failure — migration will retry next render
+    }
+  }
+}
+
 // Migration: scan all transactions, fix any where stored type doesn't match
 // what (mainCatId, subCatId) implies. Direction is preserved untouched.
+// REMOVE_AFTER: V9.0 — V8.9+ enforces sync at all 4 entry points so new drift can't accumulate.
+// This is the manual companion to that fix; users can run it from Sanity Check.
 function autoFixTypeCategoryDrift(){
   const all=allTxns();
   const fixed=[];
