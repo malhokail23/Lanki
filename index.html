@@ -1200,9 +1200,69 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overfl
   max-width:1100px;margin:0 auto 2rem;
 }
 
+/* ──────────────────────────────────────────────────────────────────────
+   PRIVACY MODE — full hide for all sensitive numbers & charts
+   Toggled by clicking the "Hide Values" button (sidebar).
+   When body.privacy-on is set, ALL of the following are blurred or hidden:
+     - .fmt-money    spans wrapped by fmtP() / fmtSP() (existing)
+     - .kval         KPI big numbers
+     - canvas        all chart bodies
+     - .priv-mask    explicit opt-in for any other sensitive element
+   In addition, .priv-hide elements are display:none entirely
+   (used for chart axes/legends that can't be safely blurred).
+   ────────────────────────────────────────────────────────────────────── */
+body.privacy-on .fmt-money,
+body.privacy-on .kval,
+body.privacy-on .priv-mask{
+  filter:blur(6px) saturate(0);
+  user-select:none;
+  pointer-events:none;
+}
+/* Charts: blur the canvas itself + hide the surrounding y-axis tick text
+   that Chart.js renders into the canvas. Belt-and-suspenders so even if
+   tooltip code somewhere leaks, the rendered surface is unreadable. */
+body.privacy-on canvas{
+  filter:blur(8px) saturate(0);
+}
+/* Anything tagged priv-hide is removed from the DOM rendering, used for
+   things that can't be safely blurred (e.g. tabular-nums table totals
+   in a tight space where blur causes layout shift). */
+body.privacy-on .priv-hide{
+  visibility:hidden;
+}
+/* Privacy mode visual cue: subtle banner across the top of the dashboard
+   so the user always knows they're in masked mode. */
+body.privacy-on .privacy-indicator{
+  display:flex!important;
+}
+.privacy-indicator{
+  display:none;
+  position:fixed;top:0;left:0;right:0;
+  padding:6px 14px;font-size:11px;
+  background:color-mix(in srgb,var(--midnight) 92%,transparent);
+  color:var(--feather);
+  z-index:650;text-align:center;font-weight:500;
+  letter-spacing:.02em;
+  align-items:center;justify-content:center;gap:6px;
+  pointer-events:none;
+}
+@media(max-width:768px){
+  .privacy-indicator{top:calc(52px + env(safe-area-inset-top, 0))}
+}
+body.privacy-on{padding-top:28px}
+@media(max-width:768px){
+  body.privacy-on{padding-top:0}
+  body.privacy-on .app-content{padding-top:calc(52px + 28px + env(safe-area-inset-top, 0))}
+}
 </style>
 </head>
 <body>
+
+<!-- Privacy mode indicator: shows when "Hide Values" is on, hidden otherwise -->
+<div class="privacy-indicator" aria-hidden="true">
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-10-8-10-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 10 8 10 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+  Privacy mode — values hidden
+</div>
 
 
 <div id="s-loading" class="auth-screen active">
@@ -1650,7 +1710,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='8.6';
+const VERSION='8.7';
 // IS_DEMO: when true, the entire app runs in a sandboxed sample-data mode.
 // No vault is loaded, no Supabase calls happen, and saveState/flushTxnQueue are no-ops.
 // Activated by URL param ?demo=1 or hash #demo. Cannot be flipped at runtime — the only
@@ -2028,8 +2088,12 @@ let S={
 };
 function fmt(n){if(n===undefined||n===null)return'--';return S.settings.currency+'\u00a0'+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function fmtS(n,sg=false){return(sg&&n>0?'+':'')+(n<0?'-':'')+S.settings.currency+'\u00a0'+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
-function fmtP(n){return S.privacy?`<span style="filter:blur(5px);user-select:none">${fmt(n)}</span>`:fmt(n);}
-function fmtSP(n,sg=false){return S.privacy?`<span style="filter:blur(5px);user-select:none">${fmtS(n,sg)}</span>`:fmtS(n,sg);}
+// Privacy-aware money formatters. Wrap in a class instead of inline blur so a
+// single body-level class controls all sensitive data, eliminating per-call gaps.
+function fmtP(n){return`<span class="fmt-money">${fmt(n)}</span>`;}
+function fmtSP(n,sg=false){return`<span class="fmt-money">${fmtS(n,sg)}</span>`;}
+// Convenience for non-money sensitive numbers (counts, percentages on personal data).
+function isPrivate(){return!!S.privacy;}
 function uid(){return'tx_'+(typeof crypto!=='undefined'&&crypto.randomUUID?crypto.randomUUID().replace(/-/g,'').substr(0,14):Math.random().toString(36).substr(2,9)+Date.now().toString(36));}
 function toast(msg,ok=true){const el=document.getElementById('toast');if(!el)return;el.textContent=msg;el.style.background=ok?'#111':'var(--bad)';el.classList.add('show');setTimeout(()=>el.classList.remove('show'),3200);}
 // Toast with an inline action link. Stays visible longer (6 seconds) and accepts a click handler.
@@ -2048,7 +2112,15 @@ function setSS(m,type){
   e.style.color=type==='ok'?'var(--ok)':type==='err'?'var(--bad)':'var(--text3)';
   e.style.fontWeight=type==='err'?'600':'';
 }
-function togglePrivacy(){S.privacy=!S.privacy;const b=document.getElementById('priv-btn');if(b)b.innerHTML=S.privacy?'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg> Show':'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg> Hide';render();}
+function togglePrivacy(){
+  S.privacy=!S.privacy;
+  document.body.classList.toggle('privacy-on',S.privacy);
+  const b=document.getElementById('priv-btn');
+  if(b)b.innerHTML=S.privacy
+    ?'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-10-8-10-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 10 8 10 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg> Show Values'
+    :'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg> Hide Values';
+  render();
+}
 function tp(id){const el=document.getElementById(id);if(el){el.classList.toggle('open');if(id==='atxn-panel'&&el.classList.contains('open')){setTimeout(()=>{const t=document.getElementById('nt-type');if(t)autoDir(t.value,'nt-dir');},10);}}}
 function getMC(id){if(S.deletedCats&&S.deletedCats.includes(id))return undefined;return MAIN_CATS.find(c=>c.id===id);}
 function getSC(id){if(S.deletedSubs&&S.deletedSubs.includes(id))return undefined;return SUB_CATS.find(c=>c.id===id);}
@@ -2886,6 +2958,8 @@ async function render(){
   _rendering=true;
   try{
   if(!sKey&&!IS_DEMO){lockApp();return;}
+  // Sync body class with S.privacy — covers boot from saved state where privacy was on
+  document.body.classList.toggle('privacy-on',!!S.privacy);
   // Prune stale matched pairs where one or both transaction IDs no longer exist
   if(S.matchedPairs?.length){
     const allIds=new Set(allTxns().map(t=>t.id));
@@ -3156,8 +3230,8 @@ async function rOv(){
   const gHtml=fGoals.filter(g=>g.status==='active').slice(0,3).map(g=>{
     const p=g.target>0?Math.min(100,Math.round(g.saved/g.target*100)):0;
     return`<div style="margin-bottom:10px">
-      <div class="fg jb" style="font-size:var(--fs-xs)"><span>${h(g.name)}</span><span style="color:var(--text3)">${p}%</span></div>
-      <div class="pb"><div class="pf" style="width:${p}%"></div></div>
+      <div class="fg jb" style="font-size:var(--fs-xs)"><span>${h(g.name)}</span><span style="color:var(--text3)" class="fmt-money">${p}%</span></div>
+      <div class="pb"><div class="pf priv-mask" style="width:${p}%"></div></div>
       <div style="font-size:11px;color:var(--text3);margin-top:2px">${fmtP(Math.max(0,g.target-g.saved))} remaining${g.deadline?' · '+toDD(g.deadline):''}</div>
     </div>`;}).join('')||'<div class="empty" style="padding:1rem">No active goals</div>';
 
@@ -3170,9 +3244,9 @@ async function rOv(){
     const mSr=mInc>0?Math.round((mInc-mExp)/mInc*100):0;
     const col=mSr>=tgt?'#3D6B4F':mSr>=10?'#7A5E20':'#8B4040'; // Brand: Dusty Mint / Gold / Rose
     return`<div style="text-align:center;flex:1">
-      <div style="font-size:13px;font-weight:500;color:${col}">${mSr}%</div>
+      <div style="font-size:13px;font-weight:500;color:${col}" class="fmt-money">${mSr}%</div>
       <div style="height:40px;background:var(--bg3);border-radius:4px;overflow:hidden;margin:4px 0;display:flex;align-items:flex-end">
-        <div style="width:100%;background:${col};height:${Math.max(4,Math.min(100,mSr))}%;border-radius:4px;transition:height .3s"></div>
+        <div class="priv-mask" style="width:100%;background:${col};height:${Math.max(4,Math.min(100,mSr))}%;border-radius:4px;transition:height .3s"></div>
       </div>
       <div style="font-size:10px;color:var(--text3)">${fmtYM(m)}</div>
     </div>`;}).join('');
@@ -3227,10 +3301,10 @@ async function rOv(){
   const alerts=[];
   const uc=uncatCount();if(uc>0)alerts.push({level:'warn',icon:'!',text:`${uc} uncategorized transaction${uc!==1?'s':''} need attention`,sub:'Go to Uncategorized tab to assign categories',action:"sw('uncat')"});
   if(dti>40)alerts.push({level:'crit',icon:'!',text:`Debt-to-income ratio is ${dti}% — above the 40% warning threshold`,sub:'More than 40 fils of every riyal earned goes to debt payments',action:null});
-  if(momDiff!==null&&momDiff>20)alerts.push({level:'warn',icon:'↑',text:`Expenses up ${momDiff}% vs last month`,sub:`${fmt(thisMonthExp)} this month vs ${fmt(lastMonthExp)} last month`,action:null});
+  if(momDiff!==null&&momDiff>20)alerts.push({level:'warn',icon:'↑',text:`Expenses up ${momDiff}% vs last month`,sub:`${fmtP(thisMonthExp)} this month vs ${fmtP(lastMonthExp)} last month`,action:null});
   S.debts.filter(d=>d.status==='active'&&d.installment>0).forEach(d=>{
     const lastPay=(d.payments||[]).slice(-1)[0];
-    if(!lastPay||lastPay.date<addM(now,-1)){alerts.push({level:'info',icon:'$',text:`${d.name} — no payment recorded this month`,sub:`Monthly installment: ${fmt(d.installment)}`,action:"sw('debts')"});}
+    if(!lastPay||lastPay.date<addM(now,-1)){alerts.push({level:'info',icon:'$',text:`${d.name} — no payment recorded this month`,sub:`Monthly installment: ${fmtP(d.installment)}`,action:"sw('debts')"});}
   });
   S.bills.filter(b=>billStatus(b).status==='Unpaid').forEach(b=>alerts.push({level:'crit',icon:'!',text:`${b.name} is unpaid`,sub:`Expected: day ${b.expectedDay||'?'}`,action:"sw('bills')"}));
   // Backup reminder
@@ -3311,7 +3385,7 @@ async function rOv(){
       <div class="card card-bordered" style="margin-bottom:10px">
         <div class="ctitle">Burn Rate</div>
         <div class="fg jb" style="margin-top:6px">
-          <div><div style="font-size:11px;color:var(--text3)">Daily average</div><div style="font-size:18px;font-weight:500">${fmt(burnThis)}<span style="font-size:11px;color:var(--text3)">/day</span></div></div>
+          <div><div style="font-size:11px;color:var(--text3)">Daily average</div><div style="font-size:18px;font-weight:500">${fmtP(burnThis)}<span style="font-size:11px;color:var(--text3)">/day</span></div></div>
           ${burnPrev>0?`<div style="text-align:right"><div style="font-size:11px;color:var(--text3)">vs prior period</div><div style="font-size:15px;font-weight:500;${burnDiff>0?'color:var(--bad)':'color:var(--ok)'}">${burnDiff>0?'↑':'↓'}${Math.abs(burnDiff)}%</div></div>`:''}
         </div>
       </div>
@@ -3677,11 +3751,23 @@ function buildCharts(){
   const d=window._cd;if(!d)return;
   const ctx=document.getElementById('cfChart');if(!ctx)return;
   if(ctx._ch)ctx._ch.destroy();
+  const _priv=isPrivate();
   ctx._ch=new Chart(ctx,{type:'bar',data:{labels:d.labels,datasets:[
     {label:'Income',data:d.inc,backgroundColor:'#B5CBB766',borderColor:'#3D6B4F',borderWidth:1,borderRadius:4}, /* Dusty Mint */
     {label:'Expenses',data:d.exp,backgroundColor:d.deficit.map(isD=>isD?'#C98E8BAA':'#C98E8B66'),borderColor:d.deficit.map(isD=>isD?'#8B4040':'#C98E8B88'),borderWidth:d.deficit.map(isD=>isD?2:1),borderRadius:4}, /* Faded Rose */
     {label:'Investments',data:d.inv,backgroundColor:'#A3BCD766',borderColor:'#0077C1',borderWidth:1,borderRadius:4}, /* Powder Blue / Electric Blue */
-  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false}},y:{grid:{color:'#E2E4E9'},ticks:{callback:v=>v>=1000?Math.round(v/1000)+'k':v}}}}});
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{
+    legend:{display:false},
+    /* Privacy: tooltips show real numbers on hover — disable in privacy mode */
+    tooltip:{enabled:!_priv}
+  },scales:{
+    x:{grid:{display:false}},
+    y:{grid:{color:'#E2E4E9'},ticks:{
+      /* Privacy: y-axis ticks display SAR amounts — hide labels in privacy mode.
+         Bars themselves are blurred via body.privacy-on canvas{filter:blur}. */
+      callback:v=>_priv?'':(v>=1000?Math.round(v/1000)+'k':v)
+    }}
+  }}});
 }
 
 
@@ -6034,7 +6120,7 @@ async function rSubs(){
           const isHigher=v.tag==='higher';
           const color=isHigher?'color-mix(in srgb,var(--warn) 18%,transparent)':'color-mix(in srgb,var(--ok) 15%,transparent)';
           const text=isHigher?'color-mix(in srgb,var(--warn) 70%,var(--midnight))':'var(--ok)';
-          attnLabel=`<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:3px;background:${color};color:${text};letter-spacing:.03em">${isHigher?'Price up':'Price down'} · ${fmt(Math.abs(v.variance))}</span>`;
+          attnLabel=`<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:3px;background:${color};color:${text};letter-spacing:.03em">${isHigher?'Price up':'Price down'} · ${fmtP(Math.abs(v.variance))}</span>`;
         }
       }
     }
@@ -6052,7 +6138,7 @@ async function rSubs(){
           const text=isHigher?'color-mix(in srgb,var(--warn) 70%,var(--midnight))':'var(--ok)';
           const label=isHigher?'Higher':'Lower';
           const avgSuffix=v.baselineSource==='avg'?' vs 6-mo avg':'';
-          return`<span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;background:${color};color:${text};letter-spacing:.03em">${label} by ${fmt(Math.abs(v.variance))}${avgSuffix}</span>`;
+          return`<span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;background:${color};color:${text};letter-spacing:.03em">${label} by ${fmtP(Math.abs(v.variance))}${avgSuffix}</span>`;
         })():(v.baselineSource==='avg'?`<span style="font-size:9px;color:var(--text3)">vs 6-mo avg</span>`:'');
         return`<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;${i<shown.length-1?'border-bottom:1px solid var(--border);':''}">
           <div style="flex-shrink:0;min-width:80px;font-size:11px;color:var(--text3)">${toDD(t.date)}</div>
@@ -6432,7 +6518,7 @@ function rBills(){
           const text=isHigher?'color-mix(in srgb,var(--warn) 70%,var(--midnight))':'var(--ok)';
           const label=isHigher?'Higher':'Lower';
           const avgSuffix=v.baselineSource==='avg'?' vs 6-mo avg':'';
-          return`<span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;background:${color};color:${text};letter-spacing:.03em">${label} by ${fmt(Math.abs(v.variance))}${avgSuffix}</span>`;
+          return`<span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;background:${color};color:${text};letter-spacing:.03em">${label} by ${fmtP(Math.abs(v.variance))}${avgSuffix}</span>`;
         })():(v.baselineSource==='avg'?`<span style="font-size:9px;color:var(--text3)">vs 6-mo avg</span>`:'');
         return`<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;${i<shown.length-1?'border-bottom:1px solid var(--border);':''}">
           <div style="flex-shrink:0;min-width:80px;font-size:11px;color:var(--text3)">${toDD(t.date)}</div>
@@ -6916,7 +7002,7 @@ function maybeAutoRecordDeduction(t,st){
   const implied=+(salary-paid).toFixed(2);
   // Overpayment: paid more than salary — flag, don't record
   if(implied<-0.005){
-    return{flag:'overpaid',month:ym,amount:Math.abs(implied),note:`Paid ${fmt(paid)} against ${fmt(salary)} salary — overpaid by ${fmt(Math.abs(implied))}`};
+    return{flag:'overpaid',month:ym,amount:Math.abs(implied),note:`Paid ${fmtP(paid)} against ${fmtP(salary)} salary — overpaid by ${fmtP(Math.abs(implied))}`};
   }
   // Full salary paid (no deduction made this month) — don't record, don't flag
   if(Math.abs(implied)<0.5){
@@ -6939,7 +7025,7 @@ function maybeAutoRecordDeduction(t,st){
     const isExact=Math.abs(amt-(a.monthlyDeduct||0))<0.5;
     const note=isExact
       ?`Auto-recorded from "${(t.description||'salary payment').substr(0,40)}"`
-      :`Auto-recorded from "${(t.description||'salary payment').substr(0,40)}" — actual deduction ${fmt(amt)} (plan was ${fmt(a.monthlyDeduct||0)})`;
+      :`Auto-recorded from "${(t.description||'salary payment').substr(0,40)}" — actual deduction ${fmtP(amt)} (plan was ${fmtP(a.monthlyDeduct||0)})`;
     a.ledger.push({id:uid(),month:ym,type:'deduction',amount:+amt.toFixed(2),notes:note,recordedAt:new Date().toISOString().substr(0,10)});
     lastRecorded={month:ym,amount:+amt.toFixed(2),note};
     leftover-=amt;
@@ -7117,7 +7203,7 @@ function rStaff(){
               const color=isHigher?'color-mix(in srgb,var(--warn) 18%,transparent)':'color-mix(in srgb,var(--ok) 15%,transparent)';
               const text=isHigher?'color-mix(in srgb,var(--warn) 70%,var(--midnight))':'var(--ok)';
               const label=isHigher?'Higher':'Lower';
-              tagHtml=`<span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;background:${color};color:${text};letter-spacing:.03em">${label} by ${fmt(Math.abs(v.variance))}</span>`;
+              tagHtml=`<span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;background:${color};color:${text};letter-spacing:.03em">${label} by ${fmtP(Math.abs(v.variance))}</span>`;
             }
             return`<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;${i<paymentsToShow.length-1?'border-bottom:1px solid var(--border);':''}">
               <div style="flex-shrink:0;min-width:80px;font-size:11px;color:var(--text3)">${toDD(t.date)}</div>
@@ -7697,7 +7783,7 @@ function advPreviewUpdate(panelId){
     return;
   }
   if(monthly>amt){
-    preview.innerHTML=`<span style="color:var(--warn)">Monthly deduction (${fmt(monthly)}) is larger than the advance (${fmt(amt)}). The advance will settle in one month.</span>`;
+    preview.innerHTML=`<span style="color:var(--warn)">Monthly deduction (${fmtP(monthly)}) is larger than the advance (${fmtP(amt)}). The advance will settle in one month.</span>`;
     return;
   }
   const fullMonths=Math.floor(amt/monthly);
@@ -7713,8 +7799,8 @@ function advPreviewUpdate(panelId){
     }
   }
   const planDesc=finalAmt>0.005
-    ?`<strong>${fullMonths}</strong> × ${fmt(monthly)} + final month of <strong>${fmt(finalAmt)}</strong>`
-    :`<strong>${fullMonths}</strong> × ${fmt(monthly)}`;
+    ?`<strong>${fullMonths}</strong> × ${fmtP(monthly)} + final month of <strong>${fmtP(finalAmt)}</strong>`
+    :`<strong>${fullMonths}</strong> × ${fmtP(monthly)}`;
   preview.innerHTML=`
     <div>Plan: ${planDesc}</div>
     <div style="color:var(--text3);font-size:var(--fs-xxs);margin-top:4px">Total ${totalMonths} month${totalMonths===1?'':'s'} · Completes ${completeLabel}</div>
@@ -8070,7 +8156,7 @@ function rAcc(){
   const archivedAccs=S.accounts.filter(a=>a.archived);
   const buildRow=(a,isArchived)=>{
     const lb=calcAccBalance(a);
-    const balTd=lb!==null?`<td><div style="font-size:var(--fs-xs);font-weight:500;color:${lb>0?'var(--ok)':lb<0?'var(--bad)':'var(--text1)'}">${fmt(lb)}</div><div style="font-size:10px;color:var(--text3)">live</div></td>`:'<td style="font-size:var(--fs-xxs);color:var(--text3)">Not set</td>';
+    const balTd=lb!==null?`<td><div style="font-size:var(--fs-xs);font-weight:500;color:${lb>0?'var(--ok)':lb<0?'var(--bad)':'var(--text1)'}">${fmtP(lb)}</div><div style="font-size:10px;color:var(--text3)">live</div></td>`:'<td style="font-size:var(--fs-xxs);color:var(--text3)">Not set</td>';
     return`<tr${isArchived?' style="opacity:.65"':''}>
       <td><div style="font-weight:500">${h(a.name)}</div>${a.accountNumber?`<div style="font-size:var(--fs-xxs);font-family:monospace;color:var(--text3)">${h(a.accountNumber)}</div>`:''}</td>
       <td style="color:var(--text3)">${h(a.institution||'')}</td>
@@ -8535,9 +8621,9 @@ function rDebts(){
           <div style="font-size:16px;font-weight:600;letter-spacing:-.02em">${h(d.name)}</div>
           <div style="font-size:var(--fs-xs);color:var(--text2);margin-top:3px">${h(d.lender||'')}${d.lender?' · ':''}${DTL[d.type]||d.type}</div>
           ${isCC?`
-            <div style="font-size:var(--fs-xs);color:var(--text3);margin-top:2px">Limit: ${fmt(d.creditLimit||0)}${d.profitRate?' · '+d.profitRate+'% p.a.':''}</div>
-            <div style="font-size:var(--fs-xxs);color:var(--text3)">Opening balance: ${fmt(d.openingBalance||0)} as of ${toDD(d.balanceAsOf)||'--'}</div>
-            ${d.minPayment?`<div style="font-size:var(--fs-xxs);color:var(--text3)">Minimum payment: ${fmt(d.minPayment)}/mo</div>`:''}
+            <div style="font-size:var(--fs-xs);color:var(--text3);margin-top:2px">Limit: ${fmtP(d.creditLimit||0)}${d.profitRate?' · '+d.profitRate+'% p.a.':''}</div>
+            <div style="font-size:var(--fs-xxs);color:var(--text3)">Opening balance: ${fmtP(d.openingBalance||0)} as of ${toDD(d.balanceAsOf)||'--'}</div>
+            ${d.minPayment?`<div style="font-size:var(--fs-xxs);color:var(--text3)">Minimum payment: ${fmtP(d.minPayment)}/mo</div>`:''}
           `:`
             ${d.profitRate?`<div style="font-size:var(--fs-xs);color:var(--text3);margin-top:2px">${d.profitRate}% p.a.${d.durationMonths?' · '+d.durationMonths+' months':''}</div>`:''}
             ${d.contractStart?`<div style="font-size:var(--fs-xs);color:var(--text3)">Start: ${toDD(d.contractStart)}${d.endDate?' · End: '+toDD(d.endDate):''}</div>`:''}
@@ -8836,8 +8922,8 @@ function rGoals(){
         <div><div class="lbl">Remaining</div><div style="font-size:16px;font-weight:500" class="${rem>0?'c-bad':'c-ok'}">${fmtP(rem)}</div></div>
         ${g.deadline?`<div><div class="lbl">Deadline</div><div style="font-size:16px;font-weight:500">${toDD(g.deadline)}</div></div>`:''}
       </div>
-      <div class="pb" style="height:6px"><div class="pf" style="width:${p}%"></div></div>
-      <div style="font-size:var(--fs-xxs);color:var(--text3);margin-top:4px">${p}% funded</div>
+      <div class="pb" style="height:6px"><div class="pf priv-mask" style="width:${p}%"></div></div>
+      <div style="font-size:var(--fs-xxs);color:var(--text3);margin-top:4px"><span class="fmt-money">${p}%</span> funded</div>
       ${g.notes?`<div style="font-size:var(--fs-xs);color:var(--text3);margin-top:6px">${h(g.notes)}</div>`:''}
       <div class="fg" style="margin-top:12px;flex-wrap:wrap;gap:6px">
         <input type="number" id="ga-${g.id}" placeholder="Add amount (SAR)" style="width:160px;flex-shrink:0" min="0" step="0.01">
