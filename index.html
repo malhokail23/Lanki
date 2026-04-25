@@ -596,6 +596,115 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overfl
 /* Description cell: clamp to 2 lines max, notes appear inline as a secondary line */
 .tx-desc-clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;line-height:1.4}
 .tx-desc-clamp .tx-notes{display:block;font-size:10px;color:var(--text3);margin-top:2px}
+
+/* C1 + H2: Mobile card layout for transactions table.
+   Below 768px the table reflows into stacked cards: each row becomes a card
+   with description+amount as the prominent line, metadata below, and
+   actions wrapped on a third line. Eliminates horizontal scroll on phones.
+
+   Cell order in source: [select][date][desc][cat][acc][amount][balance?][type][actions][recon?]
+   On mobile we use grid + named lines to compose a card.                            */
+@media(max-width:768px){
+  /* Wrapper no longer needs horizontal scroll — content fits */
+  .tx-card .tbl-wrap{overflow-x:visible}
+  .tx-card .tx-tbl{min-width:0;display:block}
+  .tx-card .tx-tbl thead{display:none} /* column headers hidden — content speaks for itself */
+  .tx-card .tx-tbl tbody{display:block}
+  .tx-card .tx-tbl tr{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:flex-start;
+    column-gap:10px;
+    row-gap:6px;
+    padding:14px;
+    border-bottom:1px solid var(--border);
+  }
+  .tx-card .tx-tbl tr:last-child{border-bottom:none}
+  .tx-card .tx-tbl td{
+    padding:0;border:none;display:block;
+    overflow:visible;text-overflow:clip;
+  }
+  /* Cell 1: select checkbox — small left rail */
+  .tx-card .tx-tbl td:nth-child(1){
+    flex:0 0 auto;align-self:flex-start;
+    padding-top:2px;
+  }
+  .tx-card .tx-tbl td:nth-child(1):empty{display:none}
+  /* Cell 2: date — small label above description */
+  .tx-card .tx-tbl td:nth-child(2){
+    order:1;flex:1 1 100%;
+    font-size:11px;color:var(--text3);font-weight:500;
+    line-height:1.2;
+  }
+  /* When bulk mode active, share row 1 with checkbox */
+  .tx-card.tx-select-mode .tx-tbl td:nth-child(2){flex:1 1 calc(100% - 32px)}
+  /* Cell 3: description — main bold line */
+  .tx-card .tx-tbl td:nth-child(3){
+    order:3;flex:1 1 60%;
+    font-size:14px;font-weight:500;color:var(--text);
+    line-height:1.4;min-width:0;
+  }
+  /* Cell 4: category — wraps to its own line */
+  .tx-card .tx-tbl td:nth-child(4){
+    order:5;flex:1 1 100%;
+    font-size:11px;
+  }
+  /* Cell 5: account — inline pill on the same meta line as type */
+  .tx-card .tx-tbl td:nth-child(5){
+    order:6;flex:0 1 auto;
+    font-size:11px;color:var(--text3);
+    padding:0 0 0 0;
+  }
+  .tx-card .tx-tbl td:nth-child(5):before{
+    content:'';display:inline-block;width:3px;height:3px;
+    border-radius:50%;background:var(--text3);
+    margin:0 6px 2px 0;vertical-align:middle;opacity:.6;
+  }
+  /* Cell 6: amount — large, right-aligned, anchors row 1 right edge */
+  .tx-card .tx-tbl td:nth-child(6){
+    order:4;flex:0 0 auto;
+    font-size:15px;font-weight:600;
+    text-align:right;white-space:nowrap;
+    min-width:90px;
+  }
+  /* Running balance cell: hide on mobile (clutters) */
+  .tx-card .tx-tbl td.tx-balance-cell{display:none}
+  /* Type badge: inline with meta */
+  .tx-card .tx-tbl td.tx-type-cell{
+    order:7;flex:0 1 auto;
+    font-size:10px;
+  }
+  .tx-card .tx-tbl td.tx-type-cell:before{
+    content:'';display:inline-block;width:3px;height:3px;
+    border-radius:50%;background:var(--text3);
+    margin:0 6px 2px 0;vertical-align:middle;opacity:.6;
+  }
+  /* Actions row: full width, wraps gracefully */
+  .tx-card .tx-tbl td.tx-actions-cell{
+    order:9;flex:1 1 100%;
+    display:flex;flex-wrap:wrap;gap:6px;
+    padding-top:6px;margin-top:2px;
+    border-top:1px solid color-mix(in srgb,var(--border) 50%,transparent);
+  }
+  .tx-card .tx-tbl td.tx-actions-cell .btn-xs{
+    flex:1 1 auto;font-size:11px;padding:7px 10px;
+    min-height:36px;white-space:nowrap;
+  }
+  /* Reconciliation cell hidden on mobile */
+  .tx-card .tx-tbl td.tx-recon-cell{display:none}
+  /* Selected row visual treatment */
+  .tx-card.tx-select-mode .tx-tbl tbody tr.tx-row.tx-row-selected{
+    background:color-mix(in srgb,var(--midnight) 7%,transparent);
+    box-shadow:inset 3px 0 0 var(--midnight);
+  }
+  .tx-card.tx-select-mode .tx-tbl tbody tr.tx-row.tx-row-selected td:first-child{
+    box-shadow:none;
+  }
+  /* Description clamp can expand on mobile */
+  .tx-card .tx-tbl .tx-desc-clamp{
+    -webkit-line-clamp:unset;display:block;
+  }
+}
 /* Transactions card: white elevated surface on Feather White page */
 .tx-card{padding:0;overflow:hidden}
 .tx-card .tbl-wrap{padding:0}
@@ -881,14 +990,14 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overfl
   .tbl-wrap table{font-size:11px;min-width:520px}
   td,th{padding:6px 8px}
 
-  /* Modals */
-  .md{width:96%;padding:1.1rem;border-radius:12px}
+  /* Modals — tighter padding on small phones (H3) */
+  .md{width:96%;padding:.85rem .9rem;border-radius:12px}
   .mdtitle{font-size:15px}
 
-  /* Buttons — larger tap targets */
+  /* Buttons — larger tap targets (H1: btn-xs bumped from 34→40px) */
   .btn{min-height:44px;font-size:14px}
   .btn-sm{min-height:38px}
-  .btn-xs{min-height:34px}
+  .btn-xs{min-height:40px}
 
   /* Cards */
   .card{padding:.85rem .9rem}
@@ -904,6 +1013,48 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overfl
   /* Account pills wrap */
   .tx-account-pills{flex-wrap:wrap}
   .opill{font-size:11px;padding:4px 11px}
+
+  /* H5: KPI row collapses to 1 column on very narrow phones */
+  .kpi-row{grid-template-columns:1fr}
+
+  /* M5: Slightly larger nav icons for visual feedback on touch */
+  .nav-btn svg{width:18px;height:18px}
+}
+
+/* C2: Prevent iOS auto-zoom on input focus.
+   iOS Safari auto-zooms when input font-size < 16px and won't reliably restore
+   on blur. This fix applies to ALL inputs/selects/textareas at <=768px breakpoint
+   (covers tablets and phones). The .auth-inp already has this fix; this generalizes it. */
+@media(max-width:768px){
+  input,select,textarea{font-size:16px}
+  /* Preserve intentionally tiny inputs for technical fields where 16px would break layout */
+  input.tiny-input,select.tiny-input,textarea.tiny-input{font-size:13px}
+}
+
+/* C3: Safe-area-inset for iPhone notch/Dynamic Island.
+   The burger bar uses padding-top to clear the notch, so it grows accordingly.
+   The content area must mirror this growth — a fixed 52px push doesn't account
+   for the additional notch area on iPhone 12/13/14/15 Pro and Pro Max. */
+@media(max-width:768px){
+  .app-content{padding-top:calc(52px + env(safe-area-inset-top, 0))}
+  /* Sticky toolbar must also shift down by the same amount */
+  .tx-sticky-toolbar{top:calc(52px + env(safe-area-inset-top, 0))}
+  /* Demo banner pushes the burger bar — banner itself respects safe area */
+  #demo-banner{padding-top:calc(8px + env(safe-area-inset-top, 0))}
+}
+
+/* M3: Explore page hero padding too tall on mobile (was 6rem top = ~96px on a phone) */
+@media(max-width:768px){
+  .explore-hero{padding:3rem 1.25rem 2.5rem}
+  .explore-hero-sub{font-size:14px}
+}
+
+/* M4: Charts use responsive height on mobile so they don't feel cramped */
+@media(max-width:768px){
+  /* Chart canvas wrappers — give charts proportionally more space on tall phones */
+  .pg [style*="height:220px"][style*="position:relative"]{
+    height:clamp(180px,32vh,280px)!important
+  }
 }
 
 /* Very small phones */
@@ -1499,7 +1650,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='8.5';
+const VERSION='8.6';
 // IS_DEMO: when true, the entire app runs in a sandboxed sample-data mode.
 // No vault is loaded, no Supabase calls happen, and saveState/flushTxnQueue are no-ops.
 // Activated by URL param ?demo=1 or hash #demo. Cannot be flipped at runtime — the only
@@ -6188,7 +6339,7 @@ function rInc(){
   <div id="addinc-panel" class="panel">
     <div class="chdr" id="ii-ptitle">Add income source</div>
     <div class="fr">
-      <div><label class="lbl">Name</label><input type="text" id="ii-name" placeholder="e.g. Monthly Salary - MASIC"></div>
+      <div><label class="lbl">Name</label><input type="text" id="ii-name" placeholder="e.g. Monthly Salary - Employer"></div>
       <div><label class="lbl">Type</label><select id="ii-type"><option>Salary</option><option>Bonus</option><option>Business Income</option><option>Investment Return</option><option>Reimbursement</option><option>Other</option></select></div>
     </div>
     <div class="fr3" style="margin-top:8px">
@@ -6201,7 +6352,7 @@ function rInc(){
       <div><label class="lbl">Notes</label><input type="text" id="ii-notes" placeholder="Optional"></div>
     </div>
     <div class="fr" style="margin-top:8px">
-      <div><label class="lbl">Statement keyword (for matching)</label><input type="text" id="ii-kw" placeholder="e.g. MASIC, PAYROLL — matches against descriptions"></div>
+      <div><label class="lbl">Statement keyword (for matching)</label><input type="text" id="ii-kw" placeholder="e.g. PAYROLL, EMPLOYER — matches against descriptions"></div>
     </div>
     <div class="fg" style="margin-top:10px"><button class="btn btn-p" id="ii-sbtn" onclick="addInc()">Add</button><button class="btn" onclick="tp('addinc-panel');editIncId=null">Cancel</button></div>
   </div>
@@ -9921,16 +10072,16 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps){
         const isFirst=reconDivergenceIds.has(t.id+'_first');
         if(isDiverged){
           const sign=rdiff>0?'+':'';
-          reconTd=`<td style="text-align:right;white-space:nowrap">
+          reconTd=`<td class="tx-recon-cell" style="text-align:right;white-space:nowrap">
             ${isFirst?`<div style="font-size:9px;font-weight:700;color:var(--bad);letter-spacing:.04em">FIRST BREAK ▼</div>`:''}
             <div style="font-size:11px;font-weight:600;color:var(--bad)">${fmtP(t.statementBal)}</div>
             <div style="font-size:10px;color:var(--bad)">${sign}${fmtS(rdiff)}</div>
           </td>`;
         }else{
-          reconTd=`<td style="text-align:right;white-space:nowrap;font-size:11px;color:var(--ok)">✓</td>`;
+          reconTd=`<td class="tx-recon-cell" style="text-align:right;white-space:nowrap;font-size:11px;color:var(--ok)">✓</td>`;
         }
       }else{
-        reconTd=`<td></td>`;
+        reconTd=`<td class="tx-recon-cell"></td>`;
       }
     }
 
@@ -9944,9 +10095,9 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps){
       <td>${ch}</td>
       <td style="font-size:var(--fs-xs)">${acc?`<span style="font-weight:500">${h(acc.name)}</span>`:'--'}</td>
       <td style="text-align:right;font-weight:500;white-space:nowrap" class="${ac}">${dir==='in'?'+':'-'}${fmtP(t.amount)}</td>
-      ${showBalance?`<td style="text-align:right;font-size:var(--fs-xs);white-space:nowrap" class="${rb!==null?(rb<-0.005?'c-bad':rb>0.005?'c-ok':''):''}">${rb!==null?(Math.abs(rb)<0.005?fmt(0):fmtS(rb)):'--'}</td>`:''}
-      <td>${tbadge(t.type)}</td>
-      <td style="white-space:nowrap">
+      ${showBalance?`<td class="tx-balance-cell ${rb!==null?(rb<-0.005?'c-bad':rb>0.005?'c-ok':''):''}" style="text-align:right;font-size:var(--fs-xs);white-space:nowrap">${rb!==null?(Math.abs(rb)<0.005?fmt(0):fmtS(rb)):'--'}</td>`:''}
+      <td class="tx-type-cell">${tbadge(t.type)}</td>
+      <td class="tx-actions-cell" style="white-space:nowrap">
         <button class="btn btn-xs" onclick="openEditTxn('${t.id}','${ym}')">Edit</button>
         <button class="btn btn-xs" onclick="openCP('${t.id}','${ym}','${t.mainCatId||''}','${t.subCatId||''}')">Cat</button>
         ${!t.isSub?`<button class="btn btn-xs" onclick="mkSub('${t.id}','${ym}')">Sub</button>`:''}
