@@ -244,8 +244,9 @@ body{font-family:var(--font);background:var(--feather);color:var(--text);min-hei
 .app-content{
   flex:1;min-width:0;
   display:flex;flex-direction:column;
-  overflow-x:hidden;
   margin-left:200px; /* offset for fixed left sidebar */
+  /* No overflow-x here — html/body already handle it. Setting overflow on .app-content
+     would create an internal scroll container and break position:sticky inside .pg. */
 }
 
 /* ── RIGHT SIDEBAR (desktop) ── */
@@ -1494,7 +1495,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='7.9';
+const VERSION='8.0';
 let sKey=null,saveTimer=null,pinCb=null,catCb=null,activeGroup=null;
 
 // Populate version labels on all auth screens (login, unlock, setup) as soon as DOM is ready.
