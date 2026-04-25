@@ -12908,77 +12908,46 @@ function enterDemoMode(){
   const _realSubmissions=JSON.parse(JSON.stringify(_submissions));
   _realS._submissions=_realSubmissions;
 
-  // ── FULL DEMO STATE — zero vault data bleeds through ──
-  S.accounts=DEMO_DATA.accounts;
-  S.debts=DEMO_DATA.debts;
-  S.txnCache=DEMO_DATA.txnCache;
+  // ── FULL DEMO STATE — all configuration loaded from demo-data.json ──
+  // Single source of truth: every collection comes from DEMO_DATA so the persona
+  // can be regenerated without touching code. Fallbacks preserve compatibility
+  // with older demo-data.json files that only contained accounts/debts/txnCache.
+  S.accounts=DEMO_DATA.accounts||[];
+  S.debts=DEMO_DATA.debts||[];
+  S.txnCache=DEMO_DATA.txnCache||{};
+  S.matchedPairs=DEMO_DATA.matchedPairs||[];
+  S.bills=DEMO_DATA.bills||[];
+  S.subs=DEMO_DATA.subs||[];
+  S.income=DEMO_DATA.income||[];
+  S.staff=DEMO_DATA.staff||[];
+  S.goals=DEMO_DATA.goals||[];
+  S.familyMembers=DEMO_DATA.familyMembers||[];
+  S.submitters=DEMO_DATA.submitters||[];
+  S.txnRules=DEMO_DATA.txnRules||[];
+  _submissions=DEMO_DATA._submissions||[];
 
-  S.goals=[
-    {id:'g_demo_1',name:'Emergency Fund',target:105000,saved:62000,status:'active',deadline:'2026-12-31'},
-    {id:'g_demo_2',name:'Family Vacation',target:25000,saved:11000,status:'active',deadline:'2026-08-01'},
-  ];
-  S.bills=[
-    {id:'b_demo_1',name:'Electricity',provider:'SEC',expectedDay:10,paymentType:'Variable',billingCycle:'Monthly'},
-    {id:'b_demo_2',name:'My Mobile',provider:'STC',expectedDay:8,paymentType:'Variable',billingCycle:'Monthly'},
-    {id:'b_demo_3',name:'Noura Mobile',provider:'STC',expectedDay:8,paymentType:'Variable',billingCycle:'Monthly'},
-    {id:'b_demo_4',name:'Rent',provider:'',sadadCode:'',expectedDay:1,paymentType:'Fixed',fixedAmount:5500,billingCycle:'Monthly'},
-  ];
-  S.subs=[
-    {id:'s_demo_1',name:'Netflix',amount:65,status:'active'},
-    {id:'s_demo_2',name:'Spotify',amount:26,status:'active'},
-    {id:'s_demo_3',name:'Amazon Prime',amount:40,status:'active'},
-  ];
-  S.income=[
-    {id:'i_demo_1',name:'Monthly Salary',incType:'Salary',frequency:'Monthly',amount:35000,expectedDay:26,status:'active',keyword:'MASIC PAYROLL'},
-  ];
-
-  // Staff — demo household staff, no real names or salaries
-  S.staff=[
-    {id:'st_demo_1',name:'Maria Santos',role:'Nanny & Babysitter',salary:2100,advances:[]},
-    {id:'st_demo_2',name:'Ahmed Al Rashidi',role:'Driver',salary:1800,advances:[]},
-    {id:'st_demo_3',name:'Lina Cruz',role:'Maid & Cleaner',salary:1600,advances:[
-      {id:'adv_demo_1',amount:400,date:'2026-03-10',notes:'Medical expense'}
-    ]},
-  ];
-
-  // Reimbursement submitters — demo names, no real PINs
-  S.submitters=[
-    {name:'Lana (Demo)',pinHash:'8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92'}, // PIN: 123456
-  ];
-
-  // Demo pending reimbursements — replaces live Supabase data
-  _submissions=[
-    {id:'sub_demo_1',submitter_name:'Lana (Demo)',submitted_at:'2026-04-15T10:30:00Z',amount:288,description:'Groceries from Tamimi',category_hint:'groceries',notes:'',expense_date:'2026-04-15',status:'pending'},
-    {id:'sub_demo_2',submitter_name:'Lana (Demo)',submitted_at:'2026-04-14T14:20:00Z',amount:170,description:'Jahez family dinner',category_hint:'food',notes:'Kids wanted pizza',expense_date:'2026-04-14',status:'pending'},
-    {id:'sub_demo_3',submitter_name:'Lana (Demo)',submitted_at:'2026-04-13T09:00:00Z',amount:95,description:'Pharmacy — vitamins',category_hint:'health',notes:'',expense_date:'2026-04-13',status:'approved'},
-  ];
-
-  // Family members — demo members for Family Investments page
-  S.familyMembers=[
-    {id:'fm_demo_1',name:'Layla',relationship:'Daughter',lastRecordedValue:52000,lastRecordedValueDate:'2026-04-01'},
-    {id:'fm_demo_2',name:'Omar',relationship:'Son',lastRecordedValue:38500,lastRecordedValueDate:'2026-04-01'},
-  ];
-
-  // Clear all vault-specific data
-  S.rules=[];            // merchant learning rules — no real merchants
-  S.extractionRules=[];  // AI extraction rules — no real patterns
-  S.dismissed=[];        // dismissed subscription suggestions
-  S.deletedCats=[];      // no category deletions in demo
-  S.deletedSubs=[];      // no sub-category deletions in demo
-  S.matchedPairs=[];
-  S.monthlyBal={};
-  
-  // Settings — generic demo, no personal info
+  // Settings — merge demo settings over defaults
   S.settings={
-    currency:'SAR',
-    savingsTarget:25,
-    backupReminderMonths:2,
-    lastBackup:null,
-    displayName:'Demo User',
-    email:'',
-    username:'',
-    edgeFnUrl:'',
+    currency:'SAR',savingsTarget:25,backupReminderMonths:2,
+    lastBackup:null,displayName:'Demo User',email:'',username:'',edgeFnUrl:'',
+    autoRuleSweep:true,
+    ...(DEMO_DATA.settings||{})
   };
+
+  // Clear vault-only collections (not exposed in demo)
+  S.rules=[];            // legacy merchant learning rules
+  S.extractionRules=[];  // AI extraction rules
+  S.dismissed=[];        // dismissed subscription suggestions
+  S.deletedCats=[];
+  S.deletedSubs=[];
+  S.customMainCats=S.customMainCats||[];
+  S.customSubCats=S.customSubCats||[];
+  S.catNameOverrides=S.catNameOverrides||{};
+  S.catColorOverrides=S.catColorOverrides||{};
+  S.subNameOverrides=S.subNameOverrides||{};
+  S.subParentOverrides=S.subParentOverrides||{};
+  S.billRules=S.billRules||[];
+  S.monthlyBal={};
 
   S.month=lastTxnMonth();
   S.ovPeriod='month';
@@ -12987,7 +12956,7 @@ function enterDemoMode(){
   // If entered without a vault, show the app directly — no auth needed for demo
   if(_demoFromAuth){showApp();loadSubmissions();}
 
-  // Update sidebar button
+  // Update sidebar button (only visible in toggle-mode demo, not URL demo)
   const btn=document.getElementById('demo-btn');
   if(btn){btn.textContent='Exit Demo';btn.style.background='var(--warn)';btn.style.color='var(--midnight)';}
   render();toast('Demo mode — all data is sample only');
