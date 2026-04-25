@@ -1499,7 +1499,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='8.4';
+const VERSION='8.5';
 // IS_DEMO: when true, the entire app runs in a sandboxed sample-data mode.
 // No vault is loaded, no Supabase calls happen, and saveState/flushTxnQueue are no-ops.
 // Activated by URL param ?demo=1 or hash #demo. Cannot be flipped at runtime — the only
@@ -2734,7 +2734,7 @@ async function render(){
   if(_rendering){_renderPending=true;return;}
   _rendering=true;
   try{
-  if(!sKey){lockApp();return;}
+  if(!sKey&&!IS_DEMO){lockApp();return;}
   // Prune stale matched pairs where one or both transaction IDs no longer exist
   if(S.matchedPairs?.length){
     const allIds=new Set(allTxns().map(t=>t.id));
