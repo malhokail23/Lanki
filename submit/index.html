@@ -115,14 +115,14 @@
           <label class="lbl">Amount (SAR)</label>
           <div class="amount-prefix">
             <div class="prefix-label">SAR</div>
-            <input type="number" id="f-amount" placeholder="0.00" min="0.01" step="0.01">
+            <input type="number" id="f-amount" placeholder="0.00" min="0.01" max="100000" step="0.01">
           </div>
         </div>
       </div>
 
       <div class="field">
         <label class="lbl">Description</label>
-        <input type="text" id="f-desc" placeholder="What was it? e.g. Kids clothes from H&M">
+        <input type="text" id="f-desc" placeholder="What was it? e.g. Kids clothes from H&M" maxlength="100">
       </div>
 
       <div class="field">
@@ -143,7 +143,7 @@
 
       <div class="field">
         <label class="lbl">Notes <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label>
-        <input type="text" id="f-notes" placeholder="Any additional context">
+        <input type="text" id="f-notes" placeholder="Any additional context" maxlength="500">
       </div>
 
       <div class="err" id="form-err"></div>
@@ -169,11 +169,24 @@ const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 let _submitterName='';
 let _submitters=[];
 
-// Set today's date as default
-document.getElementById('f-date').value=new Date().toISOString().substr(0,10);
+// V8.16 (H7): local-time YYYY-MM-DD. .toISOString() converts to UTC and shifts the date by the
+// local UTC offset (Riyadh is UTC+3). For users east of UTC, between local midnight and the offset,
+// .toISOString().slice(0,10) returns yesterday's date.
+function todayLocal(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 
-// Hash PIN
-async function hashPIN(pin){
+// Set today's date as default
+document.getElementById('f-date').value=todayLocal();
+
+// V8.16 (C3): hashPIN supports both legacy (plain SHA-256, no salt) and salted PBKDF2.
+// Submitters added pre-V8.16 have only {pinHash}. Submitters added on V8.16+ have {salt, pinHash}.
+// verifyPIN tries the salted path first; if the submitter has no salt, falls back to legacy.
+function h2bSubmit(h){const b=new Uint8Array(h.length/2);for(let i=0;i<h.length;i+=2)b[i/2]=parseInt(h.substr(i,2),16);return b;}
+async function hashPINSalted(pin, saltHex){
+  const km=await crypto.subtle.importKey('raw',new TextEncoder().encode(pin.trim()),'PBKDF2',false,['deriveBits']);
+  const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:h2bSubmit(saltHex),iterations:200000,hash:'SHA-256'},km,256);
+  return Array.from(new Uint8Array(bits)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+async function hashPINLegacy(pin){
   const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(pin.trim()));
   return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
 }
@@ -209,8 +222,17 @@ async function verifyPIN(){
   const btn=document.getElementById('pin-btn');
   btn.disabled=true;btn.innerHTML='<span class="spin"></span>Verifying…';
   await loadSubmitters();
-  const hash=await hashPIN(pin);
-  const match=_submitters.find(s=>s.pinHash===hash);
+  // V8.16 (C3): try salted PBKDF2 for each submitter that has a salt; fallback to legacy SHA-256 only.
+  let match=null;
+  for(const s of _submitters){
+    if(s.salt){
+      const h=await hashPINSalted(pin, s.salt);
+      if(h===s.pinHash){match=s;break;}
+    } else {
+      const h=await hashPINLegacy(pin);
+      if(h===s.pinHash){match=s;break;}
+    }
+  }
   btn.disabled=false;btn.innerHTML='Continue';
   if(match){
     _submitterName=match.name;
@@ -235,8 +257,11 @@ async function submitExpense(){
   const errEl=document.getElementById('form-err');
   errEl.style.display='none';
   if(!date){errEl.textContent='Date is required.';errEl.style.display='block';return;}
-  if(!amount||amount<=0){errEl.textContent='Enter a valid amount.';errEl.style.display='block';return;}
+  // V8.16 (H8): explicit upper bound — HTML max= is advisory; JS bypasses it.
+  if(!amount||amount<=0||amount>100000){errEl.textContent='Enter a valid amount between SAR 0.01 and SAR 100,000.';errEl.style.display='block';return;}
   if(!desc){errEl.textContent='Description is required.';errEl.style.display='block';return;}
+  if(desc.length>100){errEl.textContent='Description too long (max 100 characters).';errEl.style.display='block';return;}
+  if(notes.length>500){errEl.textContent='Notes too long (max 500 characters).';errEl.style.display='block';return;}
   const btn=document.getElementById('submit-btn');
   btn.disabled=true;btn.innerHTML='<span class="spin"></span>Submitting…';
   try{
@@ -255,8 +280,13 @@ async function submitExpense(){
       })
     });
     if(!r.ok){const t=await r.text();throw new Error(t);}
-    const safeDesc=desc.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-    document.getElementById('success-msg').innerHTML=`<strong>${safeDesc}</strong> — SAR ${amount.toFixed(2)} recorded. Will be reviewed and approved shortly.`;
+    // V8.16 (M11): safer success-msg construction. Build via DOM so no escaping bug can ever
+    // surface a malformed apostrophe / backtick / unicode quirk into raw HTML.
+    const msgEl=document.getElementById('success-msg');
+    msgEl.replaceChildren(
+      Object.assign(document.createElement('strong'),{textContent:desc}),
+      document.createTextNode(` — SAR ${amount.toFixed(2)} recorded. Will be reviewed and approved shortly.`)
+    );
     document.getElementById('form-screen').style.display='none';
     document.getElementById('success-screen').style.display='block';
     startRedirect();
@@ -276,7 +306,7 @@ function addAnother(){
   document.getElementById('f-amount').value='';
   document.getElementById('f-desc').value='';
   document.getElementById('f-notes').value='';
-  document.getElementById('f-date').value=new Date().toISOString().substr(0,10);
+  document.getElementById('f-date').value=todayLocal();
   document.getElementById('f-cat').value='food';
   document.getElementById('form-err').style.display='none';
   document.getElementById('f-amount').focus();
