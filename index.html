@@ -1710,7 +1710,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='8.15';
+const VERSION='8.16';
 // IS_DEMO: when true, the entire app runs in a sandboxed sample-data mode.
 // No vault is loaded, no Supabase calls happen, and saveState/flushTxnQueue are no-ops.
 // Activated by URL param ?demo=1 or hash #demo. Cannot be flipped at runtime — the only
@@ -2074,6 +2074,12 @@ function toDD(iso){if(!iso||iso.includes('/'))return iso||''; // L3: guard pre-f
   const[y,m,d]=iso.split('-');return`${(d||'').padStart(2,'0')}/${(m||'').padStart(2,'0')}/${y||''}`;}
 function fromDD(dmy){if(!dmy||!dmy.includes('/'))return dmy||'';const p=dmy.split('/');if(p.length===3){const yr=p[2].length===2?'20'+p[2]:p[2];return`${yr}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;}return dmy;}
 function getYM(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
+// V8.16: local-time ISO date helper. NEVER use .toISOString().slice(0,10) — it shifts dates
+// by the local UTC offset (e.g. -3h for Riyadh) and produces off-by-one date strings.
+// localISO produces YYYY-MM-DD in the user's local timezone, matching the Date object's intent.
+function localISO(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+// V8.16: compute the actual last day of a month (1-31) for safe day arithmetic
+function lastDayOfMonth(y,m){return new Date(y,m+1,0).getDate();}
 function fmtYM(ym){if(!ym)return'';const[y,m]=ym.split('-');const mn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return mn[parseInt(m)-1]+' '+y;}
 function addM(ym,n){const[y,m]=ym.split('-').map(Number);const d=new Date(y,m-1+n,1);return getYM(d);}
 function mRange(from,to){const r=[];let c=from;while(c<=to){r.push(c);c=addM(c,1);}return r;}
@@ -2615,15 +2621,22 @@ async function saveState(){
     const e=await enc(sKey,getMainP());
     await sbPut('phase1',{...d,encData:e});
     setSS('Saved ✓','ok');setTimeout(()=>setSS(''),2500);
-    // Sync submitter hashes in separate try — failure here does not affect core data
+    // V8.16 (M15): only re-publish submitters_public when the public-facing slice actually changes.
+    // submitters_public is publicly readable (anon key); minimizing writes reduces exposure surface
+    // and avoids unnecessary write traffic on every unrelated save.
     if(S.submitters&&S.submitters.length){
       try{
-        const pubSubs={submitters:S.submitters.map(s=>({name:s.name,pinHash:s.pinHash}))};
-        await sbPut('submitters_public',pubSubs);
+        const pubSubs={submitters:S.submitters.map(s=>({name:s.name,pinHash:s.pinHash,salt:s.salt||null}))};
+        const sig=JSON.stringify(pubSubs);
+        if(sig!==_lastSubmittersPublicSig){
+          await sbPut('submitters_public',pubSubs);
+          _lastSubmittersPublicSig=sig;
+        }
       }catch(e){console.warn('Submitters public sync failed:',e);}
     }
   }catch(e){setSS('Save failed ✗','err');setTimeout(()=>setSS(''),6000);console.error(e);}
 }
+let _lastSubmittersPublicSig=null; // V8.16 (M15): tracks last published submitter list signature
 
 let txnSaveQueue={};
 let txnSaveTimer=null;
@@ -3354,17 +3367,18 @@ async function rOv(){
   if(momDiff!==null&&momDiff>20)alerts.push({level:'warn',icon:'↑',text:`Expenses up ${momDiff}% vs last month`,sub:`${fmtP(thisMonthExp)} this month vs ${fmtP(lastMonthExp)} last month`,action:null});
   S.debts.filter(d=>d.status==='active'&&d.installment>0).forEach(d=>{
     const lastPay=(d.payments||[]).slice(-1)[0];
-    if(!lastPay||lastPay.date<addM(now,-1)){alerts.push({level:'info',icon:'$',text:`${d.name} — no payment recorded this month`,sub:`Monthly installment: ${fmtP(d.installment)}`,action:"sw('debts')"});}
+    if(!lastPay||lastPay.date<addM(now,-1)){alerts.push({level:'info',icon:'$',text:`${h(d.name)} — no payment recorded this month`,sub:`Monthly installment: ${fmtP(d.installment)}`,action:"sw('debts')"});}
   });
-  S.bills.filter(b=>billStatus(b).status==='Unpaid').forEach(b=>alerts.push({level:'crit',icon:'!',text:`${b.name} is unpaid`,sub:`Expected: day ${b.expectedDay||'?'}`,action:"sw('bills')"}));
+  S.bills.filter(b=>billStatus(b).status==='Unpaid').forEach(b=>alerts.push({level:'crit',icon:'!',text:`${h(b.name)} is unpaid`,sub:`Expected: day ${b.expectedDay||'?'}`,action:"sw('bills')"}));
   // V8.15: Credit card alerts — upcoming due dates, overdue, annual fees
+  // V8.16: d.name escaped via h() to prevent XSS in case of malicious backup imports.
   S.debts.filter(d=>d.type==='credit_card'&&d.status==='active').forEach(d=>{
     const cyc=calcCCCycle(d);
     if(cyc){
       if(cyc.daysToDue<0&&calcCCBalance(d)>0.5){
-        alerts.push({level:'crit',icon:'!',text:`${d.name} payment is ${Math.abs(cyc.daysToDue)} day${Math.abs(cyc.daysToDue)===1?'':'s'} overdue`,sub:`Was due ${toDD(cyc.dueDate.toISOString().slice(0,10))} · Late fee may apply`,action:"sw('debts')"});
+        alerts.push({level:'crit',icon:'!',text:`${h(d.name)} payment is ${Math.abs(cyc.daysToDue)} day${Math.abs(cyc.daysToDue)===1?'':'s'} overdue`,sub:`Was due ${toDD(localISO(cyc.dueDate))} · Late fee may apply`,action:"sw('debts')"});
       }else if(cyc.daysToDue>=0&&cyc.daysToDue<=3&&calcCCBalance(d)>0.5){
-        alerts.push({level:'warn',icon:'$',text:`${d.name} payment due in ${cyc.daysToDue} day${cyc.daysToDue===1?'':'s'}`,sub:`Due ${toDD(cyc.dueDate.toISOString().slice(0,10))} · Balance ${fmtP(calcCCBalance(d))}`,action:"sw('debts')"});
+        alerts.push({level:'warn',icon:'$',text:`${h(d.name)} payment due in ${cyc.daysToDue} day${cyc.daysToDue===1?'':'s'}`,sub:`Due ${toDD(localISO(cyc.dueDate))} · Balance <span class="fmt-money">${fmtP(calcCCBalance(d))}</span>`,action:"sw('debts')"});
       }
     }
     // Annual fee posting in next 30 days
@@ -3373,7 +3387,7 @@ async function rOv(){
       if(nf){
         const days=Math.round((nf-new Date().setHours(0,0,0,0))/86400000);
         if(days>=0&&days<=30){
-          alerts.push({level:'info',icon:'$',text:`${d.name} annual fee posts in ${days} day${days===1?'':'s'}`,sub:`SAR ${fmt(d.annualFee)} expected on ${toDD(nf.toISOString().slice(0,10))}`,action:"sw('debts')"});
+          alerts.push({level:'info',icon:'$',text:`${h(d.name)} annual fee posts in ${days} day${days===1?'':'s'}`,sub:`<span class="fmt-money">${fmtP(d.annualFee)}</span> expected on ${toDD(localISO(nf))}`,action:"sw('debts')"});
         }
       }
     }
@@ -8691,22 +8705,26 @@ function calcCCCycle(d, refDate){
   const ref=refDate?new Date(refDate):new Date();
   ref.setHours(0,0,0,0);
   const y=ref.getFullYear(), m=ref.getMonth(), day=ref.getDate();
-  const closeDay=Math.min(d.statementCloseDay,28); // safe day for short months
-  const dueDay=Math.min(d.paymentDueDay,28);
+  // V8.16: dynamic month-end clamping. If user enters day 31 and we're computing a Feb cycle,
+  // clamp to Feb's actual last day. Each cycle (current, prev) gets its own correct month-end.
+  const closeDayThis=Math.min(d.statementCloseDay, lastDayOfMonth(y, m));
   // The "current cycle" closes on the next occurrence of closeDay.
-  // If today is past closeDay, next close is next month; else this month.
+  // If today is past closeDay in the current month, next close is next month; else this month.
   let closeY=y, closeM=m;
-  if(day>closeDay){closeM=m+1;if(closeM>11){closeM=0;closeY=y+1;}}
-  const closeDate=new Date(closeY,closeM,closeDay);
+  if(day>closeDayThis){closeM=m+1;if(closeM>11){closeM=0;closeY=y+1;}}
+  const closeDayActual=Math.min(d.statementCloseDay, lastDayOfMonth(closeY, closeM));
+  const closeDate=new Date(closeY,closeM,closeDayActual);
   // Previous cycle close: one month before
   let prevY=closeY, prevM=closeM-1;
   if(prevM<0){prevM=11;prevY=closeY-1;}
-  const prevCloseDate=new Date(prevY,prevM,closeDay);
-  // Due date: next occurrence of dueDay after PREVIOUS close (the bill that is currently outstanding)
-  // If dueDay > closeDay, due is in same month as close. Else due is in following month.
+  const prevCloseDayActual=Math.min(d.statementCloseDay, lastDayOfMonth(prevY, prevM));
+  const prevCloseDate=new Date(prevY,prevM,prevCloseDayActual);
+  // Due date: next occurrence of dueDay after PREVIOUS close (the bill currently outstanding)
+  // If dueDay > closeDay (in raw terms), due is in same month as close. Else due is in following month.
   let dueY=prevY, dueM=prevM;
-  if(dueDay<=closeDay){dueM=prevM+1;if(dueM>11){dueM=0;dueY=prevY+1;}}
-  const dueDate=new Date(dueY,dueM,dueDay);
+  if(d.paymentDueDay<=d.statementCloseDay){dueM=prevM+1;if(dueM>11){dueM=0;dueY=prevY+1;}}
+  const dueDayActual=Math.min(d.paymentDueDay, lastDayOfMonth(dueY, dueM));
+  const dueDate=new Date(dueY,dueM,dueDayActual);
   const daysToClose=Math.round((closeDate-ref)/86400000);
   const daysToDue=Math.round((dueDate-ref)/86400000);
   // Cycle window: the cycle that closes on closeDate spans from prev close + 1 day through closeDate
@@ -8727,29 +8745,36 @@ function calcMinPayment(d){
 }
 
 // projectMinPaymentCost: projects profit accrued if user pays only minimum
-// Returns: { minPay, remaining, monthlyProfit, dailyProfit, message } or null if APR missing
+// Returns: { balance, minPay, remaining, apr, monthlyProfit, dailyProfit } or null if APR not configured
+// V8.16 (M5): 0% APR is a legitimate configuration (promotional / Sharia-compliant cards).
+// We surface the panel with monthlyProfit=0 to confirm rather than hide.
 function projectMinPaymentCost(d){
   if(d.type!=='credit_card')return null;
-  if(!d.profitRate||d.profitRate<=0)return null;
+  if(d.profitRate==null||d.profitRate<0)return null;
   const bal=calcCCBalance(d);
   if(bal<=0)return null;
   const minPay=calcMinPayment(d);
   const remaining=Math.max(0,bal-minPay);
-  const apr=d.profitRate/100;
+  const apr=Math.max(0, d.profitRate)/100;
   const monthlyProfit=Math.round(remaining*apr/12*100)/100;
   const dailyProfit=Math.round(remaining*apr/365*100)/100;
   return{balance:bal,minPay,remaining,apr:d.profitRate,monthlyProfit,dailyProfit};
 }
 
 // calcCCCosts: aggregates year-to-date cost of operating this card
-// Returns: { annualFees, lateFees, ccInterest, fxVariance, cashAdvanceFees, overlimitFees, otherCharges, total, year }
+// Returns: { annualFees, lateFees, ccInterest, fxVariance, fxMarkupCost, cashAdvanceFees, overlimitFees, otherCharges, total, year }
+// V8.16: added fxMarkupCost — implicit FX markup on foreign-currency-billed CC purchases.
+// Distinct from fxVariance (which captures inter-account variance from matched payment pairs).
+// fxMarkupCost is an estimate: spending is post-conversion, so markup is buried inside it.
+// We expose markup * spending / (100 + markup) as the "spending shifted by markup" estimate.
 function calcCCCosts(d, year){
-  if(d.type!=='credit_card')return{annualFees:0,lateFees:0,ccInterest:0,fxVariance:0,cashAdvanceFees:0,overlimitFees:0,otherCharges:0,total:0,year:year||new Date().getFullYear()};
+  if(d.type!=='credit_card')return{annualFees:0,lateFees:0,ccInterest:0,fxVariance:0,fxMarkupCost:0,cashAdvanceFees:0,overlimitFees:0,otherCharges:0,total:0,year:year||new Date().getFullYear()};
   const y=year||new Date().getFullYear();
   const yStart=`${y}-01-01`, yEnd=`${y}-12-31`;
   const all=allTxns();
   const linkedId=d.linkedAccountId;
-  let annualFees=0, lateFees=0, ccInterest=0, fxVariance=0, cashAdvanceFees=0, overlimitFees=0, otherCharges=0;
+  let annualFees=0, lateFees=0, ccInterest=0, fxVariance=0, fxMarkupCost=0, cashAdvanceFees=0, overlimitFees=0, otherCharges=0;
+  let foreignSpending=0; // V8.16: sum of merchant out-direction spending (used for fxMarkupCost estimate)
   // Pass 1: scan transactions on the linked CC account
   if(linkedId){
     all.forEach(t=>{
@@ -8764,15 +8789,26 @@ function calcCCCosts(d, year){
       if(t.subCatId==='sub_cc_interest'){ccInterest+=amt;return;}
       if(t.subCatId==='sub_cash_advance_fee'){cashAdvanceFees+=amt;return;}
       if(t.subCatId==='sub_overlimit_fee'){overlimitFees+=amt;return;}
-      if(t.subCatId==='sub_fx'){return;} // FX is handled separately via matchedPairs
-      // Heuristic detection if not categorized as above
+      if(t.subCatId==='sub_fx'){
+        // V8.16 (M4): manually-categorized sub_fx without fxPairId joins fxVariance.
+        // matchedPairs handles the auto-paired case in pass 2 below; manual entries land here.
+        if(!t.fxPairId){
+          if(t.type==='expense')fxVariance+=amt;
+          else if(t.type==='income')fxVariance-=amt;
+        }
+        return;
+      }
+      // V8.16 (M3): tightened heuristics with word boundaries to reduce false positives on merchant names
       if(t.subCatId==='sub_bank_charges'||t.mainCatId==='cat_main_finance'){
-        if(/annual.*fee|membership.*fee|card.*fee|joining.*fee/.test(desc)){annualFees+=amt;return;}
-        if(/late.*fee|late.*payment|past.*due|overdue/.test(desc)){lateFees+=amt;return;}
-        if(/profit|interest|riba|murabaha.*charge|finance.*charge/.test(desc)){ccInterest+=amt;return;}
-        if(/cash.*advance|cash.*withdrawal/.test(desc)){cashAdvanceFees+=amt;return;}
-        if(/over.?limit|exceed.*limit/.test(desc)){overlimitFees+=amt;return;}
+        if(/\b(annual|membership|card|joining)\s+fee\b/.test(desc)){annualFees+=amt;return;}
+        if(/\b(late\s+(fee|payment)|past\s+due|overdue)\b/.test(desc)){lateFees+=amt;return;}
+        if(/\b(profit\s+charge|interest\s+charge|riba|murabaha\s+charge|finance\s+charge)\b/.test(desc)){ccInterest+=amt;return;}
+        if(/\bcash\s+(advance|withdrawal\s+fee)\b/.test(desc)){cashAdvanceFees+=amt;return;}
+        if(/\bover.?limit|exceed.+limit\b/.test(desc)){overlimitFees+=amt;return;}
         otherCharges+=amt;
+      } else {
+        // V8.16 (H4/H10): track non-fee spending on linked account for fxMarkupCost estimate
+        foreignSpending+=amt;
       }
     });
   }
@@ -8780,16 +8816,22 @@ function calcCCCosts(d, year){
   (S.matchedPairs||[]).forEach(p=>{
     if(!p.fxTxnId)return;
     if(p.inAccId!==linkedId)return;
-    // Find the FX variance txn
     const fxTxn=all.find(t=>t.id===p.fxTxnId);
     if(!fxTxn)return;
     if(fxTxn.date<yStart||fxTxn.date>yEnd)return;
-    // FX variance is signed: expense type = cost to user, income type = gain
     if(fxTxn.type==='expense')fxVariance+=(fxTxn.amount||0);
     else if(fxTxn.type==='income')fxVariance-=(fxTxn.amount||0);
   });
-  const total=annualFees+lateFees+ccInterest+fxVariance+cashAdvanceFees+overlimitFees+otherCharges;
-  return{annualFees:r2(annualFees),lateFees:r2(lateFees),ccInterest:r2(ccInterest),fxVariance:r2(fxVariance),cashAdvanceFees:r2(cashAdvanceFees),overlimitFees:r2(overlimitFees),otherCharges:r2(otherCharges),total:r2(total),year:y};
+  // V8.16 (H4/H10): estimate hidden FX markup baked into merchant transactions.
+  // Only meaningful for cards configured with fxMarkupPercent (typically AmEx Platinum).
+  // Math: post-markup amount = pre-markup * (1 + markup/100)
+  //   so markup-portion = post-markup * markup / (100 + markup)
+  // Example: SAR 5,000 of foreign spending at 2.75% markup ≈ SAR 134 of hidden markup cost.
+  if(d.fxMarkupPercent!=null&&d.fxMarkupPercent>0&&foreignSpending>0){
+    fxMarkupCost=foreignSpending*d.fxMarkupPercent/(100+d.fxMarkupPercent);
+  }
+  const total=annualFees+lateFees+ccInterest+fxVariance+fxMarkupCost+cashAdvanceFees+overlimitFees+otherCharges;
+  return{annualFees:r2(annualFees),lateFees:r2(lateFees),ccInterest:r2(ccInterest),fxVariance:r2(fxVariance),fxMarkupCost:r2(fxMarkupCost),cashAdvanceFees:r2(cashAdvanceFees),overlimitFees:r2(overlimitFees),otherCharges:r2(otherCharges),total:r2(total),year:y};
 }
 function r2(n){return Math.round((n||0)*100)/100;}
 
@@ -8803,10 +8845,10 @@ function detectCCPaymentStatus(d){
   if(!linkedId)return null;
   const all=allTxns();
   // Look for payments since the previous cycle close (i.e. payments toward the last bill)
-  const prevCloseISO=cycle.prevCloseDate.toISOString().slice(0,10);
-  const todayISO=new Date().toISOString().slice(0,10);
-  const dueDateISO=cycle.dueDate.toISOString().slice(0,10);
-  const payments=all.filter(t=>t.accountId===linkedId&&txDir(t)==='in'&&t.subCatId==='sub_cc_payment'&&t.date>prevCloseISO&&t.date<=todayISO);
+  const prevCloseISO=localISO(cycle.prevCloseDate);
+  const todayISO=localISO(new Date());
+  const dueDateISO=localISO(cycle.dueDate);
+  const payments=all.filter(t=>t.accountId===linkedId&&txDir(t)==='in'&&t.subCatId==='sub_cc_payment'&&t.date>=prevCloseISO&&t.date<=todayISO);
   const totalPaid=payments.reduce((s,t)=>s+(t.amount||0),0);
   const balance=calcCCBalance(d);
   const minPay=calcMinPayment(d);
@@ -8816,25 +8858,59 @@ function detectCCPaymentStatus(d){
   // If totalPaid < minPay and we are past due date, "overdue".
   // If totalPaid > 0 but < minPay and not yet past due, "partial — at risk".
   let status, severity, message;
-  if(balance<=0.5){status='paid_in_full';severity='ok';message='Paid in full';}
-  else if(totalPaid<=0&&todayISO>dueDateISO){status='overdue';severity='bad';message=`Overdue — no payment recorded since ${toDD(prevCloseISO)}`;}
-  else if(totalPaid<minPay-0.5&&todayISO>dueDateISO){status='underpaid';severity='bad';message=`Underpaid — paid SAR ${fmt(totalPaid)} of SAR ${fmt(minPay)} minimum`;}
-  else if(totalPaid>=minPay-0.5&&Math.abs(totalPaid-minPay)<minPay*0.15){status='min_only';severity='warn';message=`Minimum only — paid SAR ${fmt(totalPaid)}, balance SAR ${fmt(balance)} carries`;}
-  else if(totalPaid>0){status='partial';severity='warn';message=`Partial — paid SAR ${fmt(totalPaid)}, balance SAR ${fmt(balance)} carries`;}
-  else {status='no_payment';severity='warn';message='No payment yet this cycle';}
-  return{status,severity,message,totalPaid:r2(totalPaid),minPay:r2(minPay),balance:r2(balance)};
+  // V8.16 (H9): Compute prior-cycle bill snapshot by replaying transactions through prevCloseDate.
+  // Without this, balance reflects current cycle (including new charges) and minPay is computed off
+  // the wrong amount. With it, "min_only" / "partial" / "underpaid" status reflects what the user
+  // actually owed at statement close, not their current rolling balance.
+  let billAtClose=d.openingBalance||0;
+  const asOf=d.balanceAsOf||'1900-01-01';
+  all.forEach(t=>{
+    if(t.date<=asOf||t.date>prevCloseISO)return;
+    if(t.accountId!==linkedId)return;
+    const td=txDir(t);
+    if(td==='out')billAtClose+=t.amount;
+    else if(td==='in')billAtClose-=t.amount;
+  });
+  billAtClose=Math.max(0,billAtClose);
+  // Recompute minPay against the bill at close, not current balance, when we have a meaningful bill
+  const minPayForBill=billAtClose>0?(d.minPayment&&d.minPayment>0?d.minPayment:Math.max(100, Math.round(billAtClose*0.05*100)/100)):minPay;
+  if(billAtClose<=0.5){
+    // No bill last cycle — current balance is purely new spending
+    status='paid_in_full';severity='ok';message='Paid in full';
+  } else if(totalPaid<=0&&todayISO>dueDateISO){
+    status='overdue';severity='bad';message=`Overdue — no payment recorded since ${toDD(prevCloseISO)}`;
+  } else if(totalPaid+0.5<minPayForBill&&todayISO>dueDateISO){
+    status='underpaid';severity='bad';message=`Underpaid — paid SAR ${fmt(totalPaid)} of SAR ${fmt(minPayForBill)} minimum`;
+  } else if(totalPaid>=billAtClose-0.5){
+    status='paid_in_full';severity='ok';message=billAtClose>0?`Last bill paid in full (SAR ${fmt(billAtClose)})`:'Paid in full';
+  } else if(totalPaid>=minPayForBill-0.5&&Math.abs(totalPaid-minPayForBill)<minPayForBill*0.15){
+    status='min_only';severity='warn';message=`Minimum only — paid SAR ${fmt(totalPaid)}, SAR ${fmt(billAtClose-totalPaid)} carries`;
+  } else if(totalPaid>0){
+    status='partial';severity='warn';message=`Partial — paid SAR ${fmt(totalPaid)} of SAR ${fmt(billAtClose)} bill`;
+  } else {
+    status='no_payment';severity='warn';message='No payment yet this cycle';
+  }
+  // V8.16: messageHtml wraps SAR amounts in fmt-money spans so privacy mode blurs them.
+  // The plain `message` is preserved for non-HTML consumers (Diagnostics, CSV exports).
+  const wrap=s=>s.replace(/SAR ([\d,]+\.\d\d)/g,'<span class="fmt-money">SAR $1</span>');
+  return{status,severity,message,messageHtml:wrap(message),totalPaid:r2(totalPaid),minPay:r2(minPayForBill),balance:r2(balance),billAtClose:r2(billAtClose)};
 }
 
 // nextAnnualFeeDate: returns Date of next annual fee posting based on anniversaryMonth + statementCloseDay
+// Returns null if either anniversaryMonth or statementCloseDay is missing — without the close day,
+// any guess at posting date would mislead. The diagnostics page surfaces missing config separately.
 function nextAnnualFeeDate(d){
   if(d.type!=='credit_card')return null;
-  if(!d.anniversaryMonth)return null;
+  if(!d.anniversaryMonth||!d.statementCloseDay)return null;
   const today=new Date();today.setHours(0,0,0,0);
   const y=today.getFullYear();
   const m=d.anniversaryMonth-1;
-  const day=Math.min(d.statementCloseDay||1,28);
-  let next=new Date(y,m,day);
-  if(next<today)next=new Date(y+1,m,day);
+  const dayActual=Math.min(d.statementCloseDay, lastDayOfMonth(y, m));
+  let next=new Date(y,m,dayActual);
+  if(next<today){
+    const dayNext=Math.min(d.statementCloseDay, lastDayOfMonth(y+1, m));
+    next=new Date(y+1,m,dayNext);
+  }
   return next;
 }
 
@@ -9203,18 +9279,18 @@ function rDebts(){
             <div style="padding:10px 12px;background:var(--bg2);border-radius:var(--rsm)">
               <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--text3);margin-bottom:3px">Statement closes</div>
               <div style="font-size:16px;font-weight:600;letter-spacing:-.02em">${cyc.daysToClose===0?'Today':cyc.daysToClose<0?Math.abs(cyc.daysToClose)+'d ago':'in '+cyc.daysToClose+'d'}</div>
-              <div style="font-size:10px;color:var(--text3);margin-top:2px">${toDD(cyc.closeDate.toISOString().slice(0,10))}</div>
+              <div style="font-size:10px;color:var(--text3);margin-top:2px">${toDD(localISO(cyc.closeDate))}</div>
             </div>
             <div style="padding:10px 12px;background:var(--bg2);border-radius:var(--rsm)">
               <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--text3);margin-bottom:3px">Payment due</div>
               <div style="font-size:16px;font-weight:600;letter-spacing:-.02em;color:${cyc.daysToDue<0?'var(--bad)':cyc.daysToDue<=3?'var(--warn)':'var(--text1)'}">${cyc.daysToDue===0?'Today':cyc.daysToDue<0?Math.abs(cyc.daysToDue)+'d overdue':'in '+cyc.daysToDue+'d'}</div>
-              <div style="font-size:10px;color:var(--text3);margin-top:2px">${toDD(cyc.dueDate.toISOString().slice(0,10))}</div>
+              <div style="font-size:10px;color:var(--text3);margin-top:2px">${toDD(localISO(cyc.dueDate))}</div>
             </div>
           `:''}
           ${stat?`
             <div style="padding:10px 12px;background:${statBg};border-radius:var(--rsm);border:1px solid ${statColor}33">
               <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--text3);margin-bottom:3px">Cycle status</div>
-              <div style="font-size:13px;font-weight:600;color:${statColor};line-height:1.3">${h(stat.message)}</div>
+              <div style="font-size:13px;font-weight:600;color:${statColor};line-height:1.3">${stat.messageHtml||h(stat.message)}</div>
             </div>
           `:''}
         </div>`;
@@ -9243,6 +9319,7 @@ function rDebts(){
           {label:'Late fees',v:costs.lateFees},
           {label:'Profit charges',v:costs.ccInterest},
           {label:'FX variance',v:costs.fxVariance},
+          {label:'FX markup (estimated)',v:costs.fxMarkupCost},
           {label:'Cash advance fees',v:costs.cashAdvanceFees},
           {label:'Over-limit fees',v:costs.overlimitFees},
           {label:'Other charges',v:costs.otherCharges}
@@ -9268,7 +9345,7 @@ function rDebts(){
         const sev=days<=30?'warn':'info';
         const color=sev==='warn'?'var(--warn)':'var(--info)';
         return`<div style="margin-top:10px;padding:10px 14px;background:color-mix(in srgb,${color} 8%,transparent);border-radius:var(--rsm);border-left:3px solid ${color};font-size:12px;line-height:1.5">
-          <strong style="color:${color}">Annual fee posting in ${days} day${days===1?'':'s'}</strong> &middot; SAR ${fmt(d.annualFee)} expected on ${toDD(nextFee.toISOString().slice(0,10))}.
+          <strong style="color:${color}">Annual fee posting in ${days} day${days===1?'':'s'}</strong> &middot; <span class="fmt-money">SAR ${fmt(d.annualFee)}</span> expected on ${toDD(localISO(nextFee))}.
         </div>`;
       })()}
       `:`
@@ -9309,21 +9386,23 @@ function rDebts(){
   }).join('')||'<div class="empty">No debts tracked yet.</div>';
 
   // V8.15: Aggregate CC Intelligence summary
+  // V8.16 (M8): cache allTxns() once for the whole rDebts render to avoid N×M traversal.
+  const _allTxnsCache=allTxns();
   const ccSummaryHtml=(()=>{
     const allCCs=S.debts.filter(d=>d.type==='credit_card'&&d.status==='active');
     if(allCCs.length===0)return '';
     const yr=new Date().getFullYear();
     const today=new Date();today.setHours(0,0,0,0);
-    let totalCost=0, totalAnnualFees=0, totalLateFees=0, totalInterest=0, totalFx=0, totalCashAdv=0, totalOther=0;
+    let totalCost=0, totalAnnualFees=0, totalLateFees=0, totalInterest=0, totalFx=0, totalFxMarkup=0, totalCashAdv=0, totalOther=0;
     let totalSpending=0;
     allCCs.forEach(d=>{
       const c=calcCCCosts(d,yr);
       totalCost+=c.total; totalAnnualFees+=c.annualFees; totalLateFees+=c.lateFees;
-      totalInterest+=c.ccInterest; totalFx+=c.fxVariance; totalCashAdv+=c.cashAdvanceFees;
+      totalInterest+=c.ccInterest; totalFx+=c.fxVariance; totalFxMarkup+=c.fxMarkupCost; totalCashAdv+=c.cashAdvanceFees;
       totalOther+=c.otherCharges+c.overlimitFees;
       // Spending: outflows on this card YTD (excludes payments, fees)
       if(d.linkedAccountId){
-        allTxns().forEach(t=>{
+        _allTxnsCache.forEach(t=>{
           if(t.accountId!==d.linkedAccountId)return;
           if(t.date<`${yr}-01-01`||t.date>`${yr}-12-31`)return;
           if(txDir(t)!=='out')return;
@@ -9360,6 +9439,7 @@ function rDebts(){
       {label:'Late fees',v:totalLateFees},
       {label:'Profit charges',v:totalInterest},
       {label:'FX variance',v:totalFx},
+      {label:'FX markup (estimated)',v:totalFxMarkup},
       {label:'Cash advance',v:totalCashAdv},
       {label:'Other charges',v:totalOther}
     ].filter(i=>Math.abs(i.v)>=0.01);
@@ -9385,13 +9465,13 @@ function rDebts(){
         ${upcoming.map(u=>{
           const sevColor=u.cycle.daysToDue<0?'var(--bad)':u.cycle.daysToDue<=3?'var(--warn)':'var(--text1)';
           const dueText=u.cycle.daysToDue<0?Math.abs(u.cycle.daysToDue)+'d overdue':u.cycle.daysToDue===0?'Due today':u.cycle.daysToDue+'d';
-          return`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid var(--border);font-size:12px"><span><strong>${h(u.card.name)}</strong> &middot; <span style="color:var(--text3)">${toDD(u.cycle.dueDate.toISOString().slice(0,10))}</span></span><span style="font-weight:600;color:${sevColor}">${dueText}</span></div>`;
+          return`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid var(--border);font-size:12px"><span><strong>${h(u.card.name)}</strong> &middot; <span style="color:var(--text3)">${toDD(localISO(u.cycle.dueDate))}</span></span><span style="font-weight:600;color:${sevColor}">${dueText}</span></div>`;
         }).join('')}
       </div>`:''}
       ${annualFeesUpcoming.length>0?`
       <div style="padding:12px 14px;background:color-mix(in srgb,var(--warn) 6%,var(--bg2));border-radius:var(--rsm);border:1px solid color-mix(in srgb,var(--warn) 20%,transparent)">
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:8px">Upcoming annual fees (next 90 days)</div>
-        ${annualFeesUpcoming.map(a=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid var(--border);font-size:12px"><span><strong>${h(a.card.name)}</strong> &middot; <span style="color:var(--text3)">${toDD(a.date.toISOString().slice(0,10))}</span></span><span style="font-weight:600;color:var(--warn)" class="fmt-money">${fmtP(a.amount)} in ${a.days}d</span></div>`).join('')}
+        ${annualFeesUpcoming.map(a=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid var(--border);font-size:12px"><span><strong>${h(a.card.name)}</strong> &middot; <span style="color:var(--text3)">${toDD(localISO(a.date))}</span></span><span style="font-weight:600;color:var(--warn)" class="fmt-money">${fmtP(a.amount)} in ${a.days}d</span></div>`).join('')}
       </div>`:''}
     </div>`;
   })();
@@ -9493,7 +9573,9 @@ function openEditDebt(id){
     const lf=document.getElementById('db-late-fee');if(lf)lf.value=d.lateFee!=null?d.lateFee:'';
     const fxm=document.getElementById('db-fx-markup');if(fxm)fxm.value=d.fxMarkupPercent!=null?d.fxMarkupPercent:'';
     // Auto-open advanced section if any of those fields are populated
-    const hasAdv=d.statementCloseDay||d.paymentDueDay||d.annualFee||d.anniversaryMonth||d.lateFee||d.fxMarkupPercent;
+    // V8.16: use null-check to detect any configured field. `||` chain treated 0 as falsy
+    // (annualFee:0 means "waived", a legitimate user choice) and would leave the panel collapsed.
+    const hasAdv=[d.statementCloseDay,d.paymentDueDay,d.annualFee,d.anniversaryMonth,d.lateFee,d.fxMarkupPercent].some(v=>v!=null);
     if(hasAdv){const f=document.getElementById('cc-adv-fields');const a=document.getElementById('cc-adv-arrow');if(f){f.style.display='block';if(a)a.style.transform='rotate(90deg)';}}
   }else{
     document.getElementById('db-start').value=d.contractStart?toDD(d.contractStart):'';
@@ -9511,6 +9593,14 @@ function saveDebt(){
   const name=document.getElementById('db-name').value.trim();if(!name){toast('Name required',false);return;}
   const type=document.getElementById('db-type').value;
   const isCC=type==='credit_card';
+  // V8.16: prevent two CCs pointing at the same account (would double-count balances and costs)
+  if(isCC){
+    const linkedSel=document.getElementById('db-linked-acc')?.value||'';
+    if(linkedSel){
+      const conflict=S.debts.find(d=>d.id!==editDebtId&&d.type==='credit_card'&&d.linkedAccountId===linkedSel);
+      if(conflict){toast(`Account already linked to "${conflict.name}". Each card account can link to one debt.`,false);return;}
+    }
+  }
   const orig=parseFloat(document.getElementById('db-orig').value)||0;
   const remRaw=document.getElementById('db-rem').value;
   const enteredRem=remRaw?parseFloat(remRaw):orig;
@@ -9525,19 +9615,24 @@ function saveDebt(){
     notes:document.getElementById('db-notes').value.trim(),
     status:'active',
     ...(isCC?{
-      creditLimit:parseFloat(document.getElementById('db-limit').value)||0,
-      openingBalance:parseFloat(document.getElementById('db-opening').value)||0,
+      // V8.16: bounded numeric validation. parseFloat accepts negatives and unbounded values that
+      // bypass HTML min/max attributes (paste, dev tools, scripts). Ranges chosen for realistic
+      // Saudi card products with generous headroom.
+      creditLimit:(()=>{const v=parseFloat(document.getElementById('db-limit').value);return isNaN(v)||v<0?0:Math.min(v, 10000000);})(),
+      openingBalance:(()=>{const v=parseFloat(document.getElementById('db-opening').value);return isNaN(v)||v<0?0:Math.min(v, 10000000);})(),
       balanceAsOf:fromDD(document.getElementById('db-cc-asof').value),
       linkedAccountId:document.getElementById('db-linked-acc').value||null,
-      minPayment:parseFloat(document.getElementById('db-minpay').value)||0,
-      profitRate:parseFloat(document.getElementById('db-cc-rate').value)||null,
-      // V8.15: advanced billing terms — null when not provided so cost engine can detect partial config
-      statementCloseDay:(()=>{const v=parseInt(document.getElementById('db-stmt-close')?.value);return isNaN(v)||v<1||v>31?null:v;})(),
-      paymentDueDay:(()=>{const v=parseInt(document.getElementById('db-pay-due')?.value);return isNaN(v)||v<1||v>31?null:v;})(),
-      annualFee:(()=>{const v=parseFloat(document.getElementById('db-annual-fee')?.value);return isNaN(v)?null:v;})(),
-      anniversaryMonth:(()=>{const v=parseInt(document.getElementById('db-anniv-month')?.value);return isNaN(v)||v<1||v>12?null:v;})(),
-      lateFee:(()=>{const v=parseFloat(document.getElementById('db-late-fee')?.value);return isNaN(v)?null:v;})(),
-      fxMarkupPercent:(()=>{const v=parseFloat(document.getElementById('db-fx-markup')?.value);return isNaN(v)?null:v;})(),
+      minPayment:(()=>{const v=parseFloat(document.getElementById('db-minpay').value);return isNaN(v)||v<0?0:Math.min(v, 1000000);})(),
+      profitRate:(()=>{const v=parseFloat(document.getElementById('db-cc-rate').value);return isNaN(v)||v<0||v>50?null:v;})(),
+      // V8.15+8.16: advanced billing terms — null when not provided so cost engine detects partial config.
+      // Math.round on Math.parseFloat ensures decimal entries (e.g. "25.5") round to nearest integer
+      // rather than silently truncating, which parseInt would do.
+      statementCloseDay:(()=>{const v=Math.round(parseFloat(document.getElementById('db-stmt-close')?.value));return isNaN(v)||v<1||v>31?null:v;})(),
+      paymentDueDay:(()=>{const v=Math.round(parseFloat(document.getElementById('db-pay-due')?.value));return isNaN(v)||v<1||v>31?null:v;})(),
+      annualFee:(()=>{const v=parseFloat(document.getElementById('db-annual-fee')?.value);return isNaN(v)||v<0||v>50000?null:v;})(),
+      anniversaryMonth:(()=>{const v=Math.round(parseFloat(document.getElementById('db-anniv-month')?.value));return isNaN(v)||v<1||v>12?null:v;})(),
+      lateFee:(()=>{const v=parseFloat(document.getElementById('db-late-fee')?.value);return isNaN(v)||v<0||v>10000?null:v;})(),
+      fxMarkupPercent:(()=>{const v=parseFloat(document.getElementById('db-fx-markup')?.value);return isNaN(v)||v<0||v>20?null:v;})(),
       paymentMode:'auto',
       original:0,remaining:0,installment:0,durationMonths:null,contractStart:null,endDate:null,refKeyword:'',
     }:{
@@ -10048,7 +10143,10 @@ function rDiagnostics(){
     ${(()=>{
       const ccs=S.debts.filter(d=>d.type==='credit_card'&&d.status==='active');
       if(ccs.length===0)return `<div style="font-size:12px;color:var(--text3);padding:14px 0">No active credit cards configured.</div>`;
-      const yr=parseInt(auditMonth.slice(0,4))||new Date().getFullYear();
+      // V8.16 (M1): strict YM regex prevents malformed audit month from coercing to a nonsense year.
+      const ymMatch=(auditMonth||'').match(/^(\d{4})-(0[1-9]|1[0-2])$/);
+      const yr=ymMatch?parseInt(ymMatch[1]):new Date().getFullYear();
+      const todayStr=localISO(new Date());
       let totalAll=0;
       const rows=ccs.map(d=>{
         const c=calcCCCosts(d,yr);
@@ -10069,23 +10167,28 @@ function rDiagnostics(){
         if(d.annualFee==null)missing.push('annual fee');
         if(d.lateFee==null)missing.push('late fee');
         if(d.fxMarkupPercent==null)missing.push('FX markup');
+        // V8.16 (M18): flag future balanceAsOf — calcCCBalance returns frozen openingBalance and any
+        // post-asOf transactions are silently excluded. Easy to miss without an explicit warning.
+        const futureAsOf=d.balanceAsOf&&d.balanceAsOf>todayStr;
         return`<div style="padding:14px;background:var(--bg2);border-radius:var(--rsm);margin-bottom:10px">
           <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px;margin-bottom:8px">
             <div style="font-weight:600;font-size:13px">${h(d.name)}</div>
             <div style="font-size:14px;font-weight:600;color:${c.total>0?'var(--bad)':'var(--ok)'}" class="fmt-money">${fmtP(c.total)}</div>
           </div>
           <div style="font-size:11px;color:var(--text3);margin-bottom:8px">${cfg.join(' &middot; ')||'No advanced terms configured'}</div>
+          ${futureAsOf?`<div style="font-size:11px;color:var(--bad);margin-bottom:8px;padding:6px 8px;background:color-mix(in srgb,var(--bad) 8%,transparent);border-left:3px solid var(--bad);border-radius:3px">&#9888; Balance-as-of date is in the future (${toDD(d.balanceAsOf)}). Calculated balance is frozen at opening; post-${toDD(d.balanceAsOf)} transactions are excluded. Edit this card and correct the date.</div>`:''}
           ${missing.length>0?`<div style="font-size:10px;color:var(--warn);margin-bottom:8px">&#9888; Missing config: ${missing.join(', ')}</div>`:''}
           <div style="font-size:11px;line-height:1.7">
             ${c.annualFees>0?`<div>Annual fees: <strong>${fmtP(c.annualFees)}</strong></div>`:''}
             ${c.lateFees>0?`<div>Late fees: <strong>${fmtP(c.lateFees)}</strong></div>`:''}
             ${c.ccInterest>0?`<div>Profit charges: <strong>${fmtP(c.ccInterest)}</strong></div>`:''}
             ${Math.abs(c.fxVariance)>0?`<div>FX variance: <strong>${fmtP(c.fxVariance)}</strong></div>`:''}
+            ${Math.abs(c.fxMarkupCost)>0?`<div>FX markup (estimated): <strong>${fmtP(c.fxMarkupCost)}</strong></div>`:''}
             ${c.cashAdvanceFees>0?`<div>Cash advance fees: <strong>${fmtP(c.cashAdvanceFees)}</strong></div>`:''}
             ${c.overlimitFees>0?`<div>Over-limit fees: <strong>${fmtP(c.overlimitFees)}</strong></div>`:''}
             ${c.otherCharges>0?`<div>Other charges: <strong>${fmtP(c.otherCharges)}</strong></div>`:''}
-            ${cyc?`<div style="margin-top:6px;color:var(--text2)">Cycle: closes ${toDD(cyc.closeDate.toISOString().slice(0,10))} (${cyc.daysToClose>=0?'in '+cyc.daysToClose+'d':Math.abs(cyc.daysToClose)+'d ago'}) &middot; Due ${toDD(cyc.dueDate.toISOString().slice(0,10))} (${cyc.daysToDue>=0?'in '+cyc.daysToDue+'d':Math.abs(cyc.daysToDue)+'d overdue'})</div>`:''}
-            ${stat?`<div style="margin-top:4px;color:${stat.severity==='ok'?'var(--ok)':stat.severity==='warn'?'var(--warn)':'var(--bad)'}">Status: ${h(stat.message)}</div>`:''}
+            ${cyc?`<div style="margin-top:6px;color:var(--text2)">Cycle: closes ${toDD(localISO(cyc.closeDate))} (${cyc.daysToClose>=0?'in '+cyc.daysToClose+'d':Math.abs(cyc.daysToClose)+'d ago'}) &middot; Due ${toDD(localISO(cyc.dueDate))} (${cyc.daysToDue>=0?'in '+cyc.daysToDue+'d':Math.abs(cyc.daysToDue)+'d overdue'})</div>`:''}
+            ${stat?`<div style="margin-top:4px;color:${stat.severity==='ok'?'var(--ok)':stat.severity==='warn'?'var(--warn)':'var(--bad)'}">Status: ${stat.messageHtml||h(stat.message)}</div>`:''}
             ${proj?`<div style="margin-top:6px;color:var(--text2)">Min-payment cost: ${fmtP(proj.minPay)} pays / ${fmtP(proj.remaining)} carries / ${fmtP(proj.monthlyProfit)}/mo profit accrues</div>`:''}
           </div>
         </div>`;
@@ -10102,10 +10205,14 @@ function rDiagnostics(){
   <div class="settings-section">
     <div class="settings-section-label">Migration registry</div>
     <div style="font-size:12px;color:var(--text2);line-height:1.5;padding:8px 0">
-      Migrations run once at boot to retrofit historical data. ${migrationsRun} migration${migrationsRun===1?' has':'s have'} run on this vault.
+      Migrations run once at boot to retrofit historical data. ${migrationsRun} of ${MIGRATIONS.length} migration${MIGRATIONS.length===1?' has':'s have'} run on this vault.
     </div>
-    <div style="font-size:11px;color:var(--text3);font-family:monospace;padding:6px 0">
-      ${Object.keys(S._migrations||{}).map(id=>`&#10003; ${id}`).join('<br>')||'(none)'}
+    <div style="font-size:11px;color:var(--text3);font-family:monospace;padding:6px 0;line-height:1.7">
+      ${MIGRATIONS.map(m=>{
+        const ran=!!(S._migrations&&S._migrations[m.id]);
+        const symbol=ran?'<span style="color:var(--ok)">&#10003;</span>':'<span style="color:var(--warn)">&#9711;</span>';
+        return `${symbol} ${m.id} <span style="opacity:.6">— ${h(m.description||'')}</span>${m.removeAfter?` <span style="opacity:.5">(remove after ${m.removeAfter})</span>`:''}`;
+      }).join('<br>')}
     </div>
   </div>
 
@@ -12547,6 +12654,27 @@ const MIGRATIONS=[
       }
       return{count:moved};
     }
+  },
+  // V8.16: Initialize V8.15 CC fields to null on existing credit cards.
+  // Existing CCs created pre-V8.15 have undefined for the new fields. Code uses `!=null` checks
+  // (which treat undefined and null identically), but explicit null is clearer in serialized state
+  // and prevents accidental `if(d.field)` regressions where 0-vs-undefined matters.
+  // REMOVE_AFTER: V9.0
+  {
+    id:'v8_16_initCCFields',
+    description:'Initialize V8.15 CC billing fields to null on existing credit cards',
+    removeAfter:'V9.0',
+    run:()=>{
+      let touched=0;
+      (S.debts||[]).forEach(d=>{
+        if(d.type!=='credit_card')return;
+        ['statementCloseDay','paymentDueDay','annualFee','anniversaryMonth','lateFee','fxMarkupPercent'].forEach(f=>{
+          if(d[f]===undefined){d[f]=null;touched++;}
+        });
+      });
+      if(touched>0)sched();
+      return{count:touched};
+    }
   }
 ];
 
@@ -12597,7 +12725,27 @@ function autoFixTypeCategoryDrift(){
 const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRnZWZzcHBraWpycnZvdGdnZW9tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4MzYyOTAsImV4cCI6MjA5MTQxMjI5MH0._MWK5XL_CQAV3ybEWPv1UrArPb-Enu6FZognyImSYzg';
 let _submissions=[];
 
-async function hashPIN(pin){
+// V8.16 (C3): Hardened submitter PIN auth.
+//
+// Prior implementation: SHA-256 of plain 4-digit PIN, no salt. Public hash + 10,000-key space →
+// brute-forced in <1 second. PBKDF2 200k + per-submitter random salt raises that to hours per submitter.
+//
+// This is a bridge fix. The architecturally correct fix moves verification behind an authenticated
+// edge function so the hashes are never publicly readable. That's tracked in the Auth Infrastructure
+// project and out of scope for V8.16.
+//
+// Backward compatibility: existing submitters have {pinHash} only (legacy SHA-256). They keep working
+// for verify. On any subsequent edit/add of that submitter, they auto-upgrade to {salt, pinHash}.
+async function hashPIN(pin, saltHex){
+  // Returns {salt, hash} — both hex strings. salt is 16 bytes (128 bits) of crypto-random.
+  const salt=saltHex||Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b=>b.toString(16).padStart(2,'0')).join('');
+  const km=await crypto.subtle.importKey('raw',new TextEncoder().encode(pin.trim()),'PBKDF2',false,['deriveBits']);
+  const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:h2b(salt),iterations:200000,hash:'SHA-256'},km,256);
+  const hash=Array.from(new Uint8Array(bits)).map(b=>b.toString(16).padStart(2,'0')).join('');
+  return{salt,hash};
+}
+// Legacy plain SHA-256 (kept ONLY for verify backward compat with pre-V8.16 submitters)
+async function hashPINLegacy(pin){
   const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(pin.trim()));
   return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
 }
@@ -13174,9 +13322,10 @@ async function addSubmitter(){
   if(!name){toast('Name required',false);return;}
   if(!/^[0-9]{4}$/.test(pin)){toast('PIN must be exactly 4 digits',false);return;}
   if((S.submitters||[]).find(s=>s.name.toLowerCase()===name.toLowerCase())){toast('Name already exists',false);return;}
-  const pinHash=await hashPIN(pin);
+  // V8.16 (C3): hashPIN now returns {salt, hash}. Both are stored on the submitter record.
+  const {salt,hash}=await hashPIN(pin);
   if(!S.submitters)S.submitters=[];
-  S.submitters.push({id:'sub_'+uid(),name,pinHash});
+  S.submitters.push({id:'sub_'+uid(),name,salt,pinHash:hash});
   document.getElementById('sub-name').value='';
   document.getElementById('sub-pin').value='';
   await saveState();render();toast(name+' added as submitter');
