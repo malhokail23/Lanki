@@ -563,6 +563,10 @@ textarea{resize:vertical;min-height:80px}
 .b-ext{background:#F5EEFF;color:#6020A0}
 .b-grey{background:var(--bg3);color:var(--text2)}
 .b-sub{background:#FEF0F8;color:#8B1A5E}
+/* V8.18: status badges for accounts/cards */
+.b-cl{background:#E8E8E8;color:#6B6B6B}     /* CLOSED — neutral grey */
+.b-ar{background:#F0F0F0;color:#888}         /* ARCHIVED — lighter grey */
+.b-fz{background:#E0F0FF;color:#0E5A9E}      /* FROZEN — cool blue */
 .pill{font-size:10px;padding:2px 8px;border-radius:100px;font-weight:500}
 .ppaid{background:#E8F5EC;color:#1A6B3C}
 .pdue{background:#FFF8E6;color:#8B5E00}
@@ -1710,7 +1714,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='8.17';
+const VERSION='8.18';
 // IS_DEMO: when true, the entire app runs in a sandboxed sample-data mode.
 // No vault is loaded, no Supabase calls happen, and saveState/flushTxnQueue are no-ops.
 // Activated by URL param ?demo=1 or hash #demo. Cannot be flipped at runtime — the only
@@ -2354,7 +2358,7 @@ function openOrphanModal(){
                 <div style="flex-shrink:0;display:flex;gap:6px;align-items:center">
                   <select onchange="assignOrphan('${t.id}','${ym}',this.value)" style="font-size:11px;padding:4px 6px;min-width:150px;max-width:180px">
                     <option value="">Assign to...</option>
-                    ${S.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}">${h(a.name)}</option>`).join('')}
+                    ${S.accounts.filter(a=>isLiveAccount(a)).map(a=>`<option value="${a.id}">${h(a.name)}</option>`).join('')}
                   </select>
                   <button class="btn btn-xs btn-d" onclick="deleteOrphan('${t.id}','${ym}')">Delete</button>
                 </div>
@@ -2643,6 +2647,17 @@ async function saveState(){
   }catch(e){setSS('Save failed ✗','err');setTimeout(()=>setSS(''),6000);console.error(e);}
 }
 let _lastSubmittersPublicSig=null; // V8.16 (M15): tracks last published submitter list signature
+// V8.18 (Case 6): per-section reorder mode toggle. Only one section can be in reorder mode at a time.
+// Module-level (not vault state) — resets on reload, intentionally. Reordering is a transient UI affordance.
+let _reorderMode={accounts:false,cards:false};
+function toggleReorderMode(section){
+  _reorderMode[section]=!_reorderMode[section];
+  // If activating one, deactivate the other to keep UI clear
+  if(_reorderMode[section]){
+    Object.keys(_reorderMode).forEach(k=>{if(k!==section)_reorderMode[k]=false;});
+  }
+  render();
+}
 
 let txnSaveQueue={};
 let txnSaveTimer=null;
@@ -3378,7 +3393,9 @@ async function rOv(){
   S.bills.filter(b=>billStatus(b).status==='Unpaid').forEach(b=>alerts.push({level:'crit',icon:'!',text:`${h(b.name)} is unpaid`,sub:`Expected: day ${b.expectedDay||'?'}`,action:"sw('bills')"}));
   // V8.15: Credit card alerts — upcoming due dates, overdue, annual fees
   // V8.16: d.name escaped via h() to prevent XSS in case of malicious backup imports.
-  S.debts.filter(d=>d.type==='credit_card'&&d.status==='active').forEach(d=>{
+  // V8.18 (B.7 Decision 1): include frozen cards. A frozen card with an outstanding balance can still
+  // go overdue and accrue late fees — the whole point of the alert is to prevent that.
+  S.debts.filter(d=>d.type==='credit_card'&&(d.status==='active'||d.status==='frozen')).forEach(d=>{
     const cyc=calcCCCycle(d);
     if(cyc){
       if(cyc.daysToDue<0&&calcCCBalance(d)>0.5){
@@ -3526,7 +3543,7 @@ async function rOv(){
       <div class="card card-bordered" style="margin-bottom:10px">
         <div class="ctitle">vs Last Month</div>
         <div style="margin-top:6px">
-          ${momDiff!==null?`<div style="font-size:24px;font-weight:500;${momDiff>0?'color:var(--bad)':'color:var(--ok)'}">${momDiff>0?'+':''}${momDiff}%</div>`:'<div style="font-size:var(--fs-xs);color:var(--text3)">Not enough data yet</div>'}
+          ${momDiff!==null?`<div class="priv-mask" style="font-size:24px;font-weight:500;${momDiff>0?'color:var(--bad)':'color:var(--ok)'}">${momDiff>0?'+':''}${momDiff}%</div>`:'<div style="font-size:var(--fs-xs);color:var(--text3)">Not enough data yet</div>'}
         </div>
       </div>
     </div>
@@ -4645,6 +4662,7 @@ function openEditTxn(id,ym){
   // Populate debt options
   const debtSel=document.getElementById('etxn-debt');
   debtSel.innerHTML='<option value="">-- None --</option>'+S.debts.filter(d=>d.status==='active').map(d=>`<option value="${d.id}">${d.name}</option>`).join('');
+  // V8.18 (B.7): frozen cards intentionally excluded from this dropdown — they shouldn't receive new transactions.
   debtSel.value=t.debtId||'';
   // Category
   document.getElementById('etxn-mc').value=t.mainCatId||'';
@@ -6767,10 +6785,10 @@ function rInc(){
     return`<div class="card">
       <div class="fg jb" style="flex-wrap:wrap;gap:8px">
         <div>
-          <div style="font-size:16px;font-weight:500">${h(i.name)}</div>
+          <div class="priv-mask" style="font-size:16px;font-weight:500">${h(i.name)}</div>
           <div style="font-size:var(--fs-xs);color:var(--text2);margin-top:2px">${i.incType} &middot; ${i.frequency}</div>
           <div style="font-size:var(--fs-xs);color:var(--text3)">${ot?'Date: '+(toDD(i.expectedDate)||'--'):'Expected: day '+(i.expectedDay||'?')+(i.weekendRule?' (Thu if Fri/Sat)':'')}</div>
-          ${i.notes?`<div style="font-size:var(--fs-xs);color:var(--text3)">${h(i.notes)}</div>`:''}
+          ${i.notes?`<div class="priv-mask" style="font-size:var(--fs-xs);color:var(--text3)">${h(i.notes)}</div>`:''}
         </div>
         <div class="fg" style="gap:6px;align-items:flex-start">
           <div style="font-size:18px;font-weight:500" class="c-ok">${fmtP(i.amount)}</div>
@@ -7472,7 +7490,7 @@ function rStaff(){
           <div style="flex-shrink:0">${schedStatusBadge[p.status]||''}</div>
           <div style="flex:1;font-size:11px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">${p.note?h(p.note):''}</div>
           <div style="flex-shrink:0;display:flex;gap:4px">${rowActions}</div>
-          <div style="flex-shrink:0;min-width:80px;text-align:right;font-size:11px;font-weight:600;font-variant-numeric:tabular-nums;color:${p.status==='deferred'||p.status==='forgiven'?'var(--text3)':p.status==='planned'?'var(--text2)':'var(--text1)'}">${p.status==='deferred'||p.status==='forgiven'?'—':fmt(p.amount)}</div>
+          <div class="priv-mask" style="flex-shrink:0;min-width:80px;text-align:right;font-size:11px;font-weight:600;font-variant-numeric:tabular-nums;color:${p.status==='deferred'||p.status==='forgiven'?'var(--text3)':p.status==='planned'?'var(--text2)':'var(--text1)'}">${p.status==='deferred'||p.status==='forgiven'?'—':fmt(p.amount)}</div>
         </div>`;
       }).join(''):'<div style="font-size:11px;color:var(--text3);padding:6px 0">Schedule will appear when amount and monthly deduction are set.</div>';
 
@@ -8071,7 +8089,7 @@ function logAdv(sid){
   const nextM=new Date(now.getFullYear(),now.getMonth()+1,1);
   const defDeductStart=String(nextM.getMonth()+1).padStart(2,'0')+'/'+nextM.getFullYear();
   // Build bank account dropdown — only non-archived bank accounts
-  const bankAccs=(S.accounts||[]).filter(a=>BANK_ACC_TYPES.has(a.type)&&!a.archived);
+  const bankAccs=(S.accounts||[]).filter(a=>BANK_ACC_TYPES.has(a.type)&&isLiveAccount(a));
   const accOptions=bankAccs.map(a=>`<option value="${a.id}">${h(a.name)}</option>`).join('');
   const div=document.createElement('div');
   div.id=panelId;
@@ -8240,7 +8258,7 @@ function advEdit(sid,ai){
   const panelId='adv-edit-'+sid+'-'+ai;
   const existing=document.getElementById(panelId);
   if(existing){existing.remove();return;}
-  const bankAccs=(S.accounts||[]).filter(acc=>BANK_ACC_TYPES.has(acc.type)&&!acc.archived);
+  const bankAccs=(S.accounts||[]).filter(acc=>BANK_ACC_TYPES.has(acc.type)&&isLiveAccount(acc));
   const curAccVal=a.txnExempt?'__historical__':(a.accountId||'');
   const accOptions=bankAccs.map(acc=>`<option value="${acc.id}" ${curAccVal===acc.id?'selected':''}>${h(acc.name)}</option>`).join('');
   const startRaw=a.deductStart?(a.deductStart.substr(5,2)+'/'+a.deductStart.substr(0,4)):'';
@@ -8401,7 +8419,7 @@ function renderBackfillModal(){
   }
   const {st,adv}=_backfillQueue[_backfillIndex];
   const candidates=findAdvanceTxnCandidates(adv.amount,adv.dateGiven);
-  const bankAccs=(S.accounts||[]).filter(a=>BANK_ACC_TYPES.has(a.type)&&!a.archived);
+  const bankAccs=(S.accounts||[]).filter(a=>BANK_ACC_TYPES.has(a.type)&&isLiveAccount(a));
   const accOptions=bankAccs.map(a=>`<option value="${a.id}" ${adv.accountId===a.id?'selected':''}>${h(a.name)}</option>`).join('');
 
   document.getElementById('backfill-modal')?.remove();
@@ -8514,65 +8532,115 @@ function onATC(v){
 }
 function rAcc(){
   const showBalance=false; // L1: explicit definition — rAcc never shows running balance
-  const activeAccs=S.accounts.filter(a=>!a.archived);
-  const archivedAccs=S.accounts.filter(a=>a.archived);
-  const buildRow=(a,isArchived)=>{
+  // V8.18: account status drives section assignment.
+  // Active accounts: appear in dropdowns, can receive transactions.
+  // Closed accounts: read-only, history preserved, hidden from active dropdowns.
+  // Archived accounts: user-side hide; otherwise like closed.
+  const activeAccs=S.accounts.filter(a=>accStatus(a)==='active');
+  const closedAccs=S.accounts.filter(a=>accStatus(a)==='closed');
+  const archivedAccs=S.accounts.filter(a=>accStatus(a)==='archived');
+  // V8.18 (Case 6): reorder mode toggle. When _reorderMode is true, up/down buttons appear.
+  // Sort each section by sortIndex (ascending), falling back to position in S.accounts.
+  const sortBySortIndex=arr=>arr.slice().sort((a,b)=>{
+    const ax=typeof a.sortIndex==='number'?a.sortIndex:1e9;
+    const bx=typeof b.sortIndex==='number'?b.sortIndex:1e9;
+    if(ax!==bx)return ax-bx;
+    return S.accounts.indexOf(a)-S.accounts.indexOf(b);
+  });
+  const reorderMode=!!_reorderMode.accounts;
+  const buildRow=(a,sectionAccs)=>{
+    const status=accStatus(a);
+    const isLive=status==='active';
+    const isClosed=status==='closed';
+    const isArch=status==='archived';
     const lb=calcAccBalance(a);
     const balTd=lb!==null?`<td><div style="font-size:var(--fs-xs);font-weight:500;color:${lb>0?'var(--ok)':lb<0?'var(--bad)':'var(--text1)'}">${fmtP(lb)}</div><div style="font-size:10px;color:var(--text3)">live</div></td>`:'<td style="font-size:var(--fs-xxs);color:var(--text3)">Not set</td>';
-    return`<tr${isArchived?' style="opacity:.65"':''}>
-      <td><div style="font-weight:500">${h(a.name)}</div>${a.accountNumber?`<div style="font-size:var(--fs-xxs);font-family:monospace;color:var(--text3)">${h(a.accountNumber)}</div>`:''}</td>
+    // Reorder controls — only visible in reorder mode, only for live accounts (closed/archived stay where they are within their section)
+    const idx=sectionAccs.indexOf(a);
+    const reorderCell=reorderMode?`<td style="white-space:nowrap;width:1%">
+      <button class="btn btn-xs" onclick="moveAccount('${a.id}',-1)" ${idx===0?'disabled':''} title="Move up" aria-label="Move ${h(a.name)} up">&uarr;</button>
+      <button class="btn btn-xs" onclick="moveAccount('${a.id}',1)" ${idx===sectionAccs.length-1?'disabled':''} title="Move down" aria-label="Move ${h(a.name)} down">&darr;</button>
+    </td>`:'';
+    return`<tr${!isLive?' style="opacity:.65"':''}>
+      ${reorderCell}
+      <td><div style="font-weight:500">${h(a.name)}${isClosed?' <span class="badge b-cl" style="font-size:9px;margin-left:4px">CLOSED</span>':isArch?' <span class="badge b-ar" style="font-size:9px;margin-left:4px">ARCHIVED</span>':''}</div>${a.accountNumber?`<div style="font-size:var(--fs-xxs);font-family:monospace;color:var(--text3)">${h(a.accountNumber)}</div>`:''}</td>
       <td style="color:var(--text3)">${h(a.institution||'')}</td>
       <td><span class="badge b-tr" style="font-size:10px">${ATL[a.type]||a.type}</span></td>
       ${balTd}
       <td style="font-size:var(--fs-xs)">${a.openingBalance!=null?`<span style="font-weight:500">${fmtP(a.openingBalance)}</span><br><span style="font-size:10px;color:var(--text3)">as of ${toDD(a.balanceAsOf)||'--'}</span>`:'<span style="color:var(--text3)">--</span>'}</td>
       <td style="font-size:11px;font-family:monospace;color:var(--text3)">${a.id}</td>
       <td style="white-space:nowrap">
-        ${isArchived
-          ?`<button class="btn btn-xs btn-p" onclick="unarchiveAcc('${a.id}')" title="Restore to Transactions view">Unarchive</button>
+        ${isLive
+          ?`<button class="btn btn-xs" onclick="openEditAcc('${a.id}')">Edit</button>
+            <button class="btn btn-xs" onclick="closeAcc('${a.id}')" title="Mark as closed at the bank — read-only, history preserved">Close</button>
+            <button class="btn btn-xs" onclick="archiveAcc('${a.id}')" title="Hide from views (data preserved)">Archive</button>
+            <button class="btn btn-xs btn-d" onclick="delAcc('${a.id}')">&#10005;</button>`
+          :isClosed
+          ?`<button class="btn btn-xs btn-p" onclick="reopenAcc('${a.id}')" title="Restore as active">Reopen</button>
             <button class="btn btn-xs btn-d" onclick="delAcc('${a.id}')" title="Delete permanently">&#10005;</button>`
-          :`<button class="btn btn-xs" onclick="openEditAcc('${a.id}')">Edit</button>
-            <button class="btn btn-xs" onclick="archiveAcc('${a.id}')" title="Hide from Transactions page (data preserved)">Archive</button>
-            <button class="btn btn-xs btn-d" onclick="delAcc('${a.id}')">&#10005;</button>`}
+          :`<button class="btn btn-xs btn-p" onclick="unarchiveAcc('${a.id}')" title="Restore as active">Unarchive</button>
+            <button class="btn btn-xs btn-d" onclick="delAcc('${a.id}')" title="Delete permanently">&#10005;</button>`}
       </td>
     </tr>`;
   };
-  // Section header row: spans all 7 columns, sits inside the same table for visual continuity
-  const sectionRow=(label,count)=>`<tr class="acc-section-row"><td colspan="7"><div class="acc-section-label">${label} <span class="acc-section-count">(${count})</span></div></td></tr>`;
+  // Section header row: spans all columns (one extra when reorder mode is on)
+  const colspan=reorderMode?8:7;
+  const sectionRow=(label,count)=>`<tr class="acc-section-row"><td colspan="${colspan}"><div class="acc-section-label">${label} <span class="acc-section-count">(${count})</span></div></td></tr>`;
 
-  // Active: one body containing both sections
-  const accountsActive=activeAccs.filter(a=>BANK_ACC_TYPES.has(a.type));
-  const cardsActive=activeAccs.filter(a=>CARD_ACC_TYPES.has(a.type));
+  // Active: one body containing both bank and card sections
+  const accountsActive=sortBySortIndex(activeAccs.filter(a=>BANK_ACC_TYPES.has(a.type)));
+  const cardsActive=sortBySortIndex(activeAccs.filter(a=>CARD_ACC_TYPES.has(a.type)));
   let activeBody='';
   if(!accountsActive.length&&!cardsActive.length){
-    activeBody=`<tr><td colspan="7" class="empty">No accounts or cards added yet</td></tr>`;
+    activeBody=`<tr><td colspan="${colspan}" class="empty">No accounts or cards added yet</td></tr>`;
   }else{
     if(accountsActive.length){
       activeBody+=sectionRow('Accounts',accountsActive.length);
-      activeBody+=accountsActive.map(a=>buildRow(a,false)).join('');
+      activeBody+=accountsActive.map(a=>buildRow(a,accountsActive)).join('');
     }
     if(cardsActive.length){
       activeBody+=sectionRow('Cards',cardsActive.length);
-      activeBody+=cardsActive.map(a=>buildRow(a,false)).join('');
+      activeBody+=cardsActive.map(a=>buildRow(a,cardsActive)).join('');
     }
   }
 
-  // Archived: one body containing both sections — section headers only appear if both types archived
-  const archivedAccounts=archivedAccs.filter(a=>BANK_ACC_TYPES.has(a.type));
-  const archivedCards=archivedAccs.filter(a=>CARD_ACC_TYPES.has(a.type));
+  // Closed section
+  const closedAccounts=sortBySortIndex(closedAccs.filter(a=>BANK_ACC_TYPES.has(a.type)));
+  const closedCards=sortBySortIndex(closedAccs.filter(a=>CARD_ACC_TYPES.has(a.type)));
+  const hasBothClosed=closedAccounts.length&&closedCards.length;
+  let closedBody='';
+  if(closedAccounts.length){
+    if(hasBothClosed)closedBody+=sectionRow('Accounts',closedAccounts.length);
+    closedBody+=closedAccounts.map(a=>buildRow(a,closedAccounts)).join('');
+  }
+  if(closedCards.length){
+    if(hasBothClosed)closedBody+=sectionRow('Cards',closedCards.length);
+    closedBody+=closedCards.map(a=>buildRow(a,closedCards)).join('');
+  }
+
+  // Archived section
+  const archivedAccounts=sortBySortIndex(archivedAccs.filter(a=>BANK_ACC_TYPES.has(a.type)));
+  const archivedCards=sortBySortIndex(archivedAccs.filter(a=>CARD_ACC_TYPES.has(a.type)));
   const hasBothArchived=archivedAccounts.length&&archivedCards.length;
   let archivedBody='';
   if(archivedAccounts.length){
     if(hasBothArchived)archivedBody+=sectionRow('Accounts',archivedAccounts.length);
-    archivedBody+=archivedAccounts.map(a=>buildRow(a,true)).join('');
+    archivedBody+=archivedAccounts.map(a=>buildRow(a,archivedAccounts)).join('');
   }
   if(archivedCards.length){
     if(hasBothArchived)archivedBody+=sectionRow('Cards',archivedCards.length);
-    archivedBody+=archivedCards.map(a=>buildRow(a,true)).join('');
+    archivedBody+=archivedCards.map(a=>buildRow(a,archivedCards)).join('');
   }
+  // Reorder toggle — only meaningful when there are 2+ live accounts to reorder
+  const showReorderBtn=activeAccs.length>=2;
+  const reorderBtnHtml=showReorderBtn?`<button class="btn btn-sm ${reorderMode?'btn-p':''}" onclick="toggleReorderMode('accounts')" title="${reorderMode?'Done reordering':'Reorder accounts and cards'}">${reorderMode?'&#10003; Done':'&#x21C5; Reorder'}</button>`:'';
+  // Reorder column header (when in reorder mode)
+  const reorderHeader=reorderMode?'<th style="width:1%"></th>':'';
   return`
   <div class="pg-header-row">
     <div class="pg-header-title">Accounts &amp; Cards</div>
     <div class="fg" style="gap:6px;flex-wrap:wrap">
+      ${reorderBtnHtml}
       <button class="btn btn-sm" onclick="downloadTemplate('accounts')">&#8595; Template</button>
       <label class="btn btn-sm" style="cursor:pointer">&#8593; Upload Excel<input type="file" accept=".xlsx,.xls" onchange="uploadTemplate('accounts',this)" style="display:none"></label>
       <button class="btn btn-p btn-sm" onclick="openAddAcc()">+ Add account</button>
@@ -8608,35 +8676,108 @@ function rAcc(){
   <div class="card acc-card">
     <div class="acc-card-intro">Account ID is used in import JSON. IBAN enables automatic account matching during statement import.</div>
     <div class="tbl-wrap"><table class="acc-tbl">
-      <thead><tr><th>Name / Number</th><th>Institution</th><th>Type</th><th>Live Balance</th><th>Opening Balance</th><th>ID</th><th></th></tr></thead>
+      <thead><tr>${reorderHeader}<th>Name / Number</th><th>Institution</th><th>Type</th><th>Live Balance</th><th>Opening Balance</th><th>ID</th><th></th></tr></thead>
       <tbody>${activeBody}</tbody>
     </table></div>
   </div>
+  ${closedAccs.length?`
+  <div style="margin-top:1.75rem">
+    <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Closed (${closedAccs.length})</div>
+    <div class="card acc-card">
+      <div class="acc-card-intro">These accounts are closed at the bank. Read-only — they cannot receive new transactions or be selected as import targets. Historical data is preserved. Click Reopen if the account becomes active again.</div>
+      <div class="tbl-wrap"><table class="acc-tbl">
+        <thead><tr>${reorderHeader}<th>Name / Number</th><th>Institution</th><th>Type</th><th>Live Balance</th><th>Opening Balance</th><th>ID</th><th></th></tr></thead>
+        <tbody>${closedBody}</tbody>
+      </table></div>
+    </div>
+  </div>`:''}
   ${archivedAccs.length?`
   <div style="margin-top:1.75rem">
     <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Archived (${archivedAccs.length})</div>
     <div class="card acc-card">
-      <div class="acc-card-intro">Hidden from the Transactions page. Still included in Overview, Debts, and Reports. Unarchive to restore visibility.</div>
+      <div class="acc-card-intro">Hidden from active views. Still included in Overview, Debts, and Reports. Unarchive to restore visibility.</div>
       <div class="tbl-wrap"><table class="acc-tbl">
-        <thead><tr><th>Name / Number</th><th>Institution</th><th>Type</th><th>Live Balance</th><th>Opening Balance</th><th>ID</th><th></th></tr></thead>
+        <thead><tr>${reorderHeader}<th>Name / Number</th><th>Institution</th><th>Type</th><th>Live Balance</th><th>Opening Balance</th><th>ID</th><th></th></tr></thead>
         <tbody>${archivedBody}</tbody>
       </table></div>
     </div>
   </div>`:''}`;
 }
 function openAddAcc(){editAccId=null;['ac-name','ac-inst','ac-no','ac-purp'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});document.getElementById('acc-ptitle').textContent='Add account';document.getElementById('acc-sbtn').textContent='Add account';const p=document.getElementById('acc-panel');if(p&&!p.classList.contains('open')){p.classList.add('open');p.scrollIntoView({behavior:'smooth'});}}
+// V8.18: archive/close/reopen — three-state account status (active/closed/archived).
+// Each setter writes BOTH `status` (V8.18+) AND `archived` (legacy V8.17 fallback) so a user
+// reverting to V8.17 still sees these accounts excluded from active dropdowns.
 function archiveAcc(id){
   const a=S.accounts.find(x=>x.id===id);if(!a)return;
-  if(!confirm(`Archive "${a.name}"?\n\nIt will be hidden from the Transactions page pills but its data stays intact in Overview, Debts, and Reports. You can unarchive it anytime.`))return;
-  a.archived=true;
-  // If it's currently the scoped account on transactions page, clear the scope
+  if(!confirm(`Archive "${a.name}"?\n\nIt will be hidden from active views but its data stays intact in Overview, Debts, and Reports. You can unarchive it anytime.`))return;
+  a.status='archived';
+  a.archived=true; // V8.17 backward compat
   if(TF.txnAcc===id)TF.txnAcc='';
   saveState().then(()=>{render();toast(`Archived "${a.name}"`);});
 }
 function unarchiveAcc(id){
   const a=S.accounts.find(x=>x.id===id);if(!a)return;
-  delete a.archived;
+  a.status='active';
+  delete a.archived; // V8.17 backward compat
   saveState().then(()=>{render();toast(`Unarchived "${a.name}"`);});
+}
+// V8.18 (B.8): close account — bank-side close. History preserved, read-only, excluded from active dropdowns.
+function closeAcc(id){
+  const a=S.accounts.find(x=>x.id===id);if(!a)return;
+  if(!confirm(`Close "${a.name}"?\n\nMark this account as closed at the bank. The account becomes read-only — no new transactions can be added. Historical data is preserved. You can reopen it anytime.`))return;
+  a.status='closed';
+  a.archived=true; // V8.17 backward compat — closed accounts also hide from V8.17 dropdowns
+  if(TF.txnAcc===id)TF.txnAcc='';
+  saveState().then(()=>{render();toast(`Closed "${a.name}"`);});
+}
+function reopenAcc(id){
+  const a=S.accounts.find(x=>x.id===id);if(!a)return;
+  if(!confirm(`Reopen "${a.name}"?\n\nThe account becomes active again — visible in dropdowns and able to receive new transactions.`))return;
+  a.status='active';
+  delete a.archived; // V8.17 backward compat
+  saveState().then(()=>{render();toast(`Reopened "${a.name}"`);});
+}
+// V8.18 (Case 6): move account up/down within its section.
+// Reassigns sortIndex to all sibling accounts (same status, same type group) to keep ordering deterministic.
+function moveAccount(id,delta){
+  const a=S.accounts.find(x=>x.id===id);if(!a)return;
+  const status=accStatus(a);
+  const sameGroup=BANK_ACC_TYPES.has(a.type)?BANK_ACC_TYPES:CARD_ACC_TYPES;
+  const peers=S.accounts.filter(x=>accStatus(x)===status&&sameGroup.has(x.type));
+  // Sort peers by current sortIndex
+  peers.sort((x,y)=>{
+    const ax=typeof x.sortIndex==='number'?x.sortIndex:1e9;
+    const bx=typeof y.sortIndex==='number'?y.sortIndex:1e9;
+    if(ax!==bx)return ax-bx;
+    return S.accounts.indexOf(x)-S.accounts.indexOf(y);
+  });
+  const idx=peers.indexOf(a);
+  const newIdx=idx+delta;
+  if(newIdx<0||newIdx>=peers.length)return;
+  // Swap and re-assign sequential sortIndex to all peers
+  peers.splice(idx,1);
+  peers.splice(newIdx,0,a);
+  peers.forEach((p,i)=>{p.sortIndex=i;});
+  saveState().then(()=>render());
+}
+// V8.18 (Case 6): move CC debt up/down within its status group on the Debts page.
+// CC debts only — loans don't have an order concept worth surfacing.
+function moveDebt(id,delta){
+  const d=S.debts.find(x=>x.id===id);if(!d||d.type!=='credit_card')return;
+  const peers=S.debts.filter(x=>x.type==='credit_card'&&x.status===d.status);
+  peers.sort((x,y)=>{
+    const ax=typeof x.sortIndex==='number'?x.sortIndex:1e9;
+    const bx=typeof y.sortIndex==='number'?y.sortIndex:1e9;
+    if(ax!==bx)return ax-bx;
+    return S.debts.indexOf(x)-S.debts.indexOf(y);
+  });
+  const idx=peers.indexOf(d);
+  const newIdx=idx+delta;
+  if(newIdx<0||newIdx>=peers.length)return;
+  peers.splice(idx,1);
+  peers.splice(newIdx,0,d);
+  peers.forEach((p,i)=>{p.sortIndex=i;});
+  saveState().then(()=>render());
 }
 function openEditAcc(id){
   const a=S.accounts.find(x=>x.id===id);if(!a)return;editAccId=id;
@@ -9187,12 +9328,31 @@ function debtFormHtml(){
     </div>`;}
 
 function rDebts(){
-  const act=S.debts.filter(d=>d.status==='active');
+  // V8.18 (B.7): include frozen CCs in the active list. A frozen card still owes a balance
+  // and must remain visible to the user. KPIs (outstanding total) include them.
+  // Card Intelligence cost-of-credit aggregate (separate, below) excludes frozen by design.
+  const act=S.debts.filter(d=>d.status==='active'||d.status==='frozen');
   const to=act.reduce((s,d)=>s+(d.original||0),0);          // Total Loans Value
   const tb=act.reduce((s,d)=>s+(d.borrowedAmount||0),0);    // Total Borrowed (principal only)
   const tr=act.reduce((s,d)=>s+(d.type==='credit_card'?calcCCBalance(d):(d.remaining||0)),0); // Outstanding
 
-  const cards=S.debts.map(d=>{
+  // V8.18 (Case 6): apply sortIndex ordering for CC debts. Loans keep their natural insertion order.
+  // Within same status group, sort by sortIndex; cross-status order: active first, then frozen, then settled/forgiven/archived.
+  const debtsOrdered=(()=>{
+    const ccs=S.debts.filter(d=>d.type==='credit_card');
+    const loans=S.debts.filter(d=>d.type!=='credit_card');
+    const statusRank=s=>s==='active'?0:s==='frozen'?1:s==='settled'?2:s==='forgiven'?3:4;
+    ccs.sort((a,b)=>{
+      const sa=statusRank(a.status||'active'),sb=statusRank(b.status||'active');
+      if(sa!==sb)return sa-sb;
+      const ax=typeof a.sortIndex==='number'?a.sortIndex:1e9;
+      const bx=typeof b.sortIndex==='number'?b.sortIndex:1e9;
+      if(ax!==bx)return ax-bx;
+      return S.debts.indexOf(a)-S.debts.indexOf(b);
+    });
+    return [...ccs, ...loans];
+  })();
+  const cards=debtsOrdered.map(d=>{
     const isCC=d.type==='credit_card';
     const liveBalance=isCC?calcCCBalance(d):(d.remaining||0);
     const ccUtil=isCC&&d.creditLimit?Math.min(100,Math.round(liveBalance/d.creditLimit*100)):null;
@@ -9249,7 +9409,7 @@ function rDebts(){
       </div>`;
     }).join('')||'<div style="font-size:var(--fs-xs);color:var(--text3);padding:8px 0">No payments recorded yet.</div>';
 
-    return`<div class="card" id="debt-card-${d.id}" style="${d.status==='settled'?'opacity:.65':''}">
+    return`<div class="card" id="debt-card-${d.id}" style="${d.status==='settled'?'opacity:.65':d.status==='frozen'?'opacity:.75':''}">
       <div class="fg jb" style="flex-wrap:wrap;gap:8px">
         <div>
           <div style="font-size:16px;font-weight:600;letter-spacing:-.02em">${h(d.name)}</div>
@@ -9266,8 +9426,22 @@ function rDebts(){
           `}
         </div>
         <div class="fg" style="gap:6px;align-items:flex-start;flex-wrap:wrap">
+          ${isCC&&_reorderMode.cards?(()=>{
+            // V8.18 (Case 6): up/down arrows for CC reordering. Disabled at section boundaries.
+            const peers=S.debts.filter(x=>x.type==='credit_card'&&x.status===d.status).sort((a,b)=>{
+              const ax=typeof a.sortIndex==='number'?a.sortIndex:1e9;
+              const bx=typeof b.sortIndex==='number'?b.sortIndex:1e9;
+              if(ax!==bx)return ax-bx;
+              return S.debts.indexOf(a)-S.debts.indexOf(b);
+            });
+            const idx=peers.indexOf(d);
+            return`<div class="fg" style="gap:2px">
+              <button class="btn btn-xs" onclick="moveDebt('${d.id}',-1)" ${idx===0?'disabled':''} title="Move up" aria-label="Move ${h(d.name)} up">&uarr;</button>
+              <button class="btn btn-xs" onclick="moveDebt('${d.id}',1)" ${idx===peers.length-1?'disabled':''} title="Move down" aria-label="Move ${h(d.name)} down">&darr;</button>
+            </div>`;
+          })():''}
           ${isCC?'<span class="badge b-tr">Auto-tracked</span>':''}
-          <span class="badge ${d.status==='active'?'b-dbt':'b-grey'}">${d.status}</span>
+          <span class="badge ${d.status==='active'?'b-dbt':d.status==='frozen'?'b-fz':'b-grey'}">${d.status}</span>
         </div>
       </div>
 
@@ -9391,9 +9565,16 @@ function rDebts(){
         <div class="date-inp-wrap"><input type="text" id="dd-${d.id}" class="date-inp" placeholder="DD/MM/YYYY" maxlength="10" style="min-width:110px"><button type="button" class="cal-btn" onclick="openCal('dd-${d.id}')" title="Pick date">📅</button></div>
         <button class="btn btn-sm btn-p" onclick="recDP('${d.id}')">Record Payment</button>`}
         <button class="btn btn-sm" onclick="openEditDebt('${d.id}')">Edit</button>
+        ${isCC?`<button class="btn btn-sm" onclick="freezeCard('${d.id}')" title="Pause this card — hide from active dropdowns and aggregate metrics. Cycle alerts continue.">Freeze</button>`:''}
         <button class="btn btn-sm" onclick="togDebt('${d.id}')">Mark Settled</button>
         <button class="btn btn-sm btn-d" onclick="delDebt('${d.id}')">Remove</button>
         ${isCC?`<div style="font-size:var(--fs-xxs);color:var(--info);margin-top:4px;width:100%">Balance calculated automatically from imported card transactions.</div>`:''}
+      </div>`:d.status==='frozen'?`<div class="fg" style="margin-top:10px;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-sm btn-p" onclick="unfreezeCard('${d.id}')" title="Restore this card to active">Unfreeze</button>
+        <button class="btn btn-sm" onclick="openEditDebt('${d.id}')">Edit</button>
+        <button class="btn btn-sm" onclick="togDebt('${d.id}')">Mark Settled</button>
+        <button class="btn btn-sm btn-d" onclick="delDebt('${d.id}')">Remove</button>
+        <div style="font-size:var(--fs-xxs);color:var(--text3);margin-top:4px;width:100%">Frozen — excluded from active dropdowns and Card Intelligence aggregate. Cycle alerts continue.</div>
       </div>`:`<div class="fg" style="margin-top:10px;gap:6px"><button class="btn btn-sm" onclick="togDebt('${d.id}')">Reactivate</button><button class="btn btn-sm btn-d" onclick="delDebt('${d.id}')">Remove</button></div>`}
     </div>
     <!-- Inline edit slot — populated by openEditDebt() -->
@@ -9493,7 +9674,16 @@ function rDebts(){
   return`
   <div class="pg-header-row">
     <div class="pg-header-title">Debt Tracker</div>
-    <button class="btn btn-p btn-sm" onclick="openAddDebt()">+ Add debt</button>
+    <div class="fg" style="gap:6px;flex-wrap:wrap">
+      ${(()=>{
+        // V8.18 (Case 6): reorder toggle for CC cards (only if 2+ CCs to reorder)
+        const ccCount=S.debts.filter(d=>d.type==='credit_card').length;
+        if(ccCount<2)return '';
+        const on=!!_reorderMode.cards;
+        return`<button class="btn btn-sm ${on?'btn-p':''}" onclick="toggleReorderMode('cards')" title="${on?'Done reordering':'Reorder credit cards'}">${on?'&#10003; Done':'&#x21C5; Reorder cards'}</button>`;
+      })()}
+      <button class="btn btn-p btn-sm" onclick="openAddDebt()">+ Add debt</button>
+    </div>
   </div>
   ${act.length?`<div class="g3-fixed" style="margin-bottom:1.5rem">
     <div class="kpi"><div class="klbl">Total Loans Value</div><div class="kval">${fmtP(to)}</div><div class="ksub">Principal + bank profit</div></div>
@@ -9742,6 +9932,19 @@ function syncDebtsFromTxns(){
 }
 function togDebt(id){const d=S.debts.find(x=>x.id===id);if(!d)return;d.status=d.status==='active'?'settled':'active';sched();render();}
 function delDebt(id){S.debts=S.debts.filter(x=>x.id!==id);sched();render();}
+// V8.18 (B.7): freeze/unfreeze card. Frozen cards keep their balance and cycle alerts but are
+// excluded from active card dropdowns, available-credit aggregates, and Card Intelligence cost ratio.
+function freezeCard(id){
+  const d=S.debts.find(x=>x.id===id);if(!d||d.type!=='credit_card')return;
+  if(!confirm(`Freeze "${d.name}"?\n\nThe card stays visible with its current balance, but it'll be hidden from active card lists and excluded from the cost-of-credit aggregate. Payment-due alerts continue so you don't miss a bill.\n\nUse this when you've stopped using a card but still owe a balance, or you want to pause it without closing it.`))return;
+  d.status='frozen';
+  sched();render();toast(`Frozen "${d.name}"`);
+}
+function unfreezeCard(id){
+  const d=S.debts.find(x=>x.id===id);if(!d||d.type!=='credit_card')return;
+  d.status='active';
+  sched();render();toast(`Unfrozen "${d.name}"`);
+}
 
 // --- GOALS ---
 const GTS=[{v:'future_purchase',l:'Future Purchase'},{v:'investment_target',l:'Investment Target'},{v:'planned_expense',l:'Planned Expense'},{v:'emergency_reserve',l:'Emergency Reserve'}];
@@ -11259,6 +11462,27 @@ function renderAIInsights(result, snapshot){
 const BANK_ACC_TYPES=new Set(['main_account','savings_account','sub_account','debit_card','prepaid_card','cash']);
 const CARD_ACC_TYPES=new Set(['credit_card','charge_card']);
 
+// V8.18: Account status semantics.
+// status:'active'   — fully usable. Appears in dropdowns. Receives transactions. Default for new accounts.
+// status:'closed'   — user closed the account at the bank. Read-only. Hidden from active dropdowns and
+//                     statement import target list, but transaction history is preserved and visible.
+// status:'archived' — user-side hide. Treated like 'closed' for live use, but presented in a separate
+//                     "Archived" section on the Accounts page. Pre-V8.18 vaults that used the old
+//                     `archived: true` boolean migrate to status:'archived'.
+//
+// Backward-compat (V8.17 fallback): we KEEP `archived` true on closed and archived accounts, so a user
+// who reverts to V8.17 still sees them hidden from active dropdowns. They lose the closed-vs-archived
+// distinction but no data is lost or treated as active.
+function accStatus(a){return a&&a.status?a.status:(a&&a.archived?'archived':'active');}
+function isLiveAccount(a){return accStatus(a)==='active';}
+function isClosedAccount(a){return accStatus(a)==='closed';}
+function isArchivedAccount(a){return accStatus(a)==='archived';}
+// Card (CC debt) status — V8.17 added 'frozen' (functionally inactive but visible) alongside the
+// existing 'active' / 'settled' / 'forgiven' / 'archived' values. V8.18 formalizes 'frozen'.
+function ccStatus(d){return d&&d.status?d.status:'active';}
+function isLiveCard(d){const s=ccStatus(d);return s==='active';} // active = appears in active dropdowns, contributes to "available credit"
+function isFrozenCard(d){return ccStatus(d)==='frozen';}
+
 // ─── SHARED TX TABLE BUILDER ───
 function buildTxTable(fl, accounts, showBalance, isCards, rbMaps){
   // Detect if any transaction in this view has statementBal — enables recon column
@@ -11534,14 +11758,14 @@ function buildTxHeader(fl, scopedAcc, accountPills, tabLabel){
 // ─── BANK ACCOUNTS TAB ───
 async function rTxBank(){
 
-  const bankAccs=S.accounts.filter(a=>BANK_ACC_TYPES.has(a.type)&&!a.archived);
+  const bankAccs=S.accounts.filter(a=>BANK_ACC_TYPES.has(a.type)&&isLiveAccount(a));
   const txns=S.txnCache[S.month]||[];
   // Only include transactions whose accountId resolves to a non-archived bank account.
   // Orphans (accountId null or pointing to a card/deleted account) are surfaced separately via the orphan banner.
   const bankTxns=txns.filter(t=>{
     if(!t.accountId)return false;
     const acc=S.accounts.find(a=>a.id===t.accountId);
-    return acc&&BANK_ACC_TYPES.has(acc.type)&&!acc.archived;
+    return acc&&BANK_ACC_TYPES.has(acc.type)&&isLiveAccount(acc);
   });
   const scopedAcc=TF.txnAcc&&bankAccs.some(a=>a.id===TF.txnAcc)?TF.txnAcc:null;
   // V3.0 #6: allMonths mode reads all months, not just S.month
@@ -11586,7 +11810,7 @@ async function rTxBank(){
 
 // ─── CARDS TAB ───
 async function rTxCards(){
-  const cardAccs=S.accounts.filter(a=>CARD_ACC_TYPES.has(a.type)&&!a.archived);
+  const cardAccs=S.accounts.filter(a=>CARD_ACC_TYPES.has(a.type)&&isLiveAccount(a));
   const txns=S.txnCache[S.month]||[];
   const cardTxns=txns.filter(t=>cardAccs.some(a=>a.id===t.accountId));
   const scopedAcc=TF.txnAcc&&cardAccs.some(a=>a.id===TF.txnAcc)?TF.txnAcc:null;
@@ -12701,6 +12925,51 @@ const MIGRATIONS=[
     description:'V8.17 vault marker — no data changes',
     removeAfter:'V9.0',
     run:()=>{return{noop:true};}
+  },
+  // V8.18: account status field. Pre-V8.18 vaults used `archived: true` boolean; V8.18 promotes this
+  // to a status field with three values: 'active' | 'closed' | 'archived'.
+  // The `archived` boolean is RETAINED on closed and archived accounts as a V8.17 backward-compat
+  // fallback — if a user reverts to V8.17, archived/closed accounts still hide from active dropdowns.
+  // Idempotent — checks for existing status field before transforming.
+  // REMOVE_AFTER: V9.0
+  {
+    id:'v8_18_accountStatus',
+    description:'Promote archived boolean to status field on accounts',
+    removeAfter:'V9.0',
+    run:()=>{
+      let touched=0;
+      (S.accounts||[]).forEach(a=>{
+        if(a.status)return; // already migrated
+        if(a.archived){a.status='archived';}
+        else{a.status='active';}
+        touched++;
+      });
+      if(touched>0)sched();
+      return{count:touched};
+    }
+  },
+  // V8.18: assign sortIndex to existing accounts and credit-card debts based on their current order
+  // in S.accounts / S.debts. Reorder UI uses sortIndex to determine display order; without backfill,
+  // existing accounts would all have undefined sortIndex and order would be inconsistent.
+  // REMOVE_AFTER: V9.0
+  {
+    id:'v8_18_sortIndex',
+    description:'Assign initial sortIndex to accounts and CC debts',
+    removeAfter:'V9.0',
+    run:()=>{
+      let touched=0;
+      (S.accounts||[]).forEach((a,i)=>{
+        if(typeof a.sortIndex==='number')return;
+        a.sortIndex=i;touched++;
+      });
+      (S.debts||[]).forEach((d,i)=>{
+        if(d.type!=='credit_card')return;
+        if(typeof d.sortIndex==='number')return;
+        d.sortIndex=i;touched++;
+      });
+      if(touched>0)sched();
+      return{count:touched};
+    }
   }
 ];
 
@@ -12982,7 +13251,7 @@ function openSettlementModal(name){
   candidates.sort((a,b)=>b.date.localeCompare(a.date));
 
   // Account options — all non-archived bank accounts
-  const bankAccs=(S.accounts||[]).filter(a=>BANK_ACC_TYPES.has(a.type)&&!a.archived);
+  const bankAccs=(S.accounts||[]).filter(a=>BANK_ACC_TYPES.has(a.type)&&isLiveAccount(a));
 
   const todayStr=localISO(new Date());
   document.getElementById('settle-modal')?.remove();
