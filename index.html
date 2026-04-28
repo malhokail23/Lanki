@@ -1714,7 +1714,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='8.18';
+const VERSION='8.18.1';
 // IS_DEMO: when true, the entire app runs in a sandboxed sample-data mode.
 // No vault is loaded, no Supabase calls happen, and saveState/flushTxnQueue are no-ops.
 // Activated by URL param ?demo=1 or hash #demo. Cannot be flipped at runtime — the only
@@ -4657,7 +4657,8 @@ function openEditTxn(id,ym){
   autoDir(t.type||'expense','etxn-dir'); // gray out if not transfer
   // Populate account options
   const accSel=document.getElementById('etxn-acc');
-  accSel.innerHTML='<option value="">-- Unassigned --</option>'+S.accounts.map(a=>`<option value="${a.id}">${a.name}</option>`).join('');
+  // V8.18.1: dropdown respects sortIndex
+  accSel.innerHTML='<option value="">-- Unassigned --</option>'+S.accounts.slice().sort(accSortFn).map(a=>`<option value="${a.id}">${a.name}</option>`).join('');
   accSel.value=t.accountId||'';
   // Populate debt options
   const debtSel=document.getElementById('etxn-debt');
@@ -11477,6 +11478,15 @@ function accStatus(a){return a&&a.status?a.status:(a&&a.archived?'archived':'act
 function isLiveAccount(a){return accStatus(a)==='active';}
 function isClosedAccount(a){return accStatus(a)==='closed';}
 function isArchivedAccount(a){return accStatus(a)==='archived';}
+// V8.18.1: centralized sort comparator for accounts. Sorts by sortIndex ascending; falls back to
+// insertion order in S.accounts when sortIndex is missing (new accounts before next render). Used
+// everywhere accounts appear as user-facing lists — Transactions pills, dropdowns, AI import picker.
+function accSortFn(a,b){
+  const ax=typeof a.sortIndex==='number'?a.sortIndex:1e9;
+  const bx=typeof b.sortIndex==='number'?b.sortIndex:1e9;
+  if(ax!==bx)return ax-bx;
+  return S.accounts.indexOf(a)-S.accounts.indexOf(b);
+}
 // Card (CC debt) status — V8.17 added 'frozen' (functionally inactive but visible) alongside the
 // existing 'active' / 'settled' / 'forgiven' / 'archived' values. V8.18 formalizes 'frozen'.
 function ccStatus(d){return d&&d.status?d.status:'active';}
@@ -11758,7 +11768,8 @@ function buildTxHeader(fl, scopedAcc, accountPills, tabLabel){
 // ─── BANK ACCOUNTS TAB ───
 async function rTxBank(){
 
-  const bankAccs=S.accounts.filter(a=>BANK_ACC_TYPES.has(a.type)&&isLiveAccount(a));
+  // V8.18.1: pills respect sortIndex so user's chosen order on the Accounts page applies here too.
+  const bankAccs=S.accounts.filter(a=>BANK_ACC_TYPES.has(a.type)&&isLiveAccount(a)).sort(accSortFn);
   const txns=S.txnCache[S.month]||[];
   // Only include transactions whose accountId resolves to a non-archived bank account.
   // Orphans (accountId null or pointing to a card/deleted account) are surfaced separately via the orphan banner.
@@ -11810,7 +11821,8 @@ async function rTxBank(){
 
 // ─── CARDS TAB ───
 async function rTxCards(){
-  const cardAccs=S.accounts.filter(a=>CARD_ACC_TYPES.has(a.type)&&isLiveAccount(a));
+  // V8.18.1: card pills respect sortIndex so user's chosen order applies here too.
+  const cardAccs=S.accounts.filter(a=>CARD_ACC_TYPES.has(a.type)&&isLiveAccount(a)).sort(accSortFn);
   const txns=S.txnCache[S.month]||[];
   const cardTxns=txns.filter(t=>cardAccs.some(a=>a.id===t.accountId));
   const scopedAcc=TF.txnAcc&&cardAccs.some(a=>a.id===TF.txnAcc)?TF.txnAcc:null;
@@ -11928,7 +11940,7 @@ function buildImpPanel(){
     <div class="chdr">Import JSON Statement</div>
     <textarea id="imp-json" rows="6" placeholder="Paste JSON array here..." style="width:100%;margin-bottom:8px;font-family:monospace;font-size:12px"></textarea>
     <div class="fr3" style="margin-bottom:8px">
-      <div><label class="lbl">Account</label><select id="imp-acc-override" onchange="prefillOpeningBal()"><option value="">Auto-detect from JSON</option>${S.accounts.map(a=>`<option value="${a.id}" ${TF.txnAcc===a.id?'selected':''}>${a.name}</option>`).join('')}</select></div>
+      <div><label class="lbl">Account</label><select id="imp-acc-override" onchange="prefillOpeningBal()"><option value="">Auto-detect from JSON</option>${S.accounts.slice().sort(accSortFn).map(a=>`<option value="${a.id}" ${TF.txnAcc===a.id?'selected':''}>${a.name}</option>`).join('')}</select></div>
       <div><label class="lbl">Opening Balance (SAR) — start of month</label><input type="number" id="imp-opening-bal" placeholder="Balance on last day of previous month" step="0.01" oninput="this.style.background='';this.title=''"></div>
       <div><label class="lbl">Closing Balance (SAR) — end of month</label><input type="number" id="imp-closing-bal" placeholder="Balance on last day of this statement" step="0.01"></div>
     </div>
@@ -11958,7 +11970,7 @@ function buildAddPanel(){
       <div><label class="lbl">Direction</label><select id="nt-dir"><option value="out">Debit</option><option value="in">Credit</option></select></div>
     </div>
     <div class="fr" style="margin-bottom:8px">
-      <div><label class="lbl">Account</label><select id="nt-acc"><option value="">-- Unassigned --</option>${S.accounts.map(a=>`<option value="${a.id}">${a.name}</option>`).join('')}</select></div>
+      <div><label class="lbl">Account</label><select id="nt-acc"><option value="">-- Unassigned --</option>${S.accounts.slice().sort(accSortFn).map(a=>`<option value="${a.id}">${a.name}</option>`).join('')}</select></div>
       <div><label class="lbl">Linked Debt</label><select id="nt-debt"><option value="">-- None --</option>${S.debts.filter(d=>d.status==='active').map(d=>`<option value="${d.id}">${d.name}</option>`).join('')}</select></div>
       <div><label class="lbl">Notes</label><input type="text" id="nt-notes" placeholder="Optional"></div>
     </div>
@@ -13894,7 +13906,7 @@ function rAIUpload(){
       <div><label class="lbl">Account</label>
         <select onchange="_aiState.accountId=this.value">
           <option value="">Select account…</option>
-          ${S.accounts.map(a=>`<option value="${a.id}" ${_aiState.accountId===a.id?'selected':''}>${h(a.name)}</option>`).join('')}
+          ${S.accounts.slice().sort(accSortFn).map(a=>`<option value="${a.id}" ${_aiState.accountId===a.id?'selected':''}>${h(a.name)}</option>`).join('')}
         </select>
         ${_aiState.scanMeta?.institution?`<div style="font-size:10px;color:var(--electric);margin-top:3px">Detected: ${h(_aiState.scanMeta.institution)} · ${h(_aiState.scanMeta.account_number||'')}</div>`:''}
       </div>
