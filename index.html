@@ -1714,7 +1714,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='8.18.1';
+const VERSION='8.19';
 // IS_DEMO: when true, the entire app runs in a sandboxed sample-data mode.
 // No vault is loaded, no Supabase calls happen, and saveState/flushTxnQueue are no-ops.
 // Activated by URL param ?demo=1 or hash #demo. Cannot be flipped at runtime — the only
@@ -1867,7 +1867,7 @@ async function initAuth(){
       await loadDemoData();
       if(!DEMO_DATA)throw new Error('Demo data missing after load');
       // Initialize minimal real-state structure so functions referencing S don't crash
-      S={accounts:[],debts:[],txnCache:{},goals:[],bills:[],subs:[],income:[],staff:[],submitters:[],txnRules:[],billRules:[],settings:{currency:'SAR',savingsTarget:20,backupReminderMonths:2,lastBackup:null,autoRuleSweep:true},monthlyBal:{},matchedPairs:[],deletedCats:[],customSubs:[],customMains:[],subOverrides:{},familyMembers:[],_submissions:[]};
+      S={accounts:[],debts:[],txnCache:{},goals:[],bills:[],subs:[],income:[],staff:[],submitters:[],txnRules:[],billRules:[],formatLibrary:[],settings:{currency:'SAR',savingsTarget:20,backupReminderMonths:2,lastBackup:null,autoRuleSweep:true},monthlyBal:{},matchedPairs:[],deletedCats:[],customSubs:[],customMains:[],subOverrides:{},familyMembers:[],_submissions:[]};
       // Enter demo (overlays DEMO_DATA on top of S)
       enterDemoMode();
       // Mount the dashboard UI (skip the auth screens entirely)
@@ -1991,7 +1991,7 @@ function lockApp(){
   window._cd=null; // M3: clear sensitive chart data from memory on lock
   // H2: Clear decrypted state from memory
   S.accounts=[];S.debts=[];S.goals=[];S.income=[];S.bills=[];S.subs=[];
-  S.staff=[];S.rules=[];S.txnRules=[];S.dismissed=[];S.deletedCats=[];S.deletedSubs=[];
+  S.staff=[];S.rules=[];S.txnRules=[];S.formatLibrary=[];S.dismissed=[];S.deletedCats=[];S.deletedSubs=[];
   S.customMainCats=[];S.customSubCats=[];S.catNameOverrides={};S.catColorOverrides={};S.subNameOverrides={};S.subParentOverrides={};S.billRules=[];
   S.familyMembers=[];S.txnCache={};S.monthlyBal={};S.matchedPairs=[];S.settings={};
   // M7: restore category colors for next unlock
@@ -8521,7 +8521,7 @@ async function backfillSkip(permanent){
 }
 
 
-const ATG=[{g:'Bank Accounts',o:[{v:'main_account',l:'Main Account'},{v:'savings_account',l:'Savings Account'},{v:'sub_account',l:'Sub Account'}]},{g:'Cards',o:[{v:'debit_card',l:'Debit Card'},{v:'credit_card',l:'Credit Card'},{v:'charge_card',l:'Charge Card'},{v:'prepaid_card',l:'Prepaid Card'}]},{g:'Investments',o:[{v:'brokerage_account',l:'Brokerage Account'},{v:'fund_account',l:'Fund Account'},{v:'gold_account',l:'Gold Account'},{v:'crypto_wallet',l:'Crypto Wallet'},{v:'real_estate_fund',l:'Real Estate Fund'},{v:'direct_investment',l:'Direct Investment'}]},{g:'Other',o:[{v:'cash',l:'Cash'},{v:'other',l:'Other'}]}];
+const ATG=[{g:'Bank Accounts',o:[{v:'main_account',l:'Main Account (Current/Checking)'},{v:'savings_account',l:'Savings Account'},{v:'sub_account',l:'Sub Account / Pocket'},{v:'prepaid_card',l:'Prepaid Card (loaded balance, no credit)'}]},{g:'Cards',o:[{v:'credit_card',l:'Credit Card (revolving credit)'},{v:'charge_card',l:'Charge Card (paid in full monthly, e.g. AmEx)'}]},{g:'Investments',o:[{v:'brokerage_account',l:'Brokerage Account'},{v:'fund_account',l:'Fund Account'},{v:'gold_account',l:'Gold Account'},{v:'crypto_wallet',l:'Crypto Wallet'},{v:'real_estate_fund',l:'Real Estate Fund'},{v:'direct_investment',l:'Direct Investment'}]},{g:'Other',o:[{v:'cash',l:'Cash'},{v:'other',l:'Other'}]}];
 const ATL=ATG.flatMap(g=>g.o).reduce((m,o)=>{m[o.v]=o.l;return m;},{});
 const ATS=ATG.map(g=>`<optgroup label="${g.g}">${g.o.map(o=>`<option value="${o.v}">${o.l}</option>`).join('')}</optgroup>`).join('');
 const INV=new Set(['brokerage_account','fund_account','gold_account','crypto_wallet','real_estate_fund','direct_investment']);
@@ -11460,7 +11460,11 @@ function renderAIInsights(result, snapshot){
 
 
 // ─── ACCOUNT TYPE SETS ───
-const BANK_ACC_TYPES=new Set(['main_account','savings_account','sub_account','debit_card','prepaid_card','cash']);
+// V8.19: debit_card removed from taxonomy — debit cards are not separate accounts, they access
+// a bank account. Existing debit_card accounts are auto-migrated to main_account by the
+// v8_19_removeDebitCardType migration. CARD_ACC_TYPES stays the same — only credit_card and
+// charge_card extend credit and warrant separate card-side tracking.
+const BANK_ACC_TYPES=new Set(['main_account','savings_account','sub_account','prepaid_card','cash']);
 const CARD_ACC_TYPES=new Set(['credit_card','charge_card']);
 
 // V8.18: Account status semantics.
@@ -12982,6 +12986,43 @@ const MIGRATIONS=[
       if(touched>0)sched();
       return{count:touched};
     }
+  },
+  // V8.19: marker migration for format library introduction. The S.formatLibrary array is
+  // initialized to [] by the defaults block; this marker just records that the vault has been
+  // opened on V8.19 at least once. No data changes.
+  // REMOVE_AFTER: V9.0
+  {
+    id:'v8_19_initFormatLibrary',
+    description:'V8.19 vault marker — format library introduced',
+    removeAfter:'V9.0',
+    run:()=>{
+      if(!Array.isArray(S.formatLibrary))S.formatLibrary=[];
+      return{noop:true};
+    }
+  },
+  // V8.19: remove debit_card account type. Debit cards are not separate accounts — they access
+  // a bank account. Auto-converts existing debit_card accounts to main_account. The institution
+  // and other fields are preserved; only `type` changes. Logs converted accounts to Diagnostics
+  // via the migration result count (visible in Settings → Diagnostics).
+  // REMOVE_AFTER: V9.0
+  {
+    id:'v8_19_removeDebitCardType',
+    description:'Convert legacy debit_card accounts to main_account',
+    removeAfter:'V9.0',
+    run:()=>{
+      let touched=0;
+      const converted=[];
+      (S.accounts||[]).forEach(a=>{
+        if(a.type==='debit_card'){
+          a.type='main_account';
+          a._migratedFromDebitCard=true; // diagnostic marker
+          converted.push(a.name);
+          touched++;
+        }
+      });
+      if(touched>0)sched();
+      return{count:touched,names:converted};
+    }
   }
 ];
 
@@ -13758,8 +13799,50 @@ function dedupDebtPayments(debtId){
 let _aiState={
   file:null, fileName:'', fileData:'', fileType:'', _isExcel:false,
   accountId:'', month:'', openingBal:'', closingBal:'',
-  extracted:[], loading:false, scanning:false, scanMeta:null, scanError:'', usage:null, error:'', step:1, status:''
+  extracted:[], loading:false, scanning:false, scanMeta:null, scanError:'', usage:null, error:'', step:1, status:'',
+  // V8.19: format library state
+  fingerprint:null,        // {institution, numPrefix, layoutHash} computed after prescan
+  matchedFormat:null,      // entry from S.formatLibrary if fingerprint matched, else null
+  prescanRetried:false,    // Decision 5: track auto-retry so we only retry once
+  acctTypeFilter:'bank'    // Case 2 type filter: 'bank' | 'card' | 'all'
 };
+
+// V8.19: compute a structural fingerprint for a statement so we can recognize known formats on
+// future imports. The fingerprint is institution + first 6 digits of account number + a simple
+// hash of the file data (first 8KB only — enough to capture layout signature without bloating
+// the computation). Decision 1: per institution + account category (numPrefix groups by category).
+function computeStatementFingerprint(scanMeta,fileData){
+  if(!scanMeta)return null;
+  const institution=(scanMeta.institution||'').trim().toLowerCase();
+  const acctNum=(scanMeta.account_number||'').replace(/[^0-9]/g,'');
+  const numPrefix=acctNum.substr(0,6); // 6 digits enough to identify bank + product category
+  // Layout hash: 32-bit FNV-like hash of the first 8KB of file data. Same statement format from the
+  // same bank produces nearly identical headers/structure in the first 8KB, so the hash is stable
+  // across statements but distinguishes different formats.
+  const sample=(fileData||'').substr(0,8192);
+  let hash=0x811c9dc5;
+  for(let i=0;i<sample.length;i++){
+    hash^=sample.charCodeAt(i);
+    hash=(hash*0x01000193)|0;
+  }
+  const layoutHash='h_'+(hash>>>0).toString(16);
+  if(!institution&&!numPrefix)return null;
+  return{institution,numPrefix,layoutHash};
+}
+
+// V8.19: lookup a fingerprint in S.formatLibrary. Match priority: institution+numPrefix exact,
+// then institution+layoutHash. Returns the format entry or null. Returns null if institution is
+// empty (we never want to match on layout hash alone — too fragile).
+function lookupFormatByFingerprint(fp){
+  if(!fp||!fp.institution)return null;
+  const lib=S.formatLibrary||[];
+  // Strongest match: same institution + same numPrefix
+  let m=lib.find(f=>f.fingerprint?.institution===fp.institution&&f.fingerprint?.numPrefix===fp.numPrefix&&fp.numPrefix);
+  if(m)return m;
+  // Fallback: same institution + same layoutHash (catches account-number changes)
+  m=lib.find(f=>f.fingerprint?.institution===fp.institution&&f.fingerprint?.layoutHash===fp.layoutHash);
+  return m||null;
+}
 
 function rAIUpload(){
   const EDGE_URL=S.settings.edgeFnUrl||'';
@@ -13902,11 +13985,48 @@ function rAIUpload(){
       <input type="file" id="ai-file-inp" accept=".pdf,.jpg,.jpeg,.png,.xls,.xlsx" style="display:none" onchange="onAIFileSelect(this)">
     </div>
 
+    ${(()=>{
+      // V8.19: format recognition badge — shows when prescan matched a known format
+      if(!_aiState.matchedFormat)return '';
+      const f=_aiState.matchedFormat;
+      return`<div style="background:color-mix(in srgb,var(--ok) 10%,var(--bg));border:1px solid color-mix(in srgb,var(--ok) 35%,transparent);border-radius:var(--rsm);padding:10px 14px;margin-bottom:14px;font-size:var(--fs-xs)">
+        <div style="font-weight:500;color:var(--ok)">Recognized format: ${h(f.name)}</div>
+        <div style="color:var(--text2);margin-top:2px">Parsed ${f.sampleCount||1} time${f.sampleCount===1?'':'s'} before · confidence ${h(f.confidence||'low')}</div>
+      </div>`;
+    })()}
+    ${_aiState.fileName&&!_aiState.matchedFormat&&_aiState.scanMeta?.institution?`<div style="background:color-mix(in srgb,var(--electric) 8%,var(--bg));border:1px solid color-mix(in srgb,var(--electric) 30%,transparent);border-radius:var(--rsm);padding:10px 14px;margin-bottom:14px;font-size:var(--fs-xs)">
+      <div style="font-weight:500;color:var(--electric)">New statement format</div>
+      <div style="color:var(--text2);margin-top:2px">This format will be remembered after a successful import to speed up future statements from ${h(_aiState.scanMeta.institution)}.</div>
+    </div>`:''}
+
+    ${(()=>{
+      // V8.19 (Case 2): type filter for account dropdown — bank/card/all
+      const filter=_aiState.acctTypeFilter||'bank';
+      return`<div style="margin-bottom:10px">
+        <label class="lbl">Account type</label>
+        <div class="fg" style="gap:6px">
+          <button class="btn btn-sm ${filter==='bank'?'btn-p':''}" onclick="_aiState.acctTypeFilter='bank';render()">Bank Account</button>
+          <button class="btn btn-sm ${filter==='card'?'btn-p':''}" onclick="_aiState.acctTypeFilter='card';render()">Card</button>
+          <button class="btn btn-sm ${filter==='all'?'btn-p':''}" onclick="_aiState.acctTypeFilter='all';render()">All</button>
+        </div>
+      </div>`;
+    })()}
+
     <div class="fr3" style="margin-bottom:14px">
       <div><label class="lbl">Account</label>
         <select onchange="_aiState.accountId=this.value">
           <option value="">Select account…</option>
-          ${S.accounts.slice().sort(accSortFn).map(a=>`<option value="${a.id}" ${_aiState.accountId===a.id?'selected':''}>${h(a.name)}</option>`).join('')}
+          ${(()=>{
+            // V8.19 (Case 2): filter accounts by type
+            const filter=_aiState.acctTypeFilter||'bank';
+            const filtered=S.accounts.filter(a=>{
+              if(!isLiveAccount(a))return false;
+              if(filter==='bank')return BANK_ACC_TYPES.has(a.type);
+              if(filter==='card')return CARD_ACC_TYPES.has(a.type);
+              return true; // 'all'
+            });
+            return filtered.slice().sort(accSortFn).map(a=>`<option value="${a.id}" ${_aiState.accountId===a.id?'selected':''}>${h(a.name)}</option>`).join('');
+          })()}
         </select>
         ${_aiState.scanMeta?.institution?`<div style="font-size:10px;color:var(--electric);margin-top:3px">Detected: ${h(_aiState.scanMeta.institution)} · ${h(_aiState.scanMeta.account_number||'')}</div>`:''}
       </div>
@@ -13945,6 +14065,7 @@ function rAIUpload(){
         _aiState.file=null;_aiState.fileName='';_aiState.fileData='';_aiState.fileType='';
         _aiState.openingBal='';_aiState.closingBal='';_aiState.month='';_aiState.accountId='';
         _aiState.scanMeta=null;_aiState.scanError='';_aiState.error='';
+        _aiState.fingerprint=null;_aiState.matchedFormat=null;_aiState.prescanRetried=false;
         const inp=document.getElementById('ai-file-inp');if(inp)inp.value='';
         render();" title="Clear file and reset all fields">Clear</button>`:''}
     </div>
@@ -13954,7 +14075,35 @@ function rAIUpload(){
     <div class="ctitle">Transaction Rules</div>
     <div class="csub">${(S.txnRules||[]).length} rule${(S.txnRules||[]).length!==1?'s':''} · AI uses your top 50 most-used rules on each extraction</div>
     ${(S.txnRules||[]).length?`<div style="margin-top:8px">${[...(S.txnRules||[])].sort((a,b)=>(b.useCount||0)-(a.useCount||0)).slice(0,5).map(r=>`<div class="fg jb" style="padding:5px 0;border-bottom:1px solid var(--bg3);font-size:var(--fs-xxs)"><span style="color:var(--text2)">${h(r.pattern)}</span><div class="fg" style="gap:6px">${ctag(r.mainCatId,r.subCatId)}<span style="color:var(--text3)">${r.useCount||1}×</span></div></div>`).join('')}${(S.txnRules||[]).length>5?`<div style="font-size:11px;color:var(--text3);margin-top:4px">+${(S.txnRules||[]).length-5} more · <button onclick="sw('rules')" style="background:none;border:none;cursor:pointer;color:var(--electric);font-size:11px;padding:0">View all →</button></div>`:''}</div>`:''}
+  </div>
+
+  <div class="card card-bordered" style="margin-top:10px">
+    <div class="ctitle">Format Library</div>
+    <div class="csub">${(S.formatLibrary||[]).length} format${(S.formatLibrary||[]).length!==1?'s':''} learned · recognized formats parse faster on future imports</div>
+    ${(S.formatLibrary||[]).length?`<div style="margin-top:8px">${[...(S.formatLibrary||[])].sort((a,b)=>(b.lastUsed||'').localeCompare(a.lastUsed||'')).map(f=>`<div class="fg jb" style="padding:6px 0;border-bottom:1px solid var(--bg3);font-size:var(--fs-xxs);gap:8px">
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:500;color:var(--text1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(f.name)}</div>
+        <div style="color:var(--text3);font-size:10px;margin-top:2px">${h(f.fingerprint?.institution||'?')}${f.fingerprint?.numPrefix?' · '+h(f.fingerprint.numPrefix)+'…':''} · ${f.sampleCount||1}× · ${h(f.confidence||'low')}</div>
+      </div>
+      <div class="fg" style="gap:4px;flex-shrink:0">
+        <button class="btn btn-xs" onclick="renameFormat('${f.id}')" title="Rename">✎</button>
+        <button class="btn btn-xs btn-d" onclick="delFormat('${f.id}')" title="Forget this format">✕</button>
+      </div>
+    </div>`).join('')}</div>`:'<div style="font-size:11px;color:var(--text3);margin-top:6px">No formats learned yet. After you successfully import your first statement, the format will appear here.</div>'}
   </div>`;
+}
+
+// V8.19: format library management
+function renameFormat(id){
+  const f=(S.formatLibrary||[]).find(x=>x.id===id);if(!f)return;
+  const newName=prompt('Rename format:',f.name);
+  if(newName&&newName.trim()){f.name=newName.trim();sched();render();}
+}
+function delFormat(id){
+  const f=(S.formatLibrary||[]).find(x=>x.id===id);if(!f)return;
+  if(!confirm(`Forget format "${f.name}"?\n\nFuture statements in this format will be parsed from scratch (slower, but no data loss).`))return;
+  S.formatLibrary=(S.formatLibrary||[]).filter(x=>x.id!==id);
+  sched();render();
 }
 
 function onAIFileDrop(event){
@@ -13975,6 +14124,10 @@ function loadAIFile(file){
   _aiState.fileType=file.type;
   _aiState._isExcel=false;
   _aiState.scanMeta=null;
+  // V8.19: reset format library state on new file
+  _aiState.fingerprint=null;
+  _aiState.matchedFormat=null;
+  _aiState.prescanRetried=false;
   const reader=new FileReader();
   reader.onload=e=>{
     _aiState.fileData=e.target.result.split(',')[1];
@@ -14414,7 +14567,23 @@ async function runAIPrescan(){
       throw new Error(`Prescan error ${resp.status}${errText?' — '+errText.slice(0,80):''}`);
     }
     const meta=await resp.json();
+    // V8.19 Decision 5: detect empty prescan and auto-retry once before giving up. An "empty" result
+    // is one where institution AND account_number are both missing — the two fields most reliably
+    // returned. If the second attempt also fails, surface the error and let the user fill manually.
+    const isEmpty=!meta.institution&&!meta.account_number&&meta.opening_balance==null&&meta.closing_balance==null;
+    if(isEmpty&&!_aiState.prescanRetried){
+      _aiState.prescanRetried=true;
+      clearTimeout(timeout);
+      _aiState.scanning=false;
+      // Recursive retry — single attempt only (prescanRetried gates further recursion)
+      return runAIPrescan();
+    }
     _aiState.scanMeta=meta;
+    // V8.19: compute fingerprint and look up known format. If matched, the extract step uses a
+    // shorter, format-specific prompt context. If not matched, the format will be saved on
+    // successful import (Decision 3).
+    _aiState.fingerprint=computeStatementFingerprint(meta,_aiState.fileData);
+    _aiState.matchedFormat=lookupFormatByFingerprint(_aiState.fingerprint);
     if(meta.period_start){
       const ym=meta.period_start.substr(0,7);
       if(!_aiState.month)_aiState.month=ym;
@@ -14477,6 +14646,16 @@ async function runAIExtract(){
         mainCats:undefined,  // hardcoded in edge function — not sent to save tokens
         subCats:undefined,   // hardcoded in edge function — not sent to save tokens
         transactionCount:_aiState.transactionCount||null,
+        // V8.19: send format hint when a known format was matched at prescan time. The edge
+        // function uses this as additive context (Decision 2c) — full prompt still applies, hint
+        // anchors expected columns/date format.
+        formatHint:_aiState.matchedFormat?{
+          name:_aiState.matchedFormat.name,
+          sampleCount:_aiState.matchedFormat.sampleCount,
+          knownColumns:_aiState.matchedFormat.extractionRules?.columns||'',
+          knownDateFormat:_aiState.matchedFormat.extractionRules?.dateFormat||'',
+          knownNotes:_aiState.matchedFormat.extractionRules?.notes||''
+        }:null,
       })
     });
     if(resp.status===429){
@@ -14681,6 +14860,12 @@ async function commitAIImport(){
 
   await doImport(payload);
 
+  // V8.19 Decision 3: save format to library only after successful import. This proves the parse
+  // worked (user clicked Import on the review screen). If a known format was matched, increment
+  // sampleCount and update lastUsed. If new format, create a new entry with extractionRules
+  // captured from the prescan metadata.
+  saveFormatOnImport(_aiState.fingerprint,_aiState.scanMeta,_aiState.matchedFormat);
+
   // Show multi-month notice if transactions span more than one month
   const crossMonths=allMonths.filter(m=>m!==primaryMonth);
   if(crossMonths.length>0){
@@ -14689,8 +14874,51 @@ async function commitAIImport(){
   }
 
   // Reset AI state and navigate to transactions
-  _aiState={file:null,fileName:'',fileData:'',fileType:'',_isExcel:false,accountId:'',month:'',openingBal:'',closingBal:'',transactionCount:null,extracted:[],loading:false,scanning:false,scanMeta:null,scanError:'',usage:null,error:'',step:1,_forceAll:false,status:'',_retryDone:false,_firstPassData:null};
+  _aiState={file:null,fileName:'',fileData:'',fileType:'',_isExcel:false,accountId:'',month:'',openingBal:'',closingBal:'',transactionCount:null,extracted:[],loading:false,scanning:false,scanMeta:null,scanError:'',usage:null,error:'',step:1,_forceAll:false,status:'',_retryDone:false,_firstPassData:null,fingerprint:null,matchedFormat:null,prescanRetried:false,acctTypeFilter:'bank'};
   sw('txbank');
+}
+
+// V8.19: persist statement format on successful import. Either upgrades an existing entry
+// (matched at prescan time) or creates a new one. Capped at 50 formats with LRU eviction.
+function saveFormatOnImport(fp,meta,existing){
+  if(!fp||!fp.institution)return; // need at least institution to save
+  if(!Array.isArray(S.formatLibrary))S.formatLibrary=[];
+  const now=localISO(new Date());
+  if(existing){
+    // Upgrade: increment counter, update lastUsed
+    const idx=S.formatLibrary.findIndex(f=>f.id===existing.id);
+    if(idx>=0){
+      S.formatLibrary[idx].sampleCount=(S.formatLibrary[idx].sampleCount||1)+1;
+      S.formatLibrary[idx].lastUsed=now;
+      // Confidence ramps up with sample count
+      const sc=S.formatLibrary[idx].sampleCount;
+      S.formatLibrary[idx].confidence=sc>=5?'high':sc>=2?'medium':'low';
+    }
+  }else{
+    // New format: capture extraction rules from metadata + a default name
+    const name=`${meta?.institution||'Unknown'}${meta?.currency&&meta.currency!=='SAR'?' '+meta.currency:''}${meta?.card_transaction_count!=null?' Card':' Bank'}`;
+    S.formatLibrary.push({
+      id:'fmt_'+uid(),
+      fingerprint:fp,
+      name,
+      extractionRules:{
+        // Captured for future format-hint context. Empty fields are fine — Claude falls back to
+        // full prompt rules. These can be populated in a future Settings UI for expert users.
+        columns:'',
+        dateFormat:'',
+        notes:meta?.card_transaction_count!=null?`Card statement (${meta.card_transaction_count} transactions in baseline)`:''
+      },
+      sampleCount:1,
+      lastUsed:now,
+      confidence:'low'
+    });
+    // Cap at 50 with LRU eviction (oldest lastUsed first)
+    if(S.formatLibrary.length>50){
+      S.formatLibrary.sort((a,b)=>(b.lastUsed||'').localeCompare(a.lastUsed||''));
+      S.formatLibrary=S.formatLibrary.slice(0,50);
+    }
+  }
+  sched();
 }
 
 function learnExtractionRules(txns){
@@ -14933,6 +15161,7 @@ function enterDemoMode(){
   S.familyMembers=DEMO_DATA.familyMembers||[];
   S.submitters=DEMO_DATA.submitters||[];
   S.txnRules=DEMO_DATA.txnRules||[];
+  S.formatLibrary=DEMO_DATA.formatLibrary||[];
   _submissions=DEMO_DATA._submissions||[];
 
   // Settings — merge demo settings over defaults
