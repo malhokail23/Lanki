@@ -1589,6 +1589,7 @@ body.privacy-on{padding-top:28px}
     <div class="nav-section-label">Household</div>
     <button class="nav-item" data-tab="staff" onclick="sw('staff')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Staff</button>
     <button class="nav-item" data-tab="familyinv" onclick="sw('familyinv')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg> Family Investments</button>
+    <button class="nav-item" data-tab="investments" onclick="sw('investments')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg> Investments</button>
 
     <div style="border-top:1px solid var(--border);margin:6px 0"></div>
     <button class="nav-item" data-tab="settings" onclick="sw('settings')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Settings</button>
@@ -1681,11 +1682,11 @@ const CAT_COLORS={"cat_main_income": "#1D9E75", "cat_main_food": "#E24B4A", "cat
 const FULL_SUB_PARENT={"sub_salary":"cat_main_income","sub_bonus":"cat_main_income","sub_commission":"cat_main_income","sub_business_revenue":"cat_main_income","sub_rental_income":"cat_main_income","sub_dividends":"cat_main_income","sub_investment_return":"cat_main_income","sub_freelance":"cat_main_income","sub_govt_benefit":"cat_main_income","sub_reimbursement":"cat_main_income","sub_refund":"cat_main_income","sub_gift_received":"cat_main_income","sub_other_income":"cat_main_income","sub_groceries":"cat_main_food","sub_supermarket":"cat_main_food","sub_wholesale":"cat_main_food","sub_butcher":"cat_main_food","sub_produce":"cat_main_food","sub_bakery":"cat_main_food","sub_dairy":"cat_main_food","sub_snacks":"cat_main_food","sub_beverages":"cat_main_food","sub_water_delivery":"cat_main_food","sub_coffee":"cat_main_food","sub_fast_food":"cat_main_food","sub_dining":"cat_main_food","sub_fine_dining":"cat_main_food","sub_food_delivery":"cat_main_food","sub_meal_kits":"cat_main_food","sub_catering":"cat_main_food","sub_health_food":"cat_main_food","sub_fuel":"cat_main_transport","sub_car_wash":"cat_main_transport","sub_parking":"cat_main_transport","sub_toll":"cat_main_transport","sub_ridehail":"cat_main_transport","sub_taxi":"cat_main_transport","sub_public_transport":"cat_main_transport","sub_vehicle_maintenance":"cat_main_transport","sub_vehicle_repair":"cat_main_transport","sub_tyres":"cat_main_transport","sub_vehicle_insurance":"cat_main_transport","sub_vehicle_reg":"cat_main_transport","sub_driving_license":"cat_main_transport","sub_traffic_fines":"cat_main_transport","sub_car_rental":"cat_main_transport","sub_car_accessories":"cat_main_transport","sub_vehicle_purchase":"cat_main_transport","sub_rent":"cat_main_housing","sub_mortgage":"cat_main_housing","sub_electricity":"cat_main_housing","sub_water_bill":"cat_main_housing","sub_gas":"cat_main_housing","sub_home_internet":"cat_main_housing","sub_landline_tv":"cat_main_housing","sub_municipality":"cat_main_housing","sub_building_maint":"cat_main_housing","sub_plumbing":"cat_main_housing","sub_ac_maint":"cat_main_housing","sub_cleaning":"cat_main_housing","sub_pest_control":"cat_main_housing","sub_security":"cat_main_housing","sub_furniture":"cat_main_housing","sub_appliances":"cat_main_housing","sub_home_decor":"cat_main_housing","sub_garden":"cat_main_housing","sub_pool":"cat_main_housing","sub_storage":"cat_main_housing","sub_moving":"cat_main_housing","sub_home_insurance":"cat_main_housing","sub_staff_driver":"cat_main_staff","sub_staff_maid":"cat_main_staff","sub_staff_nanny":"cat_main_staff","sub_staff_cook":"cat_main_staff","sub_staff_gardener":"cat_main_staff","sub_staff_guard":"cat_main_staff","sub_staff_other":"cat_main_staff","sub_staff_visa":"cat_main_staff","sub_staff_recruit":"cat_main_staff","sub_staff_travel":"cat_main_staff","sub_staff_uniforms":"cat_main_staff","sub_staff_medical":"cat_main_staff","sub_school_tuition":"cat_main_kids","sub_school_supplies":"cat_main_kids","sub_school_transport":"cat_main_kids","sub_tutoring":"cat_main_kids","sub_educational_books":"cat_main_kids","sub_toys":"cat_main_kids","sub_kids_clothing":"cat_main_kids","sub_kids_activities":"cat_main_kids","sub_kids_sports":"cat_main_kids","sub_kids_entertainment":"cat_main_kids","sub_kids_medical":"cat_main_kids","sub_baby_formula":"cat_main_kids","sub_baby_supplies":"cat_main_kids","sub_kids_birthday":"cat_main_kids","sub_school_trips":"cat_main_kids","sub_kids_tech":"cat_main_kids","sub_kids_subscriptions":"cat_main_kids","sub_kids_stem":"cat_main_kids","sub_barber":"cat_main_personal","sub_hair_salon":"cat_main_personal","sub_skincare":"cat_main_personal","sub_cosmetics":"cat_main_personal","sub_spa":"cat_main_personal","sub_nails":"cat_main_personal","sub_perfume":"cat_main_personal","sub_gym":"cat_main_personal","sub_trainer":"cat_main_personal","sub_supplements":"cat_main_personal","sub_pharmacy":"cat_main_personal","sub_doctor":"cat_main_personal","sub_specialist":"cat_main_personal","sub_dental":"cat_main_personal","sub_optical":"cat_main_personal","sub_mental_health":"cat_main_personal","sub_hospital":"cat_main_personal","sub_medical_tests":"cat_main_personal","sub_medical_equipment":"cat_main_personal","sub_health_insurance":"cat_main_personal","sub_mens_clothing":"cat_main_clothing","sub_womens_clothing":"cat_main_clothing","sub_shoes":"cat_main_clothing","sub_watches":"cat_main_clothing","sub_bags":"cat_main_clothing","sub_tailoring":"cat_main_clothing","sub_laundry":"cat_main_clothing","sub_sportswear":"cat_main_clothing","sub_formal_wear":"cat_main_clothing","sub_basics":"cat_main_clothing","sub_jewellery":"cat_main_clothing","sub_cinema":"cat_main_entertainment","sub_concerts":"cat_main_entertainment","sub_sports_events":"cat_main_entertainment","sub_theme_parks":"cat_main_entertainment","sub_gaming":"cat_main_entertainment","sub_books":"cat_main_entertainment","sub_hobbies":"cat_main_entertainment","sub_outdoor":"cat_main_entertainment","sub_sports_leisure":"cat_main_entertainment","sub_club_memberships":"cat_main_entertainment","sub_events":"cat_main_entertainment","sub_photography":"cat_main_entertainment","sub_music":"cat_main_entertainment","sub_art":"cat_main_entertainment","sub_video_streaming":"cat_main_subscriptions","sub_music_streaming":"cat_main_subscriptions","sub_gaming_sub":"cat_main_subscriptions","sub_news_digital":"cat_main_subscriptions","sub_cloud_storage":"cat_main_subscriptions","sub_software":"cat_main_subscriptions","sub_app_purchases":"cat_main_subscriptions","sub_domain_hosting":"cat_main_subscriptions","sub_vpn":"cat_main_subscriptions","sub_ai_tools":"cat_main_subscriptions","sub_professional_sub":"cat_main_subscriptions","sub_device_protection":"cat_main_subscriptions","sub_mobile_telecom":"cat_main_subscriptions","sub_ebooks":"cat_main_subscriptions","sub_flights_domestic":"cat_main_travel","sub_flights_intl":"cat_main_travel","sub_hotel":"cat_main_travel","sub_resort":"cat_main_travel","sub_vacation_rental":"cat_main_travel","sub_car_rental_travel":"cat_main_travel","sub_transport_travel":"cat_main_travel","sub_fuel_travel":"cat_main_travel","sub_dining_travel":"cat_main_travel","sub_shopping_travel":"cat_main_travel","sub_travel_activities":"cat_main_travel","sub_travel_insurance":"cat_main_travel","sub_visa_fees":"cat_main_travel","sub_airport":"cat_main_travel","sub_travel_accessories":"cat_main_travel","sub_cruise":"cat_main_travel","sub_travel_misc":"cat_main_travel","sub_courses":"cat_main_education","sub_certification":"cat_main_education","sub_study_books":"cat_main_education","sub_elearning":"cat_main_education","sub_language":"cat_main_education","sub_conferences":"cat_main_education","sub_university":"cat_main_education","sub_prof_memberships":"cat_main_education","sub_electronics":"cat_main_shopping","sub_online_shopping":"cat_main_shopping","sub_department_store":"cat_main_shopping","sub_sports_equipment":"cat_main_shopping","sub_instruments":"cat_main_shopping","sub_books_physical":"cat_main_shopping","sub_stationery":"cat_main_shopping","sub_gift_shopping":"cat_main_shopping","sub_collectibles":"cat_main_shopping","sub_birthday_gifts":"cat_main_gifts","sub_eid_gifts":"cat_main_gifts","sub_wedding_gifts":"cat_main_gifts","sub_baby_gifts":"cat_main_gifts","sub_housewarming":"cat_main_gifts","sub_holiday_gifts":"cat_main_gifts","sub_gift_vouchers":"cat_main_gifts","sub_flowers":"cat_main_gifts","sub_event_planning":"cat_main_gifts","sub_party_supplies":"cat_main_gifts","sub_venue":"cat_main_gifts","sub_event_photography":"cat_main_gifts","sub_sadaqah":"cat_main_charity","sub_zakat_maal":"cat_main_charity","sub_zakat_fitr":"cat_main_charity","sub_kaffarah":"cat_main_charity","sub_orphan":"cat_main_charity","sub_mosque":"cat_main_charity","sub_ngo":"cat_main_charity","sub_food_donation":"cat_main_charity","sub_udhiyah":"cat_main_charity","sub_ramadan_giving":"cat_main_charity","sub_individual_support":"cat_main_charity","sub_passport":"cat_main_govt","sub_iqama":"cat_main_govt","sub_alien_control":"cat_main_govt","sub_legal":"cat_main_govt","sub_govt_portal":"cat_main_govt","sub_municipality_svc":"cat_main_govt","sub_labor_visa":"cat_main_govt","sub_business_license":"cat_main_govt","sub_loan_installment":"cat_main_finance","sub_cc_payment":"cat_main_transfers","sub_bnpl":"cat_main_finance","sub_card_fee":"cat_main_finance","sub_transfer_fee":"cat_main_finance","sub_fx":"cat_main_finance","sub_vat_tax":"cat_main_finance","sub_life_insurance":"cat_main_finance","sub_early_settlement":"cat_main_finance","sub_investment_transfer":"cat_main_finance","sub_atm":"cat_main_finance","sub_bank_charges":"cat_main_finance","sub_office_supplies":"cat_main_business","sub_business_travel":"cat_main_business","sub_client_entertainment":"cat_main_business","sub_marketing":"cat_main_business","sub_business_software":"cat_main_business","sub_professional_svc":"cat_main_business","sub_printing":"cat_main_business","sub_courier":"cat_main_business","sub_coworking":"cat_main_business","sub_business_meals":"cat_main_business","sub_pet_food":"cat_main_pets","sub_vet":"cat_main_pets","sub_pet_grooming":"cat_main_pets","sub_pet_supplies":"cat_main_pets","sub_pet_medication":"cat_main_pets","sub_pet_insurance":"cat_main_pets","sub_pet_boarding":"cat_main_pets","sub_pet_accessories":"cat_main_pets","sub_internal_transfer":"cat_main_transfers","sub_external_individual":"cat_main_transfers","sub_external_business":"cat_main_transfers","sub_intl_wire":"cat_main_transfers","sub_late_fee":"cat_main_finance","sub_cc_interest":"cat_main_finance","sub_cash_advance_fee":"cat_main_finance","sub_overlimit_fee":"cat_main_finance","sub_general":"cat_main_shopping"};
 const SADAD_CODES={"001": "STC", "002": "Saudi Energy (SE)", "003": "Tawuniya Insurance", "004": "Marafiq", "005": "Mobily", "006": "Madinah Municipality", "008": "Qiyas", "010": "Riyadh Municipality", "013": "Ministry of Commerce", "014": "STCSC", "015": "Water Services", "016": "AlAhli Finance", "018": "American Express", "019": "Jeddah Chamber of Commerce", "020": "ZATCA (Zakat & Tax)", "021": "Saudi Post", "022": "Saudia Airlines", "025": "Eastern Province Municipality", "026": "FlyNas", "027": "Holy Makkah Municipality", "028": "Jeddah Municipality", "030": "Saudi Customs", "032": "OSN", "033": "GO Telecom", "036": "Saudi Credit Bureau (SIMAH)", "040": "Real Estate Development Fund", "042": "CITC", "043": "Adahi", "044": "Zain", "045": "Saudi Agricultural Bank", "050": "Ministry of Labor", "054": "AlRajhi Bank Services", "055": "ITC", "057": "Saudi Tourism Authority", "058": "Social Development Bank", "060": "GOSI", "065": "Abdul Latif Jameel Finance", "067": "Riyad Bank Payments", "070": "Al Qassim Municipality", "071": "Banque Saudi Fransi", "075": "Ministry of Transportation", "078": "Bank Al-Jazira", "080": "King Saud University", "082": "ANB Payments", "084": "Aseer Province Municipality", "088": "Ministry of Finance", "089": "Saudi Ports Authority", "098": "General Authority of Civil Aviation", "101": "Ministry of Foreign Affairs", "105": "KACST", "106": "Taibah University", "108": "Ministry of Investment", "110": "AlRajhi Takaful", "112": "Amanah Al-Ahsa", "113": "Taif Municipality", "117": "KFUPM", "118": "King Faisal University", "120": "Saudi Railways", "122": "Tawzea", "128": "Ministry of Health", "130": "Bupa Arabia", "132": "Umm Al-Qura University", "134": "Extra (United Electronics)", "136": "Arabian Shield Insurance", "137": "Saudi Electronic University", "138": "National Water Company (NWC)", "139": "Asharqia Chamber", "140": "Bank Albilad", "141": "Government e-Procurement", "142": "HRDF", "143": "Saudi Industrial Development Fund", "147": "Saudi Home Loans", "149": "STC (Sawa)", "150": "SAPTCO", "151": "Virgin Mobile", "153": "Ejar (Property Registry)", "160": "Ministry of Justice", "161": "Ministry of Haj and Umrah", "163": "Saudi Investment Bank", "165": "SaudiOrix", "166": "Emaar Economic City", "175": "Bidaya Home Finance", "177": "Ministry of Municipality & Rural Affairs", "180": "Public Transport Authority", "181": "Flyadeal", "182": "Sakani \u2013 National Housing", "184": "Lebara", "185": "Saudi Exhibition & Convention Bureau", "187": "Ijarah Finance", "188": "AJIL Financial Services", "190": "Public Pension Agency (PPA)", "191": "Saudi Railway Company (SAR)", "197": "Tameeni (Insurance)", "199": "Takamol Holding", "204": "General Commission for Audiovisual Media", "206": "Haramain High Speed Rail", "207": "STC Pay", "209": "Tatweer Educational Tech", "213": "Maharah HR", "215": "University of Jeddah", "218": "Qassim University", "222": "General Directorate of Border Guard", "226": "Najran Province Emirate", "229": "SWCC (Saline Water)", "231": "Royal Saudi Land Forces", "234": "Public Security Directorate (Traffic/Passports)", "236": "Hafr Al Batin Municipality", "237": "Makkah Region Emirate", "241": "Ministry of Education", "242": "Saudi Authority for Intellectual Property", "249": "King Khalid University", "252": "Saudi Arabian National Guard", "254": "Saudi Red Crescent Authority", "255": "Musaned (Domestic Workers Platform)", "256": "Northern Border University", "257": "King Faisal Specialist Hospital", "259": "Premium Residency Center (Iqama)", "265": "Royal Saudi Naval Forces", "267": "Ministry of Energy", "270": "Ministry of Justice \u2013 Alimony Fund", "272": "Royal Commission for Jubail and Yanbu", "275": "General Entertainment Authority", "278": "General Organization for Military Industries", "280": "School Transport"};
 const NAV_GROUPS={
-  transactions:{tabs:['txbank','txcards','aiupload'],labels:{txbank:'Bank Accounts',txcards:'Cards',aiupload:'Statement Parser'}},
+  transactions:{tabs:['txbank','txcards','txinvestments','aiupload'],labels:{txbank:'Bank Accounts',txcards:'Cards',txinvestments:'Investments',aiupload:'Statement Parser'}},
   recurring:{tabs:['income','bills','subscriptions'],labels:{income:'Income',bills:'Bills',subscriptions:'Subscriptions'}},
   inbox:{tabs:['uncat','transfers','reimbursements','rules','sanity','insights'],labels:{uncat:'Uncategorized',transfers:'Pending Matches',reimbursements:'Reimbursements',rules:'Transaction Rules',sanity:'Sanity Check',insights:'Usage Insights'}},
 };
-const TAB_TO_GROUP={txbank:'transactions',txcards:'transactions',aiupload:'transactions',income:'recurring',bills:'recurring',subscriptions:'recurring',accounts:'',debts:'',goals:'',uncat:'inbox',transfers:'inbox',reimbursements:'inbox',rules:'inbox',sanity:'inbox',insights:'inbox',staff:'',familyinv:'',settings:''};
+const TAB_TO_GROUP={txbank:'transactions',txcards:'transactions',txinvestments:'transactions',aiupload:'transactions',income:'recurring',bills:'recurring',subscriptions:'recurring',accounts:'',debts:'',goals:'',uncat:'inbox',transfers:'inbox',reimbursements:'inbox',rules:'inbox',sanity:'inbox',insights:'inbox',staff:'',familyinv:'',investments:'',settings:''};
 
 // ─── SUBSCRIPTION CATEGORIES ───
 // 12 categories covering every kind of recurring consumer/professional subscription.
@@ -1714,7 +1715,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='8.20';
+const VERSION='8.21';
 // IS_DEMO: when true, the entire app runs in a sandboxed sample-data mode.
 // No vault is loaded, no Supabase calls happen, and saveState/flushTxnQueue are no-ops.
 // Activated by URL param ?demo=1 or hash #demo. Cannot be flipped at runtime — the only
@@ -2897,7 +2898,7 @@ function sw(tab){
   // Close mobile sidebar when navigating
   closeSidebar();
   // Update mobile page title in burger bar
-  const allLabels={overview:'Overview',txbank:'Bank Accounts',txcards:'Cards',income:'Income',bills:'Bills',subscriptions:'Subscriptions',staff:'Staff',familyinv:'Family Investments',accounts:'Accounts & Cards',debts:'Debts',goals:'Goals',uncat:'Uncategorized',transfers:'Pending Matches',rules:'Transaction Rules',sanity:'Sanity Check',insights:'Usage Insights',settings:'Settings'};
+  const allLabels={overview:'Overview',txbank:'Bank Accounts',txcards:'Cards',txinvestments:'Investments',income:'Income',bills:'Bills',subscriptions:'Subscriptions',staff:'Staff',familyinv:'Family Investments',investments:'Investments',accounts:'Accounts & Cards',debts:'Debts',goals:'Goals',uncat:'Uncategorized',transfers:'Pending Matches',rules:'Transaction Rules',sanity:'Sanity Check',insights:'Usage Insights',settings:'Settings'};
   const titleEl=document.getElementById('mob-page-title');
   if(titleEl)titleEl.textContent=allLabels[tab]||tab;
   // Close mobile dropdown
@@ -3028,11 +3029,13 @@ async function render(){
   if(t==='overview')el.innerHTML=await rOv();
   else if(t==='txbank')el.innerHTML=await rTxBank();
   else if(t==='txcards')el.innerHTML=await rTxCards();
+  else if(t==='txinvestments')el.innerHTML=await rTxInvestments();
   else if(t==='income')el.innerHTML=rInc();
   else if(t==='bills')el.innerHTML=rBills();
   else if(t==='subscriptions')el.innerHTML=await rSubs();
   else if(t==='staff')el.innerHTML=rStaff();
   else if(t==='familyinv')el.innerHTML=rFamilyInv();
+  else if(t==='investments')el.innerHTML=rInvestments();
   else if(t==='accounts')el.innerHTML=rAcc();
   else if(t==='debts')el.innerHTML=rDebts();
   else if(t==='goals')el.innerHTML=rGoals();
@@ -3562,20 +3565,23 @@ async function rOv(){
       ...(ungroupedActive.length?[{id:'__ungrouped__',name:'Ungrouped',color:'#9CA0A8',accounts:ungroupedActive}]:[])
     ];
     if(!allRows.length)return '';
-    // For each row, compute: liquid cash sum, CC outstanding sum, net
+    // For each row, compute: liquid cash, CC outstanding, investments (current value), net
     const computed=allRows.map(row=>{
       const liquid=row.accounts.filter(a=>liquidTypes.has(a.type)).reduce((s,a)=>{const b=calcAccBalance(a);return b!==null?s+b:s;},0);
-      // CC outstanding for this group: sum of calcCCBalance for active CC debts whose linkedAccountId is in this group's accounts
       const groupAcctIds=new Set(row.accounts.map(a=>a.id));
       const ccDebt=S.debts.filter(d=>d.type==='credit_card'&&d.status==='active'&&groupAcctIds.has(d.linkedAccountId)).reduce((s,d)=>s+calcCCBalance(d),0);
-      return{...row,liquid,ccDebt,net:liquid-ccDebt,memberCount:row.accounts.length};
+      // V8.21: investments column — current value of investment accounts in this group
+      const investments=row.accounts.filter(a=>isInvestmentAccount(a)).reduce((s,a)=>{const v=getInvestmentValue(a);return v!==null?s+v:s;},0);
+      return{...row,liquid,ccDebt,investments,net:liquid-ccDebt+investments,memberCount:row.accounts.length};
     });
     const grandLiquid=computed.reduce((s,r)=>s+r.liquid,0);
     const grandCC=computed.reduce((s,r)=>s+r.ccDebt,0);
-    const grandNet=grandLiquid-grandCC;
+    const grandInv=computed.reduce((s,r)=>s+r.investments,0);
+    const grandNet=grandLiquid-grandCC+grandInv;
+    const showInvCol=grandInv>0; // only show Investments column when there's something to show
     return`<div class="card card-bordered" style="margin-top:10px">
       <div class="ctitle">Net Position by Group</div>
-      <div class="csub">Liquid cash minus active credit card outstanding, broken down by account group</div>
+      <div class="csub">${showInvCol?'Liquid cash plus investment value, minus active credit card outstanding':'Liquid cash minus active credit card outstanding'}, broken down by account group</div>
       <div style="margin-top:12px">
         ${computed.map(r=>`<div class="fg jb" style="padding:10px 0;border-bottom:1px solid var(--bg3);gap:12px;align-items:center">
           <div class="fg" style="gap:8px;align-items:center;flex:1;min-width:0">
@@ -3594,6 +3600,10 @@ async function rOv(){
               <div class="priv-mask" style="font-size:var(--fs-xs);font-weight:500;color:${r.ccDebt>0?'var(--bad)':'var(--text3)'}">${r.ccDebt>0?'-':''}${fmtP(r.ccDebt)}</div>
               <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">CC</div>
             </div>
+            ${showInvCol?`<div style="text-align:right">
+              <div class="priv-mask" style="font-size:var(--fs-xs);font-weight:500;color:${r.investments>0?'var(--ok)':'var(--text3)'}">${fmtP(r.investments)}</div>
+              <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Inv</div>
+            </div>`:''}
             <div style="text-align:right;min-width:100px">
               <div class="priv-mask" style="font-size:var(--fs-sm);font-weight:600;color:${r.net>=0?'var(--ok)':'var(--bad)'}">${fmtP(r.net)}</div>
               <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Net</div>
@@ -3611,6 +3621,10 @@ async function rOv(){
               <div class="priv-mask" style="font-size:var(--fs-xs);font-weight:600;color:${grandCC>0?'var(--bad)':'var(--text3)'}">${grandCC>0?'-':''}${fmtP(grandCC)}</div>
               <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">CC</div>
             </div>
+            ${showInvCol?`<div style="text-align:right">
+              <div class="priv-mask" style="font-size:var(--fs-xs);font-weight:600;color:${grandInv>0?'var(--ok)':'var(--text3)'}">${fmtP(grandInv)}</div>
+              <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Inv</div>
+            </div>`:''}
             <div style="text-align:right;min-width:100px">
               <div class="priv-mask" style="font-size:var(--fs-sm);font-weight:700;color:${grandNet>=0?'var(--ok)':'var(--bad)'}">${fmtP(grandNet)}</div>
               <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Net</div>
@@ -4752,6 +4766,16 @@ function openEditTxn(id,ym){
     benSel.innerHTML=`<option value="">${(S.settings.displayName||'').split(' ')[0]||'Self'} (Self)</option>`+( S.familyMembers||[]).map(m=>`<option value="${m.id}">${h(m.name)}${m.relationship?' ('+m.relationship+')':''}</option>`).join('');
     benSel.value=t.beneficiaryId||'';
   }
+  // V8.21: investment account row — show for investment-type or income (potential return inflow)
+  const invRow=document.getElementById('etxn-inv-acc-row');
+  const invSel=document.getElementById('etxn-inv-acc');
+  const invs=S.accounts.filter(a=>INV.has(a.type)&&isLiveAccount(a)).sort(accSortFn);
+  const showInv=showBen&&invs.length>0;
+  if(invRow)invRow.style.display=showInv?'block':'none';
+  if(invSel){
+    invSel.innerHTML='<option value="">-- None --</option>'+invs.map(a=>`<option value="${a.id}">${h(a.name)}</option>`).join('');
+    invSel.value=t.investmentAccountId||'';
+  }
   // Staff dropdown — only visible when main category is Household Staff
   const staffRow=document.getElementById('etxn-staff-row');
   const staffSel=document.getElementById('etxn-staff');
@@ -4824,6 +4848,10 @@ async function saveEditTxn(){
   t.accountId=document.getElementById('etxn-acc').value||null;
   t.debtId=document.getElementById('etxn-debt').value||null;
   t.beneficiaryId=document.getElementById('etxn-beneficiary')?.value||null;
+  // V8.21: investment account linkage
+  const invAccId=document.getElementById('etxn-inv-acc')?.value||null;
+  if(invAccId)t.investmentAccountId=invAccId;
+  else delete t.investmentAccountId;
   // Bill tag — only meaningful for Housing/Subscriptions categories
   const prevBillId=t.billId||null;
   const newBillId=document.getElementById('etxn-bill')?.value||null;
@@ -5547,7 +5575,8 @@ function addTxnM(){
   const sid=document.getElementById('nt-sc').value||null;
   const txType=document.getElementById('nt-type').value;
   const txDirVal=document.getElementById('nt-dir')?.value||(txType==='income'?'in':'out');
-  const t={id:uid(),date:dateIso,description:ds,raw_description:ds,amount:Math.abs(a),type:txType,direction:txDirVal,mainCatId:mid,subCatId:sid,accountId:document.getElementById('nt-acc').value||null,debtId:document.getElementById('nt-debt').value||null,notes:document.getElementById('nt-notes').value.trim()};
+  const invAccId=document.getElementById('nt-inv-acc')?.value||null;
+  const t={id:uid(),date:dateIso,description:ds,raw_description:ds,amount:Math.abs(a),type:txType,direction:txDirVal,mainCatId:mid,subCatId:sid,accountId:document.getElementById('nt-acc').value||null,debtId:document.getElementById('nt-debt').value||null,notes:document.getElementById('nt-notes').value.trim(),...(invAccId?{investmentAccountId:invAccId}:{})};
   if(mid)learnRule(ds,mid,sid);
   const ym=dateIso.substr(0,7);
   if(!S.txnCache[ym])S.txnCache[ym]=[];
@@ -8598,6 +8627,109 @@ const ATG=[{g:'Bank Accounts',o:[{v:'main_account',l:'Main Account (Current/Chec
 const ATL=ATG.flatMap(g=>g.o).reduce((m,o)=>{m[o.v]=o.l;return m;},{});
 const ATS=ATG.map(g=>`<optgroup label="${g.g}">${g.o.map(o=>`<option value="${o.v}">${o.l}</option>`).join('')}</optgroup>`).join('');
 const INV=new Set(['brokerage_account','fund_account','gold_account','crypto_wallet','real_estate_fund','direct_investment']);
+
+// V8.21: investment value tracking helpers. These work alongside calcAccBalance — they don't
+// replace it. calcAccBalance still computes "transactions in this account", but for investment
+// accounts that's not meaningful (the value is set externally, not derived from transactions).
+// Investments page uses these helpers; bank account logic stays untouched.
+function isInvestmentAccount(a){return a&&INV.has(a.type);}
+// Current value: user-set, last recorded. Returns null if never recorded.
+function getInvestmentValue(a){
+  if(!isInvestmentAccount(a))return null;
+  return typeof a.currentValue==='number'?a.currentValue:null;
+}
+// Cumulative deposits (capital deployed) into this investment account.
+// Source: type==='investment' outflows linked via investmentAccountId.
+function calcInvestmentDeployed(accountId){
+  if(!accountId)return 0;
+  let total=0;
+  Object.values(S.txnCache||{}).forEach(monthTxns=>{
+    (monthTxns||[]).forEach(t=>{
+      if(t.type!=='investment')return;
+      if(t.investmentAccountId!==accountId)return;
+      if(txDir(t)!=='out')return;
+      total+=(t.amount||0);
+    });
+  });
+  return total;
+}
+// Cumulative withdrawals/returns FROM this investment account.
+// Source: type==='income' with investmentAccountId set (V8.21+) or with sub_investment_return/sub_dividends (legacy).
+function calcInvestmentReturns(accountId){
+  if(!accountId)return 0;
+  let total=0;
+  Object.values(S.txnCache||{}).forEach(monthTxns=>{
+    (monthTxns||[]).forEach(t=>{
+      if(t.type!=='income')return;
+      if(t.investmentAccountId!==accountId)return;
+      if(txDir(t)!=='in')return;
+      total+=(t.amount||0);
+    });
+  });
+  return total;
+}
+// Net deployed: deposits minus withdrawals. Negative means user has withdrawn more than deposited
+// (rare but possible for mature accounts that have paid out distributions exceeding contributions).
+function calcInvestmentNetDeployed(accountId){
+  return calcInvestmentDeployed(accountId)-calcInvestmentReturns(accountId);
+}
+// Unrealized gain/loss: current value minus net deployed. Null if no current value recorded.
+function calcInvestmentUnrealized(a){
+  const cv=getInvestmentValue(a);if(cv===null)return null;
+  return cv-calcInvestmentNetDeployed(a.id);
+}
+// Days since last value recording. Returns Infinity if never recorded.
+function daysSinceValueUpdate(a){
+  if(!a||!a.currentValueAsOf)return Infinity;
+  const last=new Date(a.currentValueAsOf+'T00:00:00');
+  const now=new Date();
+  return Math.floor((now-last)/(1000*60*60*24));
+}
+// Stale check: 30+ days old (Decision 3, simplified — actionable button replaces passive warning).
+function isStaleInvestmentValue(a){
+  if(!isInvestmentAccount(a))return false;
+  if(getInvestmentValue(a)===null)return false; // never recorded — different state, not "stale"
+  return daysSinceValueUpdate(a)>=30;
+}
+// Get all transactions affecting a single investment account (for the per-account history list).
+function getInvestmentTxnsForAccount(accountId,limit){
+  if(!accountId)return [];
+  const out=[];
+  Object.values(S.txnCache||{}).forEach(monthTxns=>{
+    (monthTxns||[]).forEach(t=>{
+      if(t.investmentAccountId===accountId)out.push(t);
+    });
+  });
+  out.sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  return typeof limit==='number'?out.slice(0,limit):out;
+}
+// Render a small SVG sparkline from the lastValueHistory array. Standalone, no library.
+// Returns inline SVG. Used on the Investments page per-account card.
+function renderValueSparkline(history,width,height){
+  width=width||120;height=height||32;
+  if(!Array.isArray(history)||history.length<2){
+    return `<div style="width:${width}px;height:${height}px;display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--text3)">no history</div>`;
+  }
+  const pts=history.slice().sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  const vals=pts.map(p=>p.value);
+  const min=Math.min(...vals),max=Math.max(...vals);
+  const range=max-min||1;
+  const pad=2;
+  const usableW=width-2*pad,usableH=height-2*pad;
+  const xy=pts.map((p,i)=>{
+    const x=pad+(i/(pts.length-1))*usableW;
+    const y=pad+(1-(p.value-min)/range)*usableH;
+    return [x.toFixed(1),y.toFixed(1)];
+  });
+  const path=xy.map((p,i)=>(i===0?'M':'L')+p[0]+' '+p[1]).join(' ');
+  // Color: green if last >= first, red if last < first
+  const trend=pts[pts.length-1].value>=pts[0].value?'var(--ok)':'var(--bad)';
+  const lastX=xy[xy.length-1][0],lastY=xy[xy.length-1][1];
+  return `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg" style="display:block">
+    <path d="${path}" fill="none" stroke="${trend}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="${lastX}" cy="${lastY}" r="2" fill="${trend}"/>
+  </svg>`;
+}
 const ACS=[{v:'public_markets',l:'Public Markets'},{v:'funds_managed',l:'Funds & Managed Portfolios'},{v:'private_credit',l:'Private Credit'},{v:'real_assets',l:'Real Assets'},{v:'commodities',l:'Commodities'},{v:'digital_assets',l:'Digital Assets'},{v:'private_equity',l:'Private Equity / Venture'},{v:'cash_liquidity',l:'Cash & Liquidity'}];
 let editAccId=null;
 // V8.20: account groups CRUD
@@ -8866,6 +8998,22 @@ function rAcc(){
     </div>`:''}
     <div id="ac-row" style="display:none;margin-top:8px">
       <label class="lbl">Asset Class</label><select id="a-asclass">${ACS.map(o=>`<option value="${o.v}">${o.l}</option>`).join('')}</select>
+      <!-- V8.21: investment-specific fields -->
+      <div class="fr" style="margin-top:8px">
+        <div><label class="lbl">Platform / Broker</label><input type="text" id="ac-inv-platform" placeholder="e.g. Tameed, Saudi Tadawul, Binance"></div>
+        <div><label class="lbl">Update source</label>
+          <select id="ac-inv-source">
+            <option value="manual">Manual entry</option>
+            <option value="ai_assisted_manual" disabled>AI-assisted (V8.21.5)</option>
+            <option value="ai_public_price" disabled>Auto-fetch public price (V8.21.5)</option>
+          </select>
+        </div>
+      </div>
+      <div class="fr" style="margin-top:8px">
+        <div><label class="lbl">Current Value (SAR)</label><input type="number" id="ac-inv-value" placeholder="e.g. 47300" min="0" step="0.01"></div>
+        <div><label class="lbl">Value As Of (DD/MM/YYYY)</label><div class="date-inp-wrap"><input type="text" id="ac-inv-asof" class="date-inp" placeholder="e.g. 28/04/2026" maxlength="10"><button type="button" class="cal-btn" onclick="openCal('ac-inv-asof')" title="Pick date">📅</button></div></div>
+      </div>
+      <div style="font-size:var(--fs-xxs);color:var(--text3);margin-top:4px;line-height:1.6">Current value is what the position is worth today. Update it from your platform dashboard or statement. Net deployed (deposits minus withdrawals) is calculated automatically from your transactions.</div>
     </div>
     <div class="fr" style="margin-top:8px">
       <div><label class="lbl">Opening Balance (SAR)</label><input type="number" id="ac-bal" placeholder="e.g. 921.20" min="0" step="0.01"></div>
@@ -8996,6 +9144,11 @@ function openEditAcc(id){
   const curEl=document.getElementById('ac-currency');if(curEl)curEl.value=a.currency||'SAR';
   // V8.20: prefill group dropdown if it exists in the form
   const grpEl=document.getElementById('ac-group');if(grpEl)grpEl.value=a.groupId||'';
+  // V8.21: prefill investment fields if account is investment-type
+  const invPlatformEl=document.getElementById('ac-inv-platform');if(invPlatformEl)invPlatformEl.value=a.platform||'';
+  const invSourceEl=document.getElementById('ac-inv-source');if(invSourceEl)invSourceEl.value=a.updateSource||'manual';
+  const invValueEl=document.getElementById('ac-inv-value');if(invValueEl)invValueEl.value=a.currentValue!==undefined?a.currentValue:'';
+  const invAsOfEl=document.getElementById('ac-inv-asof');if(invAsOfEl)invAsOfEl.value=a.currentValueAsOf?toDD(a.currentValueAsOf):'';
   document.getElementById('acc-ptitle').textContent='Edit account';document.getElementById('acc-sbtn').textContent='Save changes';
   const p=document.getElementById('acc-panel');if(p&&!p.classList.contains('open')){p.classList.add('open');p.scrollIntoView({behavior:'smooth'});}
 }
@@ -9005,14 +9158,53 @@ function saveAcc(){
   const balVal=document.getElementById('ac-bal')?.value;const curVal=document.getElementById('ac-currency')?.value||'SAR';
   // V8.20: capture groupId from form (empty string = ungrouped)
   const groupId=(document.getElementById('ac-group')?.value||'').trim();
-  const data={name,institution:document.getElementById('ac-inst').value.trim(),type,accountNumber:document.getElementById('ac-no').value.trim()||null,purpose:document.getElementById('ac-purp')?.value.trim()||'',openingBalance:balVal!==''&&balVal!==undefined?parseFloat(balVal):undefined,balanceAsOf:fromDD(document.getElementById('ac-bal-date')?.value||'')||undefined,...(groupId?{groupId}:{}),...((type==='credit_card'||type==='charge_card')?{currency:curVal}:{})};
+  // V8.21: capture investment-specific fields when type is investment
+  const isInv=INV.has(type);
+  const invPlatform=isInv?(document.getElementById('ac-inv-platform')?.value||'').trim():'';
+  const invSource=isInv?(document.getElementById('ac-inv-source')?.value||'manual'):'';
+  const invValueRaw=isInv?document.getElementById('ac-inv-value')?.value:'';
+  const invAsOfRaw=isInv?(document.getElementById('ac-inv-asof')?.value||''):'';
+  const invValue=invValueRaw!==''&&invValueRaw!==undefined?parseFloat(invValueRaw):undefined;
+  const invAsOf=invAsOfRaw?fromDD(invAsOfRaw):undefined;
+  const data={name,institution:document.getElementById('ac-inst').value.trim(),type,accountNumber:document.getElementById('ac-no').value.trim()||null,purpose:document.getElementById('ac-purp')?.value.trim()||'',openingBalance:balVal!==''&&balVal!==undefined?parseFloat(balVal):undefined,balanceAsOf:fromDD(document.getElementById('ac-bal-date')?.value||'')||undefined,...(groupId?{groupId}:{}),...((type==='credit_card'||type==='charge_card')?{currency:curVal}:{}),...(isInv?{platform:invPlatform,updateSource:invSource||'manual'}:{})};
   if(editAccId){
     const existing=S.accounts.find(x=>x.id===editAccId);
+    // V8.21: detect value change for investment accounts → append to lastValueHistory
+    if(isInv&&invValue!==undefined&&invValue!==existing.currentValue){
+      const asOf=invAsOf||localISO(new Date());
+      if(!Array.isArray(existing.lastValueHistory))existing.lastValueHistory=[];
+      // Avoid duplicate same-day entries — replace if same date
+      const sameDayIdx=existing.lastValueHistory.findIndex(h=>h.date===asOf);
+      if(sameDayIdx>=0){existing.lastValueHistory[sameDayIdx]={date:asOf,value:invValue};}
+      else{existing.lastValueHistory.push({date:asOf,value:invValue});}
+      // Cap at 24 entries (oldest dropped)
+      if(existing.lastValueHistory.length>24){
+        existing.lastValueHistory.sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+        existing.lastValueHistory=existing.lastValueHistory.slice(0,24);
+      }
+      data.currentValue=invValue;
+      data.currentValueAsOf=asOf;
+      data.lastValueHistory=existing.lastValueHistory;
+    }else if(isInv&&invValue!==undefined){
+      // Same value — just refresh as-of if different
+      data.currentValue=invValue;
+      if(invAsOf)data.currentValueAsOf=invAsOf;
+    }
     Object.assign(existing,data);
     if(!groupId)delete existing.groupId; // explicit ungroup
     toast('Account updated');
   }
-  else{data.id='acc_'+name.toLowerCase().replace(/[^a-z0-9]/g,'_').slice(0,12)+'_'+Math.random().toString(36).substr(2,4);S.accounts.push(data);toast('Account added');}
+  else{
+    data.id='acc_'+name.toLowerCase().replace(/[^a-z0-9]/g,'_').slice(0,12)+'_'+Math.random().toString(36).substr(2,4);
+    // V8.21: seed lastValueHistory if first value provided on creation
+    if(isInv&&invValue!==undefined){
+      const asOf=invAsOf||localISO(new Date());
+      data.currentValue=invValue;
+      data.currentValueAsOf=asOf;
+      data.lastValueHistory=[{date:asOf,value:invValue}];
+    }
+    S.accounts.push(data);toast('Account added');
+  }
   editAccId=null;sched();tp('acc-panel');render();
 }
 function delAcc(id){S.accounts=S.accounts.filter(a=>a.id!==id);sched();render();}
@@ -9318,6 +9510,175 @@ function onDebtTypeChange(v){
     }
   }
 }
+// V8.21: Investments page — per-account current value tracking. Sits alongside Family Investments
+// (which is per-beneficiary). Different lens, both stay.
+let _invRecordingId=null; // which account's record-value form is open inline
+function rInvestments(){
+  const invAccs=S.accounts.filter(a=>isInvestmentAccount(a)&&isLiveAccount(a));
+  if(invAccs.length===0){
+    return`<div class="pg-header-row">
+      <div class="pg-header-title">Investments</div>
+      <button class="btn btn-p btn-sm" onclick="sw('accounts');setTimeout(()=>openAddAcc(),150)">+ Add investment account</button>
+    </div>
+    <div class="card"><div class="empty">No investment accounts yet. Add one from the Accounts page (pick an investment type like Brokerage, Fund, Gold, Crypto, Real Estate Fund, or Direct Investment).</div></div>`;
+  }
+  // Aggregate KPIs
+  const totalCurrent=invAccs.reduce((s,a)=>{const v=getInvestmentValue(a);return v!==null?s+v:s;},0);
+  const accountsWithValue=invAccs.filter(a=>getInvestmentValue(a)!==null).length;
+  const totalDeployed=invAccs.reduce((s,a)=>s+calcInvestmentNetDeployed(a.id),0);
+  const totalUnrealized=invAccs.reduce((s,a)=>{const u=calcInvestmentUnrealized(a);return u!==null?s+u:s;},0);
+  const staleCount=invAccs.filter(a=>isStaleInvestmentValue(a)).length;
+  // Sort: those with values first, then by current value descending
+  const ordered=invAccs.slice().sort((a,b)=>{
+    const av=getInvestmentValue(a),bv=getInvestmentValue(b);
+    if(av===null&&bv!==null)return 1;
+    if(av!==null&&bv===null)return -1;
+    if(av!==null&&bv!==null)return bv-av;
+    return (a.name||'').localeCompare(b.name||'');
+  });
+  const accountCards=ordered.map(a=>{
+    const cv=getInvestmentValue(a);
+    const dep=calcInvestmentDeployed(a.id);
+    const ret=calcInvestmentReturns(a.id);
+    const netDep=dep-ret;
+    const unreal=calcInvestmentUnrealized(a);
+    const days=daysSinceValueUpdate(a);
+    const stale=isStaleInvestmentValue(a);
+    const isRecording=_invRecordingId===a.id;
+    const recentTxns=getInvestmentTxnsForAccount(a.id,5);
+    const txnList=recentTxns.length?recentTxns.map(t=>{
+      const isOut=txDir(t)==='out';
+      return`<div class="fg jb" style="padding:5px 0;border-bottom:1px solid var(--bg2);font-size:11px;gap:8px">
+        <div style="color:var(--text3);flex-shrink:0">${toDD(t.date)||'--'}</div>
+        <div style="flex:1;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(t.description||'—')}</div>
+        <div class="priv-mask" style="font-variant-numeric:tabular-nums;font-weight:500;flex-shrink:0;color:${isOut?'var(--bad)':'var(--ok)'}">${isOut?'-':'+'}${fmtP(t.amount)}</div>
+      </div>`;
+    }).join(''):'<div style="font-size:11px;color:var(--text3);padding:6px 0">No linked transactions yet. Investment transactions get linked when the account name appears in their description, or you can link manually from the Transactions page.</div>';
+
+    return`<div class="card card-bordered" style="margin-bottom:14px">
+      <div class="fg jb" style="margin-bottom:10px;align-items:flex-start;gap:10px;flex-wrap:wrap">
+        <div style="flex:1;min-width:0">
+          <div class="fg" style="gap:6px;align-items:center">
+            ${(()=>{const gc=accGroupColor(a);return gc&&a.groupId?`<span title="Group: ${h(accGroupName(a))}" style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${gc};flex-shrink:0;border:1px solid color-mix(in srgb,${gc} 60%,transparent)"></span>`:'';})()}
+            <div style="font-weight:500;font-size:15px">${h(a.name)}</div>
+            ${stale?`<span class="badge" style="background:var(--warn);color:var(--text1);font-size:9px;padding:2px 5px" title="Value last updated ${days} days ago — consider updating">STALE</span>`:''}
+          </div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">${h(a.platform||a.institution||ATL[a.type]||a.type)} · ${ATL[a.type]||''}${a.purpose?' · '+h(a.purpose):''}</div>
+        </div>
+        <div class="fg" style="gap:4px;flex-shrink:0">
+          <button class="btn btn-sm ${cv===null||stale?'btn-p':''}" onclick="openRecordValue('${a.id}')">${cv===null?'Record value':'Update value'}</button>
+          <button class="btn btn-sm" onclick="openEditAcc('${a.id}');sw('accounts')" title="Edit account">&#9998;</button>
+        </div>
+      </div>
+
+      ${isRecording?`<div style="background:var(--bg2);border-radius:var(--rsm);padding:12px;margin-bottom:10px">
+        <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:8px">Record current value</div>
+        <div class="fr" style="gap:8px">
+          <div><label class="lbl">Value (SAR)</label><input type="number" id="rv-val-${a.id}" placeholder="${cv!==null?cv:'e.g. 47300'}" min="0" step="0.01" autofocus></div>
+          <div><label class="lbl">As of (DD/MM/YYYY)</label><div class="date-inp-wrap"><input type="text" id="rv-date-${a.id}" class="date-inp" value="${toDD(localISO(new Date()))}" maxlength="10"><button type="button" class="cal-btn" onclick="openCal('rv-date-${a.id}')" title="Pick date">📅</button></div></div>
+        </div>
+        <div class="fg" style="margin-top:10px;gap:6px">
+          <button class="btn btn-p btn-sm" onclick="saveInvestmentValue('${a.id}')">Save</button>
+          <button class="btn btn-sm" onclick="closeRecordValue()">Cancel</button>
+        </div>
+      </div>`:''}
+
+      <div class="fg" style="gap:14px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px">
+        <div style="min-width:140px">
+          <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Current value</div>
+          <div class="priv-mask" style="font-size:22px;font-weight:600;color:${cv!==null?'var(--text1)':'var(--text3)'};font-variant-numeric:tabular-nums;line-height:1.1">${cv!==null?fmtP(cv):'Not recorded'}</div>
+          ${a.currentValueAsOf?`<div style="font-size:10px;color:${stale?'var(--warn)':'var(--text3)'};margin-top:2px">as of ${toDD(a.currentValueAsOf)} (${days} day${days===1?'':'s'} ago)</div>`:''}
+        </div>
+        ${(a.lastValueHistory||[]).length>=2?`<div title="Value trend">${renderValueSparkline(a.lastValueHistory||[],140,40)}</div>`:''}
+      </div>
+
+      <div class="fg" style="gap:18px;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--bg3);border-bottom:1px solid var(--bg3);font-variant-numeric:tabular-nums">
+        <div>
+          <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Deposits</div>
+          <div class="priv-mask" style="font-size:13px;font-weight:500;color:var(--bad)">${fmtP(dep)}</div>
+        </div>
+        <div>
+          <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Withdrawals</div>
+          <div class="priv-mask" style="font-size:13px;font-weight:500;color:var(--ok)">${fmtP(ret)}</div>
+        </div>
+        <div>
+          <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Net deployed</div>
+          <div class="priv-mask" style="font-size:13px;font-weight:500;color:var(--text1)">${fmtP(netDep)}</div>
+        </div>
+        ${unreal!==null?`<div>
+          <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Unrealized G/L</div>
+          <div class="priv-mask" style="font-size:13px;font-weight:600;color:${unreal>=0?'var(--ok)':'var(--bad)'}">${unreal>=0?'+':''}${fmtP(unreal)}</div>
+        </div>`:''}
+      </div>
+
+      <div style="margin-top:10px">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Recent transactions</div>
+        ${txnList}
+      </div>
+    </div>`;
+  }).join('');
+
+  return`<div class="pg-header-row">
+    <div class="pg-header-title">Investments</div>
+    <div class="fg" style="gap:6px;flex-wrap:wrap">
+      ${staleCount>0?`<span style="font-size:11px;color:var(--warn);align-self:center" title="${staleCount} account${staleCount===1?'':'s'} have values older than 30 days">${staleCount} stale</span>`:''}
+      <button class="btn btn-p btn-sm" onclick="sw('accounts');setTimeout(()=>openAddAcc(),150)">+ Add investment account</button>
+    </div>
+  </div>
+
+  <div class="g4" style="margin-bottom:1.5rem">
+    <div class="card card-bordered">
+      <div class="ctitle">Total Current Value</div>
+      <div class="priv-mask" style="font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--text1);margin-top:6px">${fmtP(totalCurrent)}</div>
+      <div style="font-size:var(--fs-xs);color:var(--text3);margin-top:2px">${accountsWithValue} of ${invAccs.length} account${invAccs.length===1?'':'s'} have recorded values</div>
+    </div>
+    <div class="card card-bordered">
+      <div class="ctitle">Net Deployed</div>
+      <div class="priv-mask" style="font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--text1);margin-top:6px">${fmtP(totalDeployed)}</div>
+      <div style="font-size:var(--fs-xs);color:var(--text3);margin-top:2px">Cumulative deposits minus withdrawals</div>
+    </div>
+    <div class="card card-bordered">
+      <div class="ctitle">Unrealized G/L</div>
+      <div class="priv-mask" style="font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;color:${totalUnrealized>=0?'var(--ok)':'var(--bad)'};margin-top:6px">${totalUnrealized>=0?'+':''}${fmtP(totalUnrealized)}</div>
+      <div style="font-size:var(--fs-xs);color:var(--text3);margin-top:2px">Where current values are recorded</div>
+    </div>
+    <div class="card card-bordered">
+      <div class="ctitle">Accounts</div>
+      <div style="font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--text1);margin-top:6px">${invAccs.length}</div>
+      <div style="font-size:var(--fs-xs);color:var(--text3);margin-top:2px">${INV.size} types supported</div>
+    </div>
+  </div>
+
+  ${accountCards}`;
+}
+
+function openRecordValue(accId){_invRecordingId=accId;render();}
+function closeRecordValue(){_invRecordingId=null;render();}
+function saveInvestmentValue(accId){
+  const a=S.accounts.find(x=>x.id===accId);if(!a){closeRecordValue();return;}
+  const valEl=document.getElementById('rv-val-'+accId);
+  const dateEl=document.getElementById('rv-date-'+accId);
+  if(!valEl||!dateEl){closeRecordValue();return;}
+  const valRaw=valEl.value;
+  if(valRaw===''||valRaw===undefined||isNaN(parseFloat(valRaw))){toast('Value required',false);return;}
+  const value=parseFloat(valRaw);
+  if(value<0){toast('Value cannot be negative',false);return;}
+  const dateRaw=dateEl.value||toDD(localISO(new Date()));
+  const asOf=fromDD(dateRaw)||localISO(new Date());
+  if(!Array.isArray(a.lastValueHistory))a.lastValueHistory=[];
+  // Same-day entry: replace; otherwise append
+  const sameDayIdx=a.lastValueHistory.findIndex(h=>h.date===asOf);
+  if(sameDayIdx>=0){a.lastValueHistory[sameDayIdx]={date:asOf,value};}
+  else{a.lastValueHistory.push({date:asOf,value});}
+  // Keep history sorted descending (newest first), cap at 24
+  a.lastValueHistory.sort((x,y)=>(y.date||'').localeCompare(x.date||''));
+  if(a.lastValueHistory.length>24)a.lastValueHistory=a.lastValueHistory.slice(0,24);
+  a.currentValue=value;
+  a.currentValueAsOf=asOf;
+  _invRecordingId=null;
+  saveState().then(()=>{render();toast('Value recorded');});
+}
+
 function rFamilyInv(){
   // All investment outflows (capital deployed) and all income transactions (potential returns).
   // For the Self card, we only count untagged income with an investment sub-category (so salary/refunds don't inflate returns).
@@ -12176,6 +12537,65 @@ async function rTxCards(){
   return`${header}${impPanel}${addPanel}${filters}${table}`;
 }
 
+// V8.21: Transactions tab for investment accounts. Mirrors rTxCards structure but filters by INV.
+async function rTxInvestments(){
+  let invAccs=S.accounts.filter(a=>INV.has(a.type)&&isLiveAccount(a)).sort(accSortFn);
+  // V8.20 group filter
+  if(TF.txnGroup==='__ungrouped__'){invAccs=invAccs.filter(a=>!a.groupId);}
+  else if(TF.txnGroup){invAccs=invAccs.filter(a=>a.groupId===TF.txnGroup);}
+  if(TF.txnAcc&&!invAccs.some(a=>a.id===TF.txnAcc))TF.txnAcc='';
+  const txns=S.txnCache[S.month]||[];
+  // Investment-related transactions: those linked via investmentAccountId (V8.21+) OR
+  // type==='investment' / income with investment subcat that route through these accounts.
+  // We surface anything with investmentAccountId in the user's invAccs set, plus anything
+  // with accountId pointing at an investment account (rare — most investment txns go through
+  // bank accounts and only the investment side via investmentAccountId).
+  const invAccIds=new Set(invAccs.map(a=>a.id));
+  const filterFn=t=>(t.investmentAccountId&&invAccIds.has(t.investmentAccountId))||(t.accountId&&invAccIds.has(t.accountId));
+  const invTxns=txns.filter(filterFn);
+  const scopedAcc=TF.txnAcc&&invAccs.some(a=>a.id===TF.txnAcc)?TF.txnAcc:null;
+  // V3.0 #6 allMonths
+  const invSource=TF.allMonths
+    ?Object.values(S.txnCache).flat().filter(filterFn)
+    :invTxns;
+  let fl=scopedAcc
+    ?invSource.filter(t=>t.investmentAccountId===scopedAcc||t.accountId===scopedAcc)
+    :[...invSource];
+  // Group filter on the fl set
+  if(TF.txnGroup==='__ungrouped__'){
+    const ungroupedIds=new Set(S.accounts.filter(a=>!a.groupId&&INV.has(a.type)).map(a=>a.id));
+    fl=fl.filter(t=>(t.investmentAccountId&&ungroupedIds.has(t.investmentAccountId))||(t.accountId&&ungroupedIds.has(t.accountId)));
+  }else if(TF.txnGroup){
+    const groupIds=new Set(S.accounts.filter(a=>a.groupId===TF.txnGroup&&INV.has(a.type)).map(a=>a.id));
+    fl=fl.filter(t=>(t.investmentAccountId&&groupIds.has(t.investmentAccountId))||(t.accountId&&groupIds.has(t.accountId)));
+  }
+  if(TF.type)fl=fl.filter(t=>t.type===TF.type);
+  if(TF.mc)fl=fl.filter(t=>t.mainCatId===TF.mc);
+  if(TF.sub)fl=fl.filter(t=>t.subCatId===TF.sub);
+  if(TF.q){const q=TF.q.toLowerCase().trim();fl=fl.filter(t=>(t.description||'').toLowerCase().includes(q)||(t.raw_description||'').toLowerCase().includes(q)||String(t.amount||'').includes(q));}
+  if(TF.sortCol){fl.sort((a,b)=>{
+    let va,vb;
+    if(TF.sortCol==='date'){va=a.date||'';vb=b.date||'';}
+    else if(TF.sortCol==='desc'){va=(a.description||'').toLowerCase();vb=(b.description||'').toLowerCase();}
+    else if(TF.sortCol==='amount'){va=(txDir(a)==='out'?-1:1)*(a.amount||0);vb=(txDir(b)==='out'?-1:1)*(b.amount||0);}
+    else if(TF.sortCol==='cat'){va=(getMC(a.mainCatId)?.name||'').toLowerCase();vb=(getMC(b.mainCatId)?.name||'').toLowerCase();}
+    else if(TF.sortCol==='type'){va=a.type||'';vb=b.type||'';}
+    if(va<vb)return -TF.sortDir;if(va>vb)return TF.sortDir;return 0;
+  });}
+  const noInv=invAccs.length===0;
+  const accountPills=invAccs.map(a=>{
+    return`<button class="opill ${TF.txnAcc===a.id?'active':''}" onclick="setTxnAcc('${a.id}')">${h(a.name)} <span style="font-size:10px;opacity:.7">${ATL[a.type]||a.type}</span></button>`;
+  }).join('');
+  const groupPillRow=buildGroupPillRow();
+  const header=buildTxHeader(fl,scopedAcc,accountPills,'Investments',groupPillRow);
+  const filters=buildTxFilters();
+  const table=noInv
+    ?`<div class="card"><div class="empty">No investment accounts added yet. Add one from the Accounts page (Brokerage, Fund, Gold, Crypto, Real Estate Fund, or Direct Investment).</div></div>`
+    :buildTxTable(fl,S.accounts,false,false,{});
+  const impPanel=buildImpPanel();
+  const addPanel=buildAddPanel();
+  return`${header}${impPanel}${addPanel}${filters}${table}`;
+}
 // ─── SHARED FILTER BAR ───
 // Debounced search — prevents focus loss on every keystroke by throttling re-renders
 let _txSearchTimer=null;
@@ -12273,6 +12693,15 @@ function buildAddPanel(){
       <div><label class="lbl">Linked Debt</label><select id="nt-debt"><option value="">-- None --</option>${S.debts.filter(d=>d.status==='active').map(d=>`<option value="${d.id}">${d.name}</option>`).join('')}</select></div>
       <div><label class="lbl">Notes</label><input type="text" id="nt-notes" placeholder="Optional"></div>
     </div>
+    ${(()=>{const invs=S.accounts.filter(a=>INV.has(a.type)&&isLiveAccount(a)).sort(accSortFn);
+      if(invs.length===0)return '';
+      return`<div style="margin-bottom:8px">
+        <label class="lbl">Investment Account (optional, for investment/return transactions)</label>
+        <select id="nt-inv-acc">
+          <option value="">-- None --</option>
+          ${invs.map(a=>`<option value="${a.id}">${h(a.name)}</option>`).join('')}
+        </select>
+      </div>`;})()}
     <div style="margin-bottom:10px">
             <button class="btn btn-sm" onclick="openNTCat()">Category: <span id="nt-cat-label">-- Uncategorized --</span></button>
       <input type="hidden" id="nt-mc"><input type="hidden" id="nt-sc">
@@ -13329,6 +13758,72 @@ const MIGRATIONS=[
     run:()=>{
       if(!Array.isArray(S.groups))S.groups=[];
       return{noop:true};
+    }
+  },
+  // V8.21: marker migration for investment value tracking. Adds currentValue, currentValueAsOf,
+  // lastValueHistory, updateSource fields on investment accounts. All initialize to undefined or
+  // their natural defaults. No data changes — fields are populated when user records first value.
+  // REMOVE_AFTER: V9.0
+  {
+    id:'v8_21_initInvestmentValues',
+    description:'V8.21 vault marker — investment value tracking introduced',
+    removeAfter:'V9.0',
+    run:()=>{
+      // Set updateSource default on all investment accounts that don't have it
+      const INV_TYPES=new Set(['brokerage_account','fund_account','gold_account','crypto_wallet','real_estate_fund','direct_investment']);
+      let touched=0;
+      (S.accounts||[]).forEach(a=>{
+        if(INV_TYPES.has(a.type)&&!a.updateSource){
+          a.updateSource='manual';
+          touched++;
+        }
+      });
+      if(touched>0)sched();
+      return{count:touched};
+    }
+  },
+  // V8.21: backfill investmentAccountId on existing investment-type transactions. Conservative
+  // matching: only links a transaction to an investment account when the account name appears as
+  // a clear token in the transaction description. Leaves ambiguous transactions unlinked for
+  // manual review. Idempotent — skips transactions that already have investmentAccountId.
+  // REMOVE_AFTER: V9.0
+  {
+    id:'v8_21_linkInvestmentTxns',
+    description:'Link existing investment transactions to investment accounts via description match',
+    removeAfter:'V9.0',
+    run:()=>{
+      const INV_TYPES=new Set(['brokerage_account','fund_account','gold_account','crypto_wallet','real_estate_fund','direct_investment']);
+      const invAccs=(S.accounts||[]).filter(a=>INV_TYPES.has(a.type));
+      if(invAccs.length===0)return{count:0};
+      // Build lowercased name tokens for matching. Token = the most distinctive word in the account name.
+      // Examples: "Tameed Fund" → "tameed", "Aseel Brokerage" → "aseel", "Saudi Tadawul Account" → "tadawul"
+      const accTokens=invAccs.map(a=>{
+        const words=(a.name||'').toLowerCase().split(/\s+/).filter(w=>w.length>=4&&!['fund','brokerage','account','gold','crypto','wallet','direct','investment','real','estate','platform'].includes(w));
+        return{accountId:a.id,tokens:words};
+      }).filter(x=>x.tokens.length>0);
+      if(accTokens.length===0)return{count:0};
+      let touched=0;
+      const skipped=[];
+      Object.values(S.txnCache||{}).forEach(monthTxns=>{
+        (monthTxns||[]).forEach(t=>{
+          if(t.type!=='investment')return;
+          if(t.investmentAccountId)return; // already linked
+          const desc=(t.description||'').toLowerCase()+' '+(t.raw_description||'').toLowerCase();
+          // Find all accounts whose distinctive tokens appear in description
+          const matches=accTokens.filter(at=>at.tokens.some(tok=>desc.includes(tok)));
+          if(matches.length===1){
+            // Unambiguous — link it
+            t.investmentAccountId=matches[0].accountId;
+            touched++;
+          }else if(matches.length>1){
+            // Ambiguous — leave unlinked, surface for manual review
+            skipped.push({txnId:t.id,desc:t.description,candidates:matches.length});
+          }
+          // matches.length===0 → no candidates, leave unlinked, user assigns manually
+        });
+      });
+      if(touched>0)sched();
+      return{count:touched,ambiguous:skipped.length};
     }
   }
 ];
@@ -15608,6 +16103,7 @@ initAuth();
       </div>
     </div>
     <div style="margin-bottom:8px"><label class="lbl">Notes</label><input type="text" id="etxn-notes" placeholder="Optional"></div>
+    <div id="etxn-inv-acc-row" style="margin-bottom:8px;display:none"><label class="lbl">Investment Account (link this txn to a specific investment)</label><select id="etxn-inv-acc"><option value="">-- None --</option></select></div>
     <div id="etxn-beneficiary-row" style="margin-bottom:8px;display:none"><label class="lbl">Beneficiary (Family Member)</label><select id="etxn-beneficiary"><option value="">Self</option></select></div>
     <div id="etxn-staff-row" style="margin-bottom:8px;display:none"><label class="lbl">Staff member</label><select id="etxn-staff"><option value="">-- None --</option></select><div style="font-size:var(--fs-xxs);color:var(--text3);margin-top:3px;line-height:1.5">Tagging a salary payment auto-records an advance deduction for that month if an active advance exists.</div></div>
     <div id="etxn-bill-row" style="margin-bottom:8px;display:none"><label class="lbl">Link to bill</label><select id="etxn-bill"><option value="">-- None --</option></select><div style="font-size:var(--fs-xxs);color:var(--text3);margin-top:3px;line-height:1.5">Only available for Housing &amp; Utilities or Subscriptions &amp; Digital categories.</div></div>
