@@ -1714,7 +1714,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='8.19';
+const VERSION='8.20';
 // IS_DEMO: when true, the entire app runs in a sandboxed sample-data mode.
 // No vault is loaded, no Supabase calls happen, and saveState/flushTxnQueue are no-ops.
 // Activated by URL param ?demo=1 or hash #demo. Cannot be flipped at runtime — the only
@@ -1867,7 +1867,7 @@ async function initAuth(){
       await loadDemoData();
       if(!DEMO_DATA)throw new Error('Demo data missing after load');
       // Initialize minimal real-state structure so functions referencing S don't crash
-      S={accounts:[],debts:[],txnCache:{},goals:[],bills:[],subs:[],income:[],staff:[],submitters:[],txnRules:[],billRules:[],formatLibrary:[],settings:{currency:'SAR',savingsTarget:20,backupReminderMonths:2,lastBackup:null,autoRuleSweep:true},monthlyBal:{},matchedPairs:[],deletedCats:[],customSubs:[],customMains:[],subOverrides:{},familyMembers:[],_submissions:[]};
+      S={accounts:[],debts:[],txnCache:{},goals:[],bills:[],subs:[],income:[],staff:[],submitters:[],txnRules:[],billRules:[],formatLibrary:[],groups:[],settings:{currency:'SAR',savingsTarget:20,backupReminderMonths:2,lastBackup:null,autoRuleSweep:true},monthlyBal:{},matchedPairs:[],deletedCats:[],customSubs:[],customMains:[],subOverrides:{},familyMembers:[],_submissions:[]};
       // Enter demo (overlays DEMO_DATA on top of S)
       enterDemoMode();
       // Mount the dashboard UI (skip the auth screens entirely)
@@ -1991,7 +1991,7 @@ function lockApp(){
   window._cd=null; // M3: clear sensitive chart data from memory on lock
   // H2: Clear decrypted state from memory
   S.accounts=[];S.debts=[];S.goals=[];S.income=[];S.bills=[];S.subs=[];
-  S.staff=[];S.rules=[];S.txnRules=[];S.formatLibrary=[];S.dismissed=[];S.deletedCats=[];S.deletedSubs=[];
+  S.staff=[];S.rules=[];S.txnRules=[];S.formatLibrary=[];S.groups=[];S.dismissed=[];S.deletedCats=[];S.deletedSubs=[];
   S.customMainCats=[];S.customSubCats=[];S.catNameOverrides={};S.catColorOverrides={};S.subNameOverrides={};S.subParentOverrides={};S.billRules=[];
   S.familyMembers=[];S.txnCache={};S.monthlyBal={};S.matchedPairs=[];S.settings={};
   // M7: restore category colors for next unlock
@@ -3549,6 +3549,78 @@ async function rOv(){
     </div>
   </div>
   ${(()=>{
+    // V8.20: Net Position by Group card. Only renders when groups.length >= 2 — single-group
+    // users see no comparison value. Each row shows cash position, CC outstanding, and net for
+    // accounts in that group. Includes an "Ungrouped" row if any active accounts have no groupId.
+    const groups=(S.groups||[]).slice().sort(groupSortFn);
+    if(groups.length<2)return '';
+    const liquidTypes=new Set(['main_account','savings_account','sub_account','prepaid_card','cash']);
+    // Build rows: one per group + one for ungrouped (if any ungrouped active accounts exist)
+    const ungroupedActive=S.accounts.filter(a=>!a.groupId&&isLiveAccount(a));
+    const allRows=[
+      ...groups.map(g=>({id:g.id,name:g.name,color:g.color,accounts:S.accounts.filter(a=>a.groupId===g.id&&isLiveAccount(a))})),
+      ...(ungroupedActive.length?[{id:'__ungrouped__',name:'Ungrouped',color:'#9CA0A8',accounts:ungroupedActive}]:[])
+    ];
+    if(!allRows.length)return '';
+    // For each row, compute: liquid cash sum, CC outstanding sum, net
+    const computed=allRows.map(row=>{
+      const liquid=row.accounts.filter(a=>liquidTypes.has(a.type)).reduce((s,a)=>{const b=calcAccBalance(a);return b!==null?s+b:s;},0);
+      // CC outstanding for this group: sum of calcCCBalance for active CC debts whose linkedAccountId is in this group's accounts
+      const groupAcctIds=new Set(row.accounts.map(a=>a.id));
+      const ccDebt=S.debts.filter(d=>d.type==='credit_card'&&d.status==='active'&&groupAcctIds.has(d.linkedAccountId)).reduce((s,d)=>s+calcCCBalance(d),0);
+      return{...row,liquid,ccDebt,net:liquid-ccDebt,memberCount:row.accounts.length};
+    });
+    const grandLiquid=computed.reduce((s,r)=>s+r.liquid,0);
+    const grandCC=computed.reduce((s,r)=>s+r.ccDebt,0);
+    const grandNet=grandLiquid-grandCC;
+    return`<div class="card card-bordered" style="margin-top:10px">
+      <div class="ctitle">Net Position by Group</div>
+      <div class="csub">Liquid cash minus active credit card outstanding, broken down by account group</div>
+      <div style="margin-top:12px">
+        ${computed.map(r=>`<div class="fg jb" style="padding:10px 0;border-bottom:1px solid var(--bg3);gap:12px;align-items:center">
+          <div class="fg" style="gap:8px;align-items:center;flex:1;min-width:0">
+            <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${r.color};flex-shrink:0;border:1px solid color-mix(in srgb,${r.color} 60%,transparent)"></span>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:var(--fs-xs);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(r.name)}</div>
+              <div style="font-size:10px;color:var(--text3)">${r.memberCount} account${r.memberCount===1?'':'s'}</div>
+            </div>
+          </div>
+          <div class="fg" style="gap:14px;flex-shrink:0;font-variant-numeric:tabular-nums">
+            <div style="text-align:right">
+              <div class="priv-mask" style="font-size:var(--fs-xs);font-weight:500;color:${r.liquid>=0?'var(--text1)':'var(--bad)'}">${fmtP(r.liquid)}</div>
+              <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Cash</div>
+            </div>
+            <div style="text-align:right">
+              <div class="priv-mask" style="font-size:var(--fs-xs);font-weight:500;color:${r.ccDebt>0?'var(--bad)':'var(--text3)'}">${r.ccDebt>0?'-':''}${fmtP(r.ccDebt)}</div>
+              <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">CC</div>
+            </div>
+            <div style="text-align:right;min-width:100px">
+              <div class="priv-mask" style="font-size:var(--fs-sm);font-weight:600;color:${r.net>=0?'var(--ok)':'var(--bad)'}">${fmtP(r.net)}</div>
+              <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Net</div>
+            </div>
+          </div>
+        </div>`).join('')}
+        <div class="fg jb" style="padding:12px 0 4px;gap:12px;align-items:center;border-top:2px solid var(--text1);margin-top:4px">
+          <div style="font-size:var(--fs-xs);font-weight:600;color:var(--text1)">Total</div>
+          <div class="fg" style="gap:14px;flex-shrink:0;font-variant-numeric:tabular-nums">
+            <div style="text-align:right">
+              <div class="priv-mask" style="font-size:var(--fs-xs);font-weight:600;color:${grandLiquid>=0?'var(--text1)':'var(--bad)'}">${fmtP(grandLiquid)}</div>
+              <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Cash</div>
+            </div>
+            <div style="text-align:right">
+              <div class="priv-mask" style="font-size:var(--fs-xs);font-weight:600;color:${grandCC>0?'var(--bad)':'var(--text3)'}">${grandCC>0?'-':''}${fmtP(grandCC)}</div>
+              <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">CC</div>
+            </div>
+            <div style="text-align:right;min-width:100px">
+              <div class="priv-mask" style="font-size:var(--fs-sm);font-weight:700;color:${grandNet>=0?'var(--ok)':'var(--bad)'}">${fmtP(grandNet)}</div>
+              <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Net</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  })()}
+  ${(()=>{
     // V3.0 #22: Top 3 Categories Breakdown (excludes debt + finance & banking)
     const EXCLUDED=['cat_main_debt','cat_main_finance'];
     const catTotals={};
@@ -3923,7 +3995,8 @@ function buildCharts(){
 
 
 // ─── TRANSACTIONS ───
-let TF={type:'',mc:'',acc:'',q:'',sub:'',allMonths:false,sortCol:'',sortDir:1,txnAcc:'',txnTab:'bank'}; // V3.0 #6
+// V8.20: txnGroup is session-only (Decision 5) — group filter doesn't persist across page reload.
+let TF={type:'',mc:'',acc:'',q:'',sub:'',allMonths:false,sortCol:'',sortDir:1,txnAcc:'',txnTab:'bank',txnGroup:''}; // V3.0 #6
 let SP='preferences'; // current settings sub-page
 let DG={month:null}; // diagnostics page state — null = current month from S.month
 async function delTxn(id,ym){
@@ -8527,6 +8600,77 @@ const ATS=ATG.map(g=>`<optgroup label="${g.g}">${g.o.map(o=>`<option value="${o.
 const INV=new Set(['brokerage_account','fund_account','gold_account','crypto_wallet','real_estate_fund','direct_investment']);
 const ACS=[{v:'public_markets',l:'Public Markets'},{v:'funds_managed',l:'Funds & Managed Portfolios'},{v:'private_credit',l:'Private Credit'},{v:'real_assets',l:'Real Assets'},{v:'commodities',l:'Commodities'},{v:'digital_assets',l:'Digital Assets'},{v:'private_equity',l:'Private Equity / Venture'},{v:'cash_liquidity',l:'Cash & Liquidity'}];
 let editAccId=null;
+// V8.20: account groups CRUD
+let editGroupId=null;
+function openGroupsPanel(){
+  editGroupId=null;
+  ['grp-name','grp-desc'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  document.getElementById('grp-color').value=nextGroupColor();
+  document.getElementById('grp-name-lbl').textContent='New group name';
+  document.getElementById('grp-sbtn').textContent='Add group';
+  highlightGroupColor(document.getElementById('grp-color').value);
+  const p=document.getElementById('groups-panel');if(p&&!p.classList.contains('open')){p.classList.add('open');p.scrollIntoView({behavior:'smooth'});}
+}
+function selectGroupColor(hex){
+  const inp=document.getElementById('grp-color');if(inp)inp.value=hex;
+  highlightGroupColor(hex);
+}
+function highlightGroupColor(hex){
+  document.querySelectorAll('.grp-color-btn').forEach(btn=>{
+    btn.style.borderColor=btn.dataset.color===hex?'var(--text1)':'transparent';
+  });
+}
+function editGroup(id){
+  const g=(S.groups||[]).find(x=>x.id===id);if(!g)return;
+  editGroupId=id;
+  document.getElementById('grp-name').value=g.name||'';
+  document.getElementById('grp-desc').value=g.description||'';
+  document.getElementById('grp-color').value=g.color||nextGroupColor();
+  document.getElementById('grp-name-lbl').textContent='Group name';
+  document.getElementById('grp-sbtn').textContent='Save changes';
+  highlightGroupColor(g.color||'');
+  const p=document.getElementById('groups-panel');if(p&&!p.classList.contains('open')){p.classList.add('open');p.scrollIntoView({behavior:'smooth'});}
+}
+function saveGroup(){
+  const name=(document.getElementById('grp-name').value||'').trim();
+  const color=(document.getElementById('grp-color').value||'').trim()||nextGroupColor();
+  const desc=(document.getElementById('grp-desc').value||'').trim();
+  if(!name){toast('Group name required');return;}
+  if(!Array.isArray(S.groups))S.groups=[];
+  if(editGroupId){
+    const g=S.groups.find(x=>x.id===editGroupId);if(!g)return;
+    g.name=name;g.color=color;g.description=desc;
+  }else{
+    // Check for duplicate name (case-insensitive)
+    if(S.groups.some(g=>g.name.toLowerCase()===name.toLowerCase())){toast('A group with that name already exists');return;}
+    const maxIdx=S.groups.reduce((m,g)=>Math.max(m,typeof g.sortIndex==='number'?g.sortIndex:-1),-1);
+    S.groups.push({id:'grp_'+uid(),name,color,description:desc,sortIndex:maxIdx+1,createdAt:localISO(new Date())});
+  }
+  editGroupId=null;
+  saveState().then(()=>{render();toast('Saved');});
+}
+// Decision 3: deleting a group reverts member accounts to Ungrouped (no forced reassignment)
+function delGroup(id){
+  const g=(S.groups||[]).find(x=>x.id===id);if(!g)return;
+  const memberCount=(S.accounts||[]).filter(a=>a.groupId===id).length;
+  const warning=memberCount>0?`\n\n${memberCount} account${memberCount===1?'':'s'} will become Ungrouped (no data lost — you can reassign later).`:'';
+  if(!confirm(`Delete group "${g.name}"?${warning}`))return;
+  // Revert members to ungrouped
+  (S.accounts||[]).forEach(a=>{if(a.groupId===id)delete a.groupId;});
+  S.groups=S.groups.filter(x=>x.id!==id);
+  saveState().then(()=>{render();toast(`Deleted group "${g.name}"`);});
+}
+function moveGroup(id,delta){
+  const g=(S.groups||[]).find(x=>x.id===id);if(!g)return;
+  const ordered=[...(S.groups||[])].sort(groupSortFn);
+  const idx=ordered.indexOf(g);
+  const newIdx=idx+delta;
+  if(newIdx<0||newIdx>=ordered.length)return;
+  ordered.splice(idx,1);
+  ordered.splice(newIdx,0,g);
+  ordered.forEach((x,i)=>{x.sortIndex=i;});
+  saveState().then(()=>render());
+}
 function onATC(v){
   const r=document.getElementById('ac-row');if(r)r.style.display=INV.has(v)?'block':'none';
   const cr=document.getElementById('ac-currency-row');if(cr)cr.style.display=(v==='credit_card'||v==='charge_card')?'flex':'none';
@@ -8564,7 +8708,18 @@ function rAcc(){
     </td>`:'';
     return`<tr${!isLive?' style="opacity:.65"':''}>
       ${reorderCell}
-      <td><div style="font-weight:500">${h(a.name)}${isClosed?' <span class="badge b-cl" style="font-size:9px;margin-left:4px">CLOSED</span>':isArch?' <span class="badge b-ar" style="font-size:9px;margin-left:4px">ARCHIVED</span>':''}</div>${a.accountNumber?`<div style="font-size:var(--fs-xxs);font-family:monospace;color:var(--text3)">${h(a.accountNumber)}</div>`:''}</td>
+      <td>
+        <div class="fg" style="gap:6px;align-items:center">
+          ${(()=>{
+            // V8.20: small color square indicating group membership (brand pattern from sub-brand lockups)
+            const gc=accGroupColor(a);const gn=accGroupName(a);
+            if(!gc||!a.groupId)return '';
+            return`<span title="Group: ${h(gn)}" style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${gc};flex-shrink:0;border:1px solid color-mix(in srgb,${gc} 60%,transparent)"></span>`;
+          })()}
+          <div style="font-weight:500">${h(a.name)}${isClosed?' <span class="badge b-cl" style="font-size:9px;margin-left:4px">CLOSED</span>':isArch?' <span class="badge b-ar" style="font-size:9px;margin-left:4px">ARCHIVED</span>':''}</div>
+        </div>
+        ${a.accountNumber?`<div style="font-size:var(--fs-xxs);font-family:monospace;color:var(--text3);margin-top:2px">${h(a.accountNumber)}</div>`:''}
+      </td>
       <td style="color:var(--text3)">${h(a.institution||'')}</td>
       <td><span class="badge b-tr" style="font-size:10px">${ATL[a.type]||a.type}</span></td>
       ${balTd}
@@ -8642,9 +8797,50 @@ function rAcc(){
     <div class="pg-header-title">Accounts &amp; Cards</div>
     <div class="fg" style="gap:6px;flex-wrap:wrap">
       ${reorderBtnHtml}
+      <button class="btn btn-sm" onclick="openGroupsPanel()" title="Create and manage account groups">${(S.groups||[]).length?'&#9636; Groups ('+(S.groups||[]).length+')':'+ Group'}</button>
       <button class="btn btn-sm" onclick="downloadTemplate('accounts')">&#8595; Template</button>
       <label class="btn btn-sm" style="cursor:pointer">&#8593; Upload Excel<input type="file" accept=".xlsx,.xls" onchange="uploadTemplate('accounts',this)" style="display:none"></label>
       <button class="btn btn-p btn-sm" onclick="openAddAcc()">+ Add account</button>
+    </div>
+  </div>
+
+  <!-- V8.20: Groups management panel -->
+  <div id="groups-panel" class="panel">
+    <div class="chdr">Account Groups</div>
+    <div style="font-size:var(--fs-xs);color:var(--text2);margin-bottom:10px;line-height:1.6">Organize your accounts by ownership, purpose, or role (e.g. Mine, Joint, Business). Groups appear as filters on the Transactions and Reports pages.</div>
+    ${(S.groups||[]).length?`<div style="margin-bottom:10px">${[...(S.groups||[])].sort(groupSortFn).map((g,i,arr)=>{
+      const memberCount=(S.accounts||[]).filter(a=>a.groupId===g.id).length;
+      return`<div class="fg jb" style="padding:8px;border:1px solid var(--bg3);border-radius:var(--rsm);margin-bottom:6px;background:var(--bg2)">
+        <div class="fg" style="gap:8px;flex:1;min-width:0">
+          <div style="width:14px;height:14px;border-radius:3px;background:${g.color||'#9CA0A8'};flex-shrink:0;border:1px solid color-mix(in srgb,${g.color||'#9CA0A8'} 60%,transparent)"></div>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:500;color:var(--text1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(g.name)}</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:2px">${memberCount} account${memberCount===1?'':'s'}${g.description?' · '+h(g.description):''}</div>
+          </div>
+        </div>
+        <div class="fg" style="gap:4px;flex-shrink:0">
+          <button class="btn btn-xs" onclick="moveGroup('${g.id}',-1)" ${i===0?'disabled':''} title="Move up">&uarr;</button>
+          <button class="btn btn-xs" onclick="moveGroup('${g.id}',1)" ${i===arr.length-1?'disabled':''} title="Move down">&darr;</button>
+          <button class="btn btn-xs" onclick="editGroup('${g.id}')" title="Edit">&#9998;</button>
+          <button class="btn btn-xs btn-d" onclick="delGroup('${g.id}')" title="Delete">&times;</button>
+        </div>
+      </div>`;
+    }).join('')}</div>`:'<div style="font-size:11px;color:var(--text3);margin-bottom:10px">No groups yet. Create your first group below.</div>'}
+    <div class="fr" style="margin-top:8px">
+      <div><label class="lbl" id="grp-name-lbl">New group name</label><input type="text" id="grp-name" placeholder="e.g. Joint, Business, Mine" maxlength="40"></div>
+      <div><label class="lbl">Color</label>
+        <div class="fg" id="grp-color-row" style="gap:4px;flex-wrap:wrap;padding-top:4px">
+          ${GROUP_PALETTE.map((p,i)=>`<button type="button" class="grp-color-btn" data-color="${p.hex}" onclick="selectGroupColor('${p.hex}')" title="${p.name}" style="width:24px;height:24px;border-radius:4px;background:${p.hex};border:2px solid transparent;cursor:pointer;padding:0"></button>`).join('')}
+        </div>
+        <input type="hidden" id="grp-color" value="">
+      </div>
+    </div>
+    <div style="margin-top:8px">
+      <label class="lbl">Description (optional)</label><input type="text" id="grp-desc" placeholder="e.g. Joint household accounts" maxlength="80">
+    </div>
+    <div class="fg" style="margin-top:10px">
+      <button class="btn btn-p" id="grp-sbtn" onclick="saveGroup()">Save</button>
+      <button class="btn" onclick="tp('groups-panel');editGroupId=null">Cancel</button>
     </div>
   </div>
   <div id="acc-panel" class="panel">
@@ -8661,6 +8857,13 @@ function rAcc(){
     <div style="margin-top:8px">
       <label class="lbl">Purpose</label><input type="text" id="ac-purp" placeholder="e.g. Main income, groceries only">
     </div>
+    ${(S.groups||[]).length?`<div style="margin-top:8px">
+      <label class="lbl">Group</label>
+      <select id="ac-group">
+        <option value="">— Ungrouped —</option>
+        ${[...(S.groups||[])].sort(groupSortFn).map(g=>`<option value="${g.id}">${h(g.name)}</option>`).join('')}
+      </select>
+    </div>`:''}
     <div id="ac-row" style="display:none;margin-top:8px">
       <label class="lbl">Asset Class</label><select id="a-asclass">${ACS.map(o=>`<option value="${o.v}">${o.l}</option>`).join('')}</select>
     </div>
@@ -8791,14 +8994,24 @@ function openEditAcc(id){
   const balDtEl=document.getElementById('ac-bal-date');if(balDtEl)balDtEl.value=a.balanceAsOf?toDD(a.balanceAsOf):'';
   document.getElementById('ac-type').value=a.type||'main_account';onATC(a.type);
   const curEl=document.getElementById('ac-currency');if(curEl)curEl.value=a.currency||'SAR';
+  // V8.20: prefill group dropdown if it exists in the form
+  const grpEl=document.getElementById('ac-group');if(grpEl)grpEl.value=a.groupId||'';
   document.getElementById('acc-ptitle').textContent='Edit account';document.getElementById('acc-sbtn').textContent='Save changes';
   const p=document.getElementById('acc-panel');if(p&&!p.classList.contains('open')){p.classList.add('open');p.scrollIntoView({behavior:'smooth'});}
 }
 function saveAcc(){
   const name=document.getElementById('ac-name').value.trim();if(!name){toast('Name required',false);return;}
   const type=document.getElementById('ac-type').value;
-  const balVal=document.getElementById('ac-bal')?.value;const curVal=document.getElementById('ac-currency')?.value||'SAR';const data={name,institution:document.getElementById('ac-inst').value.trim(),type,accountNumber:document.getElementById('ac-no').value.trim()||null,purpose:document.getElementById('ac-purp')?.value.trim()||'',openingBalance:balVal!==''&&balVal!==undefined?parseFloat(balVal):undefined,balanceAsOf:fromDD(document.getElementById('ac-bal-date')?.value||'')||undefined,...((type==='credit_card'||type==='charge_card')?{currency:curVal}:{})};
-  if(editAccId){Object.assign(S.accounts.find(x=>x.id===editAccId),data);toast('Account updated');}
+  const balVal=document.getElementById('ac-bal')?.value;const curVal=document.getElementById('ac-currency')?.value||'SAR';
+  // V8.20: capture groupId from form (empty string = ungrouped)
+  const groupId=(document.getElementById('ac-group')?.value||'').trim();
+  const data={name,institution:document.getElementById('ac-inst').value.trim(),type,accountNumber:document.getElementById('ac-no').value.trim()||null,purpose:document.getElementById('ac-purp')?.value.trim()||'',openingBalance:balVal!==''&&balVal!==undefined?parseFloat(balVal):undefined,balanceAsOf:fromDD(document.getElementById('ac-bal-date')?.value||'')||undefined,...(groupId?{groupId}:{}),...((type==='credit_card'||type==='charge_card')?{currency:curVal}:{})};
+  if(editAccId){
+    const existing=S.accounts.find(x=>x.id===editAccId);
+    Object.assign(existing,data);
+    if(!groupId)delete existing.groupId; // explicit ungroup
+    toast('Account updated');
+  }
   else{data.id='acc_'+name.toLowerCase().replace(/[^a-z0-9]/g,'_').slice(0,12)+'_'+Math.random().toString(36).substr(2,4);S.accounts.push(data);toast('Account added');}
   editAccId=null;sched();tp('acc-panel');render();
 }
@@ -11491,6 +11704,35 @@ function accSortFn(a,b){
   if(ax!==bx)return ax-bx;
   return S.accounts.indexOf(a)-S.accounts.indexOf(b);
 }
+
+// V8.20: account groups. Per Lanki brand guidelines, group colors come from the fixed category
+// palette only (no freeform color picker — color is functional, every hue earns its place).
+// Decision 4: 8 preset colors. First group defaults to first color, second to second, etc.
+const GROUP_PALETTE=[
+  {hex:'#021751',name:'Royal Midnight'},
+  {hex:'#0077C1',name:'Electric Blue'},
+  {hex:'#A3BCD7',name:'Powder Blue'},
+  {hex:'#8FA9A3',name:'Dusty Teal'},
+  {hex:'#A690A4',name:'Dusty Plum'},
+  {hex:'#C9B9A3',name:'Cool Sand'},
+  {hex:'#D9A59A',name:'Muted Coral'},
+  {hex:'#D6C88F',name:'Mellow Gold'}
+];
+function groupSortFn(a,b){
+  const ax=typeof a.sortIndex==='number'?a.sortIndex:1e9;
+  const bx=typeof b.sortIndex==='number'?b.sortIndex:1e9;
+  if(ax!==bx)return ax-bx;
+  return (S.groups||[]).indexOf(a)-(S.groups||[]).indexOf(b);
+}
+function getGroup(id){return id?(S.groups||[]).find(g=>g.id===id)||null:null;}
+function accGroupName(a){const g=getGroup(a&&a.groupId);return g?g.name:'Ungrouped';}
+function accGroupColor(a){const g=getGroup(a&&a.groupId);return g&&g.color?g.color:null;}
+// Default color for a new group: pick the first palette color not yet in use.
+function nextGroupColor(){
+  const used=new Set((S.groups||[]).map(g=>g.color));
+  const free=GROUP_PALETTE.find(p=>!used.has(p.hex));
+  return free?free.hex:GROUP_PALETTE[((S.groups||[]).length)%GROUP_PALETTE.length].hex;
+}
 // Card (CC debt) status — V8.17 added 'frozen' (functionally inactive but visible) alongside the
 // existing 'active' / 'settled' / 'forgiven' / 'archived' values. V8.18 formalizes 'frozen'.
 function ccStatus(d){return d&&d.status?d.status:'active';}
@@ -11628,7 +11870,7 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps){
 }
 
 // ─── SHARED TX HEADER (month nav + import + summary) ───
-function buildTxHeader(fl, scopedAcc, accountPills, tabLabel){
+function buildTxHeader(fl, scopedAcc, accountPills, tabLabel, groupPillRow){
   // Matched transfers: in aggregate view both sides live in the dashboard and would double-count,
   // so they are excluded from totals. In scoped view only one side is visible — excluding it would
   // hide a real money movement for this account. So scope-aware exclusion.
@@ -11663,6 +11905,7 @@ function buildTxHeader(fl, scopedAcc, accountPills, tabLabel){
   return`
   ${orphanBanner}
   <div style="margin-bottom:1.5rem">
+    ${groupPillRow||''}
     <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Account</div>
     <div class="fg" style="gap:6px;flex-wrap:wrap">
       <button class="opill ${!scopedAcc?'active':''}" onclick="setTxnAcc('')">All ${tabLabel}</button>
@@ -11773,7 +12016,12 @@ function buildTxHeader(fl, scopedAcc, accountPills, tabLabel){
 async function rTxBank(){
 
   // V8.18.1: pills respect sortIndex so user's chosen order on the Accounts page applies here too.
-  const bankAccs=S.accounts.filter(a=>BANK_ACC_TYPES.has(a.type)&&isLiveAccount(a)).sort(accSortFn);
+  // V8.20: filter pills by active group (or show only ungrouped accounts when group='__ungrouped__').
+  let bankAccs=S.accounts.filter(a=>BANK_ACC_TYPES.has(a.type)&&isLiveAccount(a)).sort(accSortFn);
+  if(TF.txnGroup==='__ungrouped__'){bankAccs=bankAccs.filter(a=>!a.groupId);}
+  else if(TF.txnGroup){bankAccs=bankAccs.filter(a=>a.groupId===TF.txnGroup);}
+  // If the currently scoped account no longer matches the group filter, clear scope
+  if(TF.txnAcc&&!bankAccs.some(a=>a.id===TF.txnAcc))TF.txnAcc='';
   const txns=S.txnCache[S.month]||[];
   // Only include transactions whose accountId resolves to a non-archived bank account.
   // Orphans (accountId null or pointing to a card/deleted account) are surfaced separately via the orphan banner.
@@ -11786,6 +12034,14 @@ async function rTxBank(){
   // V3.0 #6: allMonths mode reads all months, not just S.month
   const bankSource=TF.allMonths?Object.values(S.txnCache).flat().filter(t=>{const acc=S.accounts.find(a=>a.id===t.accountId);return acc&&acc.accountClass!=='credit_card'&&acc.type!=='credit_card'&&acc.type!=='charge_card';}):bankTxns;
   let fl=scopedAcc?bankSource.filter(t=>t.accountId===scopedAcc):[...bankSource];
+  // V8.20: apply group filter to the transaction set (matches the filtered pill list)
+  if(TF.txnGroup==='__ungrouped__'){
+    const ungroupedIds=new Set(S.accounts.filter(a=>!a.groupId&&BANK_ACC_TYPES.has(a.type)).map(a=>a.id));
+    fl=fl.filter(t=>ungroupedIds.has(t.accountId));
+  }else if(TF.txnGroup){
+    const groupAccIds=new Set(S.accounts.filter(a=>a.groupId===TF.txnGroup&&BANK_ACC_TYPES.has(a.type)).map(a=>a.id));
+    fl=fl.filter(t=>groupAccIds.has(t.accountId));
+  }
   if(TF.type)fl=fl.filter(t=>t.type===TF.type);
   if(TF.mc)fl=fl.filter(t=>t.mainCatId===TF.mc);
   if(TF.sub)fl=fl.filter(t=>t.subCatId===TF.sub);
@@ -11815,7 +12071,9 @@ async function rTxBank(){
     const hasFail=S.monthlyBal[mk]?.guardFail;
     return`<button class="opill ${TF.txnAcc===a.id?'active':''}" onclick="setTxnAcc('${a.id}')">${h(a.name)}${hasFail?` <span style="color:#DC2626;font-size:11px" title="Balance discrepancy">⚠</span>`:''}</button>`;
   }).join('');
-  const header=buildTxHeader(fl,scopedAcc,accountPills,'Bank Accounts');
+  // V8.20: group filter pill row — appears above account pills when groups exist (Decision 2)
+  const groupPillRow=buildGroupPillRow();
+  const header=buildTxHeader(fl,scopedAcc,accountPills,'Bank Accounts',groupPillRow);
   const filters=buildTxFilters();
   const table=buildTxTable(fl,S.accounts,showBalance,false,rbMaps);
   const impPanel=buildImpPanel();
@@ -11823,16 +12081,51 @@ async function rTxBank(){
   return`${header}${impPanel}${addPanel}${filters}${table}`;
 }
 
+// V8.20: shared group pill row used on both Bank and Cards tabs
+function buildGroupPillRow(){
+  const groups=(S.groups||[]).slice().sort(groupSortFn);
+  if(!groups.length)return '';
+  const ungroupedCount=(S.accounts||[]).filter(a=>!a.groupId&&isLiveAccount(a)).length;
+  const allBtn=`<button class="opill ${!TF.txnGroup?'active':''}" onclick="setTxnGroup('')" title="Show all accounts">All Groups</button>`;
+  const groupBtns=groups.map(g=>{
+    const memberCount=(S.accounts||[]).filter(a=>a.groupId===g.id&&isLiveAccount(a)).length;
+    if(memberCount===0)return '';
+    const active=TF.txnGroup===g.id;
+    return`<button class="opill ${active?'active':''}" onclick="setTxnGroup('${g.id}')" title="${memberCount} account${memberCount===1?'':'s'}"><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${g.color||'#9CA0A8'};margin-right:5px;vertical-align:middle"></span>${h(g.name)}</button>`;
+  }).join('');
+  const ungroupedBtn=ungroupedCount>0?`<button class="opill ${TF.txnGroup==='__ungrouped__'?'active':''}" onclick="setTxnGroup('__ungrouped__')" title="${ungroupedCount} account${ungroupedCount===1?'':'s'} not in a group">Ungrouped</button>`:'';
+  return`<div class="fg" style="gap:4px;flex-wrap:wrap;margin-bottom:8px;font-size:11px">${allBtn}${groupBtns}${ungroupedBtn}</div>`;
+}
+
+function setTxnGroup(gid){
+  TF.txnGroup=gid;
+  // Clear any account scope — group change resets account scope
+  TF.txnAcc='';
+  render();
+}
+
 // ─── CARDS TAB ───
 async function rTxCards(){
   // V8.18.1: card pills respect sortIndex so user's chosen order applies here too.
-  const cardAccs=S.accounts.filter(a=>CARD_ACC_TYPES.has(a.type)&&isLiveAccount(a)).sort(accSortFn);
+  // V8.20: filter by active group as well
+  let cardAccs=S.accounts.filter(a=>CARD_ACC_TYPES.has(a.type)&&isLiveAccount(a)).sort(accSortFn);
+  if(TF.txnGroup==='__ungrouped__'){cardAccs=cardAccs.filter(a=>!a.groupId);}
+  else if(TF.txnGroup){cardAccs=cardAccs.filter(a=>a.groupId===TF.txnGroup);}
+  if(TF.txnAcc&&!cardAccs.some(a=>a.id===TF.txnAcc))TF.txnAcc='';
   const txns=S.txnCache[S.month]||[];
   const cardTxns=txns.filter(t=>cardAccs.some(a=>a.id===t.accountId));
   const scopedAcc=TF.txnAcc&&cardAccs.some(a=>a.id===TF.txnAcc)?TF.txnAcc:null;
   // V3.0 #6: allMonths mode
   const cardSource=TF.allMonths?Object.values(S.txnCache).flat().filter(t=>{const acc=S.accounts.find(a=>a.id===t.accountId);return acc&&(acc.type==='credit_card'||acc.type==='charge_card');}):cardTxns;
   let fl=scopedAcc?cardSource.filter(t=>t.accountId===scopedAcc):[...cardSource];
+  // V8.20: apply group filter
+  if(TF.txnGroup==='__ungrouped__'){
+    const ungroupedIds=new Set(S.accounts.filter(a=>!a.groupId&&CARD_ACC_TYPES.has(a.type)).map(a=>a.id));
+    fl=fl.filter(t=>ungroupedIds.has(t.accountId));
+  }else if(TF.txnGroup){
+    const groupAccIds=new Set(S.accounts.filter(a=>a.groupId===TF.txnGroup&&CARD_ACC_TYPES.has(a.type)).map(a=>a.id));
+    fl=fl.filter(t=>groupAccIds.has(t.accountId));
+  }
   if(TF.type)fl=fl.filter(t=>t.type===TF.type);
   if(TF.mc)fl=fl.filter(t=>t.mainCatId===TF.mc);
   if(TF.sub)fl=fl.filter(t=>t.subCatId===TF.sub);
@@ -11871,7 +12164,9 @@ async function rTxCards(){
     return`<button class="opill ${TF.txnAcc===a.id?'active':''}" onclick="setTxnAcc('${a.id}')">${h(a.name)} <span style="font-size:10px;opacity:.7">${ATL[a.type]||a.type}</span>${hasFail?` <span style="color:#DC2626;font-size:11px" title="Balance discrepancy">⚠</span>`:''}</button>`;
   }).join('');
   const noCards=cardAccs.length===0;
-  const header=buildTxHeader(fl,scopedAcc,accountPills,'Cards');
+  // V8.20: group pill row for cards tab
+  const groupPillRow=buildGroupPillRow();
+  const header=buildTxHeader(fl,scopedAcc,accountPills,'Cards',groupPillRow);
   const filters=buildTxFilters();
   const table=noCards
     ?`<div class="card"><div class="empty">No card accounts added yet. Add a credit or charge card in the Accounts tab.</div></div>`
@@ -13022,6 +13317,18 @@ const MIGRATIONS=[
       });
       if(touched>0)sched();
       return{count:touched,names:converted};
+    }
+  },
+  // V8.20: marker migration for account groups. S.groups initializes to [] from defaults block.
+  // Existing accounts have undefined groupId, treated as Ungrouped. No data changes.
+  // REMOVE_AFTER: V9.0
+  {
+    id:'v8_20_initGroups',
+    description:'V8.20 vault marker — account groups introduced',
+    removeAfter:'V9.0',
+    run:()=>{
+      if(!Array.isArray(S.groups))S.groups=[];
+      return{noop:true};
     }
   }
 ];
@@ -15162,6 +15469,7 @@ function enterDemoMode(){
   S.submitters=DEMO_DATA.submitters||[];
   S.txnRules=DEMO_DATA.txnRules||[];
   S.formatLibrary=DEMO_DATA.formatLibrary||[];
+  S.groups=DEMO_DATA.groups||[];
   _submissions=DEMO_DATA._submissions||[];
 
   // Settings — merge demo settings over defaults
