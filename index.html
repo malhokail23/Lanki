@@ -1715,7 +1715,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='8.21.5';
+const VERSION='8.22';
 // IS_DEMO: when true, the entire app runs in a sandboxed sample-data mode.
 // No vault is loaded, no Supabase calls happen, and saveState/flushTxnQueue are no-ops.
 // Activated by URL param ?demo=1 or hash #demo. Cannot be flipped at runtime — the only
@@ -1868,7 +1868,7 @@ async function initAuth(){
       await loadDemoData();
       if(!DEMO_DATA)throw new Error('Demo data missing after load');
       // Initialize minimal real-state structure so functions referencing S don't crash
-      S={accounts:[],debts:[],txnCache:{},goals:[],bills:[],subs:[],income:[],staff:[],submitters:[],txnRules:[],billRules:[],formatLibrary:[],groups:[],settings:{currency:'SAR',savingsTarget:20,backupReminderMonths:2,lastBackup:null,autoRuleSweep:true},monthlyBal:{},matchedPairs:[],deletedCats:[],customSubs:[],customMains:[],subOverrides:{},familyMembers:[],_submissions:[]};
+      S={accounts:[],debts:[],txnCache:{},goals:[],bills:[],subs:[],income:[],staff:[],submitters:[],txnRules:[],billRules:[],formatLibrary:[],groups:[],settings:{currency:'SAR',savingsTarget:20,backupReminderMonths:2,lastBackup:null,autoRuleSweep:true},monthlyBal:{},matchedPairs:[],deletedCats:[],customSubs:[],customMains:[],subOverrides:{},familyMembers:[],_submissions:[],_dismissedCombinations:{}};
       // Enter demo (overlays DEMO_DATA on top of S)
       enterDemoMode();
       // Mount the dashboard UI (skip the auth screens entirely)
@@ -3048,6 +3048,27 @@ async function render(){
   else if(t==='settings')el.innerHTML=rSettings();
   else if(t==='catdrill')el.innerHTML=await rCatDrill();
   else if(t==='aiupload')el.innerHTML=rAIUpload();
+  // V8.22: prepend rule conflict hint strip if active. Inline confirmation per Decision 3.
+  if(_ruleConflictHint&&_ruleConflictHint.conflict){
+    const c=_ruleConflictHint.conflict;
+    const oldCat=getMC(c.globalRule.mainCatId);
+    const oldSub=getSC(c.globalRule.subCatId);
+    const newCat=getMC(c.newMainCatId);
+    const newSub=c.newSubCatId?getSC(c.newSubCatId):null;
+    const oldLabel=(oldCat?.name||'?')+(oldSub?' / '+oldSub.name:'');
+    const newLabel=(newCat?.name||'?')+(newSub?' / '+newSub.name:'');
+    const hintHtml=`<div id="rule-conflict-hint" style="background:color-mix(in srgb,var(--electric) 8%,var(--bg));border:1px solid color-mix(in srgb,var(--electric) 40%,transparent);border-radius:var(--rsm);padding:14px 16px;margin-bottom:14px;font-size:var(--fs-xs);position:relative">
+      <button onclick="dismissRuleConflict()" style="position:absolute;top:8px;right:10px;background:none;border:none;cursor:pointer;color:var(--text3);font-size:16px;line-height:1;padding:2px 6px" title="Dismiss and don't ask again for this combination">&times;</button>
+      <div style="font-weight:600;color:var(--text1);margin-bottom:6px">💡 Rule conflict for "${h(c.pattern)}"</div>
+      <div style="color:var(--text2);line-height:1.6;margin-bottom:10px">You categorized this as <strong>${h(newLabel)}</strong> on <strong>${h(c.accountName)}</strong>, but a global rule for "${h(c.pattern)}" exists categorizing it as <strong>${h(oldLabel)}</strong>.</div>
+      <div class="fg" style="gap:6px;flex-wrap:wrap">
+        <button class="btn btn-p btn-sm" onclick="resolveRuleConflict('account_specific')" title="Add an account-specific rule. Global rule stays unchanged.">Make account-specific</button>
+        <button class="btn btn-sm" onclick="resolveRuleConflict('override_global')" title="Update the global rule for all accounts.">Override global rule</button>
+        <button class="btn btn-sm" onclick="resolveRuleConflict('just_this')" title="Apply to this transaction only. No rule change.">Just this transaction</button>
+      </div>
+    </div>`;
+    el.innerHTML=hintHtml+el.innerHTML;
+  }
   // Restore search focus after re-render (independent of tab dispatch)
   if(hadSearchFocus){
     const newSearch=document.querySelector('#page-content input[type="text"][placeholder="Search description or amount…"]');
@@ -4887,8 +4908,16 @@ async function saveEditTxn(){
       const typeLabels={income:'Income',expense:'Expense',transfer:'Transfer',external_transfer:'External Transfer',investment:'Investment'};
       toast(`Type updated from ${typeLabels[prevType]||prevType} to ${typeLabels[t.type]||t.type} to match category`);
     }
-    // Learn from manual correction — unified rule system
-    learnTxnRule(t.description,newMid,newSid,'manual');
+    // V8.22: detect conflict between manual choice and existing global rule before learning.
+    // If conflict: defer rule write, raise inline hint for user to choose scope.
+    const conflict=detectRuleConflict(t.description,t.accountId,newMid,newSid);
+    if(conflict){
+      _ruleConflictHint={conflict,txnId:t.id,ymk};
+      // Don't write any rule yet — user will resolve via inline strip.
+    }else{
+      // Learn from manual correction — unified rule system
+      learnTxnRule(t.description,newMid,newSid,'manual');
+    }
     t.ruleApplied=false;
   }
   // H1: If date moved to a different month, migrate transaction
@@ -5664,7 +5693,8 @@ async function doImport(directPayload){
       return false;
     });
     if(matchedBill&&matchedBill.mainCatId){mid=matchedBill.mainCatId;sid=matchedBill.subCatId||sid;}
-    const rule=!matchedBill?getRule(cleanDesc):null;
+    // V8.22: account-aware rule lookup. Account-specific rules take precedence over global.
+    const rule=!matchedBill?getRule(cleanDesc,ai):null;
     let ruleApplied=false;
     if(rule){
       // Rules overwrite main category, and sub ONLY if the rule has one.
@@ -5780,31 +5810,47 @@ function lcMap(id){const m={'cat_income_salary':'cat_main_income','cat_income_ot
 const TXN_RULES_MAX=300;
 const WEEK_MS_R=7*24*60*60*1000;
 
-function getRule(desc){
+// V8.22: getRule is account-aware. When accountId is provided, account-specific rules take
+// precedence over global rules. Within the same scope tier (account-specific OR global),
+// longest-pattern wins, then most recently used.
+// Backward compat: getRule(desc) without accountId works as before — only matches global rules.
+function getRule(desc,accountId){
   if(!desc)return null;
   const d=(desc||'').toLowerCase().trim();
-  // Match by pattern contained in description (longest match wins to avoid false positives)
-  const matches=(S.txnRules||[]).filter(r=>r.pattern&&d.includes(r.pattern.toLowerCase()));
-  if(!matches.length)return null;
-  const best=matches.reduce((a,b)=>{
+  // Match by pattern contained in description
+  const allMatches=(S.txnRules||[]).filter(r=>r.pattern&&d.includes(r.pattern.toLowerCase()));
+  if(!allMatches.length)return null;
+  // Tier 1: account-specific rules (only when accountId is provided and rule.accountId matches)
+  let tierMatches=accountId?allMatches.filter(r=>r.accountId===accountId):[];
+  // Tier 2: if no account-specific match, fall back to global rules (rule.accountId unset)
+  if(!tierMatches.length)tierMatches=allMatches.filter(r=>!r.accountId);
+  if(!tierMatches.length)return null;
+  const best=tierMatches.reduce((a,b)=>{
     if(a.pattern.length!==b.pattern.length)return a.pattern.length>b.pattern.length?a:b;
     return(a.lastUsed||0)>=(b.lastUsed||0)?a:b; // tie-break by most recently used
   });
   return{mid:best.mainCatId,sid:best.subCatId,_rule:best};
 }
 
-function learnTxnRule(desc,mainCatId,subCatId,source='manual'){
+// V8.22: learnTxnRule accepts optional accountId for account-specific rules. Default scope is
+// global (Decision 1). When accountId is provided, the rule applies only to transactions on
+// that specific account. Account-specific and global rules with the same pattern coexist.
+function learnTxnRule(desc,mainCatId,subCatId,source='manual',accountId){
   if(!desc||!mainCatId)return;
   if(!S.txnRules)S.txnRules=[];
   const pattern=(desc||'').toLowerCase().trim().substr(0,40);
   const now=Date.now();
-  const ex=S.txnRules.find(r=>r.pattern===pattern);
+  // V8.22: match on (pattern, accountId) tuple. Same pattern with different accountId scope
+  // creates a new rule, doesn't update.
+  const ex=S.txnRules.find(r=>r.pattern===pattern&&(r.accountId||null)===(accountId||null));
   if(ex){
     ex.mainCatId=mainCatId;ex.subCatId=subCatId||'';
     ex.useCount=(ex.useCount||0)+1;ex.lastUsed=now;
     if(source==='manual')ex.source='manual'; // manual always wins
   }else{
-    S.txnRules.push({id:'tr_'+Math.random().toString(36).substr(2,8),pattern,mainCatId,subCatId:subCatId||'',source,useCount:1,lastUsed:now,createdAt:now});
+    const rule={id:'tr_'+Math.random().toString(36).substr(2,8),pattern,mainCatId,subCatId:subCatId||'',source,useCount:1,lastUsed:now,createdAt:now};
+    if(accountId)rule.accountId=accountId;
+    S.txnRules.push(rule);
   }
   // Evict lowest-score rules when over limit
   if(S.txnRules.length>TXN_RULES_MAX){
@@ -5820,9 +5866,75 @@ function learnTxnRule(desc,mainCatId,subCatId,source='manual'){
   scheduleAutoRuleSweep();
 }
 
-// Keep learnRule as an alias for backward compatibility (called from cfmSub etc.)
+// V8.22: alias preserved. Calls without accountId default to global (same as V8.21.5 behavior).
 function learnRule(desc,mid,sid){learnTxnRule(desc,mid,sid,'manual');}
 function delRule(pattern){S.txnRules=(S.txnRules||[]).filter(r=>r.pattern!==pattern);sched();render();}
+
+// V8.22: First-time-combination hint (Case 10) helpers.
+// Detects when a manual categorization conflicts with an existing global rule, on an account
+// that has no existing account-specific rule for this description. Returns conflict info or null.
+// Per Decision 2: only when categories differ AND user hasn't dismissed this combination.
+function detectRuleConflict(desc,accountId,newMid,newSid){
+  if(!desc||!accountId||!newMid)return null;
+  const pattern=(desc||'').toLowerCase().trim().substr(0,40);
+  const dismissKey=accountId+'|'+pattern;
+  if(S._dismissedCombinations&&S._dismissedCombinations[dismissKey])return null;
+  // Check for an existing global rule (no accountId) matching this pattern
+  const globalRule=(S.txnRules||[]).find(r=>r.pattern===pattern&&!r.accountId);
+  if(!globalRule)return null;
+  // Same category as the global rule? No conflict — just a learn-from-manual confirmation.
+  if(globalRule.mainCatId===newMid&&(globalRule.subCatId||'')===(newSid||''))return null;
+  // Account-specific rule already exists for this pattern + account? No hint needed —
+  // the user is just updating their account-specific rule, learnTxnRule handles it.
+  const existingAcctRule=(S.txnRules||[]).find(r=>r.pattern===pattern&&r.accountId===accountId);
+  if(existingAcctRule)return null;
+  // True first-time conflict.
+  return{
+    pattern,
+    accountId,
+    dismissKey,
+    globalRule,
+    newMainCatId:newMid,
+    newSubCatId:newSid||'',
+    accountName:(S.accounts.find(a=>a.id===accountId)||{}).name||'this account'
+  };
+}
+
+// V8.22: hint state — when populated, the inline confirmation strip renders. One hint at a time.
+let _ruleConflictHint=null; // { conflict, txnId, ymk, onResolve }
+function dismissRuleConflict(){
+  if(_ruleConflictHint&&_ruleConflictHint.conflict){
+    const k=_ruleConflictHint.conflict.dismissKey;
+    if(!S._dismissedCombinations)S._dismissedCombinations={};
+    S._dismissedCombinations[k]=Date.now();
+    sched();
+  }
+  _ruleConflictHint=null;
+  render();
+}
+function resolveRuleConflict(action){
+  if(!_ruleConflictHint)return;
+  const{conflict}=_ruleConflictHint;
+  if(action==='account_specific'){
+    // Decision 4(a): add account-specific rule, leave global untouched.
+    learnTxnRule(conflict.pattern,conflict.newMainCatId,conflict.newSubCatId,'manual',conflict.accountId);
+    toast(`Account-specific rule added for ${conflict.accountName}`);
+  }else if(action==='override_global'){
+    // Update existing global rule to new category. Manual source preserved.
+    conflict.globalRule.mainCatId=conflict.newMainCatId;
+    conflict.globalRule.subCatId=conflict.newSubCatId||'';
+    conflict.globalRule.useCount=(conflict.globalRule.useCount||0)+1;
+    conflict.globalRule.lastUsed=Date.now();
+    conflict.globalRule.source='manual';
+    sched();
+    scheduleAutoRuleSweep();
+    toast('Global rule updated');
+  }
+  // For 'just_this' the manual categorization on the transaction itself is already saved;
+  // we don't write any rule.
+  _ruleConflictHint=null;
+  render();
+}
 
 // ─── RULE SWEEP ───
 // Scans transactions and re-applies rules. Two modes:
@@ -5841,7 +5953,9 @@ function sweepRules(scope,previewOnly){
       if(isRefundLinked(t))continue;
       // Skip manually categorized (has a main cat AND not flagged as rule-applied)
       if(t.mainCatId&&!t.ruleApplied)continue;
-      const rule=getRule(t.description||'');
+      // V8.22: account-aware rule lookup. If transaction has accountId, account-specific rules
+      // are preferred. Falls back to global rules if no account-specific match.
+      const rule=getRule(t.description||'',t.accountId);
       if(!rule||!rule.mid)continue;
       const ruleHasSub=rule.sid&&rule.sid.trim();
       const newMain=rule.mid;
@@ -13401,22 +13515,38 @@ function rMerchantRules(){
     const sourceBadge=r.source==='manual'
       ?`<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:color-mix(in srgb,var(--electric) 12%,transparent);color:var(--electric)">Manual</span>`
       :`<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:var(--bg2);color:var(--text3)">AI</span>`;
+    // V8.22: Account scope display. Global rules show "All accounts"; account-specific
+    // rules show the account name with group color chip.
+    let scopeHtml;
+    if(r.accountId){
+      const acc=S.accounts.find(a=>a.id===r.accountId);
+      if(acc){
+        const gc=accGroupColor(acc);
+        const chip=gc&&acc.groupId?`<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${gc};margin-right:4px;vertical-align:middle"></span>`:'';
+        scopeHtml=`<span style="font-size:11px">${chip}${h(acc.name)}</span>`;
+      }else{
+        scopeHtml=`<span style="font-size:11px;color:var(--warn)">⚠ Missing account</span>`;
+      }
+    }else{
+      scopeHtml=`<span style="font-size:11px;color:var(--text3)">All accounts</span>`;
+    }
     const lastUsedStr=r.lastUsed?new Date(r.lastUsed).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'2-digit'}):'—';
     return`<tr ${conflicts.length?'style="background:color-mix(in srgb,var(--warn) 4%,transparent)"':''}>
       <td style="font-size:var(--fs-xs);max-width:200px;word-break:break-word">${h(r.pattern)}</td>
       <td>${mc?ctag(r.mainCatId,r.subCatId):'<span style="color:var(--warn);font-size:11px">⚠ Unknown</span>'}</td>
+      <td>${scopeHtml}</td>
       <td style="font-size:var(--fs-xs)">${sourceBadge}</td>
       <td style="font-size:var(--fs-xs);text-align:right;font-variant-numeric:tabular-nums">${r.useCount||1}×</td>
       <td style="font-size:var(--fs-xxs);color:var(--text3)">${lastUsedStr}</td>
       <td style="font-size:var(--fs-xxs)">${conflictTags}</td>
-      <td style="white-space:nowrap"><button class="btn btn-xs btn-d mr-del-btn" data-pattern="${h(r.pattern)}">✕</button></td>
+      <td style="white-space:nowrap"><button class="btn btn-xs btn-d mr-del-btn" data-pattern="${h(r.pattern)}" data-id="${r.id}">✕</button></td>
     </tr>`;}).join('');
 
   const html=`
   <div class="pg-header-row">
     <div>
       <div class="pg-header-title">Transaction Rules</div>
-      <div class="pg-header-sub">${rules.length} rule${rules.length!==1?'s':''} · max ${TXN_RULES_MAX} · least-used evicted first${conflictCount>0?` · <span style="color:var(--warn)">${conflictCount} conflict${conflictCount!==1?'s':''} need review</span>`:''}</div>
+      <div class="pg-header-sub">${rules.length} rule${rules.length!==1?'s':''} · ${rules.filter(r=>r.accountId).length} account-specific · max ${TXN_RULES_MAX} · least-used evicted first${conflictCount>0?` · <span style="color:var(--warn)">${conflictCount} conflict${conflictCount!==1?'s':''} need review</span>`:''}</div>
     </div>
     ${rules.length?`<button class="btn btn-d btn-sm" onclick="if(confirm('Clear all transaction rules?')){S.txnRules=[];sched();render();}">Clear all</button>`:''}
   </div>
@@ -13425,7 +13555,7 @@ function rMerchantRules(){
   </div>`:''}
   <div class="card"><div class="tbl-wrap"><table>
     <thead><tr>
-      <th>Pattern (contains)</th><th>Category</th><th>Source</th>
+      <th>Pattern (contains)</th><th>Category</th><th>Scope</th><th>Source</th>
       <th style="text-align:right">Used</th><th>Last used</th><th>Conflicts</th><th></th>
     </tr></thead>
     <tbody>${rows}</tbody>
@@ -13434,9 +13564,16 @@ function rMerchantRules(){
   setTimeout(()=>{
     document.querySelectorAll('.mr-del-btn').forEach(btn=>{
       btn.addEventListener('click',()=>{
-        const p=btn.getAttribute('data-pattern');
-        const rule=S.txnRules.find(r=>h(r.pattern)===p||r.pattern===p);
-        if(rule){S.txnRules=S.txnRules.filter(x=>x.id!==rule.id);sched();render();}
+        const id=btn.getAttribute('data-id');
+        if(id){
+          // V8.22: delete by id (lets us delete a specific scope when multiple rules share a pattern)
+          S.txnRules=(S.txnRules||[]).filter(x=>x.id!==id);
+        }else{
+          const p=btn.getAttribute('data-pattern');
+          const rule=S.txnRules.find(r=>h(r.pattern)===p||r.pattern===p);
+          if(rule)S.txnRules=S.txnRules.filter(x=>x.id!==rule.id);
+        }
+        sched();render();
       });
     });
   },0);
@@ -14380,6 +14517,20 @@ const MIGRATIONS=[
       if(!S.settings.aiFetchCountResetDate)S.settings.aiFetchCountResetDate=localISO(new Date());
       if(touched>0)sched();
       return{count:touched};
+    }
+  },
+  // V8.22: marker migration for per-account categorization rules. Existing rules without
+  // accountId remain global (backward-compatible default). New _dismissedCombinations object
+  // initialized to track which (description, account) pairs the user has already declined the
+  // first-time-combination hint for. No data changes.
+  // REMOVE_AFTER: V9.0
+  {
+    id:'v8_22_perAccountRules',
+    description:'V8.22 vault marker — per-account rule scope introduced',
+    removeAfter:'V9.0',
+    run:()=>{
+      if(!S._dismissedCombinations||typeof S._dismissedCombinations!=='object')S._dismissedCombinations={};
+      return{noop:true};
     }
   }
 ];
