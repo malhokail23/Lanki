@@ -1715,7 +1715,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='8.22';
+const VERSION='8.23';
 // IS_DEMO: when true, the entire app runs in a sandboxed sample-data mode.
 // No vault is loaded, no Supabase calls happen, and saveState/flushTxnQueue are no-ops.
 // Activated by URL param ?demo=1 or hash #demo. Cannot be flipped at runtime — the only
@@ -1989,6 +1989,7 @@ function lockApp(){
   // In URL demo mode, no vault exists to lock and we don't expose the login screen to visitors
   if(IS_DEMO)return;
   sKey=null;
+  _ovPeriodApplied=false; // V8.23: re-apply persistent period on next unlock
   window._cd=null; // M3: clear sensitive chart data from memory on lock
   // H2: Clear decrypted state from memory
   S.accounts=[];S.debts=[];S.goals=[];S.income=[];S.bills=[];S.subs=[];
@@ -2985,9 +2986,15 @@ function setOvP(p){
   S.ovPeriod=p;
   // V3.0 #15: reset anchor to last transaction month when switching period
   S.month=lastTxnMonth();
+  // V8.23: persist user's last choice across sessions (Decision 2)
+  if(S.settings)S.settings.ovDefaultPeriod=p;
+  sched();
   render();
 }
 let _rendering=false,_renderPending=false;
+// V8.23: tracks whether ovDefaultPeriod has been applied for the current vault session.
+// Reset on lock/unlock so the user's persistent default re-applies on re-unlock.
+let _ovPeriodApplied=false;
 async function render(){
   if(_rendering){_renderPending=true;return;}
   _rendering=true;
@@ -3011,6 +3018,13 @@ async function render(){
   if(!S._migrations)S._migrations={};
   runMigrations();
   // ─────────────────────────────────────────────────────────────────────────
+
+  // V8.23: apply user's persistent period default. Once on first render after vault unlock —
+  // _ovPeriodApplied flag prevents this from overriding the user's mid-session period choice.
+  if(!_ovPeriodApplied&&S.settings&&S.settings.ovDefaultPeriod){
+    S.ovPeriod=S.settings.ovDefaultPeriod;
+    _ovPeriodApplied=true;
+  }
 
   // Prune stale matched pairs where one or both transaction IDs no longer exist
   if(S.matchedPairs?.length){
@@ -3160,10 +3174,10 @@ async function rOv(){
   const td=fDebts.filter(d=>d.status==='active').reduce((s,d)=>s+(d.type==='credit_card'?calcCCBalance(d):(d.remaining||0)),0);
   const avgMonthlyExp=n>0?exp/n:0;
   // Emergency buffer: cash in current accounts / avg monthly expenses
-  const cashAccTypes=new Set(['main_account','savings_account','sub_account','debit_card','prepaid_card','cash']);
+  const cashAccTypes=new Set(['main_account','savings_account','sub_account','joint_account','foreign_currency_account','debit_card','prepaid_card','cash']);
   const liquidAccs=S.accounts.filter(a=>cashAccTypes.has(a.type));
   // We can't know actual balances without balance tracking; use placeholder note
-  const cashAccTypes2=new Set(['main_account','savings_account','sub_account','debit_card','prepaid_card','cash']);
+  const cashAccTypes2=new Set(['main_account','savings_account','sub_account','joint_account','foreign_currency_account','debit_card','prepaid_card','cash']);
   const totalLiquidCash=S.accounts.filter(a=>cashAccTypes2.has(a.type)).reduce((s,a)=>{const b=calcAccBalance(a);return b!==null?s+b:s;},0);
   // Aggregate opening/closing across all bank accounts for this month
   const bankAccIds=S.accounts.filter(a=>cashAccTypes2.has(a.type)).map(a=>a.id);
@@ -3457,11 +3471,74 @@ async function rOv(){
 
   const pbtns=['month','3m','6m','12m','ytd','all'].map(p=>`<button class="pbtn ${S.ovPeriod===p?'active':''}" onclick="setOvP('${p}')">${{month:'1 Month','3m':'3 Months','6m':'6 Months','12m':'12 Months','ytd':'Year to Date','all':'All Time'}[p]}</button>`).join('');
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // V8.23: ZONE-BASED OVERVIEW LAYOUT (Case 4 redesign)
+  // Sections render in deliberate order: Alerts (above hero, conditional) →
+  // Hero (anchor + Net Position by Group) → Performance → Activity → Forecast
+  // → Reference → Intelligence. Each non-hero zone respects S.settings.ovZones
+  // visibility toggle (Decision 1 — per-zone show/hide).
+  // ─────────────────────────────────────────────────────────────────────────
+  const Z=S.settings.ovZones||{alerts:true,performance:true,activity:true,forecast:true,reference:true,intelligence:true};
+  const showZ=k=>Z[k]!==false;
+
+  // Hero composite numbers (V8.23: anchor — single composite KPI card)
+  const totalCC=fDebts.filter(d=>d.type==='credit_card'&&d.status==='active').reduce((s,d)=>s+calcCCBalance(d),0);
+  const totalInvestments=S.accounts.filter(a=>isInvestmentAccount(a)).reduce((s,a)=>{const v=getInvestmentValue(a);return v!==null?s+v:s;},0);
+  const netLiquidPosition=totalLiquidCash-totalCC+totalInvestments;
+  const heroNetCol=netLiquidPosition>=0?'var(--ok)':'var(--bad)';
+
+  // Net Position by Group computation (promoted to Hero zone, expandable)
+  const _ovExpandNPG=S._ovExpandNPG===true; // session-only state
+  const npgGroups=(S.groups||[]).slice().sort(groupSortFn);
+  const npgHasGroups=npgGroups.length>=2;
+  let npgRows='';let npgGrandLine='';
+  if(npgHasGroups){
+    const liquidTypes=new Set(['main_account','savings_account','sub_account','joint_account','foreign_currency_account','prepaid_card','cash']);
+    const ungroupedActive=S.accounts.filter(a=>!a.groupId&&isLiveAccount(a));
+    const allRows=[
+      ...npgGroups.map(g=>({id:g.id,name:g.name,color:g.color,accounts:S.accounts.filter(a=>a.groupId===g.id&&isLiveAccount(a))})),
+      ...(ungroupedActive.length?[{id:'__ungrouped__',name:'Ungrouped',color:'#9CA0A8',accounts:ungroupedActive}]:[])
+    ];
+    const computed=allRows.map(row=>{
+      const liquid=row.accounts.filter(a=>liquidTypes.has(a.type)).reduce((s,a)=>{const b=calcAccBalance(a);return b!==null?s+b:s;},0);
+      const groupAcctIds=new Set(row.accounts.map(a=>a.id));
+      const ccDebt=S.debts.filter(d=>d.type==='credit_card'&&d.status==='active'&&groupAcctIds.has(d.linkedAccountId)).reduce((s,d)=>s+calcCCBalance(d),0);
+      const investments=row.accounts.filter(a=>isInvestmentAccount(a)).reduce((s,a)=>{const v=getInvestmentValue(a);return v!==null?s+v:s;},0);
+      return{...row,liquid,ccDebt,investments,net:liquid-ccDebt+investments,memberCount:row.accounts.length};
+    });
+    const grandLiquid=computed.reduce((s,r)=>s+r.liquid,0);
+    const grandCC=computed.reduce((s,r)=>s+r.ccDebt,0);
+    const grandInv=computed.reduce((s,r)=>s+r.investments,0);
+    const showInvCol=grandInv>0;
+    npgRows=computed.map(r=>`<div class="fg jb" style="padding:10px 0;border-bottom:1px solid var(--bg3);gap:12px;align-items:center">
+      <div class="fg" style="gap:8px;align-items:center;flex:1;min-width:0">
+        <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${r.color};flex-shrink:0;border:1px solid color-mix(in srgb,${r.color} 60%,transparent)"></span>
+        <div style="flex:1;min-width:0"><div style="font-size:var(--fs-xs);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(r.name)}</div><div style="font-size:10px;color:var(--text3)">${r.memberCount} account${r.memberCount===1?'':'s'}</div></div>
+      </div>
+      <div class="fg" style="gap:14px;flex-shrink:0;font-variant-numeric:tabular-nums">
+        <div style="text-align:right"><div class="priv-mask" style="font-size:var(--fs-xs);font-weight:500;color:${r.liquid>=0?'var(--text1)':'var(--bad)'}">${fmtP(r.liquid)}</div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Cash</div></div>
+        <div style="text-align:right"><div class="priv-mask" style="font-size:var(--fs-xs);font-weight:500;color:${r.ccDebt>0?'var(--bad)':'var(--text3)'}">${r.ccDebt>0?'-':''}${fmtP(r.ccDebt)}</div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">CC</div></div>
+        ${showInvCol?`<div style="text-align:right"><div class="priv-mask" style="font-size:var(--fs-xs);font-weight:500;color:${r.investments>0?'var(--ok)':'var(--text3)'}">${fmtP(r.investments)}</div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Inv</div></div>`:''}
+        <div style="text-align:right;min-width:100px"><div class="priv-mask" style="font-size:var(--fs-sm);font-weight:600;color:${r.net>=0?'var(--ok)':'var(--bad)'}">${fmtP(r.net)}</div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Net</div></div>
+      </div>
+    </div>`).join('');
+    npgGrandLine=`<div class="fg jb" style="padding:12px 0 4px;gap:12px;align-items:center;border-top:2px solid var(--text1);margin-top:4px">
+      <div style="font-size:var(--fs-xs);font-weight:600;color:var(--text1)">Total</div>
+      <div class="fg" style="gap:14px;flex-shrink:0;font-variant-numeric:tabular-nums">
+        <div style="text-align:right"><div class="priv-mask" style="font-size:var(--fs-xs);font-weight:600;color:${grandLiquid>=0?'var(--text1)':'var(--bad)'}">${fmtP(grandLiquid)}</div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Cash</div></div>
+        <div style="text-align:right"><div class="priv-mask" style="font-size:var(--fs-xs);font-weight:600;color:${grandCC>0?'var(--bad)':'var(--text3)'}">${grandCC>0?'-':''}${fmtP(grandCC)}</div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">CC</div></div>
+        ${showInvCol?`<div style="text-align:right"><div class="priv-mask" style="font-size:var(--fs-xs);font-weight:600;color:${grandInv>0?'var(--ok)':'var(--text3)'}">${fmtP(grandInv)}</div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Inv</div></div>`:''}
+        <div style="text-align:right;min-width:100px"><div class="priv-mask" style="font-size:var(--fs-sm);font-weight:700;color:${(grandLiquid-grandCC+grandInv)>=0?'var(--ok)':'var(--bad)'}">${fmtP(grandLiquid-grandCC+grandInv)}</div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Net</div></div>
+      </div>
+    </div>`;
+  }
+
   return`
+  <!-- V8.23: PAGE HEADER — period selector + month nav -->
   <div class="pg-header-row">
     <div>
-      <div class="pg-header-title">Financial Overview</div>
-      <div class="pg-header-sub">Cash Flow Engine · ${n} month${n!==1?'s':''} of data</div>
+      <div class="pg-header-title">Overview</div>
+      <div class="pg-header-sub">${n} month${n!==1?'s':''} of data · Cash Flow Engine</div>
     </div>
     <div class="fg" style="gap:8px;flex-wrap:wrap;align-items:center">
       <div class="fg" style="gap:4px;flex-wrap:wrap">${pbtns}</div>
@@ -3475,80 +3552,85 @@ async function rOv(){
     </div>
   </div>
 
-  <!-- S1: FINANCIAL PULSE -->
-  <div class="slbl" style="margin-top:0">Summary</div>
-  <div class="kgrid">
-    <div class="kpi"><div class="klbl">Income</div><div class="kval c-ok">${fmtP(inc)}</div><div class="ksub">Excl. transfers</div></div>
-    <div class="kpi"><div class="klbl">Expenses</div><div class="kval c-bad">${fmtP(exp+ext)}</div><div class="ksub">Incl. external transfers</div></div>
-    <div class="kpi"><div class="klbl">Net Flow</div><div class="kval ${net>=0?'c-ok':'c-bad'}">${fmtSP(net,true)}</div><div class="ksub">Surplus or deficit</div></div>
-    <div class="kpi"><div class="klbl">Savings Rate</div><div class="kval ${srCol}">${sr}%</div><div class="ksub">Target: ${tgt}% or above</div></div>
-    <div class="kpi"><div class="klbl">Debt Remaining</div><div class="kval c-warn">${fmtP(td)}</div><div class="ksub">${actDebts.length} active debt${actDebts.length!==1?'s':''}</div></div>
-    <div class="kpi"><div class="klbl">Debt-to-Income</div><div class="kval ${dtiCol}">${dti}%</div><div class="ksub">Monthly obligations vs income${dti>40?' · Above 40% threshold':''}</div></div>
-    <div class="kpi"><div class="klbl">Cash Position</div><div class="kval ${aggHasData?(aggClosing>=aggOpening?'c-ok':'c-warn'):'c-mut'}">${aggHasData?fmtP(aggClosing):'--'}</div><div class="ksub">${aggHasData?`Opening: ${fmtP(aggOpening)} &middot; Net: ${aggClosing>=aggOpening?'+':''}${fmtS(aggClosing-aggOpening)}`:'Add opening balances to track'}</div></div>
-    <div class="kpi"><div class="klbl">Emergency Buffer</div><div class="kval ${ebRatio===null?'c-mut':ebRatio>=3?'c-ok':ebRatio>=1?'c-warn':'c-bad'}">${ebRatio!==null?ebRatio+' mo':'--'}</div><div class="ksub">${ebRatio===null?'Set opening balances to track':ebRatio>=3?'Healthy &mdash; 3+ months covered':ebRatio>=1?'Below target':'Critical &mdash; less than 1 month'}</div></div>
+  ${showZ('alerts')&&alerts.length?`
+  <!-- V8.23: ALERTS ZONE — above hero when alerts exist (Decision 5b) -->
+  <div class="card card-bordered" style="margin-bottom:1rem;border-left:3px solid ${alerts.some(a=>a.level==='crit')?'var(--bad)':'var(--warn)'}">
+    <div class="ctitle" style="margin-bottom:8px">Needs Attention <span style="font-size:11px;font-weight:400;color:var(--text3);margin-left:6px">${alerts.length} item${alerts.length!==1?'s':''}</span></div>
+    ${alertHtml}
   </div>
+  `:''}
 
-  ${aggHasData&&bridgeGap!==null&&Math.abs(bridgeGap)>=0.5?`
-  <!-- V8.13: Reconciliation Bridge — explain the gap between Net Flow and Cash Change -->
-  <div class="card card-bordered" style="margin-top:1rem;padding:14px 16px;background:${bridgeReconciles?'color-mix(in srgb,var(--ok) 5%,transparent)':'color-mix(in srgb,var(--warn) 6%,transparent)'};border-left:3px solid ${bridgeReconciles?'var(--ok)':'var(--warn)'}">
-    <div class="fg jb" style="align-items:flex-start;gap:14px;flex-wrap:wrap">
-      <div style="flex:1;min-width:280px">
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);margin-bottom:6px">Reconciliation</div>
-        <div style="font-size:13px;line-height:1.6;color:var(--text1)">
-          <strong>Net Flow ${fmtSP(net,true)}</strong> shows the surplus or deficit of money earned vs spent this period.<br>
-          <strong>Cash Position changed by ${fmtSP(aggCashChange,true)}</strong> &mdash; the actual movement in your bank accounts.
+  <!-- V8.23: HERO ZONE — anchor composite KPI + collapsible Net Position by Group -->
+  <div class="card card-bordered" style="margin-bottom:1rem;padding:1.25rem 1.25rem 1rem">
+    <div class="fg jb" style="align-items:flex-start;flex-wrap:wrap;gap:14px">
+      <div style="flex:1;min-width:240px">
+        <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Net Liquid Position</div>
+        <div class="priv-mask" style="font-size:34px;font-weight:600;font-variant-numeric:tabular-nums;color:${heroNetCol};line-height:1.1;margin-top:2px">${fmtP(netLiquidPosition)}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">Cash + Investments &minus; Credit Card Debt</div>
+      </div>
+      <div class="fg" style="gap:18px;flex-wrap:wrap;justify-content:flex-end">
+        <div style="text-align:right;min-width:110px">
+          <div style="font-size:9px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Cash</div>
+          <div class="priv-mask" style="font-size:18px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--text1);margin-top:2px">${fmtP(totalLiquidCash)}</div>
+        </div>
+        <div style="text-align:right;min-width:110px">
+          <div style="font-size:9px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Investments</div>
+          <div class="priv-mask" style="font-size:18px;font-weight:600;font-variant-numeric:tabular-nums;color:${totalInvestments>0?'var(--ok)':'var(--text3)'};margin-top:2px">${fmtP(totalInvestments)}</div>
+        </div>
+        <div style="text-align:right;min-width:110px">
+          <div style="font-size:9px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">CC Debt</div>
+          <div class="priv-mask" style="font-size:18px;font-weight:600;font-variant-numeric:tabular-nums;color:${totalCC>0?'var(--bad)':'var(--text3)'};margin-top:2px">${totalCC>0?'-':''}${fmtP(totalCC)}</div>
         </div>
       </div>
-      <div style="flex:0 0 auto;text-align:right;min-width:180px">
-        <div style="font-size:11px;color:var(--text3);margin-bottom:2px">Difference</div>
-        <div style="font-size:18px;font-weight:600;color:${bridgeReconciles?'var(--ok)':'var(--warn)'}">${fmtSP(bridgeGap,true)}</div>
-      </div>
     </div>
-    <div style="margin-top:10px;padding-top:10px;border-top:1px solid color-mix(in srgb,var(--border) 60%,transparent)">
-      <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em">Bridge breakdown</div>
-      <div style="display:grid;grid-template-columns:1fr auto;gap:4px 14px;font-size:12px;line-height:1.5">
-        ${ccPaymentsFromCash>0?`
-        <div style="color:var(--text2)">Credit card payments from cash (settling prior-period CC spending)</div>
-        <div style="font-weight:500;text-align:right;font-variant-numeric:tabular-nums" class="fmt-money">&minus;${fmt(ccPaymentsFromCash)}</div>
-        `:''}
-        ${orphanCount>0?`
-        <div style="color:var(--text2)">Unmatched transfers (${orphanCount} pending) &mdash; <a href="#" onclick="sw('transactions');TF.txnTab='matching';render();return false" style="color:var(--electric);text-decoration:none">resolve &rarr;</a></div>
-        <div style="font-weight:500;text-align:right;font-variant-numeric:tabular-nums" class="fmt-money">${orphanImbalance>=0?'+':''}${fmtS(orphanImbalance)}</div>
-        `:''}
-        ${Math.abs(bridgeUnexplained)>=0.5?`
-        <div style="color:${bridgeReconciles?'var(--text2)':'var(--warn)'};font-weight:${bridgeReconciles?'400':'500'}">Unexplained &mdash; likely opening balance drift or missing imports</div>
-        <div style="font-weight:500;text-align:right;font-variant-numeric:tabular-nums;color:${bridgeReconciles?'var(--text2)':'var(--warn)'}" class="fmt-money">${bridgeUnexplained>=0?'+':''}${fmtS(bridgeUnexplained)}</div>
-        `:''}
+    ${npgHasGroups?`
+    <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--bg3)">
+      <button onclick="S._ovExpandNPG=!${_ovExpandNPG};render()" style="background:none;border:none;cursor:pointer;color:var(--electric);font-size:12px;font-weight:500;padding:0;display:flex;align-items:center;gap:4px">
+        ${_ovExpandNPG?'&#9662;':'&#9656;'} Net Position by Group <span style="color:var(--text3);font-weight:400;margin-left:4px">(${npgGroups.length} groups)</span>
+      </button>
+      ${_ovExpandNPG?`<div style="margin-top:10px">${npgRows}${npgGrandLine}</div>`:''}
+    </div>`:''}
+  </div>
+
+  ${showZ('performance')?`
+  <!-- V8.23: PERFORMANCE ZONE — 3 cards (Income vs Expense, Savings Rate, Net Cash Flow) -->
+  <div class="g3" style="margin-bottom:1rem">
+    <div class="card card-bordered">
+      <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Income vs Expense</div>
+      <div class="fg" style="margin-top:10px;gap:14px;align-items:flex-end">
+        <div style="flex:1;min-width:0">
+          <div class="priv-mask" style="font-size:20px;font-weight:600;color:var(--ok);font-variant-numeric:tabular-nums">${fmtP(inc)}</div>
+          <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-top:2px">Income</div>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div class="priv-mask" style="font-size:20px;font-weight:600;color:var(--bad);font-variant-numeric:tabular-nums">${fmtP(exp+ext)}</div>
+          <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-top:2px">Expense</div>
+        </div>
       </div>
-      ${bridgeReconciles?`
-      <div style="margin-top:10px;font-size:11px;color:var(--ok);font-weight:500">&#10003; Bridge reconciles &mdash; every halala is accounted for.</div>
-      `:`
-      <div style="margin-top:10px;font-size:11px;color:var(--text3);line-height:1.5">
-        <strong style="color:var(--warn)">Note:</strong> Both Net Flow and Cash Position are correct &mdash; they answer different questions. The difference reflects timing of credit card payments and any unresolved data items. Resolve pending matches and check imported statement coverage to close any unexplained gap.
+      ${prevExp>0?`<div style="margin-top:10px;font-size:11px;color:var(--text3)">vs prior period: ${fmtP(prevExp)} prior expense</div>`:''}
+    </div>
+    <div class="card card-bordered">
+      <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Savings Rate</div>
+      <div class="fg" style="margin-top:10px;align-items:flex-end;gap:10px">
+        <div class="priv-mask" style="font-size:28px;font-weight:600;font-variant-numeric:tabular-nums;color:${sr>=tgt?'var(--ok)':sr>=10?'var(--warn)':'var(--bad)'};line-height:1">${sr}%</div>
+        <div style="font-size:11px;color:var(--text3);padding-bottom:4px">target ${tgt}%</div>
       </div>
-      `}
+      <div class="fg" style="margin-top:12px;gap:3px;align-items:flex-end;height:32px">${srBars}</div>
+    </div>
+    <div class="card card-bordered">
+      <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Net Cash Flow</div>
+      <div class="priv-mask" style="font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;color:${net>=0?'var(--ok)':'var(--bad)'};margin-top:8px;line-height:1.1">${fmtSP(net,true)}</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:8px;line-height:1.6">Income ${fmtP(inc)} &minus; Expense ${fmtP(exp)}${ext>0?` &minus; Ext ${fmtP(ext)}`:''}${inv>0?` &minus; Inv ${fmtP(inv)}`:''}</div>
     </div>
   </div>
   `:''}
 
-  <!-- S2: CASH FLOW CHART -->
-  <div class="slbl">Cash Flow</div>
-  <div class="shint">By month — deficit months outlined in red.</div>
-  <div class="card card-bordered" style="padding-bottom:1.25rem">
-    <div class="fg" style="gap:14px;flex-wrap:wrap;margin-bottom:10px;font-size:11px;color:var(--text2)">
-      <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#1D9E75;margin-right:4px;vertical-align:middle"></span>Income</span>
-      <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#E24B4A;margin-right:4px;vertical-align:middle"></span>Expenses</span>
-      <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#378ADD;margin-right:4px;vertical-align:middle"></span>Investments</span>
-    </div>
-    <div style="position:relative;height:220px"><canvas id="cfChart"></canvas></div>
-  </div>
-
-  <!-- S3: SPENDING INTELLIGENCE -->
-  <div class="slbl">Spending</div>
-  <div class="g2" style="margin-bottom:0">
+  ${showZ('activity')?`
+  <!-- V8.23: ACTIVITY ZONE — Top Categories, By Category chart, External Transfers -->
+  <div class="g2" style="margin-bottom:1rem">
     <div class="card card-bordered">
       <div class="fg jb" style="align-items:center;margin-bottom:8px">
-        <div class="ctitle" style="margin-bottom:0">By Category</div>
+        <div style="font-size:13px;font-weight:600;color:var(--text1)">By Category</div>
         <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text3);cursor:pointer;font-weight:400;margin:0;white-space:nowrap">
           <input type="checkbox" id="ov-exclude-debt" ${S.ovExcludeDebt!==false?'checked':''} onchange="S.ovExcludeDebt=this.checked;sched();render()" style="margin:0">
           Excl. Debt
@@ -3556,452 +3638,119 @@ async function rOv(){
       </div>
       ${catRows||'<div class="empty" style="padding:1rem">No expenses yet</div>'}
     </div>
-    <div>
-      <div class="card card-bordered" style="margin-bottom:10px">
-        <div class="ctitle">Burn Rate</div>
-        <div class="fg jb" style="margin-top:6px">
-          <div><div style="font-size:11px;color:var(--text3)">Daily average</div><div style="font-size:18px;font-weight:500">${fmtP(burnThis)}<span style="font-size:11px;color:var(--text3)">/day</span></div></div>
-          ${burnPrev>0?`<div style="text-align:right"><div style="font-size:11px;color:var(--text3)">vs prior period</div><div style="font-size:15px;font-weight:500;${burnDiff>0?'color:var(--bad)':'color:var(--ok)'}">${burnDiff>0?'↑':'↓'}${Math.abs(burnDiff)}%</div></div>`:''}
-        </div>
-      </div>
-      <div class="card card-bordered" style="margin-bottom:10px">
-        <div class="ctitle">vs Last Month</div>
-        <div style="margin-top:6px">
-          ${momDiff!==null?`<div class="priv-mask" style="font-size:24px;font-weight:500;${momDiff>0?'color:var(--bad)':'color:var(--ok)'}">${momDiff>0?'+':''}${momDiff}%</div>`:'<div style="font-size:var(--fs-xs);color:var(--text3)">Not enough data yet</div>'}
-        </div>
-      </div>
-    </div>
-  </div>
-  ${(()=>{
-    // V8.20: Net Position by Group card. Only renders when groups.length >= 2 — single-group
-    // users see no comparison value. Each row shows cash position, CC outstanding, and net for
-    // accounts in that group. Includes an "Ungrouped" row if any active accounts have no groupId.
-    const groups=(S.groups||[]).slice().sort(groupSortFn);
-    if(groups.length<2)return '';
-    const liquidTypes=new Set(['main_account','savings_account','sub_account','prepaid_card','cash']);
-    // Build rows: one per group + one for ungrouped (if any ungrouped active accounts exist)
-    const ungroupedActive=S.accounts.filter(a=>!a.groupId&&isLiveAccount(a));
-    const allRows=[
-      ...groups.map(g=>({id:g.id,name:g.name,color:g.color,accounts:S.accounts.filter(a=>a.groupId===g.id&&isLiveAccount(a))})),
-      ...(ungroupedActive.length?[{id:'__ungrouped__',name:'Ungrouped',color:'#9CA0A8',accounts:ungroupedActive}]:[])
-    ];
-    if(!allRows.length)return '';
-    // For each row, compute: liquid cash, CC outstanding, investments (current value), net
-    const computed=allRows.map(row=>{
-      const liquid=row.accounts.filter(a=>liquidTypes.has(a.type)).reduce((s,a)=>{const b=calcAccBalance(a);return b!==null?s+b:s;},0);
-      const groupAcctIds=new Set(row.accounts.map(a=>a.id));
-      const ccDebt=S.debts.filter(d=>d.type==='credit_card'&&d.status==='active'&&groupAcctIds.has(d.linkedAccountId)).reduce((s,d)=>s+calcCCBalance(d),0);
-      // V8.21: investments column — current value of investment accounts in this group
-      const investments=row.accounts.filter(a=>isInvestmentAccount(a)).reduce((s,a)=>{const v=getInvestmentValue(a);return v!==null?s+v:s;},0);
-      return{...row,liquid,ccDebt,investments,net:liquid-ccDebt+investments,memberCount:row.accounts.length};
-    });
-    const grandLiquid=computed.reduce((s,r)=>s+r.liquid,0);
-    const grandCC=computed.reduce((s,r)=>s+r.ccDebt,0);
-    const grandInv=computed.reduce((s,r)=>s+r.investments,0);
-    const grandNet=grandLiquid-grandCC+grandInv;
-    const showInvCol=grandInv>0; // only show Investments column when there's something to show
-    return`<div class="card card-bordered" style="margin-top:10px">
-      <div class="ctitle">Net Position by Group</div>
-      <div class="csub">${showInvCol?'Liquid cash plus investment value, minus active credit card outstanding':'Liquid cash minus active credit card outstanding'}, broken down by account group</div>
-      <div style="margin-top:12px">
-        ${computed.map(r=>`<div class="fg jb" style="padding:10px 0;border-bottom:1px solid var(--bg3);gap:12px;align-items:center">
-          <div class="fg" style="gap:8px;align-items:center;flex:1;min-width:0">
-            <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${r.color};flex-shrink:0;border:1px solid color-mix(in srgb,${r.color} 60%,transparent)"></span>
-            <div style="flex:1;min-width:0">
-              <div style="font-size:var(--fs-xs);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(r.name)}</div>
-              <div style="font-size:10px;color:var(--text3)">${r.memberCount} account${r.memberCount===1?'':'s'}</div>
-            </div>
-          </div>
-          <div class="fg" style="gap:14px;flex-shrink:0;font-variant-numeric:tabular-nums">
-            <div style="text-align:right">
-              <div class="priv-mask" style="font-size:var(--fs-xs);font-weight:500;color:${r.liquid>=0?'var(--text1)':'var(--bad)'}">${fmtP(r.liquid)}</div>
-              <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Cash</div>
-            </div>
-            <div style="text-align:right">
-              <div class="priv-mask" style="font-size:var(--fs-xs);font-weight:500;color:${r.ccDebt>0?'var(--bad)':'var(--text3)'}">${r.ccDebt>0?'-':''}${fmtP(r.ccDebt)}</div>
-              <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">CC</div>
-            </div>
-            ${showInvCol?`<div style="text-align:right">
-              <div class="priv-mask" style="font-size:var(--fs-xs);font-weight:500;color:${r.investments>0?'var(--ok)':'var(--text3)'}">${fmtP(r.investments)}</div>
-              <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Inv</div>
-            </div>`:''}
-            <div style="text-align:right;min-width:100px">
-              <div class="priv-mask" style="font-size:var(--fs-sm);font-weight:600;color:${r.net>=0?'var(--ok)':'var(--bad)'}">${fmtP(r.net)}</div>
-              <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Net</div>
-            </div>
-          </div>
-        </div>`).join('')}
-        <div class="fg jb" style="padding:12px 0 4px;gap:12px;align-items:center;border-top:2px solid var(--text1);margin-top:4px">
-          <div style="font-size:var(--fs-xs);font-weight:600;color:var(--text1)">Total</div>
-          <div class="fg" style="gap:14px;flex-shrink:0;font-variant-numeric:tabular-nums">
-            <div style="text-align:right">
-              <div class="priv-mask" style="font-size:var(--fs-xs);font-weight:600;color:${grandLiquid>=0?'var(--text1)':'var(--bad)'}">${fmtP(grandLiquid)}</div>
-              <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Cash</div>
-            </div>
-            <div style="text-align:right">
-              <div class="priv-mask" style="font-size:var(--fs-xs);font-weight:600;color:${grandCC>0?'var(--bad)':'var(--text3)'}">${grandCC>0?'-':''}${fmtP(grandCC)}</div>
-              <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">CC</div>
-            </div>
-            ${showInvCol?`<div style="text-align:right">
-              <div class="priv-mask" style="font-size:var(--fs-xs);font-weight:600;color:${grandInv>0?'var(--ok)':'var(--text3)'}">${fmtP(grandInv)}</div>
-              <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Inv</div>
-            </div>`:''}
-            <div style="text-align:right;min-width:100px">
-              <div class="priv-mask" style="font-size:var(--fs-sm);font-weight:700;color:${grandNet>=0?'var(--ok)':'var(--bad)'}">${fmtP(grandNet)}</div>
-              <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Net</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>`;
-  })()}
-  ${(()=>{
-    // V3.0 #22: Top 3 Categories Breakdown (excludes debt + finance & banking)
-    const EXCLUDED=['cat_main_debt','cat_main_finance'];
-    const catTotals={};
-    tx.filter(t=>txDir(t)==='out'&&t.type==='expense'&&!isRefundLinked(t)&&t.mainCatId&&!EXCLUDED.includes(t.mainCatId)).forEach(t=>{
-      if(!catTotals[t.mainCatId])catTotals[t.mainCatId]={amount:0,subs:{}};
-      catTotals[t.mainCatId].amount+=t.amount;
-      const sid=t.subCatId||'_uncat';
-      if(!catTotals[t.mainCatId].subs[sid])catTotals[t.mainCatId].subs[sid]=0;
-      catTotals[t.mainCatId].subs[sid]+=t.amount;
-    });
-    const top3=Object.entries(catTotals).sort((a,b)=>b[1].amount-a[1].amount).slice(0,3);
-    if(!top3.length)return '';
-    return `<div class="card card-bordered" style="margin-top:10px">
-      <div class="ctitle">Top Spending Categories</div>
-      <div class="csub">Top sub-categories by spend — excl. debt and banking</div>
-      <div class="g3-fixed" style="margin-top:10px">
-        ${top3.map(([cid,{amount,subs}])=>{
-          const mc=getMC(cid);
-          const topSubs=Object.entries(subs).sort((a,b)=>b[1]-a[1]).slice(0,4);
-          return `<div style="padding:10px 12px;background:var(--bg2);border-radius:var(--rsm)">
-            <div class="fg jb" style="margin-bottom:6px">
-              <div style="font-size:var(--fs-xs);font-weight:600;color:var(--text)">${h(mc?.name||'—')}</div>
-              <div style="font-size:var(--fs-xs);font-weight:500" class="c-bad">${fmtP(amount)}</div>
-            </div>
-            ${topSubs.map(([sid,amt])=>{
-              const sc=sid==='_uncat'?null:getSC(sid);
-              const lbl=sc?.name||'Uncategorized';
-              const pct=amount>0?Math.round(amt/amount*100):0;
-              return `<div class="fg jb" style="padding:3px 0;font-size:var(--fs-xxs);color:var(--text2)">
-                <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-right:8px">${h(lbl)}</span>
-                <span style="white-space:nowrap;color:var(--text3)">${fmtP(amt)} · ${pct}%</span>
-              </div>`;
-            }).join('')}
+    <div class="card card-bordered">
+      <div style="font-size:13px;font-weight:600;color:var(--text1);margin-bottom:8px">Top Spending Categories</div>
+      <div style="font-size:10px;color:var(--text3);margin-bottom:8px">Top sub-categories by spend &mdash; excl. debt and banking</div>
+      ${(()=>{
+        const subSpend={};
+        tx.filter(t=>txDir(t)==='out'&&t.type==='expense'&&!isRefundLinked(t)).forEach(t=>{
+          if(t.mainCatId==='cat_main_debt'||t.mainCatId==='cat_main_finance')return;
+          const k=t.subCatId||t.mainCatId||'_unc';
+          if(!subSpend[k])subSpend[k]={mc:t.mainCatId,sc:t.subCatId,total:0,count:0};
+          subSpend[k].total+=t.amount;subSpend[k].count++;
+        });
+        const top=Object.values(subSpend).sort((a,b)=>b.total-a.total).slice(0,5);
+        if(!top.length)return '<div class="empty" style="padding:1rem">No data yet</div>';
+        const totalTop=top.reduce((s,r)=>s+r.total,0);
+        return top.map(r=>{
+          const mc=getMC(r.mc),sc=getSC(r.sc);const lbl=sc?sc.name:(mc?mc.name:'Uncategorized');
+          const pct=totalTop?Math.round(r.total/totalTop*100):0;
+          return`<div style="margin-bottom:10px">
+            <div class="fg jb" style="font-size:var(--fs-xs);margin-bottom:4px"><span style="color:var(--text2)">${h(lbl)}</span><span class="priv-mask" style="font-weight:600;font-variant-numeric:tabular-nums">${fmtP(r.total)}</span></div>
+            <div style="height:5px;background:var(--bg3);border-radius:3px;overflow:hidden"><div style="height:100%;width:${pct}%;background:var(--electric);border-radius:3px"></div></div>
+            <div style="font-size:10px;color:var(--text3);margin-top:2px">${r.count} txn${r.count!==1?'s':''} · ${pct}%</div>
           </div>`;
-        }).join('')}
-      </div>
-    </div>`;
-  })()}
-
-  <!-- S4: DEBT & OBLIGATIONS -->
-  <div class="slbl">Debt &amp; Obligations</div>
-  <div class="g2">
-    <div class="card card-bordered">
-      <div class="ctitle">Debt Summary</div>
-      <div class="csub">Total remaining: ${fmtP(td)} · Monthly obligations: ${fmtP(monthlyDebt)}</div>
-      ${dHtml}
-      ${actDebts.length>4?`<div style="font-size:var(--fs-xs);color:var(--info);cursor:pointer;margin-top:6px" onclick="sw('debts')">View all debts →</div>`:''}
-    </div>
-    <div>
-      <div class="card card-bordered" style="margin-bottom:10px">
-        <div class="ctitle">Debt-to-Income Ratio</div>
-        <div style="margin-top:8px;text-align:center">
-          <div style="font-size:32px;font-weight:500" class="${dtiCol}">${dti}%</div>
-          <div style="height:8px;background:var(--bg3);border-radius:4px;overflow:hidden;margin:8px 0">
-            <div style="width:${Math.min(100,dti)}%;height:100%;background:${dti<30?'var(--ok)':dti<=40?'var(--warn)':'var(--bad)'};border-radius:4px"></div>
-          </div>
-          <div style="font-size:11px;color:var(--text3)">${dti<30?'Healthy — below 30%':dti<=40?'Caution — 30–40% range':'Critical — above 40%'}</div>
-          <div style="font-size:11px;color:var(--text3);margin-top:4px">Monthly obligations: ${fmtP(monthlyDebt)}</div>
-        </div>
-      </div>
-      <div class="card card-bordered">
-        <div class="ctitle">Savings Trend</div>
-        <div class="fg" style="gap:12px;margin-top:8px;align-items:flex-end">${srBars}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:6px">Target: ${tgt}%</div>
-      </div>
+        }).join('');
+      })()}
     </div>
   </div>
-
-  <!-- S5: INCOME TRACKING (V3.0 #23 — Received by sub-category, no Expected) -->
-  <div class="slbl">Income</div>
-  ${(()=>{
-    const periodInc=tx.filter(t=>t.type==='income'&&txDir(t)==='in'&&!isRefundLinked(t));
-    const totalRec=periodInc.reduce((s,t)=>s+t.amount,0);
-    // Breakdown by sub-category (fallback: main cat name if no sub)
-    const bySub={};
-    periodInc.forEach(t=>{
-      const sc=getSC(t.subCatId);
-      const key=sc?sc.name:(getMC(t.mainCatId)?.name||'Other Income');
-      if(!bySub[key])bySub[key]=0;
-      bySub[key]+=t.amount;
-    });
-    const subRows=Object.entries(bySub).sort((a,b)=>b[1]-a[1]);
-    return `<div class="card card-bordered" style="padding:0;overflow:hidden">
-      <div style="display:grid;grid-template-columns:1fr auto;min-height:0">
-
-        <!-- LEFT: source breakdown -->
-        <div style="padding:1.1rem 1.25rem;border-right:1px solid var(--border)">
-          <div style="font-size:var(--fs-sm);font-weight:600;color:var(--text);letter-spacing:-.01em;margin-bottom:1px">Income Received</div>
-          <div style="font-size:11px;color:var(--text3);margin-bottom:14px">By source</div>
-          ${subRows.length?subRows.map(([name,amt],i)=>{
-            const pct=totalRec>0?Math.round(amt/totalRec*100):0;
-            return `<div style="margin-bottom:${i<subRows.length-1?'12':'0'}px">
-              <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:5px">
-                <span style="font-size:var(--fs-xs);color:var(--text);font-weight:500">${h(name)}</span>
-                <span style="font-size:var(--fs-xs);color:var(--text2);margin-left:12px;white-space:nowrap;font-variant-numeric:tabular-nums">${fmtP(amt)} <span style="color:var(--text3)">· ${pct}%</span></span>
-              </div>
-              <div style="height:4px;background:var(--bg3);border-radius:2px">
-                <div style="height:4px;background:var(--ok);border-radius:2px;width:${pct}%;opacity:${0.5+pct/200}"></div>
-              </div>
-            </div>`;
-          }).join(''):'<div style="font-size:var(--fs-xs);color:var(--text3);padding:8px 0">No income in this period.</div>'}
-        </div>
-
-        <!-- RIGHT: summary metrics -->
-        <div style="padding:1.1rem 1.4rem;display:flex;flex-direction:column;justify-content:space-between;gap:0;min-width:200px">
-
-          <div>
-            <div style="font-size:10px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--text3);margin-bottom:5px">Received</div>
-            <div style="font-size:22px;font-weight:600;letter-spacing:-.04em;color:var(--ok);font-variant-numeric:tabular-nums;line-height:1">${fmtP(totalRec)}</div>
-            <div style="font-size:11px;color:var(--text3);margin-top:4px">${periodInc.length} transaction${periodInc.length!==1?'s':''} &middot; ${subRows.length} source${subRows.length!==1?'s':''}</div>
-          </div>
-
-          <div style="height:1px;background:var(--border);margin:14px 0"></div>
-
-          <div>
-            <div style="font-size:10px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--text3);margin-bottom:5px">Invested</div>
-            <div style="font-size:22px;font-weight:600;letter-spacing:-.04em;color:var(--inv);font-variant-numeric:tabular-nums;line-height:1">${fmtP(inv)}</div>
-            <div style="height:3px;background:var(--bg3);border-radius:2px;margin:8px 0 4px">
-              <div style="height:3px;background:var(--inv);border-radius:2px;width:${Math.min(100,totalRec>0?Math.round(inv/totalRec*100):0)}%;opacity:.7"></div>
-            </div>
-            <div style="font-size:11px;color:var(--text3)">${totalRec>0?Math.round(inv/totalRec*100):0}% of income</div>
-          </div>
-
-          <div style="height:1px;background:var(--border);margin:14px 0"></div>
-
-          <div>
-            <div style="font-size:10px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--text3);margin-bottom:5px">Net After Investment</div>
-            <div style="font-size:22px;font-weight:600;letter-spacing:-.04em;font-variant-numeric:tabular-nums;line-height:1;${(totalRec-inv)>=0?'color:var(--ok)':'color:var(--bad)'}">${fmtP(totalRec-inv)}</div>
-            <div style="font-size:11px;color:var(--text3);margin-top:4px">Available after investing</div>
-          </div>
-
-        </div>
-      </div>
-    </div>`;
-  })()}
-
-  <!-- S6: BILLS, SUBS & STAFF -->
-  <div class="slbl">Fixed Costs</div>
-  <div class="g3">
-    <div class="card card-bordered">
-      <div class="ctitle">Bills</div>
-      ${billHtml}
-      ${S.bills.length>5?`<div style="font-size:var(--fs-xs);color:var(--info);cursor:pointer;margin-top:6px" onclick="sw('bills')">View all →</div>`:''}
-    </div>
-    <div class="card card-bordered">
-      <div class="ctitle">Subscriptions</div>
-      ${(()=>{const confirmed=allTxns().filter(t=>t.isSub);const cMap={};confirmed.forEach(t=>{const k=(t.description||'').toLowerCase().trim().substr(0,30);if(!cMap[k]){cMap[k]={desc:t.description,txns:[]};}cMap[k].txns.push(t);});S.subs.forEach(s=>{const k=(s.name||'').toLowerCase().trim().substr(0,30);if(!cMap[k])cMap[k]={desc:s.name,txns:[],notes:s.notes};});const rows=Object.entries(cMap).slice(0,5).map(([k,{desc,txns}])=>{const sorted=txns.slice().sort((a,b)=>b.date.localeCompare(a.date));const avg=sorted.length?sorted.reduce((s,t)=>s+t.amount,0)/sorted.length:0;return`<div class="brow"><div><div style="font-size:var(--fs-xs);font-weight:500">${h(desc)}</div></div><span style="font-size:var(--fs-xs);font-weight:500">${fmtP(avg)}</span></div>`;}).join('');return rows||'<div style="font-size:var(--fs-xs);color:var(--text3);padding:8px 0">No confirmed subscriptions yet.</div>';})()}
-    </div>
-    <div class="card card-bordered">
-      <div class="ctitle">Staff</div>
-      <div class="csub">After advance deductions</div>
-      ${fStaff.map((st,si)=>{
-        // H4/L8: Use advThisMonth() — single correct implementation, advThisMonthOv dead code removed
-        const ded=advThisMonth(st);
-        const net=st.salary-ded;
-        // Paid detection: look for a cat_main_staff transaction close to net salary this period
-        const paid=tx.some(t=>t.mainCatId==='cat_main_staff'&&t.type==='expense'&&Math.abs(t.amount-net)<net*0.15+50);
-        const isLast=si===fStaff.length-1;
-        return`<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0${isLast?'':';border-bottom:1px solid var(--bg2)'}">
-          <div>
-            <div style="font-size:var(--fs-xs);font-weight:500">${h(st.name)}</div>
-            <div style="font-size:11px;color:var(--text3)">${st.role}</div>
-          </div>
-          <div style="display:flex;align-items:center;gap:10px">
-            <span style="font-size:9px;font-weight:600;padding:2px 7px;border-radius:100px;letter-spacing:.03em;${paid?'background:#E8F5EC;color:#1A6B3C':'background:#FEE2E2;color:#9B2020'}">${paid?'Paid':'Unpaid'}</span>
-            <span style="font-size:var(--fs-xs);font-weight:500;font-variant-numeric:tabular-nums">${fmtP(net)}</span>
-          </div>
-        </div>`;
-      }).join('')||'<div style="font-size:var(--fs-xs);color:var(--text3);padding:8px 0">No staff profiles defined.</div>'}
-      ${fStaff.length?`<div style="font-size:11px;color:var(--text3);margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">Staff cost: ${fmtP(fStaff.reduce((s,st)=>s+st.salary,0))} · ${exp>0?Math.round(fStaff.reduce((s,st)=>s+st.salary,0)/exp*100)+'% of expenses':'--'}</div>`:''}
-    </div>
-  </div>
-
-  <!-- S7: GOALS -->
-  <div class="slbl">Goals</div>
-  <div class="card card-bordered">
-    ${gHtml}
-    ${fGoals.filter(g=>g.status==='active').length>3?`<div style="font-size:var(--fs-xs);color:var(--info);cursor:pointer;margin-top:6px" onclick="sw('goals')">View all →</div>`:''}
-  </div>
-
-  <!-- S7b: LIQUIDITY WATERFALL -->
-  ${(()=>{
-    // Cash position — liquid accounts only
-    const liquidTypes=new Set(['main_account','savings_account','sub_account','debit_card','prepaid_card','cash']);
-    const cashPos=S.accounts.filter(a=>liquidTypes.has(a.type)).reduce((s,a)=>{const b=calcAccBalance(a);return b!==null?s+b:s;},0);
-    const hasCash=S.accounts.some(a=>liquidTypes.has(a.type)&&calcAccBalance(a)!==null);
-    if(!hasCash)return'';
-
-    const curM=getYM(new Date());
-    // Last 3 months of transactions for variable bill averaging
-    const last3=[addM(curM,-2),addM(curM,-1),curM];
-    const last3Txns=last3.flatMap(m=>S.txnCache[m]||[]).filter(t=>txDir(t)==='out'&&t.type==='expense'&&!isRefundLinked(t));
-
-    // Layer 1: Loan installments (exact, from active debts)
-    const loanRows=S.debts.filter(d=>d.status==='active'&&d.type!=='credit_card'&&d.installment>0).map(d=>({
-      label:d.name,amount:d.installment,type:'loan',certain:true
-    }));
-
-    // Layer 2 & 3: Bills — fixed or variable (3-month average)
-    const billRows=S.bills.filter(b=>!b.status||b.status!=='inactive').map(b=>{
-      if(b.paymentType==='Fixed'&&b.fixedAmount>0){
-        return{label:b.name,amount:b.fixedAmount,type:'bill',certain:true,sub:'fixed'};
-      }
-      // Variable — search last 3 months for matching transactions by provider or bill name
-      const keyword=(b.provider||b.name||'').toLowerCase().trim().substring(0,20);
-      const matches=last3Txns.filter(t=>{
-        const d=(t.description||'').toLowerCase();
-        return keyword&&d.includes(keyword);
-      });
-      if(matches.length>0){
-        const avg=matches.reduce((s,t)=>s+t.amount,0)/Math.min(matches.length,3);
-        return{label:b.name,amount:Math.round(avg*100)/100,type:'bill',certain:false,sub:'avg '+matches.length+'mo'};
-      }
-      // No history — fallback to fixed amount if any, else skip
-      if(b.fixedAmount>0)return{label:b.name,amount:b.fixedAmount,type:'bill',certain:true,sub:'fixed fallback'};
-      return null;
-    }).filter(Boolean);
-
-    // Layer 4: Goal contributions — auto-calculated from deadline
-    const today=new Date();
-    const goalRows=fGoals.filter(g=>g.status==='active'&&g.target>0&&g.deadline).map(g=>{
-      const dl=new Date(g.deadline);
-      if(dl<=today)return null;
-      const remaining=Math.max(0,g.target-(g.saved||0));
-      if(remaining<=0)return null;
-      // Months remaining (rounded up, minimum 1)
-      const msLeft=((dl.getFullYear()-today.getFullYear())*12)+(dl.getMonth()-today.getMonth());
-      const moLeft=Math.max(1,msLeft);
-      const monthly=Math.round(remaining/moLeft);
-      const moLabel=moLeft===1?'1 mo left':`${moLeft} mo left`;
-      return{label:g.name,amount:monthly,type:'goal',certain:false,sub:moLabel,moLeft};
-    }).filter(Boolean);
-
-    // Warn if goal total is very high vs income
-    const goalTotal=goalRows.reduce((s,r)=>s+r.amount,0);
-    const avgInc2=n>0?inc/n:inc;
-    const goalPct=avgInc2>0?Math.round(goalTotal/avgInc2*100):0;
-    const goalWarning=goalPct>30;
-
-    // Build waterfall
-    const allRows=[...loanRows,...billRows,...goalRows];
-    if(!allRows.length)return'';
-    const totalCommitted=allRows.reduce((s,r)=>s+r.amount,0);
-    const freeCash=cashPos-totalCommitted;
-    const freePct=cashPos>0?Math.round(freeCash/cashPos*100):0;
-
-    const rowHtml=allRows.map(r=>{
-      const pct=cashPos>0?Math.min(100,Math.round(r.amount/cashPos*100)):0;
-      const col=r.type==='loan'?'var(--bad)':r.type==='goal'?'var(--electric)':'var(--warn)';
-      const badge=r.type==='loan'?'Loan':r.type==='goal'?'Goal':'Bill';
-      const badgeBg=r.type==='loan'?'color-mix(in srgb,var(--bad) 12%,transparent)':r.type==='goal'?'color-mix(in srgb,var(--electric) 12%,transparent)':'color-mix(in srgb,var(--warn) 15%,transparent)';
-      const badgeColor=r.type==='loan'?'var(--bad)':r.type==='goal'?'var(--electric)':'color-mix(in srgb,var(--warn) 80%,var(--midnight))';
-      return`<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">
-        <span style="font-size:9px;font-weight:700;letter-spacing:.05em;padding:2px 6px;border-radius:4px;background:${badgeBg};color:${badgeColor};flex-shrink:0;min-width:32px;text-align:center">${badge}</span>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:var(--fs-xs);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h(r.label)}</div>
-          ${r.sub?`<div style="font-size:10px;color:var(--text3)">${r.certain?'Fixed':'Est. avg'} · ${r.sub}</div>`:''}
-        </div>
-        <div style="width:80px;flex-shrink:0">
-          <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden"><div style="height:4px;background:${col};width:${pct}%;border-radius:2px"></div></div>
-        </div>
-        <div style="font-size:var(--fs-xs);font-weight:600;font-variant-numeric:tabular-nums;text-align:right;flex-shrink:0;min-width:90px">−${fmtP(r.amount)}</div>
-      </div>`;
-    }).join('');
-
-    return`<div class="slbl">Liquidity Waterfall</div>
-    <div class="shint">This month — after committed outflows. Goal amounts are the monthly contribution needed to hit each deadline on time.</div>
-    <div class="card card-bordered">
-      <!-- Starting line: Cash Position -->
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0 12px;border-bottom:2px solid var(--border);margin-bottom:4px">
-        <div>
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3)">Cash Position</div>
-          <div style="font-size:10px;color:var(--text3);margin-top:1px">Liquid accounts</div>
-        </div>
-        <div style="font-size:22px;font-weight:700;letter-spacing:-.04em;font-variant-numeric:tabular-nums">${fmtP(cashPos)}</div>
-      </div>
-      <!-- Deductions -->
-      <div style="margin-bottom:4px">${rowHtml}</div>
-      ${goalWarning?`<div style="font-size:11px;color:var(--warn);padding:8px 10px;background:color-mix(in srgb,var(--warn) 8%,transparent);border-radius:var(--rsm);margin:8px 0">Goal contributions require ${goalPct}% of average monthly income. Consider extending some deadlines.</div>`:''}
-      <!-- Free Cash line -->
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0 4px;border-top:2px solid var(--border);margin-top:4px">
-        <div>
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:${freeCash>=0?'var(--ok)':'var(--bad)'}">${freeCash>=0?'Free Cash':'Shortfall'}</div>
-          <div style="font-size:10px;color:var(--text3);margin-top:1px">${Math.abs(freePct)}% of cash position${freeCash<0?' — committed exceeds available cash':''}</div>
-        </div>
-        <div style="font-size:22px;font-weight:700;letter-spacing:-.04em;font-variant-numeric:tabular-nums;color:${freeCash>=0?'var(--ok)':'var(--bad)'}">${freeCash>=0?'':'-'}${fmtP(Math.abs(freeCash))}</div>
-      </div>
-      <div style="font-size:11px;color:var(--text3);margin-top:10px;line-height:1.6">Committed: ${fmtP(totalCommitted)} · Loans: ${fmtP(loanRows.reduce((s,r)=>s+r.amount,0))} · Bills: ${fmtP(billRows.reduce((s,r)=>s+r.amount,0))} · Goals: ${fmtP(goalRows.reduce((s,r)=>s+r.amount,0))}</div>
-    </div>`;
-  })()}
-
-  <!-- S8: EXTERNAL TRANSFERS -->
-  ${ext>0?`<div class="slbl">External Transfers</div>
-  <div class="card card-bordered">
-    <div class="ctitle">External Transfers</div>
-    <div class="csub">This period: ${fmtP(ext)}</div>
+  ${ext>0?`
+  <div class="card card-bordered" style="margin-bottom:1rem">
+    <div style="font-size:13px;font-weight:600;color:var(--text1);margin-bottom:4px">External Transfers</div>
+    <div style="font-size:10px;color:var(--text3);margin-bottom:8px">Outbound transfers to people not in your accounts &middot; ${fmtP(ext)} total</div>
     ${extRows}
   </div>`:''}
+  `:''}
 
-  <!-- S8b: REIMBURSEMENTS SUMMARY (shows only if there are pending) -->
-  ${(()=>{
-    const approvedSubs=_submissions.filter(s=>s.status==='approved');
-    if(!approvedSubs.length)return '';
-    const byName={};
-    approvedSubs.forEach(s=>{if(!byName[s.submitter_name])byName[s.submitter_name]=0;byName[s.submitter_name]=Math.round((byName[s.submitter_name]+parseFloat(s.amount))*100)/100;});
-    const grand=Object.values(byName).reduce((s,v)=>s+v,0);
-    return`<div class="slbl">Pending Reimbursements</div>
-    <div class="card card-bordered" style="cursor:pointer" onclick="sw('reimbursements')">
-      <div class="fg jb" style="flex-wrap:wrap;gap:12px">
-        <div>
-          <div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:4px">${approvedSubs.length} approved item${approvedSubs.length!==1?'s':''} pending payment</div>
-          <div style="font-size:22px;font-weight:700;color:var(--warn)">${fmtP(grand)}</div>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:4px">
-          ${Object.entries(byName).map(([n,t])=>`<div class="fg jb" style="gap:16px;font-size:var(--fs-xs)"><span>${h(n)}</span><span style="font-weight:600;color:var(--warn)">${fmtP(t)}</span></div>`).join('')}
-        </div>
+  ${showZ('forecast')?`
+  <!-- V8.23: FORECAST ZONE — next 30 days teaser (deeper view in V8.24) -->
+  <div class="card card-bordered" style="margin-bottom:1rem">
+    <div class="fg jb" style="margin-bottom:10px;align-items:center">
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--text1)">Forecast &mdash; Next 30 Days</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">Based on recurring income, bills, subscriptions, staff, and minimum debt payments</div>
       </div>
-      <div style="font-size:11px;color:var(--info);margin-top:6px">→ Go to Reimbursements</div>
-    </div>`;
-  })()}
-
-  <!-- S9: CASH FLOW FORECAST -->
-  <div class="slbl">Forecast</div>
-  <div class="shint">Committed income and outflows only. Variable spending excluded.</div>
-  <div class="g3-fixed">${fcastHtml}</div>
-
-  <!-- S10: ALERTS -->
-  <div class="slbl" style="margin-top:1.25rem">Alerts</div>
-  <div class="card card-bordered" style="padding:.75rem 1.25rem">
-    ${alertHtml}
+      <span style="font-size:10px;color:var(--text3);font-style:italic">12-month projections in V8.24</span>
+    </div>
+    <div class="g3" style="margin-top:6px">
+      <div style="padding:10px 12px;background:var(--bg2);border-radius:var(--rsm)">
+        <div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Expected Income</div>
+        <div class="priv-mask" style="font-size:18px;font-weight:600;color:var(--ok);margin-top:4px;font-variant-numeric:tabular-nums">${fmtP(mInc30)}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:4px">${S.income.filter(i=>i.status==='active').length} active source${S.income.filter(i=>i.status==='active').length!==1?'s':''}</div>
+      </div>
+      <div style="padding:10px 12px;background:var(--bg2);border-radius:var(--rsm)">
+        <div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Scheduled Outflows</div>
+        <div class="priv-mask" style="font-size:18px;font-weight:600;color:var(--bad);margin-top:4px;font-variant-numeric:tabular-nums">${fmtP(fcOut)}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:4px;line-height:1.5">Debt ${fmtP(mDebt30)} · Bills ${fmtP(mBills30)} · Staff ${fmtP(mStaff30)} · Subs ${fmtP(mSubs30)}</div>
+      </div>
+      <div style="padding:10px 12px;background:var(--bg2);border-radius:var(--rsm)">
+        <div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Projected Net</div>
+        <div class="priv-mask" style="font-size:18px;font-weight:600;color:${fcNet>=0?'var(--ok)':'var(--bad)'};margin-top:4px;font-variant-numeric:tabular-nums">${fmtSP(fcNet,true)}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:4px">Excl. variable spending</div>
+      </div>
+    </div>
   </div>
+  `:''}
 
-  <!-- AI INSIGHTS -->
-  <div class="slbl" style="margin-top:1.5rem">Intelligence</div>
-  <div class="shint">Powered by Claude — aggregated data only, no transaction details.</div>
-  <div class="card card-bordered" id="ai-insights-card">
+  ${showZ('reference')?`
+  <!-- V8.23: REFERENCE ZONE — Goals, Debts, Bills, Subs, Staff (lower priority) -->
+  <div class="g2" style="margin-bottom:1rem">
+    <div class="card card-bordered">
+      <div style="font-size:13px;font-weight:600;color:var(--text1);margin-bottom:8px">Goals</div>
+      ${gHtml}
+    </div>
+    <div class="card card-bordered">
+      <div style="font-size:13px;font-weight:600;color:var(--text1);margin-bottom:4px">Debt Summary</div>
+      <div style="font-size:10px;color:var(--text3);margin-bottom:10px">Total remaining: ${fmtP(td)} · Monthly obligations: ${fmtP(monthlyDebt)}</div>
+      <div class="fg jb" style="padding:6px 0;border-top:1px solid var(--bg3)">
+        <div style="font-size:var(--fs-xs);color:var(--text2)">Debt-to-Income Ratio</div>
+        <div class="priv-mask" style="font-size:var(--fs-xs);font-weight:600;color:${dti>40?'var(--bad)':dti>25?'var(--warn)':'var(--ok)'};font-variant-numeric:tabular-nums">${dti}%</div>
+      </div>
+      ${dti>40?`<div style="font-size:10px;color:var(--bad);margin-top:6px">Above 40% threshold</div>`:''}
+    </div>
+  </div>
+  <div class="g3" style="margin-bottom:1rem">
+    <div class="card card-bordered">
+      <div style="font-size:13px;font-weight:600;color:var(--text1);margin-bottom:8px">Bills</div>
+      ${(()=>{const bills=S.bills.slice(0,4);if(!bills.length)return'<div style="font-size:11px;color:var(--text3);padding:6px 0">No bills tracked</div>';return bills.map(b=>{const status=billStatus(b);return`<div class="fg jb" style="padding:6px 0;border-bottom:1px solid var(--bg3);font-size:var(--fs-xs)"><div style="color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(b.name)}</div><div class="priv-mask" style="font-weight:500;font-variant-numeric:tabular-nums">${fmtP(b.fixedAmount||0)}</div></div>`;}).join('');})()}
+    </div>
+    <div class="card card-bordered">
+      <div style="font-size:13px;font-weight:600;color:var(--text1);margin-bottom:8px">Subscriptions</div>
+      ${(()=>{const confirmed=allTxns().filter(t=>t.isSub);const cMap={};confirmed.forEach(t=>{const k=(t.description||'').toLowerCase().trim().substr(0,30);if(!cMap[k]){cMap[k]={desc:t.description,txns:[]};}cMap[k].txns.push(t);});S.subs.forEach(s=>{const k=(s.name||'').toLowerCase().trim().substr(0,30);if(!cMap[k])cMap[k]={desc:s.name,txns:[],notes:s.notes};});const rows=Object.entries(cMap).slice(0,4).map(([k,{desc,txns}])=>{const sorted=txns.slice().sort((a,b)=>b.date.localeCompare(a.date));const avg=sorted.length?sorted.reduce((s,t)=>s+t.amount,0)/sorted.length:0;return`<div class="fg jb" style="padding:6px 0;border-bottom:1px solid var(--bg3);font-size:var(--fs-xs)"><div style="color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(desc)}</div><span class="priv-mask" style="font-weight:500;font-variant-numeric:tabular-nums">${fmtP(avg)}</span></div>`;}).join('');return rows||'<div style="font-size:11px;color:var(--text3);padding:6px 0">No subscriptions</div>';})()}
+    </div>
+    <div class="card card-bordered">
+      <div style="font-size:13px;font-weight:600;color:var(--text1);margin-bottom:4px">Staff</div>
+      <div style="font-size:10px;color:var(--text3);margin-bottom:8px">After advance deductions</div>
+      ${(()=>{const staffActive=fStaff.filter(s=>s.status!=='inactive');if(!staffActive.length)return'<div style="font-size:11px;color:var(--text3);padding:6px 0">No staff tracked</div>';return staffActive.slice(0,4).map(s=>`<div class="fg jb" style="padding:6px 0;border-bottom:1px solid var(--bg3);font-size:var(--fs-xs)"><div style="color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(s.name)}</div><div class="priv-mask" style="font-weight:500;font-variant-numeric:tabular-nums">${fmtP(s.salary||0)}</div></div>`).join('');})()}
+    </div>
+  </div>
+  `:''}
+
+  ${showZ('intelligence')?`
+  <!-- V8.23: INTELLIGENCE ZONE — AI Analysis -->
+  <div class="card card-bordered" id="ai-insights-card" style="margin-bottom:1rem">
     <div id="ai-insights-content">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
         <div>
-          <div class="ctitle">AI Analysis</div>
-          <div class="csub">Generate insights from your financial data.</div>
+          <div style="font-size:13px;font-weight:600;color:var(--text1)">AI Analysis</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:2px">Powered by Claude · aggregated data only, no transaction details</div>
         </div>
-        <button class="btn btn-p" id="ai-gen-btn" onclick="generateAIInsights()">Generate Insights</button>
+        <button class="btn btn-p btn-sm" id="ai-gen-btn" onclick="generateAIInsights()">Generate Insights</button>
       </div>
     </div>
-  </div>`;
+  </div>
+  `:''}
+  `;
 }
 
 function buildCharts(){
@@ -8737,10 +8486,47 @@ async function backfillSkip(permanent){
 }
 
 
-const ATG=[{g:'Bank Accounts',o:[{v:'main_account',l:'Main Account (Current/Checking)'},{v:'savings_account',l:'Savings Account'},{v:'sub_account',l:'Sub Account / Pocket'},{v:'prepaid_card',l:'Prepaid Card (loaded balance, no credit)'}]},{g:'Cards',o:[{v:'credit_card',l:'Credit Card (revolving credit)'},{v:'charge_card',l:'Charge Card (paid in full monthly, e.g. AmEx)'}]},{g:'Investments',o:[{v:'brokerage_account',l:'Brokerage Account'},{v:'fund_account',l:'Fund Account'},{v:'gold_account',l:'Gold Account'},{v:'crypto_wallet',l:'Crypto Wallet'},{v:'real_estate_fund',l:'Real Estate Fund'},{v:'direct_investment',l:'Direct Investment'}]},{g:'Other',o:[{v:'cash',l:'Cash'},{v:'other',l:'Other'}]}];
+// V8.23 (Case 13 Part A): expanded type taxonomy. New types are additive and use the
+// existing V8.21/V8.21.5 generic infrastructure for investment accounts. Rich per-type
+// fields (sukuk maturity, joint ownership %, FX rates, etc.) defer to V9.0 Portfolio Engine.
+const ATG=[
+  {g:'Bank Accounts',o:[
+    {v:'main_account',l:'Main Account (Current/Checking)'},
+    {v:'sub_account',l:'Sub Account'},
+    {v:'savings_account',l:'Savings Account'},
+    {v:'joint_account',l:'Joint Account'},
+    {v:'foreign_currency_account',l:'Foreign Currency Account'},
+    {v:'prepaid_card',l:'Prepaid Card'}
+  ]},
+  {g:'Cards',o:[
+    {v:'credit_card',l:'Credit Card'},
+    {v:'charge_card',l:'Charge Card'}
+  ]},
+  {g:'Investments',o:[
+    {v:'brokerage_account',l:'Brokerage Account'},
+    {v:'fund_account',l:'Fund Account'},
+    {v:'reit',l:'REIT'},
+    {v:'sukuk',l:'Sukuk'},
+    {v:'crypto_wallet',l:'Crypto Wallet'},
+    {v:'gold_account',l:'Gold Account'},
+    {v:'real_estate_fund',l:'Real Estate Fund'},
+    {v:'real_estate_direct',l:'Real Estate (Direct)'},
+    {v:'direct_investment',l:'Direct Investment'},
+    {v:'p2p_lending',l:'P2P Lending'},
+    {v:'physical_gold',l:'Physical Gold'},
+    {v:'collectibles',l:'Collectibles'},
+    {v:'retirement_pension',l:'Retirement / Pension'}
+  ]},
+  {g:'Other',o:[
+    {v:'cash',l:'Cash'},
+    {v:'other',l:'Other'}
+  ]}
+];
 const ATL=ATG.flatMap(g=>g.o).reduce((m,o)=>{m[o.v]=o.l;return m;},{});
 const ATS=ATG.map(g=>`<optgroup label="${g.g}">${g.o.map(o=>`<option value="${o.v}">${o.l}</option>`).join('')}</optgroup>`).join('');
-const INV=new Set(['brokerage_account','fund_account','gold_account','crypto_wallet','real_estate_fund','direct_investment']);
+// V8.23: extended INV set with all new investment types. The holdings/value tracking
+// infrastructure from V8.21/V8.21.5 applies to all of these uniformly.
+const INV=new Set(['brokerage_account','fund_account','reit','sukuk','crypto_wallet','gold_account','real_estate_fund','real_estate_direct','direct_investment','p2p_lending','physical_gold','collectibles','retirement_pension']);
 
 // V8.21: investment value tracking helpers. These work alongside calcAccBalance — they don't
 // replace it. calcAccBalance still computes "transactions in this account", but for investment
@@ -11237,6 +11023,16 @@ function rSettings(){
       <div class="settings-row" style="align-items:flex-start"><div class="settings-row-label"><div class="settings-row-title">Edge Function URL</div><div class="settings-row-sub">Your Supabase Edge Function endpoint for AI extraction. See deployment guide.</div></div><div class="settings-row-ctrl" style="min-width:240px"><input type="text" placeholder="https://xxx.supabase.co/functions/v1/extract" value="${S.settings.edgeFnUrl||''}" onchange="S.settings.edgeFnUrl=this.value.trim();sched()" style="width:100%;font-size:11px;font-family:monospace"></div></div>
       <div class="settings-row" style="align-items:flex-start"><div class="settings-row-label"><div class="settings-row-title">Edge Function Secret</div><div class="settings-row-sub">V8.17 — shared secret used to authenticate dashboard calls to extract-statement and ai-proxy. Set the matching value as <code>LANKI_SECRET</code> in Supabase Edge Function env vars. If empty, AI extraction and AI categorization will be rejected by the edge functions.</div></div><div class="settings-row-ctrl" style="min-width:240px"><input type="password" placeholder="Paste secret value" value="${S.settings.lankiSecret||''}" onchange="S.settings.lankiSecret=this.value.trim();sched();toast('Edge Function secret saved')" style="width:100%;font-size:11px;font-family:monospace"></div></div>
       <!-- V8.21.5: AI Features section -->
+      <!-- V8.23: Overview Sections (Decision 1 — per-zone show/hide) -->
+      <div class="settings-row" style="border-top:2px solid var(--bg3);margin-top:8px;padding-top:12px"><div class="settings-row-label"><div class="settings-row-title" style="font-weight:600">Overview Sections (V8.23)</div><div class="settings-row-sub">Show or hide entire zones on the Overview page. The Hero zone (top anchor + Net Position) is always visible. Hidden zones don't render — they're skipped, not collapsed.</div></div><div class="settings-row-ctrl"></div></div>
+      ${(()=>{const zones=[
+        {k:'alerts',l:'Alerts',d:'Critical, warning, and info alerts. Hidden automatically when there are no active alerts even if enabled.'},
+        {k:'performance',l:'Performance',d:'Income vs Expense, Savings Rate, Net Cash Flow cards.'},
+        {k:'activity',l:'Activity',d:'Top Spending Categories, By Category breakdown, External Transfers.'},
+        {k:'forecast',l:'Forecast (next 30 days)',d:'Expected income, scheduled outflows, projected net. Teaser link to V8.24 Cash Position Projections page when shipped.'},
+        {k:'reference',l:'Reference (Goals, Debts, Bills, Subs, Staff)',d:'Lower-priority reference data. Hide if you want a leaner Overview.'},
+        {k:'intelligence',l:'AI Intelligence',d:'On-demand AI analysis of your financial data.'}
+      ];const z=S.settings.ovZones||{};return zones.map(zone=>`<div class="settings-row" style="align-items:flex-start"><div class="settings-row-label"><div class="settings-row-title">${h(zone.l)}</div><div class="settings-row-sub">${h(zone.d)}</div></div><div class="settings-row-ctrl"><input type="checkbox" ${z[zone.k]!==false?'checked':''} onchange="if(!S.settings.ovZones)S.settings.ovZones={};S.settings.ovZones['${zone.k}']=this.checked;sched();toast(this.checked?'${h(zone.l)} shown':'${h(zone.l)} hidden')" style="cursor:pointer;width:18px;height:18px"></div></div>`).join('');})()}
       <div class="settings-row" style="border-top:2px solid var(--bg3);margin-top:8px;padding-top:12px"><div class="settings-row-label"><div class="settings-row-title" style="font-weight:600">AI Features (V8.21.5)</div><div class="settings-row-sub">Settings for AI-driven investment value updates. Requires Edge Function URL + Secret above.</div></div><div class="settings-row-ctrl"></div></div>
       <div class="settings-row" style="align-items:flex-start"><div class="settings-row-label"><div class="settings-row-title">Auto-refresh on Investments page</div><div class="settings-row-sub">When enabled, opening the Investments page silently refreshes any AI-public-price account whose value is older than the stale threshold below. Disable to require manual button clicks for all updates.</div></div><div class="settings-row-ctrl"><input type="checkbox" ${S.settings.aiAutoRefresh!==false?'checked':''} onchange="S.settings.aiAutoRefresh=this.checked;sched();toast(this.checked?'Auto-refresh enabled':'Auto-refresh disabled')" style="cursor:pointer;width:18px;height:18px"></div></div>
       <div class="settings-row" style="align-items:flex-start"><div class="settings-row-label"><div class="settings-row-title">Stale threshold (hours)</div><div class="settings-row-sub">How old a value must be before auto-refresh triggers. Default 24h. Lower values mean more frequent fetches and higher API costs.</div></div><div class="settings-row-ctrl" style="min-width:120px"><input type="number" min="1" max="720" step="1" value="${S.settings.aiStaleThresholdHours||24}" onchange="S.settings.aiStaleThresholdHours=Math.max(1,Math.min(720,parseInt(this.value)||24));sched()" style="width:100%;font-size:12px"></div></div>
@@ -11368,7 +11164,7 @@ function rDiagnostics(){
 
   // ─── CC payment flows ────────────────────────────────────────────────────
   const ccAccIds=new Set(S.accounts.filter(a=>a.type==='credit_card'||a.type==='charge_card').map(a=>a.id));
-  const cashAccIds=new Set(S.accounts.filter(a=>['main_account','savings_account','sub_account','debit_card','prepaid_card','cash'].includes(a.type)).map(a=>a.id));
+  const cashAccIds=new Set(S.accounts.filter(a=>['main_account','savings_account','sub_account','joint_account','foreign_currency_account','debit_card','prepaid_card','cash'].includes(a.type)).map(a=>a.id));
   const ccPaymentsOut=tx.filter(t=>t.type==='transfer'&&dir(t)==='out'&&t.subCatId==='sub_cc_payment'&&cashAccIds.has(t.accountId));
   const ccPaymentsIn=tx.filter(t=>t.type==='transfer'&&dir(t)==='in'&&t.subCatId==='sub_cc_payment'&&ccAccIds.has(t.accountId));
   const ccPaymentsOutTotal=ccPaymentsOut.reduce((s,t)=>s+t.amount,0);
@@ -12680,7 +12476,7 @@ function renderAIInsights(result, snapshot){
 // a bank account. Existing debit_card accounts are auto-migrated to main_account by the
 // v8_19_removeDebitCardType migration. CARD_ACC_TYPES stays the same — only credit_card and
 // charge_card extend credit and warrant separate card-side tracking.
-const BANK_ACC_TYPES=new Set(['main_account','savings_account','sub_account','prepaid_card','cash']);
+const BANK_ACC_TYPES=new Set(['main_account','savings_account','sub_account','joint_account','foreign_currency_account','prepaid_card','cash']);
 const CARD_ACC_TYPES=new Set(['credit_card','charge_card']);
 
 // V8.18: Account status semantics.
@@ -12743,7 +12539,7 @@ function isLiveCard(d){const s=ccStatus(d);return s==='active';} // active = app
 function isFrozenCard(d){return ccStatus(d)==='frozen';}
 
 // ─── SHARED TX TABLE BUILDER ───
-function buildTxTable(fl, accounts, showBalance, isCards, rbMaps){
+function buildTxTable(fl, accounts, showBalance, isCards, rbMaps, scopedAcc){
   // Detect if any transaction in this view has statementBal — enables recon column
   const hasRecon=showBalance&&fl.some(t=>t.statementBal!=null);
 
@@ -12764,9 +12560,12 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps){
     }
   }
 
+  // V8.23 (Case 15): when filtered to a single account, drop the account column.
+  // The Description column expands into the freed space. Saves ~130px on every row.
+  const hideAcc=!!scopedAcc;
   const colConfig=isCards
-    ?['date','desc','cat','acc','amount','outstanding','type','']
-    :['date','desc','cat','acc','amount','balance','type',''];
+    ?(hideAcc?['date','desc','cat','amount','outstanding','type','']:['date','desc','cat','acc','amount','outstanding','type',''])
+    :(hideAcc?['date','desc','cat','amount','balance','type','']:['date','desc','cat','acc','amount','balance','type','']);
   const labels={date:'Date',desc:'Description',cat:'Category / Sub-Category',acc:'Account',
     amount:'Amount',balance:'Balance',outstanding:'Outstanding',type:'Type','':''};
   const widths={date:'110px',desc:'auto',cat:'230px',acc:'130px',amount:'140px',balance:'140px',outstanding:'140px',type:'90px','':'270px'};
@@ -13078,7 +12877,7 @@ async function rTxBank(){
   const groupPillRow=buildGroupPillRow();
   const header=buildTxHeader(fl,scopedAcc,accountPills,'Bank Accounts',groupPillRow);
   const filters=buildTxFilters();
-  const table=buildTxTable(fl,S.accounts,showBalance,false,rbMaps);
+  const table=buildTxTable(fl,S.accounts,showBalance,false,rbMaps,scopedAcc);
   const impPanel=buildImpPanel();
   const addPanel=buildAddPanel();
   return`${header}${impPanel}${addPanel}${filters}${table}`;
@@ -13173,7 +12972,7 @@ async function rTxCards(){
   const filters=buildTxFilters();
   const table=noCards
     ?`<div class="card"><div class="empty">No card accounts added yet. Add a credit or charge card in the Accounts tab.</div></div>`
-    :buildTxTable(fl,S.accounts,showBalance,true,rbMaps);
+    :buildTxTable(fl,S.accounts,showBalance,true,rbMaps,scopedAcc);
   const impPanel=buildImpPanel();
   const addPanel=buildAddPanel();
   return`${header}${impPanel}${addPanel}${filters}${table}`;
@@ -13233,7 +13032,7 @@ async function rTxInvestments(){
   const filters=buildTxFilters();
   const table=noInv
     ?`<div class="card"><div class="empty">No investment accounts added yet. Add one from the Accounts page (Brokerage, Fund, Gold, Crypto, Real Estate Fund, or Direct Investment).</div></div>`
-    :buildTxTable(fl,S.accounts,false,false,{});
+    :buildTxTable(fl,S.accounts,false,false,{},scopedAcc);
   const impPanel=buildImpPanel();
   const addPanel=buildAddPanel();
   return`${header}${impPanel}${addPanel}${filters}${table}`;
@@ -14435,7 +14234,7 @@ const MIGRATIONS=[
     removeAfter:'V9.0',
     run:()=>{
       // Set updateSource default on all investment accounts that don't have it
-      const INV_TYPES=new Set(['brokerage_account','fund_account','gold_account','crypto_wallet','real_estate_fund','direct_investment']);
+      const INV_TYPES=INV;
       let touched=0;
       (S.accounts||[]).forEach(a=>{
         if(INV_TYPES.has(a.type)&&!a.updateSource){
@@ -14457,7 +14256,7 @@ const MIGRATIONS=[
     description:'Link existing investment transactions to investment accounts via description match',
     removeAfter:'V9.0',
     run:()=>{
-      const INV_TYPES=new Set(['brokerage_account','fund_account','gold_account','crypto_wallet','real_estate_fund','direct_investment']);
+      const INV_TYPES=INV;
       const invAccs=(S.accounts||[]).filter(a=>INV_TYPES.has(a.type));
       if(invAccs.length===0)return{count:0};
       // Build lowercased name tokens for matching. Token = the most distinctive word in the account name.
@@ -14499,7 +14298,7 @@ const MIGRATIONS=[
     description:'V8.21.5 vault marker — AI value fetching introduced',
     removeAfter:'V9.0',
     run:()=>{
-      const INV_TYPES=new Set(['brokerage_account','fund_account','gold_account','crypto_wallet','real_estate_fund','direct_investment']);
+      const INV_TYPES=INV;
       let touched=0;
       (S.accounts||[]).forEach(a=>{
         if(INV_TYPES.has(a.type)&&!Array.isArray(a.holdings)){
@@ -14530,6 +14329,28 @@ const MIGRATIONS=[
     removeAfter:'V9.0',
     run:()=>{
       if(!S._dismissedCombinations||typeof S._dismissedCombinations!=='object')S._dismissedCombinations={};
+      return{noop:true};
+    }
+  },
+  // V8.23: marker for type taxonomy expansion. New types (REIT, Sukuk, P2P Lending, Physical Gold,
+  // Collectibles, Retirement/Pension, Real Estate Direct, Joint Account, Foreign Currency Account)
+  // are additive. Existing accounts with existing types continue to work unchanged.
+  // Initialize Overview zone visibility settings (per-zone show/hide per Decision 1) and
+  // ovDefaultPeriod (3-month default per Decision 2).
+  // REMOVE_AFTER: V9.0
+  {
+    id:'v8_23_overviewRedesign',
+    description:'V8.23 vault marker — Overview redesign + type taxonomy expansion',
+    removeAfter:'V9.0',
+    run:()=>{
+      if(!S.settings)S.settings={};
+      // Per-zone visibility (Decision 1 — per-zone, not per-card)
+      if(!S.settings.ovZones||typeof S.settings.ovZones!=='object'){
+        S.settings.ovZones={alerts:true,performance:true,activity:true,forecast:true,reference:true,intelligence:true};
+      }
+      // First-load default period: 3 months (Decision 2). User's session/persistent choice
+      // overrides via S.settings.ovDefaultPeriod after first interaction with the period selector.
+      if(!S.settings.ovDefaultPeriod)S.settings.ovDefaultPeriod='3m';
       return{noop:true};
     }
   }
