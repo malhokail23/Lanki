@@ -1715,7 +1715,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='8.21';
+const VERSION='8.21.5';
 // IS_DEMO: when true, the entire app runs in a sandboxed sample-data mode.
 // No vault is loaded, no Supabase calls happen, and saveState/flushTxnQueue are no-ops.
 // Activated by URL param ?demo=1 or hash #demo. Cannot be flipped at runtime — the only
@@ -3035,7 +3035,7 @@ async function render(){
   else if(t==='subscriptions')el.innerHTML=await rSubs();
   else if(t==='staff')el.innerHTML=rStaff();
   else if(t==='familyinv')el.innerHTML=rFamilyInv();
-  else if(t==='investments')el.innerHTML=rInvestments();
+  else if(t==='investments'){el.innerHTML=rInvestments();setTimeout(triggerAutoRefreshIfStale,200);}
   else if(t==='accounts')el.innerHTML=rAcc();
   else if(t==='debts')el.innerHTML=rDebts();
   else if(t==='goals')el.innerHTML=rGoals();
@@ -8730,6 +8730,309 @@ function renderValueSparkline(history,width,height){
     <circle cx="${lastX}" cy="${lastY}" r="2" fill="${trend}"/>
   </svg>`;
 }
+
+// ============================================================================
+// V8.21.5: AI VALUE FETCH INFRASTRUCTURE
+// ============================================================================
+// Architecture: dashboard calls Claude API via existing V8.17-secured ai-proxy. The proxy passes
+// through arbitrary message bodies, so we can include the web_search tool to let Claude look up
+// real prices. No edge function changes — V8.17 LANKI_SECRET fail-closed auth and model allowlist
+// fully preserved.
+
+// Cost guardrail — soft cap counter with daily reset. Stored in S.settings.aiFetchCount.
+function checkAndIncrementAiFetchCount(){
+  const today=localISO(new Date());
+  if(S.settings.aiFetchCountResetDate!==today){
+    S.settings.aiFetchCount=0;
+    S.settings.aiFetchCountResetDate=today;
+  }
+  const count=S.settings.aiFetchCount||0;
+  const softCap=S.settings.aiFetchSoftCap||50;
+  const hardCap=S.settings.aiFetchHardCap||200;
+  if(count>=hardCap){
+    return{ok:false,reason:'hard_cap',message:`Hard cap reached (${hardCap}/day). Wait until tomorrow or raise the cap in Settings.`};
+  }
+  if(count>=softCap){
+    // Soft cap — caller decides whether to confirm
+    return{ok:'soft',count,softCap,hardCap,message:`Soft cap warning: ${count} fetches today. Continue?`};
+  }
+  S.settings.aiFetchCount=count+1;
+  sched();
+  return{ok:true,count:S.settings.aiFetchCount};
+}
+function recordAiFetchFailure(reason,detail){
+  if(!S.settings.aiFetchFailures)S.settings.aiFetchFailures=[];
+  S.settings.aiFetchFailures.unshift({when:new Date().toISOString(),reason,detail:String(detail||'').substr(0,300)});
+  if(S.settings.aiFetchFailures.length>50)S.settings.aiFetchFailures=S.settings.aiFetchFailures.slice(0,50);
+  sched();
+}
+
+// Core fetch — for an ai_public_price account with one or more holdings, get current price for each
+// holding, compute value = sum(quantity × price), return result + per-holding details for tooltip.
+// Returns: { ok, value, asOf, results: [{symbol, displayName, quantity, price, currency, source, asOf}], error }
+async function fetchInvestmentValuesAI(accountId){
+  const a=S.accounts.find(x=>x.id===accountId);
+  if(!a||!isInvestmentAccount(a))return{ok:false,error:'Not an investment account'};
+  if(a.updateSource!=='ai_public_price')return{ok:false,error:'Account is not configured for AI public-price fetch'};
+  const holdings=Array.isArray(a.holdings)?a.holdings.filter(h=>h.symbol&&typeof h.quantity==='number'&&h.quantity>0):[];
+  if(holdings.length===0)return{ok:false,error:'No holdings configured. Add at least one symbol + quantity in account settings.'};
+  // Demo mode safeguard: don't actually call API in demo
+  if(typeof IS_DEMO!=='undefined'&&IS_DEMO){
+    return{ok:false,error:'AI fetch is disabled in demo mode (would expose API costs).'};
+  }
+  // Cost guardrail check
+  const guard=checkAndIncrementAiFetchCount();
+  if(guard.ok===false){
+    return{ok:false,error:guard.message,reason:guard.reason};
+  }
+  if(guard.ok==='soft'){
+    if(!confirm(guard.message+'\n\nClick OK to continue, Cancel to abort.')){
+      return{ok:false,error:'Cancelled by user (soft cap)'};
+    }
+    // Re-increment after confirmation
+    S.settings.aiFetchCount=(S.settings.aiFetchCount||0)+1;
+    sched();
+  }
+
+  const EDGE_URL=(S.settings.edgeFnUrl||'').replace(/\/extract-statement$/,'/ai-proxy');
+  const SECRET=S.settings.lankiSecret||'';
+  if(!EDGE_URL||!SECRET){
+    recordAiFetchFailure('config_missing','Edge function URL or secret not set in Settings');
+    return{ok:false,error:'Edge function URL or secret not set in Settings.'};
+  }
+
+  // Build a single Claude prompt asking for prices on all holdings in this account
+  const symbolList=holdings.map(h=>`- ${h.symbol}${h.symbolDisplay&&h.symbolDisplay!==h.symbol?' ('+h.symbolDisplay+')':''}, quantity ${h.quantity}`).join('\n');
+  const userMsg=`I need current market prices for the following investment holdings. Use web search to find each price from a credible source.
+
+Holdings:
+${symbolList}
+
+For each holding, return a JSON object with these fields:
+- symbol: the symbol as I provided it
+- displayName: the human-readable name of the instrument
+- price: the current price as a number (no currency symbol, no commas)
+- currency: the currency code of the price (SAR, USD, etc.)
+- source: the URL or name of the source you used
+- asOf: the date or timestamp the price reflects (ISO format if possible)
+- confidence: "high" / "medium" / "low" based on source quality and data freshness
+- notes: any caveats (e.g. "market closed", "delayed quote", "could not find") — empty string if none
+
+Return ONLY a JSON array of these objects, no other text. If you cannot find a price for a holding, include the entry with price: null and notes explaining why.
+
+Symbol format guide:
+- TADAWUL:XXXX → Saudi Tadawul stocks (e.g. TADAWUL:2222 for Aramco)
+- NASDAQ:XXXX / NYSE:XXXX → US stocks
+- CRYPTO:XXX → cryptocurrencies (e.g. CRYPTO:BTC)
+- GOLD:OZ or GOLD:GRAM → spot gold by unit
+- FUND:XXXX → mutual fund by ISIN or local code
+If a symbol is free-text (e.g. "Aramco" without prefix), interpret it and search accordingly. Use SAR pricing for Saudi instruments where available.`;
+
+  let resp;
+  try{
+    resp=await fetch(EDGE_URL,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-lanki-secret':SECRET},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-6',
+        max_tokens:2000,
+        tools:[{type:'web_search_20250305',name:'web_search'}],
+        messages:[{role:'user',content:userMsg}]
+      })
+    });
+  }catch(e){
+    recordAiFetchFailure('network',e.message||String(e));
+    return{ok:false,error:'Network error: '+(e.message||String(e))};
+  }
+  if(!resp.ok){
+    const body=await resp.text().catch(()=>'');
+    recordAiFetchFailure('http_'+resp.status,body.substr(0,300));
+    return{ok:false,error:`AI proxy returned ${resp.status}: ${body.substr(0,200)}`};
+  }
+  const data=await resp.json().catch(()=>null);
+  if(!data){
+    recordAiFetchFailure('parse_error','Response was not valid JSON');
+    return{ok:false,error:'AI response was not valid JSON.'};
+  }
+
+  // Extract Claude's text response from the content array. Claude with web search returns
+  // multiple content blocks (server_tool_use, web_search_tool_result, text). We need the text.
+  const textBlocks=(data.content||[]).filter(b=>b.type==='text').map(b=>b.text||'');
+  const text=textBlocks.join('\n').trim();
+  if(!text){
+    recordAiFetchFailure('empty_response','No text content in response');
+    return{ok:false,error:'AI returned no text content.'};
+  }
+
+  // Parse JSON array from text. Strip markdown fences if present.
+  let parsed;
+  try{
+    let cleaned=text.replace(/```json/g,'').replace(/```/g,'').trim();
+    // Find first [ and last ] to handle preamble/postamble
+    const start=cleaned.indexOf('[');
+    const end=cleaned.lastIndexOf(']');
+    if(start>=0&&end>start)cleaned=cleaned.slice(start,end+1);
+    parsed=JSON.parse(cleaned);
+  }catch(e){
+    recordAiFetchFailure('parse_json',e.message+' :: '+text.substr(0,200));
+    return{ok:false,error:'Could not parse AI response as JSON. See Diagnostics for raw text.'};
+  }
+  if(!Array.isArray(parsed)){
+    recordAiFetchFailure('not_array','Parsed response is not an array');
+    return{ok:false,error:'AI response was not a JSON array.'};
+  }
+
+  // Compute total value, validate per-holding
+  let totalValue=0;
+  const results=[];
+  let allOk=true;
+  for(const h of holdings){
+    const match=parsed.find(p=>p&&p.symbol===h.symbol);
+    if(!match||match.price==null||isNaN(parseFloat(match.price))){
+      results.push({symbol:h.symbol,displayName:h.symbolDisplay||h.symbol,quantity:h.quantity,price:null,currency:'',source:'',asOf:'',confidence:'low',notes:match?.notes||'No price returned',ok:false});
+      allOk=false;
+      continue;
+    }
+    const price=parseFloat(match.price);
+    let priceInSAR=price;
+    // V8.21.5: convert non-SAR currencies. AmEx-style USD already uses 3.75 elsewhere; reuse that fact.
+    const cur=(match.currency||'').toUpperCase();
+    if(cur==='USD')priceInSAR=price*3.75;
+    else if(cur&&cur!=='SAR'&&cur!==''){
+      // Unknown currency — flag and use raw value, user will see and can correct
+      results.push({symbol:h.symbol,displayName:match.displayName||h.symbolDisplay||h.symbol,quantity:h.quantity,price,currency:cur,source:match.source||'',asOf:match.asOf||'',confidence:match.confidence||'low',notes:'Unknown currency '+cur+' — using raw value, please verify',ok:true});
+      totalValue+=price*h.quantity;
+      continue;
+    }
+    const value=priceInSAR*h.quantity;
+    totalValue+=value;
+    results.push({symbol:h.symbol,displayName:match.displayName||h.symbolDisplay||h.symbol,quantity:h.quantity,price,currency:cur||'SAR',priceInSAR,source:match.source||'',asOf:match.asOf||'',confidence:match.confidence||'medium',notes:match.notes||'',ok:true});
+  }
+
+  return{ok:allOk||totalValue>0,value:totalValue,asOf:localISO(new Date()),results,partial:!allOk&&totalValue>0};
+}
+
+// Apply a successful AI fetch result to an account: update currentValue, currentValueAsOf, append
+// to lastValueHistory. Anomaly check: if new value is >50% different from previous, prompt confirm.
+function applyInvestmentFetchResult(accountId,fetchResult){
+  const a=S.accounts.find(x=>x.id===accountId);
+  if(!a||!fetchResult||!fetchResult.ok)return false;
+  // Anomaly detection
+  const prev=getInvestmentValue(a);
+  if(prev!==null&&prev>0){
+    const ratio=Math.abs(fetchResult.value-prev)/prev;
+    if(ratio>0.5){
+      const direction=fetchResult.value>prev?'increased':'decreased';
+      if(!confirm(`Anomaly detected: AI-fetched value (${fmt(fetchResult.value)}) ${direction} by ${(ratio*100).toFixed(0)}% from previous (${fmt(prev)}).\n\nThis is unusually large. Save anyway?`)){
+        return false;
+      }
+    }
+  }
+  if(!Array.isArray(a.lastValueHistory))a.lastValueHistory=[];
+  const asOf=fetchResult.asOf||localISO(new Date());
+  const sameDayIdx=a.lastValueHistory.findIndex(h=>h.date===asOf);
+  if(sameDayIdx>=0){a.lastValueHistory[sameDayIdx]={date:asOf,value:fetchResult.value};}
+  else{a.lastValueHistory.unshift({date:asOf,value:fetchResult.value});}
+  if(a.lastValueHistory.length>24)a.lastValueHistory=a.lastValueHistory.slice(0,24);
+  a.currentValue=fetchResult.value;
+  a.currentValueAsOf=asOf;
+  // Store last fetch metadata for tooltip display
+  a._lastAiFetch={
+    when:new Date().toISOString(),
+    results:fetchResult.results,
+    partial:!!fetchResult.partial
+  };
+  sched();
+  return true;
+}
+
+// AI-assisted manual update for Tier 2 accounts (ai_assisted_manual). Asks Claude to find
+// platform-level return data and provide a contextual estimate. Per Decision 4: clean fallback —
+// no extrapolation when no data is found.
+async function fetchInvestmentEstimateAI(accountId){
+  const a=S.accounts.find(x=>x.id===accountId);
+  if(!a||!isInvestmentAccount(a))return{ok:false,error:'Not an investment account'};
+  if(a.updateSource!=='ai_assisted_manual')return{ok:false,error:'Account is not configured for AI-assisted update'};
+  if(typeof IS_DEMO!=='undefined'&&IS_DEMO){
+    return{ok:false,error:'AI assist is disabled in demo mode.'};
+  }
+  const guard=checkAndIncrementAiFetchCount();
+  if(guard.ok===false)return{ok:false,error:guard.message};
+  if(guard.ok==='soft'){
+    if(!confirm(guard.message+'\n\nClick OK to continue, Cancel to abort.')){
+      return{ok:false,error:'Cancelled by user (soft cap)'};
+    }
+    S.settings.aiFetchCount=(S.settings.aiFetchCount||0)+1;
+    sched();
+  }
+  const EDGE_URL=(S.settings.edgeFnUrl||'').replace(/\/extract-statement$/,'/ai-proxy');
+  const SECRET=S.settings.lankiSecret||'';
+  if(!EDGE_URL||!SECRET){
+    recordAiFetchFailure('config_missing','Edge function URL or secret not set in Settings');
+    return{ok:false,error:'Edge function URL or secret not set in Settings.'};
+  }
+  const platform=a.platform||a.institution||a.name;
+  const lastValue=getInvestmentValue(a);
+  const lastDate=a.currentValueAsOf;
+  const userMsg=`I have an investment account at "${platform}" (account name: "${a.name}", type: ${a.type}). ${lastValue!==null&&lastDate?`My last recorded value was SAR ${lastValue.toFixed(2)} on ${lastDate}.`:'I have not recorded a value yet.'}
+
+I cannot access my account directly. Please use web search to find any publicly available information about ${platform} that could help me estimate my current portfolio value:
+- Recent platform-level returns (Q1, monthly, YTD)
+- Public performance disclosures
+- Recent news that affects the platform's portfolio
+
+Return a JSON object with these fields:
+- platform: the platform name as you understand it
+- estimate: a single estimated current value as a number (or null if you cannot make a credible estimate)
+- methodology: one short sentence describing how you derived the estimate (or "no public data available" if estimate is null)
+- sources: array of URLs or source names
+- confidence: "low" / "medium" / "high"
+- caveat: a short caveat the user should consider before using this estimate
+- platformLink: the most likely login URL for ${platform} (so the user can update manually)
+
+Be honest. If you cannot find specific platform-level performance data, set estimate to null. Do NOT extrapolate from generic asset class averages — that would be misleading.
+
+Return ONLY the JSON object, no other text.`;
+
+  let resp;
+  try{
+    resp=await fetch(EDGE_URL,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-lanki-secret':SECRET},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-6',
+        max_tokens:1500,
+        tools:[{type:'web_search_20250305',name:'web_search'}],
+        messages:[{role:'user',content:userMsg}]
+      })
+    });
+  }catch(e){
+    recordAiFetchFailure('network',e.message||String(e));
+    return{ok:false,error:'Network error: '+(e.message||String(e))};
+  }
+  if(!resp.ok){
+    const body=await resp.text().catch(()=>'');
+    recordAiFetchFailure('http_'+resp.status,body.substr(0,300));
+    return{ok:false,error:`AI proxy returned ${resp.status}`};
+  }
+  const data=await resp.json().catch(()=>null);
+  if(!data){return{ok:false,error:'AI response was not valid JSON.'};}
+  const textBlocks=(data.content||[]).filter(b=>b.type==='text').map(b=>b.text||'');
+  const text=textBlocks.join('\n').trim();
+  if(!text){return{ok:false,error:'AI returned no text content.'};}
+  let parsed;
+  try{
+    let cleaned=text.replace(/```json/g,'').replace(/```/g,'').trim();
+    const start=cleaned.indexOf('{');
+    const end=cleaned.lastIndexOf('}');
+    if(start>=0&&end>start)cleaned=cleaned.slice(start,end+1);
+    parsed=JSON.parse(cleaned);
+  }catch(e){
+    recordAiFetchFailure('parse_json_estimate',e.message);
+    return{ok:false,error:'Could not parse AI response as JSON.'};
+  }
+  return{ok:true,...parsed};
+}
 const ACS=[{v:'public_markets',l:'Public Markets'},{v:'funds_managed',l:'Funds & Managed Portfolios'},{v:'private_credit',l:'Private Credit'},{v:'real_assets',l:'Real Assets'},{v:'commodities',l:'Commodities'},{v:'digital_assets',l:'Digital Assets'},{v:'private_equity',l:'Private Equity / Venture'},{v:'cash_liquidity',l:'Cash & Liquidity'}];
 let editAccId=null;
 // V8.20: account groups CRUD
@@ -8803,6 +9106,52 @@ function moveGroup(id,delta){
   ordered.forEach((x,i)=>{x.sortIndex=i;});
   saveState().then(()=>render());
 }
+// V8.21.5: Holdings UI helpers (used inside the account form)
+function onUpdateSourceChange(v){
+  const wrap=document.getElementById('ac-inv-holdings-wrap');
+  if(!wrap)return;
+  wrap.style.display=(v==='ai_public_price')?'block':'none';
+  if(v==='ai_public_price'){
+    const rows=document.getElementById('ac-inv-holdings-rows');
+    if(rows&&rows.children.length===0)addHoldingRow();
+  }
+}
+function addHoldingRow(prefill){
+  const rows=document.getElementById('ac-inv-holdings-rows');
+  if(!rows)return;
+  const i=rows.children.length;
+  const row=document.createElement('div');
+  row.className='fr';
+  row.style.cssText='gap:6px;margin-bottom:6px;align-items:flex-end';
+  row.dataset.holdingIdx=i;
+  row.innerHTML=`
+    <div style="flex:2"><label class="lbl">Symbol</label><input type="text" class="hld-sym" placeholder="e.g. TADAWUL:2222 or Aramco" value="${prefill?h(prefill.symbol||''):''}"></div>
+    <div style="flex:2"><label class="lbl">Display name (optional)</label><input type="text" class="hld-name" placeholder="e.g. Aramco" value="${prefill?h(prefill.symbolDisplay||''):''}"></div>
+    <div style="flex:1"><label class="lbl">Quantity</label><input type="number" class="hld-qty" min="0" step="0.0001" placeholder="100" value="${prefill&&typeof prefill.quantity==='number'?prefill.quantity:''}"></div>
+    <div><button type="button" class="btn btn-xs btn-d" onclick="this.closest('.fr').remove()" title="Remove">&times;</button></div>
+  `;
+  rows.appendChild(row);
+}
+function readHoldingsFromForm(){
+  const rows=document.querySelectorAll('#ac-inv-holdings-rows > .fr');
+  const out=[];
+  rows.forEach(r=>{
+    const sym=(r.querySelector('.hld-sym')?.value||'').trim();
+    const name=(r.querySelector('.hld-name')?.value||'').trim();
+    const qty=parseFloat(r.querySelector('.hld-qty')?.value||'0');
+    if(sym&&qty>0)out.push({symbol:sym,symbolDisplay:name||sym,quantity:qty,addedAt:localISO(new Date())});
+  });
+  return out;
+}
+function prefillHoldingsForm(holdings){
+  const rows=document.getElementById('ac-inv-holdings-rows');
+  if(!rows)return;
+  rows.innerHTML='';
+  if(Array.isArray(holdings)&&holdings.length>0){
+    holdings.forEach(holding=>addHoldingRow(holding));
+  }
+}
+
 function onATC(v){
   const r=document.getElementById('ac-row');if(r)r.style.display=INV.has(v)?'block':'none';
   const cr=document.getElementById('ac-currency-row');if(cr)cr.style.display=(v==='credit_card'||v==='charge_card')?'flex':'none';
@@ -8998,20 +9347,29 @@ function rAcc(){
     </div>`:''}
     <div id="ac-row" style="display:none;margin-top:8px">
       <label class="lbl">Asset Class</label><select id="a-asclass">${ACS.map(o=>`<option value="${o.v}">${o.l}</option>`).join('')}</select>
-      <!-- V8.21: investment-specific fields -->
+      <!-- V8.21: investment-specific fields. V8.21.5: AI options enabled -->
       <div class="fr" style="margin-top:8px">
         <div><label class="lbl">Platform / Broker</label><input type="text" id="ac-inv-platform" placeholder="e.g. Tameed, Saudi Tadawul, Binance"></div>
         <div><label class="lbl">Update source</label>
-          <select id="ac-inv-source">
+          <select id="ac-inv-source" onchange="onUpdateSourceChange(this.value)">
             <option value="manual">Manual entry</option>
-            <option value="ai_assisted_manual" disabled>AI-assisted (V8.21.5)</option>
-            <option value="ai_public_price" disabled>Auto-fetch public price (V8.21.5)</option>
+            <option value="ai_assisted_manual">AI-assisted (deep link + estimate)</option>
+            <option value="ai_public_price">Auto-fetch public price (Tier 1)</option>
           </select>
         </div>
       </div>
       <div class="fr" style="margin-top:8px">
         <div><label class="lbl">Current Value (SAR)</label><input type="number" id="ac-inv-value" placeholder="e.g. 47300" min="0" step="0.01"></div>
         <div><label class="lbl">Value As Of (DD/MM/YYYY)</label><div class="date-inp-wrap"><input type="text" id="ac-inv-asof" class="date-inp" placeholder="e.g. 28/04/2026" maxlength="10"><button type="button" class="cal-btn" onclick="openCal('ac-inv-asof')" title="Pick date">📅</button></div></div>
+      </div>
+      <!-- V8.21.5: Holdings configuration — only shown when updateSource is ai_public_price -->
+      <div id="ac-inv-holdings-wrap" style="display:none;margin-top:8px;border:1px solid var(--bg3);border-radius:var(--rsm);padding:10px;background:var(--bg2)">
+        <div class="fg jb" style="margin-bottom:8px">
+          <div style="font-size:11px;font-weight:600;color:var(--text2)">Holdings (for AI public-price fetch)</div>
+          <button type="button" class="btn btn-xs" onclick="addHoldingRow()">+ Add holding</button>
+        </div>
+        <div id="ac-inv-holdings-rows"></div>
+        <div style="font-size:10px;color:var(--text3);margin-top:8px;line-height:1.6">Symbol formats: <code>TADAWUL:2222</code> (Saudi stocks), <code>NASDAQ:TSLA</code> / <code>NYSE:JPM</code> (US), <code>CRYPTO:BTC</code>, <code>GOLD:OZ</code> or <code>GOLD:GRAM</code>, <code>FUND:XXXX</code>. Free text like "Aramco" also works — AI will normalize on first fetch.</div>
       </div>
       <div style="font-size:var(--fs-xxs);color:var(--text3);margin-top:4px;line-height:1.6">Current value is what the position is worth today. Update it from your platform dashboard or statement. Net deployed (deposits minus withdrawals) is calculated automatically from your transactions.</div>
     </div>
@@ -9055,7 +9413,7 @@ function rAcc(){
     </div>
   </div>`:''}`;
 }
-function openAddAcc(){editAccId=null;['ac-name','ac-inst','ac-no','ac-purp'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});document.getElementById('acc-ptitle').textContent='Add account';document.getElementById('acc-sbtn').textContent='Add account';const p=document.getElementById('acc-panel');if(p&&!p.classList.contains('open')){p.classList.add('open');p.scrollIntoView({behavior:'smooth'});}}
+function openAddAcc(){editAccId=null;['ac-name','ac-inst','ac-no','ac-purp','ac-inv-platform','ac-inv-value','ac-inv-asof'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});const sourceEl=document.getElementById('ac-inv-source');if(sourceEl)sourceEl.value='manual';const holdingsRows=document.getElementById('ac-inv-holdings-rows');if(holdingsRows)holdingsRows.innerHTML='';const holdingsWrap=document.getElementById('ac-inv-holdings-wrap');if(holdingsWrap)holdingsWrap.style.display='none';document.getElementById('acc-ptitle').textContent='Add account';document.getElementById('acc-sbtn').textContent='Add account';const p=document.getElementById('acc-panel');if(p&&!p.classList.contains('open')){p.classList.add('open');p.scrollIntoView({behavior:'smooth'});}}
 // V8.18: archive/close/reopen — three-state account status (active/closed/archived).
 // Each setter writes BOTH `status` (V8.18+) AND `archived` (legacy V8.17 fallback) so a user
 // reverting to V8.17 still sees these accounts excluded from active dropdowns.
@@ -9149,6 +9507,13 @@ function openEditAcc(id){
   const invSourceEl=document.getElementById('ac-inv-source');if(invSourceEl)invSourceEl.value=a.updateSource||'manual';
   const invValueEl=document.getElementById('ac-inv-value');if(invValueEl)invValueEl.value=a.currentValue!==undefined?a.currentValue:'';
   const invAsOfEl=document.getElementById('ac-inv-asof');if(invAsOfEl)invAsOfEl.value=a.currentValueAsOf?toDD(a.currentValueAsOf):'';
+  // V8.21.5: prefill holdings UI if account uses ai_public_price
+  if(INV.has(a.type)){
+    onUpdateSourceChange(a.updateSource||'manual');
+    if(a.updateSource==='ai_public_price'){
+      prefillHoldingsForm(a.holdings||[]);
+    }
+  }
   document.getElementById('acc-ptitle').textContent='Edit account';document.getElementById('acc-sbtn').textContent='Save changes';
   const p=document.getElementById('acc-panel');if(p&&!p.classList.contains('open')){p.classList.add('open');p.scrollIntoView({behavior:'smooth'});}
 }
@@ -9166,7 +9531,9 @@ function saveAcc(){
   const invAsOfRaw=isInv?(document.getElementById('ac-inv-asof')?.value||''):'';
   const invValue=invValueRaw!==''&&invValueRaw!==undefined?parseFloat(invValueRaw):undefined;
   const invAsOf=invAsOfRaw?fromDD(invAsOfRaw):undefined;
-  const data={name,institution:document.getElementById('ac-inst').value.trim(),type,accountNumber:document.getElementById('ac-no').value.trim()||null,purpose:document.getElementById('ac-purp')?.value.trim()||'',openingBalance:balVal!==''&&balVal!==undefined?parseFloat(balVal):undefined,balanceAsOf:fromDD(document.getElementById('ac-bal-date')?.value||'')||undefined,...(groupId?{groupId}:{}),...((type==='credit_card'||type==='charge_card')?{currency:curVal}:{}),...(isInv?{platform:invPlatform,updateSource:invSource||'manual'}:{})};
+  // V8.21.5: capture holdings array when ai_public_price is selected
+  const invHoldings=(isInv&&invSource==='ai_public_price')?readHoldingsFromForm():null;
+  const data={name,institution:document.getElementById('ac-inst').value.trim(),type,accountNumber:document.getElementById('ac-no').value.trim()||null,purpose:document.getElementById('ac-purp')?.value.trim()||'',openingBalance:balVal!==''&&balVal!==undefined?parseFloat(balVal):undefined,balanceAsOf:fromDD(document.getElementById('ac-bal-date')?.value||'')||undefined,...(groupId?{groupId}:{}),...((type==='credit_card'||type==='charge_card')?{currency:curVal}:{}),...(isInv?{platform:invPlatform,updateSource:invSource||'manual'}:{}),...(invHoldings!==null?{holdings:invHoldings}:{})};
   if(editAccId){
     const existing=S.accounts.find(x=>x.id===editAccId);
     // V8.21: detect value change for investment accounts → append to lastValueHistory
@@ -9513,6 +9880,12 @@ function onDebtTypeChange(v){
 // V8.21: Investments page — per-account current value tracking. Sits alongside Family Investments
 // (which is per-beneficiary). Different lens, both stay.
 let _invRecordingId=null; // which account's record-value form is open inline
+// V8.21.5: AI fetch state
+let _invFetchingId=null;          // which account is currently being fetched (for spinner)
+let _invFetchingBatch=false;      // is a batch fetch in progress (Update values button)
+let _invAssistOpen=null;           // which account has the AI-assisted panel open
+let _invAssistData=null;           // {accountId, response} from last estimate call
+let _invAutoRefreshDoneAt=null;    // timestamp of last auto-refresh, debounce key
 function rInvestments(){
   const invAccs=S.accounts.filter(a=>isInvestmentAccount(a)&&isLiveAccount(a));
   if(invAccs.length===0){
@@ -9558,15 +9931,18 @@ function rInvestments(){
     return`<div class="card card-bordered" style="margin-bottom:14px">
       <div class="fg jb" style="margin-bottom:10px;align-items:flex-start;gap:10px;flex-wrap:wrap">
         <div style="flex:1;min-width:0">
-          <div class="fg" style="gap:6px;align-items:center">
+          <div class="fg" style="gap:6px;align-items:center;flex-wrap:wrap">
             ${(()=>{const gc=accGroupColor(a);return gc&&a.groupId?`<span title="Group: ${h(accGroupName(a))}" style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${gc};flex-shrink:0;border:1px solid color-mix(in srgb,${gc} 60%,transparent)"></span>`:'';})()}
             <div style="font-weight:500;font-size:15px">${h(a.name)}</div>
-            ${stale?`<span class="badge" style="background:var(--warn);color:var(--text1);font-size:9px;padding:2px 5px" title="Value last updated ${days} days ago — consider updating">STALE</span>`:''}
+            ${stale?`<span class="badge" style="background:var(--warn);color:var(--text1);font-size:9px;padding:2px 5px;cursor:pointer" onclick="triggerUpdateForAccount('${a.id}')" title="Value last updated ${days} days ago — click to update">STALE</span>`:''}
+            ${a.updateSource==='ai_public_price'?`<span class="badge" style="background:color-mix(in srgb,var(--electric) 20%,transparent);color:var(--electric);font-size:9px;padding:2px 5px" title="Auto-fetch via AI public-price">AI</span>`:''}
+            ${a.updateSource==='ai_assisted_manual'?`<span class="badge" style="background:color-mix(in srgb,var(--electric) 12%,transparent);color:var(--electric);font-size:9px;padding:2px 5px" title="AI-assisted manual update">AI assist</span>`:''}
+            ${_invFetchingId===a.id?`<span style="font-size:10px;color:var(--electric)">Fetching…</span>`:''}
           </div>
           <div style="font-size:11px;color:var(--text3);margin-top:2px">${h(a.platform||a.institution||ATL[a.type]||a.type)} · ${ATL[a.type]||''}${a.purpose?' · '+h(a.purpose):''}</div>
         </div>
         <div class="fg" style="gap:4px;flex-shrink:0">
-          <button class="btn btn-sm ${cv===null||stale?'btn-p':''}" onclick="openRecordValue('${a.id}')">${cv===null?'Record value':'Update value'}</button>
+          <button class="btn btn-sm ${cv===null||stale?'btn-p':''}" onclick="triggerUpdateForAccount('${a.id}')" ${_invFetchingId===a.id?'disabled':''}>${cv===null?'Record value':'Update value'}</button>
           <button class="btn btn-sm" onclick="openEditAcc('${a.id}');sw('accounts')" title="Edit account">&#9998;</button>
         </div>
       </div>
@@ -9582,6 +9958,39 @@ function rInvestments(){
           <button class="btn btn-sm" onclick="closeRecordValue()">Cancel</button>
         </div>
       </div>`:''}
+
+      ${(_invAssistOpen===a.id&&_invAssistData&&_invAssistData.accountId===a.id)?(()=>{
+        const r=_invAssistData.response||{};
+        return`<div style="background:var(--bg2);border-radius:var(--rsm);padding:12px;margin-bottom:10px">
+          <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:8px">AI-assisted update</div>
+          ${r.platformLink?`<div style="margin-bottom:8px;font-size:11px"><a href="${h(r.platformLink)}" target="_blank" rel="noopener" style="color:var(--electric);text-decoration:underline">🔗 Open ${h(r.platform||a.platform||'platform')} dashboard</a></div>`:''}
+          ${r.estimate!=null?`<div style="margin-bottom:10px;padding:8px;background:var(--bg3);border-radius:4px">
+            <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">AI estimate</div>
+            <div class="priv-mask" style="font-size:18px;font-weight:600;color:var(--text1);font-variant-numeric:tabular-nums">~ ${fmtP(r.estimate)}</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:4px;line-height:1.5">ⓘ ${h(r.methodology||'')} (confidence: ${h(r.confidence||'low')})</div>
+            ${r.caveat?`<div style="font-size:10px;color:var(--warn);margin-top:4px;line-height:1.5">⚠ ${h(r.caveat)}</div>`:''}
+            ${(r.sources||[]).length?`<div style="font-size:10px;color:var(--text3);margin-top:4px">Sources: ${r.sources.map(s=>h(String(s).substr(0,80))).join(', ')}</div>`:''}
+          </div>`:`<div style="margin-bottom:10px;padding:8px;background:var(--bg3);border-radius:4px;font-size:11px;color:var(--text2)">No public estimate available. Please update manually using your platform dashboard.</div>`}
+          <div style="font-size:11px;color:var(--text2);margin-bottom:6px">Enter your actual value:</div>
+          <div class="fr" style="gap:8px">
+            <div><label class="lbl">Value (SAR)</label><input type="number" id="rv-val-${a.id}" placeholder="${cv!==null?cv:(r.estimate!=null?String(r.estimate):'e.g. 47300')}" min="0" step="0.01" autofocus></div>
+            <div><label class="lbl">As of (DD/MM/YYYY)</label><div class="date-inp-wrap"><input type="text" id="rv-date-${a.id}" class="date-inp" value="${toDD(localISO(new Date()))}" maxlength="10"><button type="button" class="cal-btn" onclick="openCal('rv-date-${a.id}')" title="Pick date">📅</button></div></div>
+          </div>
+          <div class="fg" style="margin-top:10px;gap:6px">
+            <button class="btn btn-p btn-sm" onclick="saveInvestmentValue('${a.id}');closeAssistPanel()">Save</button>
+            <button class="btn btn-sm" onclick="closeAssistPanel()">Cancel</button>
+          </div>
+        </div>`;
+      })():''}
+
+      ${a._lastAiFetch?(()=>{
+        const f=a._lastAiFetch;
+        const when=new Date(f.when);
+        const ago=Math.floor((Date.now()-when.getTime())/60000);
+        const agoLabel=ago<60?ago+'m ago':Math.floor(ago/60)+'h ago';
+        const tip=(f.results||[]).map(r=>`${r.symbol}: ${r.price!=null?r.price+' '+(r.currency||'SAR')+' × '+r.quantity+(r.priceInSAR&&r.priceInSAR!==r.price?' = SAR '+r.priceInSAR.toFixed(2)+' each':''):'no price'}${r.source?' [src: '+r.source.substr(0,50)+']':''}${r.notes?' ('+r.notes+')':''}`).join('\n');
+        return`<div style="font-size:10px;color:var(--text3);margin-bottom:8px;font-style:italic" title="${h(tip)}">⚡ AI-fetched ${agoLabel}${f.partial?' · partial':''} · hover for details</div>`;
+      })():''}
 
       <div class="fg" style="gap:14px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px">
         <div style="min-width:140px">
@@ -9622,6 +10031,12 @@ function rInvestments(){
     <div class="pg-header-title">Investments</div>
     <div class="fg" style="gap:6px;flex-wrap:wrap">
       ${staleCount>0?`<span style="font-size:11px;color:var(--warn);align-self:center" title="${staleCount} account${staleCount===1?'':'s'} have values older than 30 days">${staleCount} stale</span>`:''}
+      ${(()=>{
+        // V8.21.5: Update Values bulk button — only when at least one ai_public_price account exists
+        const hasAi=invAccs.some(a=>a.updateSource==='ai_public_price'&&Array.isArray(a.holdings)&&a.holdings.length>0);
+        if(!hasAi)return '';
+        return`<button class="btn btn-sm" onclick="bulkUpdateValues()" ${_invFetchingBatch?'disabled':''} title="Fetch current prices for AI-enabled accounts">${_invFetchingBatch?'Fetching…':'⚡ Update values'}</button>`;
+      })()}
       <button class="btn btn-p btn-sm" onclick="sw('accounts');setTimeout(()=>openAddAcc(),150)">+ Add investment account</button>
     </div>
   </div>
@@ -9654,6 +10069,113 @@ function rInvestments(){
 
 function openRecordValue(accId){_invRecordingId=accId;render();}
 function closeRecordValue(){_invRecordingId=null;render();}
+// V8.21.5: source-aware update trigger. Routes to manual form, AI fetch, or AI assist panel
+// based on the account's updateSource setting.
+async function triggerUpdateForAccount(accId){
+  const a=S.accounts.find(x=>x.id===accId);
+  if(!a)return;
+  const src=a.updateSource||'manual';
+  if(src==='ai_public_price'){
+    // Validate holdings exist
+    if(!Array.isArray(a.holdings)||a.holdings.length===0){
+      toast('No holdings configured. Edit the account to add symbols + quantities.',false);
+      return;
+    }
+    _invFetchingId=accId;render();
+    try{
+      const result=await fetchInvestmentValuesAI(accId);
+      if(result.ok){
+        const applied=applyInvestmentFetchResult(accId,result);
+        if(applied){
+          await saveState();
+          toast(`Updated ${h(a.name)}: ${fmt(result.value)}${result.partial?' (partial — see tooltip)':''}`);
+        }
+      }else{
+        toast(`Update failed: ${result.error}`,false);
+      }
+    }catch(e){
+      toast('Update failed: '+(e.message||String(e)),false);
+      recordAiFetchFailure('exception',e.message||String(e));
+    }finally{
+      _invFetchingId=null;render();
+    }
+  }else if(src==='ai_assisted_manual'){
+    _invFetchingId=accId;_invAssistOpen=accId;render();
+    try{
+      const result=await fetchInvestmentEstimateAI(accId);
+      _invAssistData={accountId:accId,response:result.ok?result:{estimate:null,methodology:result.error||'AI assist failed'}};
+    }catch(e){
+      _invAssistData={accountId:accId,response:{estimate:null,methodology:'Error: '+(e.message||String(e))}};
+    }finally{
+      _invFetchingId=null;render();
+    }
+  }else{
+    // manual — open the simple inline form (V8.21 behavior)
+    openRecordValue(accId);
+  }
+}
+function closeAssistPanel(){_invAssistOpen=null;_invAssistData=null;render();}
+
+// V8.21.5: bulk Update Values for all ai_public_price accounts on the Investments page
+async function bulkUpdateValues(){
+  const accounts=S.accounts.filter(a=>isInvestmentAccount(a)&&isLiveAccount(a)&&a.updateSource==='ai_public_price'&&Array.isArray(a.holdings)&&a.holdings.length>0);
+  if(accounts.length===0){toast('No AI-enabled accounts to update.');return;}
+  _invFetchingBatch=true;render();
+  let successes=0,failures=0;
+  for(const a of accounts){
+    _invFetchingId=a.id;render();
+    try{
+      const result=await fetchInvestmentValuesAI(a.id);
+      if(result.ok){
+        const applied=applyInvestmentFetchResult(a.id,result);
+        if(applied)successes++;
+        else failures++;
+      }else{
+        failures++;
+      }
+    }catch(e){
+      failures++;
+      recordAiFetchFailure('bulk_exception',e.message||String(e));
+    }
+  }
+  _invFetchingId=null;_invFetchingBatch=false;
+  await saveState();
+  render();
+  toast(`Updated ${successes} of ${accounts.length} accounts${failures?` · ${failures} failed (see Diagnostics)`:''}`);
+}
+
+// V8.21.5: auto-refresh on Investments page open. Conservative — only ai_public_price accounts
+// that are stale (default 24h threshold). Debounced (1 hour) to avoid hammering on every navigation.
+async function triggerAutoRefreshIfStale(){
+  if(!S.settings.aiAutoRefresh)return;
+  if(typeof IS_DEMO!=='undefined'&&IS_DEMO)return;
+  // Debounce
+  if(_invAutoRefreshDoneAt&&(Date.now()-_invAutoRefreshDoneAt)<3600000)return;
+  const threshold=(S.settings.aiStaleThresholdHours||24)*3600000;
+  const candidates=S.accounts.filter(a=>{
+    if(!isInvestmentAccount(a)||!isLiveAccount(a))return false;
+    if(a.updateSource!=='ai_public_price')return false;
+    if(!Array.isArray(a.holdings)||a.holdings.length===0)return false;
+    if(!a.currentValueAsOf)return true; // never set — always refresh
+    const last=new Date(a.currentValueAsOf+'T00:00:00').getTime();
+    return (Date.now()-last)>=threshold;
+  });
+  if(candidates.length===0)return;
+  _invAutoRefreshDoneAt=Date.now();
+  // Run serially (Decision 3 — serial, not parallel, to avoid rate limit hammering)
+  for(const a of candidates){
+    _invFetchingId=a.id;render();
+    try{
+      const result=await fetchInvestmentValuesAI(a.id);
+      if(result.ok)applyInvestmentFetchResult(a.id,result);
+    }catch(e){
+      recordAiFetchFailure('auto_refresh',e.message||String(e));
+    }
+  }
+  _invFetchingId=null;
+  await saveState();
+  render();
+}
 function saveInvestmentValue(accId){
   const a=S.accounts.find(x=>x.id===accId);if(!a){closeRecordValue();return;}
   const valEl=document.getElementById('rv-val-'+accId);
@@ -10600,6 +11122,12 @@ function rSettings(){
       <div class="settings-row" style="align-items:flex-start"><div class="settings-row-label"><div class="settings-row-title">Auto-apply Rules</div><div class="settings-row-sub">When enabled, Lanki re-runs your learned rules across all transactions in the background whenever a rule is created or upgraded. It only touches uncategorized transactions or ones previously auto-assigned by rules — manual categorizations are never overwritten. Turn off if you prefer to apply rules only at statement import or via the Apply Rules button.</div></div><div class="settings-row-ctrl"><input type="checkbox" ${S.settings.autoRuleSweep!==false?'checked':''} onchange="S.settings.autoRuleSweep=this.checked;sched();toast(this.checked?'Auto-apply Rules enabled':'Auto-apply Rules disabled')" style="cursor:pointer;width:18px;height:18px"></div></div>
       <div class="settings-row" style="align-items:flex-start"><div class="settings-row-label"><div class="settings-row-title">Edge Function URL</div><div class="settings-row-sub">Your Supabase Edge Function endpoint for AI extraction. See deployment guide.</div></div><div class="settings-row-ctrl" style="min-width:240px"><input type="text" placeholder="https://xxx.supabase.co/functions/v1/extract" value="${S.settings.edgeFnUrl||''}" onchange="S.settings.edgeFnUrl=this.value.trim();sched()" style="width:100%;font-size:11px;font-family:monospace"></div></div>
       <div class="settings-row" style="align-items:flex-start"><div class="settings-row-label"><div class="settings-row-title">Edge Function Secret</div><div class="settings-row-sub">V8.17 — shared secret used to authenticate dashboard calls to extract-statement and ai-proxy. Set the matching value as <code>LANKI_SECRET</code> in Supabase Edge Function env vars. If empty, AI extraction and AI categorization will be rejected by the edge functions.</div></div><div class="settings-row-ctrl" style="min-width:240px"><input type="password" placeholder="Paste secret value" value="${S.settings.lankiSecret||''}" onchange="S.settings.lankiSecret=this.value.trim();sched();toast('Edge Function secret saved')" style="width:100%;font-size:11px;font-family:monospace"></div></div>
+      <!-- V8.21.5: AI Features section -->
+      <div class="settings-row" style="border-top:2px solid var(--bg3);margin-top:8px;padding-top:12px"><div class="settings-row-label"><div class="settings-row-title" style="font-weight:600">AI Features (V8.21.5)</div><div class="settings-row-sub">Settings for AI-driven investment value updates. Requires Edge Function URL + Secret above.</div></div><div class="settings-row-ctrl"></div></div>
+      <div class="settings-row" style="align-items:flex-start"><div class="settings-row-label"><div class="settings-row-title">Auto-refresh on Investments page</div><div class="settings-row-sub">When enabled, opening the Investments page silently refreshes any AI-public-price account whose value is older than the stale threshold below. Disable to require manual button clicks for all updates.</div></div><div class="settings-row-ctrl"><input type="checkbox" ${S.settings.aiAutoRefresh!==false?'checked':''} onchange="S.settings.aiAutoRefresh=this.checked;sched();toast(this.checked?'Auto-refresh enabled':'Auto-refresh disabled')" style="cursor:pointer;width:18px;height:18px"></div></div>
+      <div class="settings-row" style="align-items:flex-start"><div class="settings-row-label"><div class="settings-row-title">Stale threshold (hours)</div><div class="settings-row-sub">How old a value must be before auto-refresh triggers. Default 24h. Lower values mean more frequent fetches and higher API costs.</div></div><div class="settings-row-ctrl" style="min-width:120px"><input type="number" min="1" max="720" step="1" value="${S.settings.aiStaleThresholdHours||24}" onchange="S.settings.aiStaleThresholdHours=Math.max(1,Math.min(720,parseInt(this.value)||24));sched()" style="width:100%;font-size:12px"></div></div>
+      <div class="settings-row" style="align-items:flex-start"><div class="settings-row-label"><div class="settings-row-title">API call limits</div><div class="settings-row-sub">Soft cap warns before exceeding (default 50/day). Hard cap blocks further fetches (default 200/day). Today's count: <strong>${S.settings.aiFetchCount||0}</strong> calls (resets at midnight). Failures logged to Diagnostics.</div></div><div class="settings-row-ctrl" style="min-width:200px"><div class="fr" style="gap:4px"><div><label class="lbl" style="font-size:9px">Soft</label><input type="number" min="1" max="500" value="${S.settings.aiFetchSoftCap||50}" onchange="S.settings.aiFetchSoftCap=Math.max(1,parseInt(this.value)||50);sched()" style="width:70px;font-size:11px"></div><div><label class="lbl" style="font-size:9px">Hard</label><input type="number" min="1" max="2000" value="${S.settings.aiFetchHardCap||200}" onchange="S.settings.aiFetchHardCap=Math.max(1,parseInt(this.value)||200);sched()" style="width:70px;font-size:11px"></div></div></div></div>
+      ${(S.settings.aiFetchFailures||[]).length>0?`<div class="settings-row" style="align-items:flex-start"><div class="settings-row-label"><div class="settings-row-title">Recent AI failures</div><div class="settings-row-sub">Last ${Math.min(5,(S.settings.aiFetchFailures||[]).length)} of ${(S.settings.aiFetchFailures||[]).length} recorded failures. <button class="btn btn-xs" onclick="S.settings.aiFetchFailures=[];sched();render();toast('Failure log cleared')">Clear log</button></div></div><div class="settings-row-ctrl" style="min-width:200px;font-size:10px;font-family:monospace;color:var(--text3)">${(S.settings.aiFetchFailures||[]).slice(0,5).map(f=>`<div style="margin-bottom:4px">${h(f.when.substr(0,16))} · ${h(f.reason)}<br><span style="color:var(--text3)">${h((f.detail||'').substr(0,80))}</span></div>`).join('')}</div></div>`:''}
     </div>`;
   }else if(SP==='categories'){
     pageContent=rCategoriesSettings();
@@ -13824,6 +14352,34 @@ const MIGRATIONS=[
       });
       if(touched>0)sched();
       return{count:touched,ambiguous:skipped.length};
+    }
+  },
+  // V8.21.5: marker migration for AI value fetching. Initializes holdings:[] on investment
+  // accounts that don't have it. Initializes AI fetch settings if absent. No data changes.
+  // REMOVE_AFTER: V9.0
+  {
+    id:'v8_21_5_initHoldings',
+    description:'V8.21.5 vault marker — AI value fetching introduced',
+    removeAfter:'V9.0',
+    run:()=>{
+      const INV_TYPES=new Set(['brokerage_account','fund_account','gold_account','crypto_wallet','real_estate_fund','direct_investment']);
+      let touched=0;
+      (S.accounts||[]).forEach(a=>{
+        if(INV_TYPES.has(a.type)&&!Array.isArray(a.holdings)){
+          a.holdings=[];
+          touched++;
+        }
+      });
+      // Initialize AI fetch settings under settings namespace if not already set
+      if(!S.settings)S.settings={};
+      if(typeof S.settings.aiAutoRefresh!=='boolean')S.settings.aiAutoRefresh=true;
+      if(typeof S.settings.aiStaleThresholdHours!=='number')S.settings.aiStaleThresholdHours=24;
+      if(typeof S.settings.aiFetchSoftCap!=='number')S.settings.aiFetchSoftCap=50;
+      if(typeof S.settings.aiFetchHardCap!=='number')S.settings.aiFetchHardCap=200;
+      if(typeof S.settings.aiFetchCount!=='number')S.settings.aiFetchCount=0;
+      if(!S.settings.aiFetchCountResetDate)S.settings.aiFetchCountResetDate=localISO(new Date());
+      if(touched>0)sched();
+      return{count:touched};
     }
   }
 ];
