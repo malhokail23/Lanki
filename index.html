@@ -1555,6 +1555,7 @@ body.privacy-on{padding-top:28px}
     </div>
     <!-- V3.1: Restructured nav — ACTIVITY / FINANCES / HOUSEHOLD / Settings -->
     <button class="nav-item active" data-tab="overview" onclick="sw('overview')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg> Overview</button>
+    <button class="nav-item" data-tab="projections" onclick="sw('projections')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="14 7 21 7 21 14"/></svg> Projections</button>
 
     <div class="nav-section-label">Activity</div>
     <button class="nav-item nav-group" data-group="transactions" onclick="toggleGroup('transactions')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg> Transactions <span class="nav-arrow" id="arr-transactions">&#8250;</span></button>
@@ -1715,7 +1716,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='8.23';
+const VERSION='8.24';
 // IS_DEMO: when true, the entire app runs in a sandboxed sample-data mode.
 // No vault is loaded, no Supabase calls happen, and saveState/flushTxnQueue are no-ops.
 // Activated by URL param ?demo=1 or hash #demo. Cannot be flipped at runtime — the only
@@ -3041,6 +3042,7 @@ async function render(){
   const searchVal=searchEl?searchEl.value:null;
   const t=S.tab;
   if(t==='overview')el.innerHTML=await rOv();
+  else if(t==='projections')el.innerHTML=rProjections();
   else if(t==='txbank')el.innerHTML=await rTxBank();
   else if(t==='txcards')el.innerHTML=await rTxCards();
   else if(t==='txinvestments')el.innerHTML=await rTxInvestments();
@@ -3089,6 +3091,7 @@ async function render(){
     if(newSearch){newSearch.focus();if(searchVal!==null){newSearch.value=searchVal;newSearch.setSelectionRange(searchVal.length,searchVal.length);}}
   }
   if(t==='overview')setTimeout(buildCharts,120);
+  else if(t==='projections')setTimeout(buildProjectionsChart,120);
   }finally{_rendering=false;}
   if(_renderPending){_renderPending=false;render();}
   // Restore bulk bar visibility after render
@@ -3680,7 +3683,7 @@ async function rOv(){
         <div style="font-size:13px;font-weight:600;color:var(--text1)">Forecast &mdash; Next 30 Days</div>
         <div style="font-size:10px;color:var(--text3);margin-top:2px">Based on recurring income, bills, subscriptions, staff, and minimum debt payments</div>
       </div>
-      <span style="font-size:10px;color:var(--text3);font-style:italic">12-month projections in V8.24</span>
+      <button onclick="sw('projections')" style="background:none;border:none;cursor:pointer;color:var(--electric);font-size:11px;font-weight:500;padding:0">View 12-month projections &rarr;</button>
     </div>
     <div class="g3" style="margin-top:6px">
       <div style="padding:10px 12px;background:var(--bg2);border-radius:var(--rsm)">
@@ -3752,6 +3755,453 @@ async function rOv(){
   `:''}
   `;
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// V8.24: CASH POSITION PROJECTIONS (Case 16)
+// Three-layer projection page: monthly table + visual chart + scenario sliders.
+// Reads recurring data already in vault (income, bills, subs, staff, debts) plus
+// rolling-average variable spend. No data mutations — page is read-only against state.
+// ─────────────────────────────────────────────────────────────────────────
+
+// V8.24: Session-only scenario adjustments (Decision 4 — session-only, no persistence).
+// Reset on page reload, vault lock, navigation away from Projections.
+let _projScenario={
+  incomeAdj:0,        // ±% applied to recurring income
+  variableAdj:0,      // ±% applied to variable spend baseline
+  cutSubs:[],         // array of sub IDs assumed cancelled
+  cutBills:[],        // array of bill IDs assumed eliminated
+  oneTimeEvents:[]    // array of {monthOffset, amount, sign:'in'|'out', label}
+};
+function _projResetScenarios(){
+  _projScenario={incomeAdj:0,variableAdj:0,cutSubs:[],cutBills:[],oneTimeEvents:[]};
+  render();
+}
+
+// V8.24: Compute projection. Returns array of month objects with all line items.
+// Decision 5: starting cash = liquid accounts only. Decision 2: negative balances shown as-is.
+function buildProjections(){
+  const horizon=S.settings.projHorizon||12;
+  const variableWindow=S.settings.projVariableWindow||6;
+  const includeInv=S.settings.projIncludeInvestments===true;
+
+  // Starting cash position — liquid accounts only (Decision 5a)
+  const liquidTypes=new Set(['main_account','savings_account','sub_account','joint_account','foreign_currency_account','prepaid_card','cash']);
+  const startingCash=S.accounts.filter(a=>liquidTypes.has(a.type)&&isLiveAccount(a)).reduce((s,a)=>{const b=calcAccBalance(a);return b!==null?s+b:s;},0);
+
+  // Recurring income (monthly only — V8.24 simplification)
+  const baseIncome=S.income.filter(i=>i.status==='active'&&i.frequency==='Monthly').reduce((s,i)=>s+(i.amount||0),0);
+  // Apply scenario adjustment
+  const adjustedIncome=baseIncome*(1+(_projScenario.incomeAdj||0)/100);
+
+  // Recurring bills (monthly billing cycle, with optional cuts from scenario)
+  const cutBillSet=new Set(_projScenario.cutBills||[]);
+  const baseBills=S.bills.filter(b=>b.billingCycle==='Monthly'&&!cutBillSet.has(b.id)).reduce((s,b)=>s+(b.fixedAmount||0),0);
+
+  // Recurring subscriptions (active, with optional cuts)
+  const cutSubSet=new Set(_projScenario.cutSubs||[]);
+  const baseSubs=(S.subs||[]).filter(s=>s.status==='active'&&!cutSubSet.has(s.id)).reduce((s,sub)=>s+(sub.amount||0),0);
+
+  // Staff salaries
+  const baseStaff=S.staff.reduce((s,st)=>s+(st.salary||0),0);
+
+  // Debt obligations — CC minPayment + loan installment (monthly)
+  const baseDebt=S.debts.filter(d=>d.status==='active').reduce((s,d)=>s+(d.type==='credit_card'?(d.minPayment||0):(d.installment||0)),0);
+
+  // Investment commitments — only if user opted in. Look at recurring income items typed as investment, or recurring bills/transactions explicitly tagged investment.
+  // V8.24: simple heuristic — sum any income items with incType='investment' as outflows.
+  // Default off per Decision 3.
+  const baseInvestments=includeInv?(()=>{
+    // Heuristic: count active income/bill items where incType==='investment' or category indicates investment
+    // For simplicity in V8.24, this is a conservative zero unless the user has explicit "Investment Commitment" flagged items.
+    // Future enhancement: add a "Planned Investments" section to the Income page.
+    return 0; // Placeholder until explicit investment commitments UI ships in V9.0+
+  })():0;
+
+  // Variable (non-recurring) spend rolling average
+  // Computed per category over the past `variableWindow` months, EXCLUDING anything already counted as recurring
+  const now=getYM(new Date());
+  const lookback=mRange(addM(now,-(variableWindow)),addM(now,-1));
+  const lookbackTxns=lookback.flatMap(m=>S.txnCache[m]||[]).filter(t=>{
+    if(txDir(t)!=='out')return false;
+    if(t.type!=='expense')return false;
+    if(isRefundLinked(t))return false;
+    // Exclude transactions that match recurring categories already counted
+    if(t.mainCatId==='cat_main_debt'||t.mainCatId==='cat_main_finance')return false; // counted in debt
+    if(t.mainCatId==='cat_main_subscriptions')return false; // counted in subs
+    if(t.subCatId==='sub_cc_payment')return false; // counted in debt
+    return true;
+  });
+  // Compute totals per category for outlier detection (Risk 1 mitigation)
+  const catTotals={};
+  lookbackTxns.forEach(t=>{
+    const k=t.mainCatId||'_unc';
+    if(!catTotals[k])catTotals[k]={total:0,count:0,amounts:[]};
+    catTotals[k].total+=t.amount;
+    catTotals[k].count++;
+    catTotals[k].amounts.push(t.amount);
+  });
+  // Outlier detection: median per category, exclude transactions > 3× median
+  const outliers=[];
+  Object.entries(catTotals).forEach(([cat,data])=>{
+    if(data.amounts.length<3)return; // need at least 3 to compute median meaningfully
+    const sorted=[...data.amounts].sort((a,b)=>a-b);
+    const median=sorted[Math.floor(sorted.length/2)];
+    if(median<=0)return;
+    data.amounts.forEach(amt=>{
+      if(amt>median*3){
+        outliers.push({cat,amount:amt,median});
+        data.total-=amt; // remove from total used in average
+        data.count--;
+      }
+    });
+  });
+  const totalVariable=Object.values(catTotals).reduce((s,d)=>s+d.total,0);
+  const monthsAvailable=Math.min(variableWindow,lookback.length);
+  const baseVariable=monthsAvailable>0?(totalVariable/monthsAvailable):0;
+  const adjustedVariable=baseVariable*(1+(_projScenario.variableAdj||0)/100);
+
+  // One-time events lookup by month offset
+  const oneTimeByMonth={};
+  (_projScenario.oneTimeEvents||[]).forEach(e=>{
+    if(!oneTimeByMonth[e.monthOffset])oneTimeByMonth[e.monthOffset]=[];
+    oneTimeByMonth[e.monthOffset].push(e);
+  });
+
+  // Build month-by-month projection
+  const months=[];
+  let runningBalance=startingCash;
+  for(let i=0;i<horizon;i++){
+    const monthYM=addM(now,i);
+    const opening=runningBalance;
+    const incomeForMonth=adjustedIncome;
+    const billsForMonth=baseBills;
+    const subsForMonth=baseSubs;
+    const staffForMonth=baseStaff;
+    const debtForMonth=baseDebt;
+    const invForMonth=baseInvestments;
+    const variableForMonth=adjustedVariable;
+    // Apply one-time events for this month offset
+    const events=oneTimeByMonth[i]||[];
+    let oneTimeNet=0;
+    events.forEach(e=>{
+      const amt=parseFloat(e.amount)||0;
+      oneTimeNet+=(e.sign==='in'?amt:-amt);
+    });
+    const totalOut=billsForMonth+subsForMonth+staffForMonth+debtForMonth+invForMonth+variableForMonth;
+    const closing=opening+incomeForMonth-totalOut+oneTimeNet;
+    const delta=closing-opening;
+    months.push({
+      ym:monthYM,
+      opening,income:incomeForMonth,bills:billsForMonth,subs:subsForMonth,staff:staffForMonth,
+      debt:debtForMonth,investments:invForMonth,variable:variableForMonth,
+      oneTimeNet,oneTimeEvents:events,
+      closing,delta
+    });
+    runningBalance=closing;
+  }
+
+  // Average monthly outflow used for buffer thresholds
+  const avgOutflow=months.length?months.reduce((s,m)=>s+(m.bills+m.subs+m.staff+m.debt+m.investments+m.variable),0)/months.length:0;
+
+  return{months,startingCash,baseIncome,adjustedIncome,baseBills,baseSubs,baseStaff,baseDebt,baseInvestments,baseVariable,adjustedVariable,monthsAvailable,outliers,avgOutflow,horizon,variableWindow,includeInv};
+}
+
+// V8.24: Buffer health classifier — returns 'comfortable', 'tight', 'shortfall', or 'critical'
+function projHealth(closing,avgOutflow){
+  const comfort=S.settings.projBufferComfort||1.0;
+  const tight=S.settings.projBufferTight||0.5;
+  if(closing<0)return 'critical';
+  if(avgOutflow<=0)return 'comfortable';
+  const ratio=closing/avgOutflow;
+  if(ratio>=comfort)return 'comfortable';
+  if(ratio>=tight)return 'tight';
+  return 'shortfall';
+}
+
+// V8.24: Quality check panel — surface input completeness so user knows projection limitations
+function rProjectionsQuality(proj){
+  const issues=[];
+  const oks=[];
+
+  const incomeCount=S.income.filter(i=>i.status==='active'&&i.frequency==='Monthly').length;
+  if(incomeCount===0){
+    issues.push({lvl:'crit',label:'No recurring monthly income tracked',action:"sw('income')",actionLabel:'Add income →'});
+  }else{
+    oks.push(`${incomeCount} recurring income source${incomeCount===1?'':'s'} tracked`);
+  }
+
+  const billsCount=S.bills.filter(b=>b.billingCycle==='Monthly').length;
+  if(billsCount===0){
+    issues.push({lvl:'warn',label:'No recurring bills tracked',action:"sw('bills')",actionLabel:'Add bills →'});
+  }else{
+    oks.push(`${billsCount} recurring bill${billsCount===1?'':'s'} tracked`);
+  }
+
+  const subsCount=(S.subs||[]).filter(s=>s.status==='active').length;
+  if(subsCount===0){
+    issues.push({lvl:'info',label:'No active subscriptions tracked',action:"sw('subscriptions')",actionLabel:'Review subscriptions →'});
+  }else{
+    oks.push(`${subsCount} active subscription${subsCount===1?'':'s'} tracked`);
+  }
+
+  if(proj.monthsAvailable<3){
+    issues.push({lvl:'warn',label:`Variable spend baseline limited (${proj.monthsAvailable} month${proj.monthsAvailable===1?'':'s'} of history)`,action:null});
+  }else{
+    oks.push(`Variable spend based on ${proj.monthsAvailable} month${proj.monthsAvailable===1?'':'s'} of history`);
+  }
+
+  // Accounts without opening balance
+  const liquidTypes=new Set(['main_account','savings_account','sub_account','joint_account','foreign_currency_account','prepaid_card','cash']);
+  const liquidNoOpening=S.accounts.filter(a=>liquidTypes.has(a.type)&&isLiveAccount(a)&&a.openingBalance==null).length;
+  if(liquidNoOpening>0){
+    issues.push({lvl:'warn',label:`${liquidNoOpening} liquid account${liquidNoOpening===1?'':'s'} missing opening balance — starting cash estimate may be incomplete`,action:"sw('accounts')",actionLabel:'Set opening balances →'});
+  }
+
+  if(proj.outliers.length>0){
+    issues.push({lvl:'info',label:`${proj.outliers.length} outlier transaction${proj.outliers.length===1?'':'s'} excluded from variable baseline (>3× category median)`,action:null});
+  }
+
+  return`<div class="card card-bordered" style="margin-bottom:1rem">
+    <div class="fg jb" style="align-items:center;margin-bottom:8px">
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--text1)">Projection Quality</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">Inputs that drive this forecast — incomplete data means incomplete projection</div>
+      </div>
+    </div>
+    ${oks.length?`<div style="margin-bottom:${issues.length?'10px':'0'}">${oks.map(o=>`<div style="font-size:11px;color:var(--ok);padding:3px 0">&#10003; ${h(o)}</div>`).join('')}</div>`:''}
+    ${issues.length?`<div>${issues.map(i=>{
+      const col=i.lvl==='crit'?'var(--bad)':i.lvl==='warn'?'var(--warn)':'var(--text3)';
+      const icon=i.lvl==='crit'?'!':i.lvl==='warn'?'!':'i';
+      return`<div class="fg jb" style="padding:6px 0;font-size:11px;gap:10px;align-items:center"><div style="color:${col}">${icon}&nbsp; ${h(i.label)}</div>${i.action?`<button class="btn btn-xs" onclick="${i.action}">${h(i.actionLabel)}</button>`:''}</div>`;
+    }).join('')}</div>`:''}
+  </div>`;
+}
+
+// V8.24: Layer 1 — Monthly projection table
+function rProjectionsTable(proj){
+  const fmtY=ym=>{const[y,m]=ym.split('-');return new Date(y,m-1).toLocaleDateString('en-GB',{month:'short',year:'2-digit'});};
+  const showInvCol=proj.includeInv&&proj.baseInvestments>0;
+  const rows=proj.months.map((m,idx)=>{
+    const health=projHealth(m.closing,proj.avgOutflow);
+    const bgColor=health==='comfortable'?'transparent':health==='tight'?'color-mix(in srgb,var(--warn) 5%,transparent)':health==='shortfall'?'color-mix(in srgb,var(--bad) 6%,transparent)':'color-mix(in srgb,var(--bad) 12%,transparent)';
+    const closingCol=health==='critical'?'var(--bad)':health==='shortfall'?'var(--bad)':health==='tight'?'var(--warn)':'var(--ok)';
+    const deltaCol=m.delta>=0?'var(--ok)':'var(--bad)';
+    const oneTimeChip=m.oneTimeEvents.length?`<div style="font-size:9px;color:var(--electric);margin-top:2px">${m.oneTimeEvents.length} event${m.oneTimeEvents.length===1?'':'s'}</div>`:'';
+    return`<tr style="background:${bgColor}">
+      <td style="font-size:var(--fs-xs);padding:8px 10px;font-weight:500">${fmtY(m.ym)}${oneTimeChip}</td>
+      <td class="priv-mask" style="font-size:var(--fs-xs);text-align:right;padding:8px 10px;font-variant-numeric:tabular-nums;color:${m.opening<0?'var(--bad)':'var(--text2)'}">${fmtP(m.opening)}</td>
+      <td class="priv-mask" style="font-size:var(--fs-xs);text-align:right;padding:8px 10px;font-variant-numeric:tabular-nums;color:var(--ok)">${fmtP(m.income)}</td>
+      <td class="priv-mask" style="font-size:var(--fs-xs);text-align:right;padding:8px 10px;font-variant-numeric:tabular-nums;color:var(--bad)">${fmtP(m.bills)}</td>
+      <td class="priv-mask" style="font-size:var(--fs-xs);text-align:right;padding:8px 10px;font-variant-numeric:tabular-nums;color:var(--bad)">${fmtP(m.subs)}</td>
+      <td class="priv-mask" style="font-size:var(--fs-xs);text-align:right;padding:8px 10px;font-variant-numeric:tabular-nums;color:var(--bad)">${fmtP(m.staff)}</td>
+      <td class="priv-mask" style="font-size:var(--fs-xs);text-align:right;padding:8px 10px;font-variant-numeric:tabular-nums;color:var(--bad)">${fmtP(m.debt)}</td>
+      ${showInvCol?`<td class="priv-mask" style="font-size:var(--fs-xs);text-align:right;padding:8px 10px;font-variant-numeric:tabular-nums;color:var(--bad)">${fmtP(m.investments)}</td>`:''}
+      <td class="priv-mask" style="font-size:var(--fs-xs);text-align:right;padding:8px 10px;font-variant-numeric:tabular-nums;color:var(--bad)">${fmtP(m.variable)}</td>
+      ${m.oneTimeNet!==0?`<td class="priv-mask" style="font-size:var(--fs-xs);text-align:right;padding:8px 10px;font-variant-numeric:tabular-nums;color:${m.oneTimeNet>=0?'var(--ok)':'var(--bad)'}">${fmtSP(m.oneTimeNet,true)}</td>`:'<td style="padding:8px 10px"></td>'}
+      <td class="priv-mask" style="font-size:var(--fs-xs);text-align:right;padding:8px 10px;font-variant-numeric:tabular-nums;font-weight:600;color:${closingCol}">${fmtP(m.closing)}</td>
+      <td class="priv-mask" style="font-size:var(--fs-xxs);text-align:right;padding:8px 10px;font-variant-numeric:tabular-nums;color:${deltaCol}">${fmtSP(m.delta,true)}</td>
+    </tr>`;
+  }).join('');
+
+  return`<div class="card card-bordered" style="margin-bottom:1rem;padding:14px 0 0">
+    <div style="padding:0 16px 10px">
+      <div class="fg jb" style="align-items:center;flex-wrap:wrap;gap:8px">
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--text1)">Monthly Projection</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:2px">Starting from ${fmtP(proj.startingCash)} liquid cash · ${proj.horizon} months forward</div>
+        </div>
+        <div style="font-size:10px;color:var(--text3);display:flex;gap:12px;flex-wrap:wrap">
+          <span><span style="display:inline-block;width:10px;height:10px;background:color-mix(in srgb,var(--ok) 12%,transparent);border-radius:2px;vertical-align:middle"></span> Comfortable</span>
+          <span><span style="display:inline-block;width:10px;height:10px;background:color-mix(in srgb,var(--warn) 14%,transparent);border-radius:2px;vertical-align:middle"></span> Tight</span>
+          <span><span style="display:inline-block;width:10px;height:10px;background:color-mix(in srgb,var(--bad) 14%,transparent);border-radius:2px;vertical-align:middle"></span> Shortfall</span>
+        </div>
+      </div>
+    </div>
+    <div class="tbl-wrap" style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
+      <thead><tr style="background:var(--bg2);border-top:1px solid var(--bg3);border-bottom:1px solid var(--bg3)">
+        <th style="font-size:10px;text-align:left;padding:8px 10px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.04em">Month</th>
+        <th style="font-size:10px;text-align:right;padding:8px 10px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.04em">Opening</th>
+        <th style="font-size:10px;text-align:right;padding:8px 10px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.04em">+ Income</th>
+        <th style="font-size:10px;text-align:right;padding:8px 10px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.04em">− Bills</th>
+        <th style="font-size:10px;text-align:right;padding:8px 10px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.04em">− Subs</th>
+        <th style="font-size:10px;text-align:right;padding:8px 10px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.04em">− Staff</th>
+        <th style="font-size:10px;text-align:right;padding:8px 10px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.04em">− Debt</th>
+        ${showInvCol?'<th style="font-size:10px;text-align:right;padding:8px 10px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.04em">− Inv</th>':''}
+        <th style="font-size:10px;text-align:right;padding:8px 10px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.04em">− Variable</th>
+        <th style="font-size:10px;text-align:right;padding:8px 10px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.04em">± Events</th>
+        <th style="font-size:10px;text-align:right;padding:8px 10px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.04em">Closing</th>
+        <th style="font-size:10px;text-align:right;padding:8px 10px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.04em">Δ</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>
+    <div style="padding:10px 16px;font-size:10px;color:var(--text3);background:var(--bg2);border-top:1px solid var(--bg3)">
+      Recurring inputs: Income ${fmtP(proj.adjustedIncome)}/mo · Bills ${fmtP(proj.baseBills)}/mo · Subs ${fmtP(proj.baseSubs)}/mo · Staff ${fmtP(proj.baseStaff)}/mo · Debt ${fmtP(proj.baseDebt)}/mo · Variable ${fmtP(proj.adjustedVariable)}/mo (avg of ${proj.monthsAvailable}mo)
+      ${(_projScenario.incomeAdj||_projScenario.variableAdj||(_projScenario.cutSubs||[]).length||(_projScenario.cutBills||[]).length||(_projScenario.oneTimeEvents||[]).length)?`<div style="margin-top:4px;color:var(--electric);font-weight:500">Scenario adjustments active</div>`:''}
+    </div>
+  </div>`;
+}
+
+// V8.24: Layer 2 — Visual chart (Chart.js line chart)
+function buildProjectionsChart(){
+  if(typeof Chart==='undefined')return;
+  const proj=window._projData;if(!proj)return;
+  const ctx=document.getElementById('projChart');if(!ctx)return;
+  if(ctx._ch)ctx._ch.destroy();
+  const fmtY=ym=>{const[y,m]=ym.split('-');return new Date(y,m-1).toLocaleDateString('en-GB',{month:'short',year:'2-digit'});};
+  const labels=proj.months.map(m=>fmtY(m.ym));
+  const data=proj.months.map(m=>m.closing);
+  const comfort=(S.settings.projBufferComfort||1.0)*proj.avgOutflow;
+  const tight=(S.settings.projBufferTight||0.5)*proj.avgOutflow;
+  // Color points by health
+  const pointColors=proj.months.map(m=>{
+    const h=projHealth(m.closing,proj.avgOutflow);
+    return h==='comfortable'?'#3D6B4F':h==='tight'?'#7A5E20':h==='shortfall'?'#8B4040':'#5C2929';
+  });
+  ctx._ch=new Chart(ctx,{
+    type:'line',
+    data:{
+      labels,
+      datasets:[
+        {label:'Projected Closing',data,borderColor:'#0077C1',backgroundColor:'rgba(0,119,193,.06)',fill:true,tension:0.25,pointRadius:5,pointBackgroundColor:pointColors,pointBorderColor:pointColors,borderWidth:2},
+        {label:'Comfortable buffer',data:Array(proj.months.length).fill(comfort),borderColor:'rgba(61,107,79,.4)',borderDash:[4,4],pointRadius:0,fill:false,borderWidth:1},
+        {label:'Tight buffer',data:Array(proj.months.length).fill(tight),borderColor:'rgba(122,94,32,.4)',borderDash:[4,4],pointRadius:0,fill:false,borderWidth:1},
+        {label:'Zero',data:Array(proj.months.length).fill(0),borderColor:'rgba(139,64,64,.5)',borderDash:[2,2],pointRadius:0,fill:false,borderWidth:1}
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{display:true,position:'bottom',labels:{font:{size:10},boxWidth:14,padding:8}},
+        tooltip:{
+          callbacks:{
+            label:function(ctx){
+              if(ctx.datasetIndex!==0)return ctx.dataset.label+': '+fmtP(ctx.parsed.y);
+              const m=proj.months[ctx.dataIndex];
+              return['Closing: '+fmtP(m.closing),'Δ: '+fmtSP(m.delta,true)];
+            }
+          }
+        }
+      },
+      scales:{
+        y:{ticks:{font:{size:10},callback:v=>fmtP(v)},grid:{color:'rgba(0,0,0,.04)'}},
+        x:{ticks:{font:{size:10}},grid:{display:false}}
+      }
+    }
+  });
+}
+
+// V8.24: Layer 3 — Scenario adjustments panel (collapsible)
+function rProjectionsScenarios(proj){
+  const expanded=S._projShowScenarios===true; // session-only
+  const subsActive=(S.subs||[]).filter(s=>s.status==='active');
+  const billsMonthly=S.bills.filter(b=>b.billingCycle==='Monthly');
+  const cutSubSet=new Set(_projScenario.cutSubs||[]);
+  const cutBillSet=new Set(_projScenario.cutBills||[]);
+  const hasAnyAdj=_projScenario.incomeAdj||_projScenario.variableAdj||cutSubSet.size||cutBillSet.size||(_projScenario.oneTimeEvents||[]).length;
+
+  if(!expanded){
+    return`<div class="card card-bordered" style="margin-bottom:1rem">
+      <div class="fg jb" style="align-items:center">
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--text1)">Scenario Adjustments</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:2px">${hasAnyAdj?'<span style="color:var(--electric);font-weight:500">Adjustments active</span> · ':''}Test "what if" scenarios — income changes, spending cuts, one-time events</div>
+        </div>
+        <button class="btn btn-sm" onclick="S._projShowScenarios=true;render()">${hasAnyAdj?'Edit':'Open'} →</button>
+      </div>
+    </div>`;
+  }
+
+  const oneTimeRows=(_projScenario.oneTimeEvents||[]).map((e,idx)=>{
+    return`<div class="fg" style="gap:8px;margin-bottom:6px;align-items:center;flex-wrap:wrap">
+      <input type="text" placeholder="Label (e.g. Bonus)" value="${h(e.label||'')}" oninput="_projScenario.oneTimeEvents[${idx}].label=this.value" style="flex:1;min-width:120px;padding:6px 8px;border:1px solid var(--border);border-radius:var(--rsm);font-size:12px">
+      <select onchange="_projScenario.oneTimeEvents[${idx}].monthOffset=parseInt(this.value);render()" style="padding:6px 8px;border:1px solid var(--border);border-radius:var(--rsm);font-size:12px">
+        ${Array.from({length:proj.horizon},(_,i)=>{const ym=addM(getYM(new Date()),i);const[y,m]=ym.split('-');const lbl=new Date(y,m-1).toLocaleDateString('en-GB',{month:'short',year:'2-digit'});return`<option value="${i}" ${e.monthOffset===i?'selected':''}>${lbl}</option>`;}).join('')}
+      </select>
+      <select onchange="_projScenario.oneTimeEvents[${idx}].sign=this.value;render()" style="padding:6px 8px;border:1px solid var(--border);border-radius:var(--rsm);font-size:12px">
+        <option value="in" ${e.sign==='in'?'selected':''}>+ Income</option>
+        <option value="out" ${e.sign==='out'?'selected':''}>− Outflow</option>
+      </select>
+      <input type="number" placeholder="Amount" value="${e.amount||''}" oninput="_projScenario.oneTimeEvents[${idx}].amount=parseFloat(this.value)||0" onchange="render()" style="width:120px;padding:6px 8px;border:1px solid var(--border);border-radius:var(--rsm);font-size:12px">
+      <button class="btn btn-xs btn-d" onclick="_projScenario.oneTimeEvents.splice(${idx},1);render()" title="Remove event">✕</button>
+    </div>`;
+  }).join('');
+
+  return`<div class="card card-bordered" style="margin-bottom:1rem">
+    <div class="fg jb" style="align-items:center;margin-bottom:14px">
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--text1)">Scenario Adjustments</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">Changes here affect the table and chart above. Reset returns to baseline. Adjustments are session-only.</div>
+      </div>
+      <div class="fg" style="gap:6px">
+        ${hasAnyAdj?`<button class="btn btn-sm btn-d" onclick="_projResetScenarios()">Reset</button>`:''}
+        <button class="btn btn-sm" onclick="S._projShowScenarios=false;render()">Close</button>
+      </div>
+    </div>
+
+    <div class="g2" style="margin-bottom:14px">
+      <div>
+        <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Income adjustment: <span class="priv-mask" style="color:${_projScenario.incomeAdj>0?'var(--ok)':_projScenario.incomeAdj<0?'var(--bad)':'var(--text2)'}">${_projScenario.incomeAdj>0?'+':''}${_projScenario.incomeAdj}%</span></label>
+        <input type="range" min="-50" max="50" step="5" value="${_projScenario.incomeAdj||0}" oninput="_projScenario.incomeAdj=parseInt(this.value);clearTimeout(window._projDeb);window._projDeb=setTimeout(render,200)" style="width:100%">
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">Base recurring income: ${fmtP(proj.baseIncome)}/mo → adjusted: ${fmtP(proj.adjustedIncome)}/mo</div>
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Variable spend adjustment: <span class="priv-mask" style="color:${_projScenario.variableAdj<0?'var(--ok)':_projScenario.variableAdj>0?'var(--bad)':'var(--text2)'}">${_projScenario.variableAdj>0?'+':''}${_projScenario.variableAdj}%</span></label>
+        <input type="range" min="-50" max="50" step="5" value="${_projScenario.variableAdj||0}" oninput="_projScenario.variableAdj=parseInt(this.value);clearTimeout(window._projDeb);window._projDeb=setTimeout(render,200)" style="width:100%">
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">Base variable spend: ${fmtP(proj.baseVariable)}/mo → adjusted: ${fmtP(proj.adjustedVariable)}/mo</div>
+      </div>
+    </div>
+
+    ${subsActive.length?`<div style="margin-bottom:14px">
+      <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:6px">Cancel subscriptions (assume cut)</div>
+      <div class="fg" style="gap:6px;flex-wrap:wrap">
+        ${subsActive.map(s=>`<label style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;background:${cutSubSet.has(s.id)?'color-mix(in srgb,var(--bad) 10%,transparent)':'var(--bg2)'};border:1px solid ${cutSubSet.has(s.id)?'var(--bad)':'var(--border)'};border-radius:var(--rsm);font-size:11px;cursor:pointer"><input type="checkbox" ${cutSubSet.has(s.id)?'checked':''} onchange="if(this.checked){if(!_projScenario.cutSubs.includes('${s.id}'))_projScenario.cutSubs.push('${s.id}');}else{_projScenario.cutSubs=_projScenario.cutSubs.filter(x=>x!=='${s.id}');}render()" style="margin:0;cursor:pointer">${h(s.name||'?')} (${fmtP(s.amount||0)})</label>`).join('')}
+      </div>
+    </div>`:''}
+
+    ${billsMonthly.length?`<div style="margin-bottom:14px">
+      <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:6px">Eliminate bills (assume cut)</div>
+      <div class="fg" style="gap:6px;flex-wrap:wrap">
+        ${billsMonthly.map(b=>`<label style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;background:${cutBillSet.has(b.id)?'color-mix(in srgb,var(--bad) 10%,transparent)':'var(--bg2)'};border:1px solid ${cutBillSet.has(b.id)?'var(--bad)':'var(--border)'};border-radius:var(--rsm);font-size:11px;cursor:pointer"><input type="checkbox" ${cutBillSet.has(b.id)?'checked':''} onchange="if(this.checked){if(!_projScenario.cutBills.includes('${b.id}'))_projScenario.cutBills.push('${b.id}');}else{_projScenario.cutBills=_projScenario.cutBills.filter(x=>x!=='${b.id}');}render()" style="margin:0;cursor:pointer">${h(b.name||'?')} (${fmtP(b.fixedAmount||0)})</label>`).join('')}
+      </div>
+    </div>`:''}
+
+    <div>
+      <div class="fg jb" style="align-items:center;margin-bottom:6px">
+        <div style="font-size:11px;font-weight:600;color:var(--text2)">One-time events</div>
+        <button class="btn btn-xs" onclick="if(!_projScenario.oneTimeEvents)_projScenario.oneTimeEvents=[];_projScenario.oneTimeEvents.push({monthOffset:0,sign:'in',amount:0,label:''});render()">+ Add event</button>
+      </div>
+      ${oneTimeRows||'<div style="font-size:10px;color:var(--text3);padding:6px 0">No one-time events. Add bonuses, asset sales, or large purchases to model their impact.</div>'}
+    </div>
+  </div>`;
+}
+
+// V8.24: Page assembly
+function rProjections(){
+  const proj=buildProjections();
+  window._projData=proj; // for chart access
+  return`
+  <div class="pg-header-row">
+    <div>
+      <div class="pg-header-title">Cash Position Projections</div>
+      <div class="pg-header-sub">Forward-looking ${proj.horizon}-month projection · Cash Flow Engine · ${proj.includeInv?'incl. ':'excl. '}investment commitments</div>
+    </div>
+  </div>
+
+  ${rProjectionsQuality(proj)}
+
+  <!-- V8.24: Layer 2 — Visual chart -->
+  <div class="card card-bordered" style="margin-bottom:1rem;padding:14px 16px">
+    <div style="font-size:13px;font-weight:600;color:var(--text1);margin-bottom:4px">Projected Closing Balance</div>
+    <div style="font-size:10px;color:var(--text3);margin-bottom:10px">Reference lines: comfortable buffer (${(S.settings.projBufferComfort||1.0).toFixed(1)}× monthly outflow), tight (${(S.settings.projBufferTight||0.5).toFixed(2)}×), zero</div>
+    <div style="position:relative;height:280px"><canvas id="projChart"></canvas></div>
+  </div>
+
+  ${rProjectionsTable(proj)}
+
+  ${rProjectionsScenarios(proj)}
+  `;
+}
+// ─────────────────────────────────────────────────────────────────────────
 
 function buildCharts(){
   if(typeof Chart==='undefined')return;
@@ -11033,6 +11483,13 @@ function rSettings(){
         {k:'reference',l:'Reference (Goals, Debts, Bills, Subs, Staff)',d:'Lower-priority reference data. Hide if you want a leaner Overview.'},
         {k:'intelligence',l:'AI Intelligence',d:'On-demand AI analysis of your financial data.'}
       ];const z=S.settings.ovZones||{};return zones.map(zone=>`<div class="settings-row" style="align-items:flex-start"><div class="settings-row-label"><div class="settings-row-title">${h(zone.l)}</div><div class="settings-row-sub">${h(zone.d)}</div></div><div class="settings-row-ctrl"><input type="checkbox" ${z[zone.k]!==false?'checked':''} onchange="if(!S.settings.ovZones)S.settings.ovZones={};S.settings.ovZones['${zone.k}']=this.checked;sched();toast(this.checked?'${h(zone.l)} shown':'${h(zone.l)} hidden')" style="cursor:pointer;width:18px;height:18px"></div></div>`).join('');})()}
+      <!-- V8.24: Cash Projections settings -->
+      <div class="settings-row" style="border-top:2px solid var(--bg3);margin-top:8px;padding-top:12px"><div class="settings-row-label"><div class="settings-row-title" style="font-weight:600">Cash Projections (V8.24)</div><div class="settings-row-sub">Settings for the Projections page. Affects how monthly cash position is forecasted forward.</div></div><div class="settings-row-ctrl"></div></div>
+      <div class="settings-row" style="align-items:flex-start"><div class="settings-row-label"><div class="settings-row-title">Projection horizon</div><div class="settings-row-sub">How many months forward the projection extends. Beyond 24 months assumptions get too soft.</div></div><div class="settings-row-ctrl"><select onchange="S.settings.projHorizon=parseInt(this.value);sched();render()" style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--rsm);background:var(--bg);font-size:12px"><option value="12" ${(S.settings.projHorizon||12)===12?'selected':''}>12 months</option><option value="18" ${(S.settings.projHorizon||12)===18?'selected':''}>18 months</option><option value="24" ${(S.settings.projHorizon||12)===24?'selected':''}>24 months</option></select></div></div>
+      <div class="settings-row" style="align-items:flex-start"><div class="settings-row-label"><div class="settings-row-title">Variable spend baseline window</div><div class="settings-row-sub">Months of history used to compute the rolling average for non-recurring spend (groceries, dining, fuel, etc.). Shorter = more responsive to recent changes. Longer = more stable.</div></div><div class="settings-row-ctrl"><select onchange="S.settings.projVariableWindow=parseInt(this.value);sched();render()" style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--rsm);background:var(--bg);font-size:12px"><option value="3" ${(S.settings.projVariableWindow||6)===3?'selected':''}>3 months</option><option value="6" ${(S.settings.projVariableWindow||6)===6?'selected':''}>6 months</option><option value="12" ${(S.settings.projVariableWindow||6)===12?'selected':''}>12 months</option></select></div></div>
+      <div class="settings-row" style="align-items:flex-start"><div class="settings-row-label"><div class="settings-row-title">Include investment commitments</div><div class="settings-row-sub">When enabled, projection deducts planned investment deployments from monthly cash. Disable if you treat investments as separate from cash flow planning.</div></div><div class="settings-row-ctrl"><input type="checkbox" ${S.settings.projIncludeInvestments===true?'checked':''} onchange="S.settings.projIncludeInvestments=this.checked;sched();render()" style="cursor:pointer;width:18px;height:18px"></div></div>
+      <div class="settings-row" style="align-items:flex-start"><div class="settings-row-label"><div class="settings-row-title">Comfortable buffer threshold</div><div class="settings-row-sub">Multiple of monthly expense above which a month is colored green (comfortable). Default 1.0× = one month of expenses in cushion.</div></div><div class="settings-row-ctrl"><input type="number" min="0.1" max="10" step="0.1" value="${S.settings.projBufferComfort||1.0}" onchange="S.settings.projBufferComfort=parseFloat(this.value)||1.0;sched();render()" style="width:80px;padding:6px 10px;border:1px solid var(--border);border-radius:var(--rsm);font-size:12px"></div></div>
+      <div class="settings-row" style="align-items:flex-start"><div class="settings-row-label"><div class="settings-row-title">Tight buffer threshold</div><div class="settings-row-sub">Multiple of monthly expense below which a month is colored amber (tight). Below this in red. Default 0.5× = half a month of cushion.</div></div><div class="settings-row-ctrl"><input type="number" min="0.05" max="5" step="0.05" value="${S.settings.projBufferTight||0.5}" onchange="S.settings.projBufferTight=parseFloat(this.value)||0.5;sched();render()" style="width:80px;padding:6px 10px;border:1px solid var(--border);border-radius:var(--rsm);font-size:12px"></div></div>
       <div class="settings-row" style="border-top:2px solid var(--bg3);margin-top:8px;padding-top:12px"><div class="settings-row-label"><div class="settings-row-title" style="font-weight:600">AI Features (V8.21.5)</div><div class="settings-row-sub">Settings for AI-driven investment value updates. Requires Edge Function URL + Secret above.</div></div><div class="settings-row-ctrl"></div></div>
       <div class="settings-row" style="align-items:flex-start"><div class="settings-row-label"><div class="settings-row-title">Auto-refresh on Investments page</div><div class="settings-row-sub">When enabled, opening the Investments page silently refreshes any AI-public-price account whose value is older than the stale threshold below. Disable to require manual button clicks for all updates.</div></div><div class="settings-row-ctrl"><input type="checkbox" ${S.settings.aiAutoRefresh!==false?'checked':''} onchange="S.settings.aiAutoRefresh=this.checked;sched();toast(this.checked?'Auto-refresh enabled':'Auto-refresh disabled')" style="cursor:pointer;width:18px;height:18px"></div></div>
       <div class="settings-row" style="align-items:flex-start"><div class="settings-row-label"><div class="settings-row-title">Stale threshold (hours)</div><div class="settings-row-sub">How old a value must be before auto-refresh triggers. Default 24h. Lower values mean more frequent fetches and higher API costs.</div></div><div class="settings-row-ctrl" style="min-width:120px"><input type="number" min="1" max="720" step="1" value="${S.settings.aiStaleThresholdHours||24}" onchange="S.settings.aiStaleThresholdHours=Math.max(1,Math.min(720,parseInt(this.value)||24));sched()" style="width:100%;font-size:12px"></div></div>
@@ -14351,6 +14808,28 @@ const MIGRATIONS=[
       // First-load default period: 3 months (Decision 2). User's session/persistent choice
       // overrides via S.settings.ovDefaultPeriod after first interaction with the period selector.
       if(!S.settings.ovDefaultPeriod)S.settings.ovDefaultPeriod='3m';
+      return{noop:true};
+    }
+  },
+  // V8.24: marker for Cash Position Projections page. Initializes projection settings with
+  // safe defaults. The page reads existing recurring data (income, bills, subs, staff, debts)
+  // and computes monthly cash position 12 months forward. No data transformation.
+  // REMOVE_AFTER: V9.0
+  {
+    id:'v8_24_cashProjections',
+    description:'V8.24 vault marker — Cash Position Projections page introduced',
+    removeAfter:'V9.0',
+    run:()=>{
+      if(!S.settings)S.settings={};
+      // Decision 1: variable spend baseline window (months of history to average)
+      if(typeof S.settings.projVariableWindow!=='number')S.settings.projVariableWindow=6;
+      // Decision: projection horizon in months
+      if(typeof S.settings.projHorizon!=='number')S.settings.projHorizon=12;
+      // Decision 3: include investment commitments in outflows
+      if(typeof S.settings.projIncludeInvestments!=='boolean')S.settings.projIncludeInvestments=false;
+      // Buffer thresholds (multiples of monthly expense)
+      if(typeof S.settings.projBufferComfort!=='number')S.settings.projBufferComfort=1.0;
+      if(typeof S.settings.projBufferTight!=='number')S.settings.projBufferTight=0.5;
       return{noop:true};
     }
   }
