@@ -4306,7 +4306,7 @@ function openAiCategorize(id,ym){
   mo.innerHTML=`
     <div class="md" style="max-width:560px;width:94%;padding:0">
       <div style="padding:1.1rem 1.3rem;border-bottom:1px solid var(--border)">
-        <div class="mdtitle" style="margin-bottom:2px">✨ AI-assisted categorization</div>
+        <div class="mdtitle" style="margin-bottom:2px;display:inline-flex;align-items:center;gap:6px"><span style="color:var(--electric)">${CASE9_AI_ICON_SVG}</span> AI-assisted categorization</div>
         <div style="font-size:var(--fs-xs);color:var(--text3)">Add context about this transaction. Claude suggests the best Type, Category, and Sub-Category.</div>
       </div>
       <div style="padding:1.1rem 1.3rem">
@@ -4453,7 +4453,7 @@ function renderAiSuggestion(result,mainCat,subCat){
   sugEl.innerHTML=`
     <div style="margin-top:4px;padding-top:14px;border-top:1px solid var(--border)">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-        <div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text3)">✨ Claude's suggestion</div>
+        <div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text3);display:inline-flex;align-items:center;gap:5px"><span style="color:var(--electric)">${CASE9_AI_ICON_SVG}</span> Claude's suggestion</div>
         <div style="font-size:10px;color:${confColor};font-weight:500">${confPct}% confidence</div>
       </div>
       ${result.reasoning?`<div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:12px;font-style:italic">"${h(result.reasoning)}"</div>`:''}
@@ -4630,7 +4630,7 @@ function openBulkAiWaveModal(totalRemaining){
   mo.innerHTML=`
     <div class="md" style="max-width:880px;width:96%;padding:0;max-height:92vh;display:flex;flex-direction:column">
       <div style="padding:1.1rem 1.3rem;border-bottom:1px solid var(--border)">
-        <div class="mdtitle" style="margin-bottom:2px">✨ AI categorize ${waveSize} transaction${waveSize===1?'':'s'}${waveHeaderExtra}</div>
+        <div class="mdtitle" style="margin-bottom:2px;display:inline-flex;align-items:center;gap:6px"><span style="color:var(--electric)">${CASE9_AI_ICON_SVG}</span> AI categorize ${waveSize} transaction${waveSize===1?'':'s'}${waveHeaderExtra}</div>
         <div style="font-size:var(--fs-xs);color:var(--text3)">${isMultiWave?`You selected ${selectedCount}, processing ${BULK_AI_MAX} per wave to stay within rate and cost limits. The context carries across waves.`:'Write one context that applies to all selected transactions. Claude analyzes each one individually using that shared context.'}</div>
       </div>
       <div style="padding:1.1rem 1.3rem;flex:1;overflow-y:auto">
