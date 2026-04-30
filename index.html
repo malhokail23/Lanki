@@ -1750,7 +1750,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='8.25';
+const VERSION='8.26';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -2145,6 +2145,83 @@ function fmtS(n,sg=false){return(sg&&n>0?'+':'')+(n<0?'-':'')+S.settings.currenc
 // single body-level class controls all sensitive data, eliminating per-call gaps.
 function fmtP(n){return`<span class="fmt-money">${fmt(n)}</span>`;}
 function fmtSP(n,sg=false){return`<span class="fmt-money">${fmtS(n,sg)}</span>`;}
+
+// ===== V8.26: Sparkline + comparison + anomaly utilities =====
+// Inline SVG sparkline. Returns 60×16px polyline. Decision 2a — no Chart.js dependency.
+// `series` — array of numbers. `colorOverride` — optional CSS color.
+function sparkline(series,colorOverride){
+  if(!series||series.length<2)return '';
+  const w=60,hh=16,pad=1;
+  const min=Math.min(...series),max=Math.max(...series);
+  const range=max-min||1;
+  const stepX=(w-2*pad)/(series.length-1);
+  const points=series.map((v,i)=>{
+    const x=pad+i*stepX;
+    const y=pad+(hh-2*pad)*(1-(v-min)/range);
+    return`${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  // Color: green if last > first, red if last < first, neutral if flat
+  const last=series[series.length-1],first=series[0];
+  const col=colorOverride||(last>first?'var(--ok)':last<first?'var(--bad)':'var(--text3)');
+  return`<svg width="${w}" height="${hh}" viewBox="0 0 ${w} ${hh}" style="vertical-align:middle"><polyline fill="none" stroke="${col}" stroke-width="1.5" points="${points}"/></svg>`;
+}
+
+// Compute period-over-period delta. Returns {pct, absDelta, dir} or null if no comparison possible.
+function pctChange(current,prior){
+  if(prior==null||prior===0)return null;
+  const absDelta=current-prior;
+  const pct=(absDelta/Math.abs(prior))*100;
+  const dir=pct>0.5?'up':pct<-0.5?'down':'flat';
+  return{pct:Math.round(pct*10)/10,absDelta,dir};
+}
+
+// Render a comparison chip: "↑ +12% vs prior". Decision 3c — multi-tier color.
+function compareChip(current,prior,opts){
+  const ch=pctChange(current,prior);
+  if(!ch)return '<span style="font-size:10px;color:var(--text3)">no prior data</span>';
+  opts=opts||{};
+  // For expense-type metrics, "up" is bad. For income-type, "up" is good.
+  const isExpense=opts.invert===true;
+  const isGood=isExpense?ch.dir==='down':ch.dir==='up';
+  const isBad=isExpense?ch.dir==='up':ch.dir==='down';
+  const col=ch.dir==='flat'?'var(--text3)':isGood?'var(--ok)':isBad?'var(--bad)':'var(--text3)';
+  const arrow=ch.dir==='up'?'↑':ch.dir==='down'?'↓':'→';
+  const label=opts.label||'vs prior';
+  const sign=ch.pct>0?'+':'';
+  return`<span style="font-size:11px;color:${col};font-variant-numeric:tabular-nums">${arrow} ${sign}${ch.pct}%</span> <span style="font-size:10px;color:var(--text3)">${label}</span>`;
+}
+
+// Anomaly detection for spending. Returns severity: 'normal' | 'elevated' | 'high' | 'extreme'.
+// Decision 3c — three thresholds: 1.5× (elevated), 2× (high), 3× (extreme).
+function spendAnomaly(current,baseline){
+  if(baseline==null||baseline===0)return{severity:'normal',ratio:1};
+  const ratio=current/baseline;
+  let severity='normal';
+  if(ratio>=3.0)severity='extreme';
+  else if(ratio>=2.0)severity='high';
+  else if(ratio>=1.5)severity='elevated';
+  return{severity,ratio:Math.round(ratio*10)/10};
+}
+
+// Anomaly chip — just the multiplier with color. e.g. "↑ 2.3× avg"
+function anomalyChip(current,baseline){
+  const a=spendAnomaly(current,baseline);
+  if(a.severity==='normal')return `<span style="font-size:10px;color:var(--text3);font-variant-numeric:tabular-nums">→ ${a.ratio}× avg</span>`;
+  const col=a.severity==='extreme'?'var(--bad)':a.severity==='high'?'#B85F2E':'#7A5E20'; // Brand: Faded Rose / orange / Mellow Gold
+  const arrow=a.ratio>1?'↑':'↓';
+  return`<span style="font-size:11px;color:${col};font-weight:500;font-variant-numeric:tabular-nums">${arrow} ${a.ratio}× avg</span>`;
+}
+
+// Build month-by-month series for a metric across last N months. Used by sparklines.
+// `metricFn` is (txns) => number, applied per month.
+function monthlySeries(months,metricFn){
+  return months.map(ym=>{
+    const txns=S.txnCache[ym]||[];
+    return metricFn(txns)||0;
+  });
+}
+// ===== End V8.26 utilities =====
+
 // Convenience for non-money sensitive numbers (counts, percentages on personal data).
 function isPrivate(){return!!S.privacy;}
 function uid(){return'tx_'+(typeof crypto!=='undefined'&&crypto.randomUUID?crypto.randomUUID().replace(/-/g,'').substr(0,14):Math.random().toString(36).substr(2,9)+Date.now().toString(36));}
@@ -3267,6 +3344,13 @@ async function rOv(){
 
   // Prev period metrics for burn rate
   const prevExp=pTx.filter(t=>txDir(t)==='out'&&t.type==='expense'&&!isRefundLinked(t)).reduce((s,t)=>s+t.amount,0);
+  // V8.26: prior income for comparison chip
+  const prevInc=pTx.filter(t=>t.type==='income'&&txDir(t)==='in'&&!isRefundLinked(t)).reduce((s,t)=>s+t.amount,0);
+  // V8.26: 6-month sparkline series for Performance trio
+  const ovSparkMonths=mRange(addM(anchor,-5),anchor);
+  const incomeSeries=monthlySeries(ovSparkMonths,txns=>txns.filter(t=>t.type==='income'&&txDir(t)==='in'&&!isRefundLinked(t)).reduce((s,t)=>s+t.amount,0));
+  const expenseSeries=monthlySeries(ovSparkMonths,txns=>txns.filter(t=>txDir(t)==='out'&&t.type==='expense'&&!isRefundLinked(t)).reduce((s,t)=>s+t.amount,0));
+  const netSeries=incomeSeries.map((v,i)=>v-expenseSeries[i]);
   // Use days elapsed in the viewed month, not today's calendar day
   const isCurrentMonth=S.month===getYM(new Date());
   const daysThis=isCurrentMonth?new Date().getDate():new Date(S.month.split('-')[0],S.month.split('-')[1],0).getDate();
@@ -3438,10 +3522,39 @@ async function rOv(){
   const mInc30=S.income.filter(i=>i.status==='active').reduce((s,i)=>s+(i.frequency==='Monthly'?i.amount:0),0);
   const mDebt30=fDebts.filter(d=>d.status==='active').reduce((s,d)=>s+(d.type==='credit_card'?(d.minPayment||0):(d.installment||0)),0); // CC uses minPayment, loans use installment
   const mBills30=S.bills.reduce((s,b)=>s+(b.billingCycle==='Monthly'?b.fixedAmount||0:0),0);
-  const mSubs30=(S.subs||[]).filter(sub=>sub.status==='active').reduce((s,sub)=>s+(sub.amount||0),0);
+  // V8.26: subs read nativeAmount × FX rate, annual cycle /12 — matches Projections model
+  const mSubs30=(S.subs||[]).filter(sub=>sub.status==='active').reduce((s,sub)=>{
+    if(!sub.nativeAmount)return s;
+    const rate=SUB_FX_RATE[sub.nativeCurrency]||1;
+    const sarAmt=sub.nativeAmount*rate;
+    return s+(sub.cycle==='annual'?sarAmt/12:sarAmt);
+  },0);
   const mStaff30=fStaff.reduce((s,st)=>s+(st.salary||0),0);
   const fcOut=mDebt30+mBills30+mStaff30+mSubs30;
   const fcNet=mInc30-fcOut;
+  // V8.26: variable spend baseline (matches Projections — past 6mo average, with outlier exclusion)
+  const fcVarWindow=S.settings.projVariableWindow||6;
+  const fcVarMonths=mRange(addM(now,-fcVarWindow),addM(now,-1));
+  const fcVarTxns=fcVarMonths.flatMap(m=>S.txnCache[m]||[]).filter(t=>{
+    if(txDir(t)!=='out'||t.type!=='expense'||isRefundLinked(t))return false;
+    if(t.mainCatId==='cat_main_debt'||t.mainCatId==='cat_main_finance')return false;
+    if(t.mainCatId==='cat_main_subscriptions')return false;
+    if(t.subCatId==='sub_cc_payment')return false;
+    return true;
+  });
+  // Simple per-category outlier removal (matches Projections logic)
+  const fcCatTotals={};
+  fcVarTxns.forEach(t=>{const k=t.mainCatId||'_unc';if(!fcCatTotals[k])fcCatTotals[k]={total:0,amounts:[]};fcCatTotals[k].total+=t.amount;fcCatTotals[k].amounts.push(t.amount);});
+  Object.values(fcCatTotals).forEach(d=>{
+    if(d.amounts.length<3)return;
+    const sorted=[...d.amounts].sort((a,b)=>a-b);
+    const median=sorted[Math.floor(sorted.length/2)];
+    if(median<=0)return;
+    d.amounts.forEach(a=>{if(a>median*3)d.total-=a;});
+  });
+  const fcVarTotal=Object.values(fcCatTotals).reduce((s,d)=>s+d.total,0);
+  const fcVarMonthly=fcVarMonths.length?fcVarTotal/fcVarMonths.length:0;
+  const fcNetWithVar=fcNet-fcVarMonthly;
   const fcastHtml=`
     <div class="kpi" style="padding:.9rem 1rem">
       <div class="klbl">Expected Income</div>
@@ -3592,13 +3705,7 @@ async function rOv(){
     </div>
   </div>
 
-  ${showZ('alerts')&&alerts.length?`
-  <!-- V8.23: ALERTS ZONE — above hero when alerts exist (Decision 5b) -->
-  <div class="card card-bordered" style="margin-bottom:1rem;border-left:3px solid ${alerts.some(a=>a.level==='crit')?'var(--bad)':'var(--warn)'}">
-    <div class="ctitle" style="margin-bottom:8px">Needs Attention <span style="font-size:11px;font-weight:400;color:var(--text3);margin-left:6px">${alerts.length} item${alerts.length!==1?'s':''}</span></div>
-    ${alertHtml}
-  </div>
-  `:''}
+  <!-- V8.26: Needs Attention moved to bottom of page (was here, see end of rOv) -->
 
   <!-- V8.23: HERO ZONE — anchor composite KPI + collapsible Net Position by Group -->
   <div class="card card-bordered" style="margin-bottom:1rem;padding:1.25rem 1.25rem 1rem">
@@ -3636,73 +3743,158 @@ async function rOv(){
   <!-- V8.23: PERFORMANCE ZONE — 3 cards (Income vs Expense, Savings Rate, Net Cash Flow) -->
   <div class="g3" style="margin-bottom:1rem">
     <div class="card card-bordered">
-      <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Income vs Expense</div>
+      <div class="fg jb" style="align-items:flex-start">
+        <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Income vs Expense</div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
+          ${sparkline(incomeSeries)}
+        </div>
+      </div>
       <div class="fg" style="margin-top:10px;gap:14px;align-items:flex-end">
         <div style="flex:1;min-width:0">
           <div class="priv-mask" style="font-size:20px;font-weight:600;color:var(--ok);font-variant-numeric:tabular-nums">${fmtP(inc)}</div>
           <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-top:2px">Income</div>
+          <div style="margin-top:2px">${compareChip(inc,prevInc,{label:'vs prior'})}</div>
         </div>
         <div style="flex:1;min-width:0">
           <div class="priv-mask" style="font-size:20px;font-weight:600;color:var(--bad);font-variant-numeric:tabular-nums">${fmtP(exp+ext)}</div>
           <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-top:2px">Expense</div>
+          <div style="margin-top:2px">${compareChip(exp+ext,prevExp,{label:'vs prior',invert:true})}</div>
         </div>
       </div>
-      ${prevExp>0?`<div style="margin-top:10px;font-size:11px;color:var(--text3)">vs prior period: ${fmtP(prevExp)} prior expense</div>`:''}
     </div>
     <div class="card card-bordered">
       <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Savings Rate</div>
-      <div class="fg" style="margin-top:10px;align-items:flex-end;gap:10px">
-        <div class="priv-mask" style="font-size:28px;font-weight:600;font-variant-numeric:tabular-nums;color:${sr>=tgt?'var(--ok)':sr>=10?'var(--warn)':'var(--bad)'};line-height:1">${sr}%</div>
-        <div style="font-size:11px;color:var(--text3);padding-bottom:4px">target ${tgt}%</div>
+      <div class="priv-mask" style="font-size:28px;font-weight:600;font-variant-numeric:tabular-nums;color:${sr>=tgt?'var(--ok)':sr>=10?'var(--warn)':'var(--bad)'};line-height:1;margin-top:10px">${sr}%</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px">Target ${tgt}% · ${(()=>{
+        // V8.26: comparison vs prior period
+        const pInc=pTx.filter(t=>t.type==='income'&&txDir(t)==='in'&&!isRefundLinked(t)).reduce((s,t)=>s+t.amount,0);
+        const pExp=pTx.filter(t=>txDir(t)==='out'&&t.type==='expense'&&!isRefundLinked(t)).reduce((s,t)=>s+t.amount,0);
+        const pInv=pTx.filter(t=>txDir(t)==='out'&&t.type==='investment').reduce((s,t)=>s+t.amount,0);
+        const pExt=pTx.filter(t=>txDir(t)==='out'&&t.type==='external_transfer').reduce((s,t)=>s+t.amount,0);
+        const pNet=pInc-pExp-pInv-pExt;
+        const pSr=pInc>0?Math.round((pNet/pInc)*100):0;
+        const diff=sr-pSr;
+        if(diff===0)return '<span style="color:var(--text3)">→ unchanged vs prior</span>';
+        const col=diff>0?'var(--ok)':'var(--bad)';
+        return `<span style="color:${col}">${diff>0?'↑':'↓'} ${Math.abs(diff)} pts vs prior</span>`;
+      })()}</div>
+      <!-- V8.26: bars now live in their own clearly separated row below the headline -->
+      <div style="margin-top:14px;padding-top:10px;border-top:1px solid var(--bg3)">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em">Last 6 months</div>
+        <div class="fg" style="gap:6px;align-items:flex-end;height:50px">${srBars}</div>
       </div>
-      <div class="fg" style="margin-top:12px;gap:3px;align-items:flex-end;height:32px">${srBars}</div>
     </div>
     <div class="card card-bordered">
-      <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Net Cash Flow</div>
+      <div class="fg jb" style="align-items:flex-start">
+        <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Net Cash Flow</div>
+        ${sparkline(netSeries)}
+      </div>
       <div class="priv-mask" style="font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;color:${net>=0?'var(--ok)':'var(--bad)'};margin-top:8px;line-height:1.1">${fmtSP(net,true)}</div>
       <div style="font-size:11px;color:var(--text3);margin-top:8px;line-height:1.6">Income ${fmtP(inc)} &minus; Expense ${fmtP(exp)}${ext>0?` &minus; Ext ${fmtP(ext)}`:''}${inv>0?` &minus; Inv ${fmtP(inv)}`:''}</div>
+      <div style="margin-top:6px">${compareChip(net,prevInc-prevExp,{label:'vs prior'})}</div>
     </div>
   </div>
   `:''}
 
   ${showZ('activity')?`
-  <!-- V8.23: ACTIVITY ZONE — Top Categories, By Category chart, External Transfers -->
-  <div class="g2" style="margin-bottom:1rem">
-    <div class="card card-bordered">
-      <div class="fg jb" style="align-items:center;margin-bottom:8px">
-        <div style="font-size:13px;font-weight:600;color:var(--text1)">By Category</div>
-        <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text3);cursor:pointer;font-weight:400;margin:0;white-space:nowrap">
-          <input type="checkbox" id="ov-exclude-debt" ${S.ovExcludeDebt!==false?'checked':''} onchange="S.ovExcludeDebt=this.checked;sched();render()" style="margin:0">
-          Excl. Debt
-        </label>
+  <!-- V8.26: SPENDING INTELLIGENCE ZONE — top 5 main categories with nested top 3 sub-categories + anomaly detection -->
+  <div class="card card-bordered" style="margin-bottom:1rem">
+    <div class="fg jb" style="align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--text1)">Spending Intelligence</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">Top categories with sub-category breakdown · click any row to drill into transactions</div>
       </div>
-      ${catRows||'<div class="empty" style="padding:1rem">No expenses yet</div>'}
+      <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text3);cursor:pointer;font-weight:400;margin:0;white-space:nowrap">
+        <input type="checkbox" id="ov-exclude-debt" ${S.ovExcludeDebt!==false?'checked':''} onchange="S.ovExcludeDebt=this.checked;sched();render()" style="margin:0">
+        Excl. Debt &amp; Banking
+      </label>
     </div>
-    <div class="card card-bordered">
-      <div style="font-size:13px;font-weight:600;color:var(--text1);margin-bottom:8px">Top Spending Categories</div>
-      <div style="font-size:10px;color:var(--text3);margin-bottom:8px">Top sub-categories by spend &mdash; excl. debt and banking</div>
-      ${(()=>{
-        const subSpend={};
-        tx.filter(t=>txDir(t)==='out'&&t.type==='expense'&&!isRefundLinked(t)).forEach(t=>{
-          if(t.mainCatId==='cat_main_debt'||t.mainCatId==='cat_main_finance')return;
-          const k=t.subCatId||t.mainCatId||'_unc';
-          if(!subSpend[k])subSpend[k]={mc:t.mainCatId,sc:t.subCatId,total:0,count:0};
-          subSpend[k].total+=t.amount;subSpend[k].count++;
+    ${(()=>{
+      // V8.26: Compute per-main-category total + per-sub breakdown
+      const excludeDebt=S.ovExcludeDebt!==false;
+      const mainTotals={}; // mainCatId -> {total, count, subBreakdown:{subId -> {total,count,scObj}}}
+      tx.filter(t=>txDir(t)==='out'&&t.type==='expense'&&!isRefundLinked(t)).forEach(t=>{
+        if(excludeDebt&&(t.mainCatId==='cat_main_debt'||t.mainCatId==='cat_main_finance'))return;
+        const mid=t.mainCatId||'_unc';
+        if(!mainTotals[mid])mainTotals[mid]={mc:getMC(mid),total:0,count:0,subBreakdown:{}};
+        mainTotals[mid].total+=t.amount;
+        mainTotals[mid].count++;
+        const sid=t.subCatId||'_nosub';
+        if(!mainTotals[mid].subBreakdown[sid])mainTotals[mid].subBreakdown[sid]={sc:getSC(sid),total:0,count:0};
+        mainTotals[mid].subBreakdown[sid].total+=t.amount;
+        mainTotals[mid].subBreakdown[sid].count++;
+      });
+      const totalSpend=Object.values(mainTotals).reduce((s,m)=>s+m.total,0);
+      const top5=Object.entries(mainTotals).sort((a,b)=>b[1].total-a[1].total).slice(0,5);
+      if(!top5.length)return '<div class="empty" style="padding:1rem">No expenses yet</div>';
+
+      // V8.26: 6-month per-category baseline for anomaly detection
+      const baselineMonths=mRange(addM(anchor,-5),addM(anchor,-1));
+      const baselinePerCat={};
+      baselineMonths.forEach(ym=>{
+        (S.txnCache[ym]||[]).filter(t=>txDir(t)==='out'&&t.type==='expense'&&!isRefundLinked(t)).forEach(t=>{
+          if(excludeDebt&&(t.mainCatId==='cat_main_debt'||t.mainCatId==='cat_main_finance'))return;
+          const mid=t.mainCatId||'_unc';
+          if(!baselinePerCat[mid])baselinePerCat[mid]=0;
+          baselinePerCat[mid]+=t.amount;
         });
-        const top=Object.values(subSpend).sort((a,b)=>b.total-a.total).slice(0,5);
-        if(!top.length)return '<div class="empty" style="padding:1rem">No data yet</div>';
-        const totalTop=top.reduce((s,r)=>s+r.total,0);
-        return top.map(r=>{
-          const mc=getMC(r.mc),sc=getSC(r.sc);const lbl=sc?sc.name:(mc?mc.name:'Uncategorized');
-          const pct=totalTop?Math.round(r.total/totalTop*100):0;
-          return`<div style="margin-bottom:10px">
-            <div class="fg jb" style="font-size:var(--fs-xs);margin-bottom:4px"><span style="color:var(--text2)">${h(lbl)}</span><span class="priv-mask" style="font-weight:600;font-variant-numeric:tabular-nums">${fmtP(r.total)}</span></div>
-            <div style="height:5px;background:var(--bg3);border-radius:3px;overflow:hidden"><div style="height:100%;width:${pct}%;background:var(--electric);border-radius:3px"></div></div>
-            <div style="font-size:10px;color:var(--text3);margin-top:2px">${r.count} txn${r.count!==1?'s':''} · ${pct}%</div>
+      });
+      // Per-month average over the 6-month baseline
+      Object.keys(baselinePerCat).forEach(k=>{baselinePerCat[k]=baselinePerCat[k]/baselineMonths.length;});
+
+      // Anomaly summary across categories
+      const anomalies=[];
+      top5.forEach(([mid,data])=>{
+        const baseline=baselinePerCat[mid];
+        if(!baseline)return;
+        const currentMonthly=data.total/Math.max(n,1);
+        const a=spendAnomaly(currentMonthly,baseline);
+        if(a.severity!=='normal'&&a.ratio>1)anomalies.push({label:data.mc?.name||'Uncategorized',ratio:a.ratio,severity:a.severity});
+      });
+
+      const rows=top5.map(([mid,data])=>{
+        const cat=data.mc;
+        const catColor=cat?.color||'var(--electric)';
+        const pct=totalSpend?Math.round(data.total/totalSpend*100):0;
+        const baseline=baselinePerCat[mid];
+        const currentMonthly=data.total/Math.max(n,1);
+        const anomalyHtml=baseline?anomalyChip(currentMonthly,baseline):'';
+        // Top 3 sub-categories within this main
+        const top3subs=Object.values(data.subBreakdown).sort((a,b)=>b.total-a.total).slice(0,3);
+        const subRows=top3subs.map(sd=>{
+          const subPct=data.total?Math.round(sd.total/data.total*100):0;
+          const subLabel=sd.sc?sd.sc.name:'Uncategorized';
+          return`<div class="fg jb" style="font-size:11px;color:var(--text2);padding:4px 0 4px 16px;cursor:pointer" onclick="TF.mc='${mid}';TF.sub='${sd.sc?sd.sc.id:''}';sw('txbank')" title="View transactions">
+            <span style="display:flex;align-items:center;gap:6px"><span style="color:var(--text3);font-size:10px">└─</span> ${h(subLabel)}</span>
+            <span class="priv-mask" style="font-variant-numeric:tabular-nums;color:var(--text3)">${fmtP(sd.total)} <span style="color:var(--text3);font-size:10px">(${subPct}%)</span></span>
           </div>`;
         }).join('');
-      })()}
-    </div>
+        return`<div style="margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--bg3)">
+          <div class="fg jb" style="cursor:pointer" onclick="TF.mc='${mid}';TF.sub='';sw('txbank')" title="View all ${cat?h(cat.name):'transactions'} transactions">
+            <div class="fg" style="gap:8px;align-items:center;flex:1;min-width:0">
+              <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${catColor};flex-shrink:0"></span>
+              <span style="font-size:13px;font-weight:500;color:var(--text1)">${h(cat?.name||'Uncategorized')}</span>
+              <span style="font-size:11px;color:var(--text3)">${data.count} txn${data.count!==1?'s':''}</span>
+              ${anomalyHtml?`<span style="margin-left:6px">${anomalyHtml}</span>`:''}
+            </div>
+            <div class="priv-mask" style="font-size:14px;font-weight:600;color:var(--text1);font-variant-numeric:tabular-nums">${fmtP(data.total)} <span style="color:var(--text3);font-size:11px;font-weight:400">(${pct}%)</span></div>
+          </div>
+          <div style="height:5px;background:var(--bg3);border-radius:3px;overflow:hidden;margin-top:6px"><div style="height:100%;width:${pct}%;background:${catColor};border-radius:3px"></div></div>
+          ${subRows?`<div style="margin-top:6px">${subRows}</div>`:''}
+        </div>`;
+      }).join('');
+
+      // Anomalies callout
+      const anomalyAlert=anomalies.length?`<div style="margin-top:10px;padding:10px 12px;background:color-mix(in srgb,var(--warn) 10%,transparent);border-left:3px solid var(--warn);border-radius:var(--rsm)">
+        <div style="font-size:11px;font-weight:600;color:var(--text1);margin-bottom:4px">Spending anomalies</div>
+        ${anomalies.map(a=>{
+          const col=a.severity==='extreme'?'var(--bad)':a.severity==='high'?'#B85F2E':'#7A5E20';
+          return`<div style="font-size:11px;color:var(--text2);margin-top:2px">&#9888; <span style="font-weight:500">${h(a.label)}</span> is <span style="color:${col};font-weight:600">${a.ratio}×</span> your 6-month average</div>`;
+        }).join('')}
+      </div>`:'';
+
+      return rows+anomalyAlert;
+    })()}
   </div>
   ${ext>0?`
   <div class="card card-bordered" style="margin-bottom:1rem">
@@ -3713,12 +3905,12 @@ async function rOv(){
   `:''}
 
   ${showZ('forecast')?`
-  <!-- V8.23: FORECAST ZONE — next 30 days teaser (deeper view in V8.24) -->
+  <!-- V8.26: FORWARD LOOK ZONE — next 30 days with both excl/incl variable views -->
   <div class="card card-bordered" style="margin-bottom:1rem">
-    <div class="fg jb" style="margin-bottom:10px;align-items:center">
+    <div class="fg jb" style="margin-bottom:10px;align-items:center;flex-wrap:wrap;gap:8px">
       <div>
-        <div style="font-size:13px;font-weight:600;color:var(--text1)">Forecast &mdash; Next 30 Days</div>
-        <div style="font-size:10px;color:var(--text3);margin-top:2px">Based on recurring income, bills, subscriptions, staff, and minimum debt payments</div>
+        <div style="font-size:13px;font-weight:600;color:var(--text1)">Forward Look &mdash; Next 30 Days</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">Recurring inflows and outflows · variable spend modeled separately</div>
       </div>
       <button onclick="sw('projections')" style="background:none;border:none;cursor:pointer;color:var(--electric);font-size:11px;font-weight:500;padding:0">View 12-month projections &rarr;</button>
     </div>
@@ -3739,39 +3931,177 @@ async function rOv(){
         <div style="font-size:10px;color:var(--text3);margin-top:4px">Excl. variable spending</div>
       </div>
     </div>
+    <!-- V8.26: Reconciliation row — shows the variable-spend-included view that matches Projections -->
+    ${fcVarMonthly>0?`<div style="margin-top:10px;padding:10px 12px;background:color-mix(in srgb,var(--bg2) 60%,transparent);border-radius:var(--rsm);border-left:3px solid var(--electric)">
+      <div class="fg jb" style="align-items:center;flex-wrap:wrap;gap:8px">
+        <div>
+          <div style="font-size:11px;font-weight:600;color:var(--text2)">Including variable spending (matches Projections)</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:2px">Variable baseline ${fmtP(fcVarMonthly)}/mo (${fcVarMonths.length}-month avg) → projected net</div>
+        </div>
+        <div class="priv-mask" style="font-size:18px;font-weight:600;color:${fcNetWithVar>=0?'var(--ok)':'var(--bad)'};font-variant-numeric:tabular-nums">${fmtSP(fcNetWithVar,true)}</div>
+      </div>
+    </div>`:''}
   </div>
   `:''}
 
   ${showZ('reference')?`
-  <!-- V8.23: REFERENCE ZONE — Goals, Debts, Bills, Subs, Staff (lower priority) -->
+  <!-- V8.26: DEBT & CARDS ZONE — debt headline + per-type breakdown + CC utilization -->
+  <div class="card card-bordered" style="margin-bottom:1rem">
+    <div style="font-size:13px;font-weight:600;color:var(--text1);margin-bottom:4px">Debt &amp; Cards</div>
+    <div style="font-size:10px;color:var(--text3);margin-bottom:10px">Total debt position with payoff trajectory and credit card utilization</div>
+    ${(()=>{
+      const activeDebts=fDebts.filter(d=>d.status==='active');
+      if(!activeDebts.length)return '<div style="font-size:11px;color:var(--text3);padding:10px 0">No active debts tracked.</div>';
+      const ccDebts=activeDebts.filter(d=>d.type==='credit_card');
+      const loanDebts=activeDebts.filter(d=>d.type!=='credit_card'&&d.type!=='bnpl');
+      const bnplDebts=activeDebts.filter(d=>d.type==='bnpl');
+      const ccTotal=ccDebts.reduce((s,d)=>s+(calcCCBalance(d)||0),0);
+      const loanTotal=loanDebts.reduce((s,d)=>s+((d.balanceAsOf!=null?d.balanceAsOf-(d.amountPaid||0):0)),0);
+      const bnplTotal=bnplDebts.reduce((s,d)=>s+((d.balanceAsOf!=null?d.balanceAsOf-(d.amountPaid||0):0)),0);
+      // V8.26 Decision 7a: simple linear payoff projection
+      const monthlyPayments=monthlyDebt; // already computed earlier in rOv
+      const debtFreeMonths=monthlyPayments>0?Math.ceil(td/monthlyPayments):null;
+      const debtFreeDate=debtFreeMonths?(()=>{
+        const d=new Date();d.setMonth(d.getMonth()+debtFreeMonths);
+        return d.toLocaleDateString('en-GB',{month:'short',year:'numeric'});
+      })():null;
+      // CC utilization
+      const ccBalance=ccTotal;
+      const ccLimit=ccDebts.reduce((s,d)=>s+(d.creditLimit||0),0);
+      const ccUtil=ccLimit>0?Math.round(ccBalance/ccLimit*100):0;
+
+      return`
+      <div class="g3" style="margin-bottom:14px">
+        <div style="padding:10px 12px;background:var(--bg2);border-radius:var(--rsm)">
+          <div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Total Debt</div>
+          <div class="priv-mask" style="font-size:18px;font-weight:600;color:var(--bad);margin-top:4px;font-variant-numeric:tabular-nums">${fmtP(td)}</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:4px">${activeDebts.length} active debt${activeDebts.length!==1?'s':''}</div>
+        </div>
+        <div style="padding:10px 12px;background:var(--bg2);border-radius:var(--rsm)">
+          <div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Monthly Obligations</div>
+          <div class="priv-mask" style="font-size:18px;font-weight:600;color:var(--text1);margin-top:4px;font-variant-numeric:tabular-nums">${fmtP(monthlyPayments)}</div>
+          <div style="font-size:10px;color:${dti>40?'var(--bad)':dti>25?'var(--warn)':'var(--ok)'};margin-top:4px;font-weight:500">${dti}% of income${dti>40?' · above 40% threshold':''}</div>
+        </div>
+        <div style="padding:10px 12px;background:var(--bg2);border-radius:var(--rsm)">
+          <div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Projected Debt-Free</div>
+          <div style="font-size:18px;font-weight:600;color:var(--text1);margin-top:4px">${debtFreeDate||'—'}</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:4px">${debtFreeMonths?`${debtFreeMonths} months at current pace`:'No payment plan'}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:11px;padding-top:10px;border-top:1px solid var(--bg3)">
+        ${loanTotal>0?`<div><span style="color:var(--text3)">Loans:</span> <span class="priv-mask" style="font-weight:500;font-variant-numeric:tabular-nums">${fmtP(loanTotal)}</span></div>`:''}
+        ${ccTotal>0?`<div><span style="color:var(--text3)">Credit Cards:</span> <span class="priv-mask" style="font-weight:500;font-variant-numeric:tabular-nums">${fmtP(ccTotal)}</span> ${ccLimit>0?`<span style="color:var(--text3)">(${ccUtil}% util)</span>`:''}</div>`:''}
+        ${bnplTotal>0?`<div><span style="color:var(--text3)">BNPL:</span> <span class="priv-mask" style="font-weight:500;font-variant-numeric:tabular-nums">${fmtP(bnplTotal)}</span></div>`:''}
+      </div>
+      ${ccDebts.length?`<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bg3)">
+        <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:6px">Credit Cards — utilization</div>
+        ${ccDebts.map(d=>{
+          const bal=calcCCBalance(d)||0;
+          const limit=d.creditLimit||0;
+          const util=limit>0?Math.round(bal/limit*100):0;
+          const utilCol=util>70?'var(--bad)':util>30?'var(--warn)':'var(--ok)';
+          return`<div class="fg jb" style="font-size:11px;padding:4px 0">
+            <span style="color:var(--text2)">${h(d.name)}</span>
+            <span class="priv-mask" style="font-variant-numeric:tabular-nums;color:var(--text3)">${fmtP(bal)}${limit>0?` / ${fmtP(limit)} <span style="color:${utilCol};font-weight:600">${util}%</span>`:''}</span>
+          </div>`;
+        }).join('')}
+      </div>`:''}
+      `;
+    })()}
+  </div>
+
+  <!-- V8.26: GOALS + RECURRING HEALTH ZONE -->
   <div class="g2" style="margin-bottom:1rem">
     <div class="card card-bordered">
       <div style="font-size:13px;font-weight:600;color:var(--text1);margin-bottom:8px">Goals</div>
-      ${gHtml}
+      ${(()=>{
+        const activeGoals=fGoals.filter(g=>(g.status||'active')==='active');
+        if(!activeGoals.length)return '<div style="font-size:11px;color:var(--text3);padding:10px 0">No active goals.</div>';
+        return activeGoals.slice(0,3).map(g=>{
+          const target=g.target||0;
+          const saved=g.saved||0;
+          const remaining=Math.max(0,target-saved);
+          const pct=target>0?Math.min(100,Math.round(saved/target*100)):0;
+          // V8.26: monthly contribution required to hit target by deadline
+          let needed=null;
+          let onTrackHtml='';
+          if(g.deadline&&remaining>0){
+            const targetDate=new Date(g.deadline+'T00:00:00');
+            if(!isNaN(targetDate.getTime())){
+              const monthsLeft=Math.max(0,Math.round((targetDate-new Date())/(30.4*24*60*60*1000)));
+              if(monthsLeft>0){
+                needed=remaining/monthsLeft;
+                // Compare needed to current monthly net surplus
+                const currentMonthlySurplus=net/Math.max(n,1);
+                const onTrack=currentMonthlySurplus>=needed;
+                if(onTrack){
+                  onTrackHtml=`<div style="font-size:10px;color:var(--ok);margin-top:4px">&#10003; On track at current pace</div>`;
+                }else if(currentMonthlySurplus>0){
+                  onTrackHtml=`<div style="font-size:10px;color:var(--warn);margin-top:4px">&#9888; Need ${fmtP(needed)}/mo · current surplus ${fmtP(currentMonthlySurplus)}/mo</div>`;
+                }else{
+                  onTrackHtml=`<div style="font-size:10px;color:var(--bad);margin-top:4px">&#9888; Goal unreachable at current spending — would need ${fmtP(needed)}/mo</div>`;
+                }
+              }
+            }
+          }
+          return`<div style="margin-bottom:14px">
+            <div class="fg jb" style="font-size:var(--fs-xs);margin-bottom:4px">
+              <span style="font-weight:500;color:var(--text1)">${h(g.name)}</span>
+              <span style="color:var(--text3)" class="fmt-money">${pct}%</span>
+            </div>
+            <div class="pb"><div class="pf priv-mask" style="width:${pct}%"></div></div>
+            <div style="font-size:11px;color:var(--text3);margin-top:4px">${fmtP(remaining)} remaining${g.deadline?' · '+toDD(g.deadline):''}</div>
+            ${onTrackHtml}
+          </div>`;
+        }).join('');
+      })()}
     </div>
     <div class="card card-bordered">
-      <div style="font-size:13px;font-weight:600;color:var(--text1);margin-bottom:4px">Debt Summary</div>
-      <div style="font-size:10px;color:var(--text3);margin-bottom:10px">Total remaining: ${fmtP(td)} · Monthly obligations: ${fmtP(monthlyDebt)}</div>
-      <div class="fg jb" style="padding:6px 0;border-top:1px solid var(--bg3)">
-        <div style="font-size:var(--fs-xs);color:var(--text2)">Debt-to-Income Ratio</div>
-        <div class="priv-mask" style="font-size:var(--fs-xs);font-weight:600;color:${dti>40?'var(--bad)':dti>25?'var(--warn)':'var(--ok)'};font-variant-numeric:tabular-nums">${dti}%</div>
-      </div>
-      ${dti>40?`<div style="font-size:10px;color:var(--bad);margin-top:6px">Above 40% threshold</div>`:''}
-    </div>
-  </div>
-  <div class="g3" style="margin-bottom:1rem">
-    <div class="card card-bordered">
-      <div style="font-size:13px;font-weight:600;color:var(--text1);margin-bottom:8px">Bills</div>
-      ${(()=>{const bills=S.bills.slice(0,4);if(!bills.length)return'<div style="font-size:11px;color:var(--text3);padding:6px 0">No bills tracked</div>';return bills.map(b=>{const status=billStatus(b);return`<div class="fg jb" style="padding:6px 0;border-bottom:1px solid var(--bg3);font-size:var(--fs-xs)"><div style="color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(b.name)}</div><div class="priv-mask" style="font-weight:500;font-variant-numeric:tabular-nums">${fmtP(b.fixedAmount||0)}</div></div>`;}).join('');})()}
-    </div>
-    <div class="card card-bordered">
-      <div style="font-size:13px;font-weight:600;color:var(--text1);margin-bottom:8px">Subscriptions</div>
-      ${(()=>{const confirmed=allTxns().filter(t=>t.isSub);const cMap={};confirmed.forEach(t=>{const k=(t.description||'').toLowerCase().trim().substr(0,30);if(!cMap[k]){cMap[k]={desc:t.description,txns:[]};}cMap[k].txns.push(t);});S.subs.forEach(s=>{const k=(s.name||'').toLowerCase().trim().substr(0,30);if(!cMap[k])cMap[k]={desc:s.name,txns:[],notes:s.notes};});const rows=Object.entries(cMap).slice(0,4).map(([k,{desc,txns}])=>{const sorted=txns.slice().sort((a,b)=>b.date.localeCompare(a.date));const avg=sorted.length?sorted.reduce((s,t)=>s+t.amount,0)/sorted.length:0;return`<div class="fg jb" style="padding:6px 0;border-bottom:1px solid var(--bg3);font-size:var(--fs-xs)"><div style="color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(desc)}</div><span class="priv-mask" style="font-weight:500;font-variant-numeric:tabular-nums">${fmtP(avg)}</span></div>`;}).join('');return rows||'<div style="font-size:11px;color:var(--text3);padding:6px 0">No subscriptions</div>';})()}
-    </div>
-    <div class="card card-bordered">
-      <div style="font-size:13px;font-weight:600;color:var(--text1);margin-bottom:4px">Staff</div>
-      <div style="font-size:10px;color:var(--text3);margin-bottom:8px">After advance deductions</div>
-      ${(()=>{const staffActive=fStaff.filter(s=>s.status!=='inactive');if(!staffActive.length)return'<div style="font-size:11px;color:var(--text3);padding:6px 0">No staff tracked</div>';return staffActive.slice(0,4).map(s=>`<div class="fg jb" style="padding:6px 0;border-bottom:1px solid var(--bg3);font-size:var(--fs-xs)"><div style="color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(s.name)}</div><div class="priv-mask" style="font-weight:500;font-variant-numeric:tabular-nums">${fmtP(s.salary||0)}</div></div>`).join('');})()}
+      <div style="font-size:13px;font-weight:600;color:var(--text1);margin-bottom:8px">Recurring Health</div>
+      ${(()=>{
+        const subsActive=(S.subs||[]).filter(s=>s.status==='active');
+        const subsTotal=subsActive.reduce((s,sub)=>{
+          if(!sub.nativeAmount)return s;
+          const rate=SUB_FX_RATE[sub.nativeCurrency]||1;
+          const sarAmt=sub.nativeAmount*rate;
+          return s+(sub.cycle==='annual'?sarAmt/12:sarAmt);
+        },0);
+        // V8.26 Decision 8: subscription creep detection
+        // Compare current subs total to 6-month historical subscription spend
+        const subsBaselineMonths=mRange(addM(now,-6),addM(now,-1));
+        const subsBaselineTotal=subsBaselineMonths.flatMap(m=>S.txnCache[m]||[]).filter(t=>t.mainCatId==='cat_main_subscriptions'&&txDir(t)==='out').reduce((s,t)=>s+t.amount,0);
+        const subsBaselineMonthly=subsBaselineMonths.length?subsBaselineTotal/subsBaselineMonths.length:0;
+        const subsCreep=subsBaselineMonthly>0?(subsTotal-subsBaselineMonthly)/subsBaselineMonthly*100:0;
+        // V8.26: bills creep — compare current bills total to 6-month avg
+        const billsTotal=S.bills.reduce((s,b)=>s+(b.billingCycle==='Monthly'?b.fixedAmount||0:0),0);
+        const billsBaselineTotal=subsBaselineMonths.flatMap(m=>S.txnCache[m]||[]).filter(t=>t.mainCatId==='cat_main_housing'&&txDir(t)==='out').reduce((s,t)=>s+t.amount,0);
+        const billsBaselineMonthly=subsBaselineMonths.length?billsBaselineTotal/subsBaselineMonths.length:0;
+
+        return`
+        <div style="margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--bg3)">
+          <div class="fg jb" style="margin-bottom:4px">
+            <span style="font-size:12px;font-weight:500;color:var(--text1)">Subscriptions</span>
+            <span class="priv-mask" style="font-size:13px;font-weight:600;color:var(--text1);font-variant-numeric:tabular-nums">${fmtP(subsTotal)}<span style="font-size:10px;color:var(--text3);font-weight:400">/mo</span></span>
+          </div>
+          <div style="font-size:10px;color:var(--text3)">${subsActive.length} active</div>
+          ${Math.abs(subsCreep)>=10&&subsBaselineMonthly>0?`<div style="font-size:10px;color:${subsCreep>0?'var(--warn)':'var(--ok)'};margin-top:4px;font-weight:500">${subsCreep>0?'&#9888; Creep up':'&#10003; Down'} ${Math.abs(Math.round(subsCreep))}% vs 6-month average</div>`:''}
+        </div>
+        <div style="margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--bg3)">
+          <div class="fg jb" style="margin-bottom:4px">
+            <span style="font-size:12px;font-weight:500;color:var(--text1)">Bills (Monthly)</span>
+            <span class="priv-mask" style="font-size:13px;font-weight:600;color:var(--text1);font-variant-numeric:tabular-nums">${fmtP(billsTotal)}<span style="font-size:10px;color:var(--text3);font-weight:400">/mo</span></span>
+          </div>
+          <div style="font-size:10px;color:var(--text3)">${S.bills.filter(b=>b.billingCycle==='Monthly').length} monthly bill${S.bills.filter(b=>b.billingCycle==='Monthly').length!==1?'s':''} configured · variable amounts billed via statement</div>
+        </div>
+        <div>
+          <div class="fg jb" style="margin-bottom:4px">
+            <span style="font-size:12px;font-weight:500;color:var(--text1)">Household Staff</span>
+            <span class="priv-mask" style="font-size:13px;font-weight:600;color:var(--text1);font-variant-numeric:tabular-nums">${fmtP(mStaff30)}<span style="font-size:10px;color:var(--text3);font-weight:400">/mo</span></span>
+          </div>
+          <div style="font-size:10px;color:var(--text3)">${fStaff.filter(s=>s.status!=='inactive').length} active staff · after advance deductions</div>
+        </div>
+        `;
+      })()}
     </div>
   </div>
   `:''}
@@ -3790,6 +4120,29 @@ async function rOv(){
     </div>
   </div>
   `:''}
+
+  ${showZ('alerts')&&alerts.length?(()=>{
+    // V8.26: Needs Attention moved to bottom of Overview, collapsed by default per Mohammad.
+    // Grouped by severity. Click to expand/collapse.
+    const collapsed=S.settings.ovNeedsAttentionCollapsed!==false;
+    const critItems=alerts.filter(a=>a.level==='crit');
+    const warnItems=alerts.filter(a=>a.level==='warn');
+    const infoItems=alerts.filter(a=>a.level==='info');
+    const renderGroup=(items,label,color,icon)=>{
+      if(!items.length)return '';
+      return`<div style="margin-top:10px"><div style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:${color};margin-bottom:4px">${icon} ${label} (${items.length})</div>${items.map(a=>`<div class="fg" style="gap:10px;padding:6px 8px;align-items:flex-start;border-left:2px solid ${color};margin-bottom:4px">${a.action?`<a href="#" onclick="${a.action};return false" style="text-decoration:none;color:inherit;display:flex;gap:10px;flex:1">`:`<div style="flex:1">`}<div style="flex:1;min-width:0"><div style="font-size:12px;color:var(--text1);font-weight:500">${a.text}</div>${a.sub?`<div style="font-size:10px;color:var(--text3);margin-top:2px">${a.sub}</div>`:''}</div>${a.action?'</a>':'</div>'}</div>`).join('')}</div>`;
+    };
+    return`<div class="card card-bordered" style="margin-bottom:1rem;border-left:3px solid ${critItems.length?'var(--bad)':warnItems.length?'var(--warn)':'var(--text3)'}">
+      <div class="fg jb" style="align-items:center;cursor:pointer" onclick="S.settings.ovNeedsAttentionCollapsed=!${!collapsed};sched();render()">
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--text1)">Needs Attention <span style="font-size:11px;font-weight:400;color:var(--text3);margin-left:6px">${alerts.length} item${alerts.length!==1?'s':''}${critItems.length?` · <span style="color:var(--bad);font-weight:500">${critItems.length} critical</span>`:''}</span></div>
+          ${collapsed?`<div style="font-size:10px;color:var(--text3);margin-top:2px">Tap to expand</div>`:''}
+        </div>
+        <span style="font-size:14px;color:var(--text3)">${collapsed?'&#9656;':'&#9662;'}</span>
+      </div>
+      ${!collapsed?`${renderGroup(critItems,'Critical','var(--bad)','&#9888;')}${renderGroup(warnItems,'Warning','var(--warn)','&#9888;')}${renderGroup(infoItems,'Info','var(--text3)','&#9432;')}`:''}
+    </div>`;
+  })():''}
   `;
 }
 
@@ -3825,50 +4178,126 @@ function buildProjections(){
   const liquidTypes=new Set(['main_account','savings_account','sub_account','joint_account','foreign_currency_account','prepaid_card','cash']);
   const startingCash=S.accounts.filter(a=>liquidTypes.has(a.type)&&isLiveAccount(a)).reduce((s,a)=>{const b=calcAccBalance(a);return b!==null?s+b:s;},0);
 
-  // Recurring income (monthly only — V8.24 simplification)
+  const now=getYM(new Date());
+  const todayDate=new Date();
+
+  // ===== INCOME — handle all frequencies =====
+  // V8.26: Monthly recurring income (steady-state baseline)
   const baseIncome=S.income.filter(i=>i.status==='active'&&i.frequency==='Monthly').reduce((s,i)=>s+(i.amount||0),0);
-  // Apply scenario adjustment
+  // V8.26: Adjustment for slider
   const adjustedIncome=baseIncome*(1+(_projScenario.incomeAdj||0)/100);
 
-  // Recurring bills (monthly billing cycle, with optional cuts from scenario)
+  // V8.26: Per-month income additions for non-monthly frequencies (Quarterly, Annual, One-time)
+  // These layer on top of baseIncome on the specific months they hit.
+  const incomeByMonthOffset={};
+  S.income.filter(i=>i.status==='active'&&i.frequency!=='Monthly').forEach(i=>{
+    const amt=(i.amount||0)*(1+(_projScenario.incomeAdj||0)/100);
+    if(amt<=0)return;
+    if(i.frequency==='One-time'){
+      // Use expectedDate (if in future) — figure out month offset
+      if(!i.expectedDate)return;
+      const d=new Date(i.expectedDate+'T00:00:00');
+      if(isNaN(d.getTime()))return;
+      const itemYM=getYM(d);
+      const offset=monthDiff(now,itemYM);
+      if(offset>=0&&offset<horizon){
+        if(!incomeByMonthOffset[offset])incomeByMonthOffset[offset]=[];
+        incomeByMonthOffset[offset].push({label:i.name||'One-time income',amount:amt,kind:'one-time'});
+      }
+    }else if(i.frequency==='Quarterly'){
+      // Quarterly: hits every 3rd month from a reference point. Use expectedDay as DOM, current month as anchor.
+      // V8.26: simplified — assume next quarterly hit is in month 0, then every +3
+      for(let j=0;j<horizon;j+=3){
+        if(!incomeByMonthOffset[j])incomeByMonthOffset[j]=[];
+        incomeByMonthOffset[j].push({label:i.name||'Quarterly income',amount:amt,kind:'quarterly'});
+      }
+    }else if(i.frequency==='Annual'){
+      // Annual: assume hit in month 0 (next 12-month cycle starts now). For more accuracy, use expectedDay/expectedDate.
+      // V8.26: place on month 0 if no specific month info. Refine when expectedDate is set.
+      let placedOffset=0;
+      if(i.expectedDate){
+        const d=new Date(i.expectedDate+'T00:00:00');
+        if(!isNaN(d.getTime())){
+          const o=monthDiff(now,getYM(d));
+          if(o>=0&&o<horizon)placedOffset=o;
+          else placedOffset=0;
+        }
+      }
+      if(!incomeByMonthOffset[placedOffset])incomeByMonthOffset[placedOffset]=[];
+      incomeByMonthOffset[placedOffset].push({label:i.name||'Annual income',amount:amt,kind:'annual'});
+    }
+  });
+
+  // ===== BILLS — handle all cycles =====
   const cutBillSet=new Set(_projScenario.cutBills||[]);
-  const baseBills=S.bills.filter(b=>b.billingCycle==='Monthly'&&!cutBillSet.has(b.id)).reduce((s,b)=>s+(b.fixedAmount||0),0);
+  const billsByMonthOffset={};
+  let baseBillsMonthly=0;
+  S.bills.filter(b=>!cutBillSet.has(b.id)).forEach(b=>{
+    const amt=(b.fixedAmount||0);
+    if(amt<=0)return;
+    if(b.billingCycle==='Monthly'){
+      baseBillsMonthly+=amt;
+    }else if(b.billingCycle==='Quarterly'){
+      for(let j=0;j<horizon;j+=3){
+        if(!billsByMonthOffset[j])billsByMonthOffset[j]=0;
+        billsByMonthOffset[j]+=amt;
+      }
+    }else if(b.billingCycle==='Annual'){
+      // Annual bill: use expectedDay if it carries a date hint, otherwise place on month 0
+      let placedOffset=0;
+      if(billsByMonthOffset[placedOffset]===undefined)billsByMonthOffset[placedOffset]=0;
+      billsByMonthOffset[placedOffset]+=amt;
+    }
+  });
 
-  // Recurring subscriptions (active, with optional cuts)
+  // ===== SUBSCRIPTIONS — V8.26 BUG FIX: read nativeAmount, not amount =====
   const cutSubSet=new Set(_projScenario.cutSubs||[]);
-  const baseSubs=(S.subs||[]).filter(s=>s.status==='active'&&!cutSubSet.has(s.id)).reduce((s,sub)=>s+(sub.amount||0),0);
+  let baseSubs=0;
+  (S.subs||[]).filter(s=>s.status==='active'&&!cutSubSet.has(s.id)).forEach(sub=>{
+    if(!sub.nativeAmount)return;
+    const rate=SUB_FX_RATE[sub.nativeCurrency]||1;
+    const sarAmt=sub.nativeAmount*rate;
+    // Annual subs amortize to monthly equivalent
+    const monthlyEquiv=sub.cycle==='annual'?sarAmt/12:sarAmt;
+    baseSubs+=monthlyEquiv;
+  });
 
-  // Staff salaries
+  // ===== STAFF =====
   const baseStaff=S.staff.reduce((s,st)=>s+(st.salary||0),0);
 
-  // Debt obligations — CC minPayment + loan installment (monthly)
-  const baseDebt=S.debts.filter(d=>d.status==='active').reduce((s,d)=>s+(d.type==='credit_card'?(d.minPayment||0):(d.installment||0)),0);
+  // ===== DEBT — V8.26: handle payoff over time =====
+  // Each debt has a balance and either an installment (loan) or minPayment (CC).
+  // For loans with finite balance: once cumulative installments >= balance, stop.
+  // For CCs: assume minPayment continues at that level until balance hits zero (rough — true amortization would need profit rate).
+  const debtByMonthOffset={};
+  S.debts.filter(d=>d.status==='active').forEach(d=>{
+    const isCC=d.type==='credit_card';
+    const monthlyPayment=isCC?(d.minPayment||0):(d.installment||0);
+    if(monthlyPayment<=0)return;
+    // Estimate remaining months until payoff (linear, no profit rate compounding — Decision 7a)
+    const remaining=isCC?(calcCCBalance(d)||0):(d.balanceAsOf!=null?(d.balanceAsOf - (d.amountPaid||0)):0);
+    const monthsToPayoff=remaining>0?Math.ceil(remaining/monthlyPayment):0;
+    for(let j=0;j<horizon;j++){
+      if(j>=monthsToPayoff)break; // stop after debt paid off
+      if(!debtByMonthOffset[j])debtByMonthOffset[j]=0;
+      debtByMonthOffset[j]+=monthlyPayment;
+    }
+  });
 
-  // Investment commitments — only if user opted in. Look at recurring income items typed as investment, or recurring bills/transactions explicitly tagged investment.
-  // V8.24: simple heuristic — sum any income items with incType='investment' as outflows.
-  // Default off per Decision 3.
-  const baseInvestments=includeInv?(()=>{
-    // Heuristic: count active income/bill items where incType==='investment' or category indicates investment
-    // For simplicity in V8.24, this is a conservative zero unless the user has explicit "Investment Commitment" flagged items.
-    // Future enhancement: add a "Planned Investments" section to the Income page.
-    return 0; // Placeholder until explicit investment commitments UI ships in V9.0+
-  })():0;
+  // ===== INVESTMENTS (opt-in, default 0) =====
+  const baseInvestments=includeInv?0:0;
 
-  // Variable (non-recurring) spend rolling average
-  // Computed per category over the past `variableWindow` months, EXCLUDING anything already counted as recurring
-  const now=getYM(new Date());
+  // ===== VARIABLE SPEND — rolling average with category-level outlier detection =====
   const lookback=mRange(addM(now,-(variableWindow)),addM(now,-1));
   const lookbackTxns=lookback.flatMap(m=>S.txnCache[m]||[]).filter(t=>{
     if(txDir(t)!=='out')return false;
     if(t.type!=='expense')return false;
     if(isRefundLinked(t))return false;
-    // Exclude transactions that match recurring categories already counted
-    if(t.mainCatId==='cat_main_debt'||t.mainCatId==='cat_main_finance')return false; // counted in debt
-    if(t.mainCatId==='cat_main_subscriptions')return false; // counted in subs
-    if(t.subCatId==='sub_cc_payment')return false; // counted in debt
+    if(t.mainCatId==='cat_main_debt'||t.mainCatId==='cat_main_finance')return false;
+    if(t.mainCatId==='cat_main_subscriptions')return false;
+    if(t.subCatId==='sub_cc_payment')return false;
     return true;
   });
-  // Compute totals per category for outlier detection (Risk 1 mitigation)
   const catTotals={};
   lookbackTxns.forEach(t=>{
     const k=t.mainCatId||'_unc';
@@ -3877,17 +4306,16 @@ function buildProjections(){
     catTotals[k].count++;
     catTotals[k].amounts.push(t.amount);
   });
-  // Outlier detection: median per category, exclude transactions > 3× median
   const outliers=[];
   Object.entries(catTotals).forEach(([cat,data])=>{
-    if(data.amounts.length<3)return; // need at least 3 to compute median meaningfully
+    if(data.amounts.length<3)return;
     const sorted=[...data.amounts].sort((a,b)=>a-b);
     const median=sorted[Math.floor(sorted.length/2)];
     if(median<=0)return;
     data.amounts.forEach(amt=>{
       if(amt>median*3){
         outliers.push({cat,amount:amt,median});
-        data.total-=amt; // remove from total used in average
+        data.total-=amt;
         data.count--;
       }
     });
@@ -3897,33 +4325,48 @@ function buildProjections(){
   const baseVariable=monthsAvailable>0?(totalVariable/monthsAvailable):0;
   const adjustedVariable=baseVariable*(1+(_projScenario.variableAdj||0)/100);
 
-  // One-time events lookup by month offset
+  // ===== ONE-TIME EVENTS (user-added scenarios) =====
   const oneTimeByMonth={};
   (_projScenario.oneTimeEvents||[]).forEach(e=>{
     if(!oneTimeByMonth[e.monthOffset])oneTimeByMonth[e.monthOffset]=[];
     oneTimeByMonth[e.monthOffset].push(e);
   });
 
-  // Build month-by-month projection
+  // ===== Build month-by-month projection =====
   const months=[];
   let runningBalance=startingCash;
   for(let i=0;i<horizon;i++){
     const monthYM=addM(now,i);
     const opening=runningBalance;
-    const incomeForMonth=adjustedIncome;
-    const billsForMonth=baseBills;
+    // V8.26: monthly income + scheduled non-monthly income hits
+    const scheduledIncomeHits=incomeByMonthOffset[i]||[];
+    const scheduledIncomeTotal=scheduledIncomeHits.reduce((s,h)=>s+h.amount,0);
+    const incomeForMonth=adjustedIncome+scheduledIncomeTotal;
+
+    // V8.26: monthly bills + scheduled non-monthly bill hits
+    const billsForMonth=baseBillsMonthly+(billsByMonthOffset[i]||0);
+
     const subsForMonth=baseSubs;
     const staffForMonth=baseStaff;
-    const debtForMonth=baseDebt;
+    // V8.26: debt that has paid off stops contributing
+    const debtForMonth=debtByMonthOffset[i]||0;
     const invForMonth=baseInvestments;
     const variableForMonth=adjustedVariable;
-    // Apply one-time events for this month offset
+
+    // User scenario one-time events
     const events=oneTimeByMonth[i]||[];
     let oneTimeNet=0;
     events.forEach(e=>{
       const amt=parseFloat(e.amount)||0;
       oneTimeNet+=(e.sign==='in'?amt:-amt);
     });
+
+    // V8.26: scheduled non-monthly income/bills surface in events column for transparency
+    const eventsLabel=[];
+    scheduledIncomeHits.forEach(h=>eventsLabel.push(`+${h.label}`));
+    if(billsByMonthOffset[i])eventsLabel.push(`Quarterly/annual bills`);
+    events.forEach(e=>eventsLabel.push(`${e.sign==='in'?'+':'-'}${e.label||'event'}`));
+
     const totalOut=billsForMonth+subsForMonth+staffForMonth+debtForMonth+invForMonth+variableForMonth;
     const closing=opening+incomeForMonth-totalOut+oneTimeNet;
     const delta=closing-opening;
@@ -3932,15 +4375,25 @@ function buildProjections(){
       opening,income:incomeForMonth,bills:billsForMonth,subs:subsForMonth,staff:staffForMonth,
       debt:debtForMonth,investments:invForMonth,variable:variableForMonth,
       oneTimeNet,oneTimeEvents:events,
+      scheduledIncomeHits,
+      eventsLabel:eventsLabel.join(' · '),
       closing,delta
     });
     runningBalance=closing;
   }
 
-  // Average monthly outflow used for buffer thresholds
   const avgOutflow=months.length?months.reduce((s,m)=>s+(m.bills+m.subs+m.staff+m.debt+m.investments+m.variable),0)/months.length:0;
 
-  return{months,startingCash,baseIncome,adjustedIncome,baseBills,baseSubs,baseStaff,baseDebt,baseInvestments,baseVariable,adjustedVariable,monthsAvailable,outliers,avgOutflow,horizon,variableWindow,includeInv};
+  return{months,startingCash,baseIncome,adjustedIncome,baseBills:baseBillsMonthly,baseSubs,baseStaff,baseDebt:0,baseInvestments,baseVariable,adjustedVariable,monthsAvailable,outliers,avgOutflow,horizon,variableWindow,includeInv,
+    // V8.26: expose new model details
+    incomeByMonthOffset,billsByMonthOffset,debtByMonthOffset};
+}
+
+// V8.26 helper: month offset between two YYYY-MM strings (b minus a)
+function monthDiff(a,b){
+  const[ay,am]=a.split('-').map(Number);
+  const[by,bm]=b.split('-').map(Number);
+  return (by-ay)*12+(bm-am);
 }
 
 // V8.24: Buffer health classifier — returns 'comfortable', 'tight', 'shortfall', or 'critical'
@@ -4024,7 +4477,12 @@ function rProjectionsTable(proj){
     const closingCol=health==='critical'?'var(--bad)':health==='shortfall'?'var(--bad)':health==='tight'?'var(--warn)':'var(--ok)';
     const deltaCol=m.delta>=0?'var(--ok)':'var(--bad)';
     const oneTimeChip=m.oneTimeEvents.length?`<div style="font-size:9px;color:var(--electric);margin-top:2px">${m.oneTimeEvents.length} event${m.oneTimeEvents.length===1?'':'s'}</div>`:'';
-    return`<tr style="background:${bgColor}">
+    // V8.26: events column shows manual events net + scheduled non-monthly hits as a chip
+    const scheduledHits=(m.scheduledIncomeHits||[]).filter(h=>h.kind!=='quarterly'||idx===0); // dedupe quarterly chip
+    const eventsCellTitle=m.eventsLabel||'';
+    const hasScheduledOrManual=m.oneTimeNet!==0||scheduledHits.length>0||(m.bills>0&&proj.billsByMonthOffset&&proj.billsByMonthOffset[idx]);
+    const eventsDisplay=m.oneTimeNet!==0?fmtSP(m.oneTimeNet,true):(scheduledHits.length>0?`<span style="font-size:9px;color:var(--electric);font-weight:500">${scheduledHits.length} scheduled</span>`:'');
+    return`<tr style="background:${bgColor}" title="${h(eventsCellTitle)}">
       <td style="font-size:var(--fs-xs);padding:8px 10px;font-weight:500">${fmtY(m.ym)}${oneTimeChip}</td>
       <td class="priv-mask" style="font-size:var(--fs-xs);text-align:right;padding:8px 10px;font-variant-numeric:tabular-nums;color:${m.opening<0?'var(--bad)':'var(--text2)'}">${fmtP(m.opening)}</td>
       <td class="priv-mask" style="font-size:var(--fs-xs);text-align:right;padding:8px 10px;font-variant-numeric:tabular-nums;color:var(--ok)">${fmtP(m.income)}</td>
@@ -4034,7 +4492,7 @@ function rProjectionsTable(proj){
       <td class="priv-mask" style="font-size:var(--fs-xs);text-align:right;padding:8px 10px;font-variant-numeric:tabular-nums;color:var(--bad)">${fmtP(m.debt)}</td>
       ${showInvCol?`<td class="priv-mask" style="font-size:var(--fs-xs);text-align:right;padding:8px 10px;font-variant-numeric:tabular-nums;color:var(--bad)">${fmtP(m.investments)}</td>`:''}
       <td class="priv-mask" style="font-size:var(--fs-xs);text-align:right;padding:8px 10px;font-variant-numeric:tabular-nums;color:var(--bad)">${fmtP(m.variable)}</td>
-      ${m.oneTimeNet!==0?`<td class="priv-mask" style="font-size:var(--fs-xs);text-align:right;padding:8px 10px;font-variant-numeric:tabular-nums;color:${m.oneTimeNet>=0?'var(--ok)':'var(--bad)'}">${fmtSP(m.oneTimeNet,true)}</td>`:'<td style="padding:8px 10px"></td>'}
+      <td class="priv-mask" style="font-size:var(--fs-xs);text-align:right;padding:8px 10px;font-variant-numeric:tabular-nums;color:${m.oneTimeNet>=0?'var(--ok)':'var(--bad)'}" title="${h(eventsCellTitle)}">${eventsDisplay||'<span style="color:var(--text3)">—</span>'}</td>
       <td class="priv-mask" style="font-size:var(--fs-xs);text-align:right;padding:8px 10px;font-variant-numeric:tabular-nums;font-weight:600;color:${closingCol}">${fmtP(m.closing)}</td>
       <td class="priv-mask" style="font-size:var(--fs-xxs);text-align:right;padding:8px 10px;font-variant-numeric:tabular-nums;color:${deltaCol}">${fmtSP(m.delta,true)}</td>
     </tr>`;
@@ -4072,8 +4530,13 @@ function rProjectionsTable(proj){
       <tbody>${rows}</tbody>
     </table></div>
     <div style="padding:10px 16px;font-size:10px;color:var(--text3);background:var(--bg2);border-top:1px solid var(--bg3)">
-      Recurring inputs: Income ${fmtP(proj.adjustedIncome)}/mo · Bills ${fmtP(proj.baseBills)}/mo · Subs ${fmtP(proj.baseSubs)}/mo · Staff ${fmtP(proj.baseStaff)}/mo · Debt ${fmtP(proj.baseDebt)}/mo · Variable ${fmtP(proj.adjustedVariable)}/mo (avg of ${proj.monthsAvailable}mo)
-      ${(_projScenario.incomeAdj||_projScenario.variableAdj||(_projScenario.cutSubs||[]).length||(_projScenario.cutBills||[]).length||(_projScenario.oneTimeEvents||[]).length)?`<div style="margin-top:4px;color:var(--electric);font-weight:500">Scenario adjustments active</div>`:''}
+      Recurring inputs: Income ${fmtP(proj.adjustedIncome)}/mo · Bills ${fmtP(proj.baseBills)}/mo · Subs ${fmtP(proj.baseSubs)}/mo · Staff ${fmtP(proj.baseStaff)}/mo · Variable ${fmtP(proj.adjustedVariable)}/mo (avg of ${proj.monthsAvailable}mo)
+      <div style="margin-top:4px">Non-monthly events: scheduled income, quarterly bills, debt payoff dates auto-applied per month.</div>
+      ${(_projScenario.incomeAdj||_projScenario.variableAdj||(_projScenario.cutSubs||[]).length||(_projScenario.cutBills||[]).length||(_projScenario.oneTimeEvents||[]).length)?(()=>{
+        // V8.26: Scenario impact summary — last month closing vs baseline
+        const lastClosing=proj.months[proj.months.length-1].closing;
+        return`<div style="margin-top:6px;color:var(--electric);font-weight:500">Scenario adjustments active · projected closing at month ${proj.horizon}: ${fmtP(lastClosing)}</div>`;
+      })():''}
     </div>
   </div>`;
 }
@@ -4112,15 +4575,15 @@ function buildProjectionsChart(){
         tooltip:{
           callbacks:{
             label:function(ctx){
-              if(ctx.datasetIndex!==0)return ctx.dataset.label+': '+fmtP(ctx.parsed.y);
+              if(ctx.datasetIndex!==0)return ctx.dataset.label+': '+fmt(ctx.parsed.y);
               const m=proj.months[ctx.dataIndex];
-              return['Closing: '+fmtP(m.closing),'Δ: '+fmtSP(m.delta,true)];
+              return['Closing: '+fmt(m.closing),'Δ: '+fmtS(m.delta,true)];
             }
           }
         }
       },
       scales:{
-        y:{ticks:{font:{size:10},callback:v=>fmtP(v)},grid:{color:'rgba(0,0,0,.04)'}},
+        y:{ticks:{font:{size:10},callback:v=>fmt(v)},grid:{color:'rgba(0,0,0,.04)'}},
         x:{ticks:{font:{size:10}},grid:{display:false}}
       }
     }
@@ -4188,19 +4651,35 @@ function rProjectionsScenarios(proj){
       </div>
     </div>
 
-    ${subsActive.length?`<div style="margin-bottom:14px">
-      <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:6px">Cancel subscriptions (assume cut)</div>
-      <div class="fg" style="gap:6px;flex-wrap:wrap">
-        ${subsActive.map(s=>`<label style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;background:${cutSubSet.has(s.id)?'color-mix(in srgb,var(--bad) 10%,transparent)':'var(--bg2)'};border:1px solid ${cutSubSet.has(s.id)?'var(--bad)':'var(--border)'};border-radius:var(--rsm);font-size:11px;cursor:pointer"><input type="checkbox" ${cutSubSet.has(s.id)?'checked':''} onchange="if(this.checked){if(!_projScenario.cutSubs.includes('${s.id}'))_projScenario.cutSubs.push('${s.id}');}else{_projScenario.cutSubs=_projScenario.cutSubs.filter(x=>x!=='${s.id}');}render()" style="margin:0;cursor:pointer">${h(s.name||'?')} (${fmtP(s.amount||0)})</label>`).join('')}
-      </div>
-    </div>`:''}
+    ${(()=>{
+      // V8.26: only show subs with a known amount
+      const subsWithAmount=subsActive.filter(s=>s.nativeAmount&&s.nativeAmount>0);
+      if(!subsWithAmount.length)return '';
+      return`<div style="margin-bottom:14px">
+        <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:6px">Cancel subscriptions (assume cut)</div>
+        <div style="font-size:10px;color:var(--text3);margin-bottom:6px">Toggle to model the impact of cancelling each subscription.</div>
+        <div class="fg" style="gap:6px;flex-wrap:wrap">
+          ${subsWithAmount.map(s=>{
+            const sarAmt=s.nativeAmount*(SUB_FX_RATE[s.nativeCurrency]||1);
+            const monthlySAR=s.cycle==='annual'?sarAmt/12:sarAmt;
+            return`<label style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;background:${cutSubSet.has(s.id)?'color-mix(in srgb,var(--bad) 10%,transparent)':'var(--bg2)'};border:1px solid ${cutSubSet.has(s.id)?'var(--bad)':'var(--border)'};border-radius:var(--rsm);font-size:11px;cursor:pointer"><input type="checkbox" ${cutSubSet.has(s.id)?'checked':''} onchange="if(this.checked){if(!_projScenario.cutSubs.includes('${s.id}'))_projScenario.cutSubs.push('${s.id}');}else{_projScenario.cutSubs=_projScenario.cutSubs.filter(x=>x!=='${s.id}');}render()" style="margin:0;cursor:pointer">${h(s.name||'?')} (${fmtP(monthlySAR)}/mo)</label>`;
+          }).join('')}
+        </div>
+      </div>`;
+    })()}
 
-    ${billsMonthly.length?`<div style="margin-bottom:14px">
-      <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:6px">Eliminate bills (assume cut)</div>
-      <div class="fg" style="gap:6px;flex-wrap:wrap">
-        ${billsMonthly.map(b=>`<label style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;background:${cutBillSet.has(b.id)?'color-mix(in srgb,var(--bad) 10%,transparent)':'var(--bg2)'};border:1px solid ${cutBillSet.has(b.id)?'var(--bad)':'var(--border)'};border-radius:var(--rsm);font-size:11px;cursor:pointer"><input type="checkbox" ${cutBillSet.has(b.id)?'checked':''} onchange="if(this.checked){if(!_projScenario.cutBills.includes('${b.id}'))_projScenario.cutBills.push('${b.id}');}else{_projScenario.cutBills=_projScenario.cutBills.filter(x=>x!=='${b.id}');}render()" style="margin:0;cursor:pointer">${h(b.name||'?')} (${fmtP(b.fixedAmount||0)})</label>`).join('')}
-      </div>
-    </div>`:''}
+    ${(()=>{
+      // V8.26: only show bills with a known amount
+      const billsWithAmount=S.bills.filter(b=>b.fixedAmount>0);
+      if(!billsWithAmount.length)return '';
+      return`<div style="margin-bottom:14px">
+        <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:6px">Eliminate bills (assume cut)</div>
+        <div style="font-size:10px;color:var(--text3);margin-bottom:6px">Bills with a configured fixed amount only. Bills set as "via statement" are not shown here.</div>
+        <div class="fg" style="gap:6px;flex-wrap:wrap">
+          ${billsWithAmount.map(b=>`<label style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;background:${cutBillSet.has(b.id)?'color-mix(in srgb,var(--bad) 10%,transparent)':'var(--bg2)'};border:1px solid ${cutBillSet.has(b.id)?'var(--bad)':'var(--border)'};border-radius:var(--rsm);font-size:11px;cursor:pointer"><input type="checkbox" ${cutBillSet.has(b.id)?'checked':''} onchange="if(this.checked){if(!_projScenario.cutBills.includes('${b.id}'))_projScenario.cutBills.push('${b.id}');}else{_projScenario.cutBills=_projScenario.cutBills.filter(x=>x!=='${b.id}');}render()" style="margin:0;cursor:pointer">${h(b.name||'?')} (${fmtP(b.fixedAmount||0)})</label>`).join('')}
+        </div>
+      </div>`;
+    })()}
 
     <div>
       <div class="fg jb" style="align-items:center;margin-bottom:6px">
@@ -11573,14 +12052,14 @@ function rSettings(){
       <div class="settings-row" style="align-items:flex-start"><div class="settings-row-label"><div class="settings-row-title">Edge Function Secret</div><div class="settings-row-sub">V8.17 — shared secret used to authenticate dashboard calls to extract-statement and ai-proxy. Set the matching value as <code>LANKI_SECRET</code> in Supabase Edge Function env vars. If empty, AI extraction and AI categorization will be rejected by the edge functions.</div></div><div class="settings-row-ctrl" style="min-width:240px"><input type="password" placeholder="Paste secret value" value="${S.settings.lankiSecret||''}" onchange="S.settings.lankiSecret=this.value.trim();sched();toast('Edge Function secret saved')" style="width:100%;font-size:11px;font-family:monospace"></div></div>
       <!-- V8.21.5: AI Features section -->
       <!-- V8.23: Overview Sections (Decision 1 — per-zone show/hide) -->
-      <div class="settings-row" style="border-top:2px solid var(--bg3);margin-top:8px;padding-top:12px"><div class="settings-row-label"><div class="settings-row-title" style="font-weight:600">Overview Sections (V8.23)</div><div class="settings-row-sub">Show or hide entire zones on the Overview page. The Hero zone (top anchor + Net Position) is always visible. Hidden zones don't render — they're skipped, not collapsed.</div></div><div class="settings-row-ctrl"></div></div>
+      <div class="settings-row" style="border-top:2px solid var(--bg3);margin-top:8px;padding-top:12px"><div class="settings-row-label"><div class="settings-row-title" style="font-weight:600">Overview Sections (V8.26)</div><div class="settings-row-sub">Show or hide entire zones on the Overview page. The Hero zone (top anchor + Net Position) and Period banner are always visible. Hidden zones don't render — they're skipped, not collapsed.</div></div><div class="settings-row-ctrl"></div></div>
       ${(()=>{const zones=[
-        {k:'alerts',l:'Alerts',d:'Critical, warning, and info alerts. Hidden automatically when there are no active alerts even if enabled.'},
-        {k:'performance',l:'Performance',d:'Income vs Expense, Savings Rate, Net Cash Flow cards.'},
-        {k:'activity',l:'Activity',d:'Top Spending Categories, By Category breakdown, External Transfers.'},
-        {k:'forecast',l:'Forecast (next 30 days)',d:'Expected income, scheduled outflows, projected net. Teaser link to V8.24 Cash Position Projections page when shipped.'},
-        {k:'reference',l:'Reference (Goals, Debts, Bills, Subs, Staff)',d:'Lower-priority reference data. Hide if you want a leaner Overview.'},
-        {k:'intelligence',l:'AI Intelligence',d:'On-demand AI analysis of your financial data.'}
+        {k:'performance',l:'Performance Trio',d:'Income vs Expense, Savings Rate, Net Cash Flow with sparklines and period comparisons.'},
+        {k:'activity',l:'Spending Intelligence',d:'Top 5 main categories with nested top 3 sub-categories, anomaly detection (1.5×, 2×, 3× thresholds), External Transfers.'},
+        {k:'forecast',l:'Forward Look (next 30 days)',d:'Expected income, scheduled outflows, projected net (both excl/incl variable spend — reconciles with Projections page).'},
+        {k:'reference',l:'Debt & Cards + Goals + Recurring Health',d:'Debt headline with payoff trajectory, CC utilization, goals on-track math, subscription/bills creep detection.'},
+        {k:'intelligence',l:'AI Intelligence',d:'On-demand AI analysis of your financial data.'},
+        {k:'alerts',l:'Needs Attention',d:'Critical, warning, and info alerts. Always at the bottom of the Overview, collapsed by default. Hidden automatically when no alerts.'}
       ];const z=S.settings.ovZones||{};return zones.map(zone=>`<div class="settings-row" style="align-items:flex-start"><div class="settings-row-label"><div class="settings-row-title">${h(zone.l)}</div><div class="settings-row-sub">${h(zone.d)}</div></div><div class="settings-row-ctrl"><input type="checkbox" ${z[zone.k]!==false?'checked':''} onchange="if(!S.settings.ovZones)S.settings.ovZones={};S.settings.ovZones['${zone.k}']=this.checked;sched();toast(this.checked?'${h(zone.l)} shown':'${h(zone.l)} hidden')" style="cursor:pointer;width:18px;height:18px"></div></div>`).join('');})()}
       <!-- V8.24: Cash Projections settings -->
       <!-- V8.25 (Case 11): Display Settings — controls technical detail visibility -->
@@ -14958,6 +15437,26 @@ const MIGRATIONS=[
       if(!S.settings)S.settings={};
       // Case 11: technical IDs hidden by default. User can re-enable in Settings if needed.
       if(typeof S.settings.showTechnicalIds!=='boolean')S.settings.showTechnicalIds=false;
+      return{noop:true};
+    }
+  },
+  // V8.26: marker for Overview redesign + Projections rebuild.
+  // 10-zone Overview structure with sparklines, anomaly detection, and drill-down.
+  // Projections gets chart Y-axis fix, subs/one-time income inclusion, seasonality.
+  // REMOVE_AFTER: V9.0
+  {
+    id:'v8_26_overviewProjRebuild',
+    description:'V8.26 vault marker — Overview redesign + Projections rebuild',
+    removeAfter:'V9.0',
+    run:()=>{
+      if(!S.settings)S.settings={};
+      // Default: Needs Attention collapsed
+      if(typeof S.settings.ovNeedsAttentionCollapsed!=='boolean')S.settings.ovNeedsAttentionCollapsed=true;
+      // V8.26: visibility toggles for new zones (default all on)
+      if(typeof S.settings.ovZoneCashFlow!=='boolean')S.settings.ovZoneCashFlow=true;
+      if(typeof S.settings.ovZoneSpending!=='boolean')S.settings.ovZoneSpending=true;
+      if(typeof S.settings.ovZoneRecurring!=='boolean')S.settings.ovZoneRecurring=true;
+      if(typeof S.settings.ovZoneDebtCards!=='boolean')S.settings.ovZoneDebtCards=true;
       return{noop:true};
     }
   }
