@@ -737,6 +737,33 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overfl
 @media(max-width:768px){th,td{padding:8px 8px}.tx-card .tx-tbl th,.tx-card .tx-tbl td{padding:10px 10px}}
 /* ── STICKY TRANSACTIONS TOOLBAR ── */
 /* Container that pins the bulk action bar (when active) and the filter row to the top of the viewport on scroll. */
+/* V8.25 (Case 8): Bottom-sticky bulk action bar — appears when transactions are selected.
+   Apple Mail-style, replaces inline bulk bar in select mode. Respects iOS safe area.
+   Mobile gets the strongest treatment (most needed there); desktop also benefits when scrolling long lists. */
+.bulk-bottom-bar{
+  position:fixed;left:0;right:0;
+  bottom:0;
+  background:color-mix(in srgb,var(--paper) 92%,transparent);
+  -webkit-backdrop-filter:blur(14px) saturate(1.6);
+  backdrop-filter:blur(14px) saturate(1.6);
+  border-top:1px solid var(--border);
+  padding:12px 16px calc(12px + env(safe-area-inset-bottom)) 16px;
+  z-index:60;
+  box-shadow:0 -2px 12px rgba(0,0,0,.06);
+  display:none;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+  animation:bbbSlide .18s ease-out;
+}
+.bulk-bottom-bar.active{display:flex}
+@keyframes bbbSlide{from{transform:translateY(100%)}to{transform:translateY(0)}}
+@media(max-width:768px){
+  .bulk-bottom-bar{padding:10px 12px calc(10px + env(safe-area-inset-bottom)) 12px}
+  .bulk-bottom-bar .btn{padding:8px 10px;font-size:11px}
+}
+/* When bulk bar is active, push the body content up so the last row isn't hidden */
+.bulk-active-pad{padding-bottom:80px}
 .tx-sticky-toolbar{
   position:sticky;top:0;
   z-index:50;
@@ -1577,6 +1604,11 @@ body.privacy-on{padding-top:28px}
       <button onclick="sw('uncat')" style="display:flex;justify-content:space-between;align-items:center">Uncategorized <span id="nb-uncat" style="display:none;font-size:10px;font-weight:600;padding:1px 6px;border-radius:8px;background:#7A1F1F;color:#fff"></span></button>
       <button onclick="sw('transfers')" style="display:flex;justify-content:space-between;align-items:center">Pending Matches <span id="nb-transfers" style="display:none;font-size:10px;font-weight:600;padding:1px 6px;border-radius:8px;background:#7A1F1F;color:#fff"></span></button>
       <button onclick="sw('reimbursements')" style="display:flex;justify-content:space-between;align-items:center">Reimbursements <span id="nb-reimb" style="display:none;font-size:10px;font-weight:600;padding:1px 6px;border-radius:8px;background:#7A1F1F;color:#fff"></span></button>
+    </div>
+
+    <!-- V8.25 (Case 7): System section — audit, reference, diagnostics. Separate from Inbox (which is action-required only). -->
+    <button class="nav-item nav-group" data-group="system" onclick="toggleGroup('system')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg> System <span class="nav-arrow" id="arr-system">&#8250;</span></button>
+    <div id="nav-dd-system" class="nav-dd">
       <button onclick="sw('rules')">Transaction Rules</button>
       <button onclick="sw('sanity')" style="display:flex;justify-content:space-between;align-items:center">Sanity Check <span id="nb-sanity" style="display:none;font-size:10px;font-weight:600;padding:1px 6px;border-radius:8px;background:#7A1F1F;color:#fff"></span></button>
       <button onclick="sw('insights')">Usage Insights</button>
@@ -1685,9 +1717,11 @@ const SADAD_CODES={"001": "STC", "002": "Saudi Energy (SE)", "003": "Tawuniya In
 const NAV_GROUPS={
   transactions:{tabs:['txbank','txcards','txinvestments','aiupload'],labels:{txbank:'Bank Accounts',txcards:'Cards',txinvestments:'Investments',aiupload:'Statement Parser'}},
   recurring:{tabs:['income','bills','subscriptions'],labels:{income:'Income',bills:'Bills',subscriptions:'Subscriptions'}},
-  inbox:{tabs:['uncat','transfers','reimbursements','rules','sanity','insights'],labels:{uncat:'Uncategorized',transfers:'Pending Matches',reimbursements:'Reimbursements',rules:'Transaction Rules',sanity:'Sanity Check',insights:'Usage Insights'}},
+  inbox:{tabs:['uncat','transfers','reimbursements'],labels:{uncat:'Uncategorized',transfers:'Pending Matches',reimbursements:'Reimbursements'}},
+  // V8.25 (Case 7): System section — audit, reference, diagnostics
+  system:{tabs:['rules','sanity','insights'],labels:{rules:'Transaction Rules',sanity:'Sanity Check',insights:'Usage Insights'}},
 };
-const TAB_TO_GROUP={txbank:'transactions',txcards:'transactions',txinvestments:'transactions',aiupload:'transactions',income:'recurring',bills:'recurring',subscriptions:'recurring',accounts:'',debts:'',goals:'',uncat:'inbox',transfers:'inbox',reimbursements:'inbox',rules:'inbox',sanity:'inbox',insights:'inbox',staff:'',familyinv:'',investments:'',settings:''};
+const TAB_TO_GROUP={txbank:'transactions',txcards:'transactions',txinvestments:'transactions',aiupload:'transactions',income:'recurring',bills:'recurring',subscriptions:'recurring',accounts:'',debts:'',goals:'',uncat:'inbox',transfers:'inbox',reimbursements:'inbox',rules:'system',sanity:'system',insights:'system',staff:'',familyinv:'',investments:'',settings:'',projections:''};
 
 // ─── SUBSCRIPTION CATEGORIES ───
 // 12 categories covering every kind of recurring consumer/professional subscription.
@@ -1716,7 +1750,10 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='8.24';
+const VERSION='8.25';
+// V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
+// Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
+const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
 // IS_DEMO: when true, the entire app runs in a sandboxed sample-data mode.
 // No vault is loaded, no Supabase calls happen, and saveState/flushTxnQueue are no-ops.
 // Activated by URL param ?demo=1 or hash #demo. Cannot be flipped at runtime — the only
@@ -6480,6 +6517,68 @@ function escalateToEdit(){
   if(!ctx)return;
   openEditTxn(ctx.txnId,ctx.ym);
 }
+
+// V8.25 (Case 8): Categorize cluster — replaces the per-row Cat / Sub / AI buttons.
+// Desktop: anchored popover. Mobile (≤640px): bottom sheet (Decision 3b).
+// Three actions inside: Set category (opens Cat modal), Set sub-category (mkSub flow),
+// AI categorize (opens AI categorize modal).
+function openCatCluster(anchorBtn,txnId,ym,curM,curS,canMakeSub){
+  // Close any existing cluster popover first
+  document.querySelectorAll('.cat-cluster-pop').forEach(el=>el.remove());
+  const isMobile=window.innerWidth<=640;
+  const pop=document.createElement('div');
+  pop.className='cat-cluster-pop';
+  pop.setAttribute('role','menu');
+  const items=[
+    {label:'Set category',sub:'Choose a main + sub-category',onclick:`closeCatCluster();openCP('${txnId}','${ym}','${curM}','${curS}')`,iconSvg:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>'},
+  ];
+  if(canMakeSub)items.push({label:'Mark as recurring',sub:'Add as a subscription pattern',onclick:`closeCatCluster();mkSub('${txnId}','${ym}')`,iconSvg:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>'});
+  items.push({label:'AI categorize',sub:'Suggest type, category, and sub',onclick:`closeCatCluster();openAiCategorize('${txnId}','${ym}')`,iconSvg:CASE9_AI_ICON_SVG});
+
+  if(isMobile){
+    pop.style.cssText='position:fixed;left:0;right:0;bottom:0;background:var(--bg);border-top:1px solid var(--border);border-radius:14px 14px 0 0;padding:14px 16px calc(14px + env(safe-area-inset-bottom));box-shadow:0 -8px 24px rgba(0,0,0,.12);z-index:9999;animation:cclSlideUp .18s ease-out';
+    pop.innerHTML=`
+      <div style="width:36px;height:4px;background:var(--bg3);border-radius:2px;margin:0 auto 12px"></div>
+      <div style="font-size:13px;font-weight:600;color:var(--text1);margin-bottom:10px">Categorize</div>
+      ${items.map(it=>`<button class="cat-cluster-item" onclick="${it.onclick}" style="display:flex;align-items:center;gap:12px;width:100%;padding:12px;background:none;border:none;border-radius:8px;cursor:pointer;text-align:left;font-size:14px;color:var(--text1);min-height:48px"><span style="color:var(--electric);flex-shrink:0">${it.iconSvg}</span><div style="flex:1"><div style="font-weight:500">${it.label}</div><div style="font-size:11px;color:var(--text3);margin-top:1px">${it.sub}</div></div></button>`).join('')}
+      <button onclick="closeCatCluster()" style="margin-top:6px;width:100%;padding:10px;background:var(--bg2);border:none;border-radius:8px;font-size:13px;color:var(--text2);cursor:pointer">Cancel</button>
+    `;
+    // Backdrop
+    const bd=document.createElement('div');
+    bd.className='cat-cluster-backdrop';
+    bd.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9998';
+    bd.onclick=closeCatCluster;
+    document.body.appendChild(bd);
+  }else{
+    // Desktop: anchored popover
+    const r=anchorBtn.getBoundingClientRect();
+    pop.style.cssText=`position:fixed;top:${r.bottom+4}px;left:${Math.max(8,Math.min(window.innerWidth-260,r.left))}px;background:var(--bg);border:1px solid var(--border);border-radius:8px;box-shadow:0 6px 16px rgba(0,0,0,.10);padding:6px;z-index:9999;min-width:220px;animation:cclFadeIn .12s ease-out`;
+    pop.innerHTML=items.map(it=>`<button class="cat-cluster-item" onclick="${it.onclick}" style="display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;background:none;border:none;border-radius:5px;cursor:pointer;text-align:left;font-size:12px;color:var(--text1)"><span style="color:var(--electric);flex-shrink:0">${it.iconSvg}</span><div style="flex:1"><div style="font-weight:500">${it.label}</div><div style="font-size:10px;color:var(--text3);margin-top:1px">${it.sub}</div></div></button>`).join('');
+    // Click-outside dismiss
+    setTimeout(()=>{
+      document.addEventListener('click',_catClusterOutside,{once:true});
+    },10);
+  }
+  document.body.appendChild(pop);
+}
+function _catClusterOutside(e){
+  const pop=document.querySelector('.cat-cluster-pop');
+  if(!pop)return;
+  if(!pop.contains(e.target))closeCatCluster();
+  else document.addEventListener('click',_catClusterOutside,{once:true}); // keep listening
+}
+function closeCatCluster(){
+  document.querySelectorAll('.cat-cluster-pop').forEach(el=>el.remove());
+  document.querySelectorAll('.cat-cluster-backdrop').forEach(el=>el.remove());
+}
+// V8.25 (Case 8): Hover style for cluster items + animations
+(function injectClusterCSS(){
+  if(document.getElementById('ccl-css'))return;
+  const s=document.createElement('style');s.id='ccl-css';
+  s.textContent='.cat-cluster-item:hover{background:var(--bg2)!important}@keyframes cclSlideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}@keyframes cclFadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}';
+  document.head.appendChild(s);
+})();
+
 function confirmCat(){
   // BUG FIX 4.1: capture cb before closeCatM nullifies it
   const m=document.getElementById('catm-main').value;
@@ -9555,7 +9654,7 @@ function rAcc(){
       <td><span class="badge b-tr" style="font-size:10px">${ATL[a.type]||a.type}</span></td>
       ${balTd}
       <td style="font-size:var(--fs-xs)">${a.openingBalance!=null?`<span style="font-weight:500">${fmtP(a.openingBalance)}</span><br><span style="font-size:10px;color:var(--text3)">as of ${toDD(a.balanceAsOf)||'--'}</span>`:'<span style="color:var(--text3)">--</span>'}</td>
-      <td style="font-size:11px;font-family:monospace;color:var(--text3)">${a.id}</td>
+      ${S.settings.showTechnicalIds?`<td style="font-size:11px;font-family:monospace;color:var(--text3)">${a.id}</td>`:''}
       <td style="white-space:nowrap">
         ${isLive
           ?`<button class="btn btn-xs" onclick="openEditAcc('${a.id}')">Edit</button>
@@ -9736,7 +9835,7 @@ function rAcc(){
   <div class="card acc-card">
     <div class="acc-card-intro">Account ID is used in import JSON. IBAN enables automatic account matching during statement import.</div>
     <div class="tbl-wrap"><table class="acc-tbl">
-      <thead><tr>${reorderHeader}<th>Name / Number</th><th>Institution</th><th>Type</th><th>Live Balance</th><th>Opening Balance</th><th>ID</th><th></th></tr></thead>
+      <thead><tr>${reorderHeader}<th>Name / Number</th><th>Institution</th><th>Type</th><th>Live Balance</th><th>Opening Balance</th>${S.settings.showTechnicalIds?"<th>ID</th>":""}<th></th></tr></thead>
       <tbody>${activeBody}</tbody>
     </table></div>
   </div>
@@ -9746,7 +9845,7 @@ function rAcc(){
     <div class="card acc-card">
       <div class="acc-card-intro">These accounts are closed at the bank. Read-only — they cannot receive new transactions or be selected as import targets. Historical data is preserved. Click Reopen if the account becomes active again.</div>
       <div class="tbl-wrap"><table class="acc-tbl">
-        <thead><tr>${reorderHeader}<th>Name / Number</th><th>Institution</th><th>Type</th><th>Live Balance</th><th>Opening Balance</th><th>ID</th><th></th></tr></thead>
+        <thead><tr>${reorderHeader}<th>Name / Number</th><th>Institution</th><th>Type</th><th>Live Balance</th><th>Opening Balance</th>${S.settings.showTechnicalIds?"<th>ID</th>":""}<th></th></tr></thead>
         <tbody>${closedBody}</tbody>
       </table></div>
     </div>
@@ -9757,7 +9856,7 @@ function rAcc(){
     <div class="card acc-card">
       <div class="acc-card-intro">Hidden from active views. Still included in Overview, Debts, and Reports. Unarchive to restore visibility.</div>
       <div class="tbl-wrap"><table class="acc-tbl">
-        <thead><tr>${reorderHeader}<th>Name / Number</th><th>Institution</th><th>Type</th><th>Live Balance</th><th>Opening Balance</th><th>ID</th><th></th></tr></thead>
+        <thead><tr>${reorderHeader}<th>Name / Number</th><th>Institution</th><th>Type</th><th>Live Balance</th><th>Opening Balance</th>${S.settings.showTechnicalIds?"<th>ID</th>":""}<th></th></tr></thead>
         <tbody>${archivedBody}</tbody>
       </table></div>
     </div>
@@ -10339,7 +10438,7 @@ function rInvestments(){
         const ago=Math.floor((Date.now()-when.getTime())/60000);
         const agoLabel=ago<60?ago+'m ago':Math.floor(ago/60)+'h ago';
         const tip=(f.results||[]).map(r=>`${r.symbol}: ${r.price!=null?r.price+' '+(r.currency||'SAR')+' × '+r.quantity+(r.priceInSAR&&r.priceInSAR!==r.price?' = SAR '+r.priceInSAR.toFixed(2)+' each':''):'no price'}${r.source?' [src: '+r.source.substr(0,50)+']':''}${r.notes?' ('+r.notes+')':''}`).join('\n');
-        return`<div style="font-size:10px;color:var(--text3);margin-bottom:8px;font-style:italic" title="${h(tip)}">⚡ AI-fetched ${agoLabel}${f.partial?' · partial':''} · hover for details</div>`;
+        return`<div style="font-size:10px;color:var(--text3);margin-bottom:8px;font-style:italic;display:inline-flex;align-items:center;gap:4px" title="${h(tip)}"><span style="color:var(--electric)">${CASE9_AI_ICON_SVG}</span> AI-fetched ${agoLabel}${f.partial?' · partial':''} · hover for details</div>`;
       })():''}
 
       <div class="fg" style="gap:14px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px">
@@ -10385,7 +10484,7 @@ function rInvestments(){
         // V8.21.5: Update Values bulk button — only when at least one ai_public_price account exists
         const hasAi=invAccs.some(a=>a.updateSource==='ai_public_price'&&Array.isArray(a.holdings)&&a.holdings.length>0);
         if(!hasAi)return '';
-        return`<button class="btn btn-sm" onclick="bulkUpdateValues()" ${_invFetchingBatch?'disabled':''} title="Fetch current prices for AI-enabled accounts">${_invFetchingBatch?'Fetching…':'⚡ Update values'}</button>`;
+        return`<button class="btn btn-sm" onclick="bulkUpdateValues()" ${_invFetchingBatch?'disabled':''} title="Fetch current prices for AI-enabled accounts" style="display:inline-flex;align-items:center;gap:5px">${_invFetchingBatch?'Fetching…':`<span style="color:var(--electric)">${CASE9_AI_ICON_SVG}</span> Update values`}</button>`;
       })()}
       <button class="btn btn-p btn-sm" onclick="sw('accounts');setTimeout(()=>openAddAcc(),150)">+ Add investment account</button>
     </div>
@@ -11484,6 +11583,9 @@ function rSettings(){
         {k:'intelligence',l:'AI Intelligence',d:'On-demand AI analysis of your financial data.'}
       ];const z=S.settings.ovZones||{};return zones.map(zone=>`<div class="settings-row" style="align-items:flex-start"><div class="settings-row-label"><div class="settings-row-title">${h(zone.l)}</div><div class="settings-row-sub">${h(zone.d)}</div></div><div class="settings-row-ctrl"><input type="checkbox" ${z[zone.k]!==false?'checked':''} onchange="if(!S.settings.ovZones)S.settings.ovZones={};S.settings.ovZones['${zone.k}']=this.checked;sched();toast(this.checked?'${h(zone.l)} shown':'${h(zone.l)} hidden')" style="cursor:pointer;width:18px;height:18px"></div></div>`).join('');})()}
       <!-- V8.24: Cash Projections settings -->
+      <!-- V8.25 (Case 11): Display Settings — controls technical detail visibility -->
+      <div class="settings-row" style="border-top:2px solid var(--bg3);margin-top:8px;padding-top:12px"><div class="settings-row-label"><div class="settings-row-title" style="font-weight:600">Display (V8.25)</div><div class="settings-row-sub">Controls visibility of technical details in the dashboard UI.</div></div><div class="settings-row-ctrl"></div></div>
+      <div class="settings-row" style="align-items:flex-start"><div class="settings-row-label"><div class="settings-row-title">Show technical IDs</div><div class="settings-row-sub">Show internal IDs (account, debt, transaction, etc.) in tables and details. Off by default — these are technical identifiers that aren't usually needed. Turn on if you're debugging an extraction or generating import JSON manually.</div></div><div class="settings-row-ctrl"><input type="checkbox" ${S.settings.showTechnicalIds===true?'checked':''} onchange="S.settings.showTechnicalIds=this.checked;sched();render()" style="cursor:pointer;width:18px;height:18px"></div></div>
       <div class="settings-row" style="border-top:2px solid var(--bg3);margin-top:8px;padding-top:12px"><div class="settings-row-label"><div class="settings-row-title" style="font-weight:600">Cash Projections (V8.24)</div><div class="settings-row-sub">Settings for the Projections page. Affects how monthly cash position is forecasted forward.</div></div><div class="settings-row-ctrl"></div></div>
       <div class="settings-row" style="align-items:flex-start"><div class="settings-row-label"><div class="settings-row-title">Projection horizon</div><div class="settings-row-sub">How many months forward the projection extends. Beyond 24 months assumptions get too soft.</div></div><div class="settings-row-ctrl"><select onchange="S.settings.projHorizon=parseInt(this.value);sched();render()" style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--rsm);background:var(--bg);font-size:12px"><option value="12" ${(S.settings.projHorizon||12)===12?'selected':''}>12 months</option><option value="18" ${(S.settings.projHorizon||12)===18?'selected':''}>18 months</option><option value="24" ${(S.settings.projHorizon||12)===24?'selected':''}>24 months</option></select></div></div>
       <div class="settings-row" style="align-items:flex-start"><div class="settings-row-label"><div class="settings-row-title">Variable spend baseline window</div><div class="settings-row-sub">Months of history used to compute the rolling average for non-recurring spend (groceries, dining, fuel, etc.). Shorter = more responsive to recent changes. Longer = more stable.</div></div><div class="settings-row-ctrl"><select onchange="S.settings.projVariableWindow=parseInt(this.value);sched();render()" style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--rsm);background:var(--bg);font-size:12px"><option value="3" ${(S.settings.projVariableWindow||6)===3?'selected':''}>3 months</option><option value="6" ${(S.settings.projVariableWindow||6)===6?'selected':''}>6 months</option><option value="12" ${(S.settings.projVariableWindow||6)===12?'selected':''}>12 months</option></select></div></div>
@@ -13017,12 +13119,13 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps, scopedAcc){
     }
   }
 
-  // V8.23 (Case 15): when filtered to a single account, drop the account column.
-  // The Description column expands into the freed space. Saves ~130px on every row.
-  const hideAcc=!!scopedAcc;
+  // V8.25: REVERTED Case 15 (V8.23) — the conditional column hide caused a column-shift bug
+  // where the Account column rendered with the wrong data when filtered. Row space will be
+  // recovered via Case 8 categorize cluster popover instead. The scopedAcc parameter is
+  // accepted for backward signature compat but no longer used to drop a column.
   const colConfig=isCards
-    ?(hideAcc?['date','desc','cat','amount','outstanding','type','']:['date','desc','cat','acc','amount','outstanding','type',''])
-    :(hideAcc?['date','desc','cat','amount','balance','type','']:['date','desc','cat','acc','amount','balance','type','']);
+    ?['date','desc','cat','acc','amount','outstanding','type','']
+    :['date','desc','cat','acc','amount','balance','type',''];
   const labels={date:'Date',desc:'Description',cat:'Category / Sub-Category',acc:'Account',
     amount:'Amount',balance:'Balance',outstanding:'Outstanding',type:'Type','':''};
   const widths={date:'110px',desc:'auto',cat:'230px',acc:'130px',amount:'140px',balance:'140px',outstanding:'140px',type:'90px','':'270px'};
@@ -13115,12 +13218,10 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps, scopedAcc){
       ${showBalance?`<td class="tx-balance-cell ${rb!==null?(rb<-0.005?'c-bad':rb>0.005?'c-ok':''):''}" style="text-align:right;font-size:var(--fs-xs);white-space:nowrap">${rb!==null?(Math.abs(rb)<0.005?fmt(0):fmtS(rb)):'--'}</td>`:''}
       <td class="tx-type-cell">${tbadge(t.type)}</td>
       <td class="tx-actions-cell" style="white-space:nowrap">
-        <button class="btn btn-xs" onclick="openEditTxn('${t.id}','${ym}')">Edit</button>
-        <button class="btn btn-xs" onclick="openCP('${t.id}','${ym}','${t.mainCatId||''}','${t.subCatId||''}')">Cat</button>
-        ${!t.isSub?`<button class="btn btn-xs" onclick="mkSub('${t.id}','${ym}')">Sub</button>`:''}
-        <button class="btn btn-xs" onclick="openAiCategorize('${t.id}','${ym}')" title="AI-assisted categorization — add context for a suggested Type, Category, and Sub-Category" style="padding:2px 6px"><span style="color:var(--electric);font-weight:600">✨</span></button>
-        ${(t.type==='income'&&(t.subCatId==='sub_refund'||t.subCatId==='sub_reimbursement')&&!isRefundLinked(t))?`<button class="btn btn-xs" onclick="openRefundLinkModal('${t.id}','${ym}')" title="Link this refund/reimbursement to its original expense — excludes the pair from Income and Expense totals" style="padding:2px 6px"><span style="color:var(--ok);font-weight:600">↔</span></button>`:''}
-        <button class="btn btn-xs btn-d" onclick="delTxn('${t.id}','${ym}')">&#10005;</button>
+        <button class="btn btn-xs" onclick="openEditTxn('${t.id}','${ym}')" title="Edit transaction">Edit</button>
+        <button class="btn btn-xs txn-cat-cluster" onclick="event.stopPropagation();openCatCluster(this,'${t.id}','${ym}','${t.mainCatId||''}','${t.subCatId||''}',${!t.isSub?'true':'false'})" title="Categorize: set category, sub-category, or use AI">Categorize ▾</button>
+        ${(t.type==='income'&&(t.subCatId==='sub_refund'||t.subCatId==='sub_reimbursement')&&!isRefundLinked(t))?`<button class="btn btn-xs" onclick="openRefundLinkModal('${t.id}','${ym}')" title="Link this refund/reimbursement to its original expense" style="padding:2px 6px"><span style="color:var(--ok);font-weight:600">↔</span></button>`:''}
+        <button class="btn btn-xs btn-d" onclick="delTxn('${t.id}','${ym}')" title="Delete transaction">&#10005;</button>
       </td>
       ${reconTd}
     </tr>`;}).join(''):`<tr><td colspan="${(showBalance?8:7)+1+(hasRecon?1:0)}" class="empty">No transactions found</td></tr>`;
@@ -13511,13 +13612,14 @@ function buildTxFilters(){
   return`
   <div class="tx-sticky-toolbar" id="tx-sticky-toolbar">
   <!-- Bulk action bar — hidden until transactions are selected -->
-  <div id="bulk-action-bar" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;background:color-mix(in srgb,var(--midnight) 6%,transparent);border:1px solid color-mix(in srgb,var(--midnight) 18%,transparent);border-radius:var(--r);padding:10px 14px;margin-bottom:10px">
+  <!-- Bulk action bar — V8.25 (Case 8): bottom-sticky toolbar in select mode -->
+  <div id="bulk-action-bar" class="bulk-bottom-bar">
     <span id="bulk-count" style="font-size:var(--fs-xs);font-weight:600;color:var(--midnight)">0 selected</span>
-    <button class="btn btn-xs" onclick="selectAllDisplayed()">Select all displayed</button>
+    <button class="btn btn-xs" onclick="selectAllDisplayed()">Select all</button>
     <button class="btn btn-xs" onclick="clearBulkSelection()">Clear</button>
     <div style="flex:1"></div>
     <button class="btn btn-xs btn-p" onclick="applyBulkCategory()">Assign Category</button>
-    <button class="btn btn-xs" onclick="openBulkAiCategorize()" title="Use AI with shared context to categorize all selected transactions at once"><span style="color:var(--electric);font-weight:600">✨</span> AI Categorize</button>
+    <button class="btn btn-xs" onclick="openBulkAiCategorize()" title="Use AI with shared context to categorize all selected transactions at once" style="display:inline-flex;align-items:center;gap:4px"><span style="color:var(--electric)">${CASE9_AI_ICON_SVG}</span> AI Categorize</button>
     <button class="btn btn-xs" onclick="openRuleSweepModal(true)" title="Apply learned rules to selected transactions (only touches uncategorized or previously rule-applied rows — manual categorizations are protected)">↻ Apply Rules</button>
   </div>
   <div class="fg" style="gap:8px;flex-wrap:nowrap;align-items:center;margin-bottom:1rem;overflow-x:auto">
@@ -14248,7 +14350,16 @@ function clearBulkSelection(){
 function updateBulkBar(){
   const bar=document.getElementById('bulk-action-bar');
   const countEl=document.getElementById('bulk-count');
-  if(bar)bar.style.display=BulkSelected.size>0?'flex':'none';
+  // V8.25 (Case 8): bottom-sticky bar uses .active class instead of inline display
+  if(bar){
+    if(BulkSelected.size>0){
+      bar.classList.add('active');
+      document.body.classList.add('bulk-active-pad');
+    }else{
+      bar.classList.remove('active');
+      document.body.classList.remove('bulk-active-pad');
+    }
+  }
   if(countEl)countEl.textContent=BulkSelected.size+' selected';
   const btn=document.getElementById('bulk-sel-btn');
   if(btn){
@@ -14830,6 +14941,23 @@ const MIGRATIONS=[
       // Buffer thresholds (multiples of monthly expense)
       if(typeof S.settings.projBufferComfort!=='number')S.settings.projBufferComfort=1.0;
       if(typeof S.settings.projBufferTight!=='number')S.settings.projBufferTight=0.5;
+      return{noop:true};
+    }
+  },
+  // V8.25: marker for Phase 9 — UX Polish & Information Architecture.
+  // Cases 7 (Inbox/System nav restructure), 8 (txn list cluster + sticky toolbar),
+  // 9 (AI icon redesign), 11 (hide IDs by default + toggle), 12 (site-wide design pass).
+  // Reverts Case 15 (V8.23 hide-account-column when filtered) per Mohammad — column-shift bug.
+  // Case 8 work recovers the row space anyway.
+  // REMOVE_AFTER: V9.0
+  {
+    id:'v8_25_uxPolish',
+    description:'V8.25 vault marker — Phase 9 UX Polish & Information Architecture',
+    removeAfter:'V9.0',
+    run:()=>{
+      if(!S.settings)S.settings={};
+      // Case 11: technical IDs hidden by default. User can re-enable in Settings if needed.
+      if(typeof S.settings.showTechnicalIds!=='boolean')S.settings.showTechnicalIds=false;
       return{noop:true};
     }
   }
