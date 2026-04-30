@@ -741,29 +741,29 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overfl
    Apple Mail-style, replaces inline bulk bar in select mode. Respects iOS safe area.
    Mobile gets the strongest treatment (most needed there); desktop also benefits when scrolling long lists. */
 .bulk-bottom-bar{
-  position:fixed;left:0;right:0;
-  bottom:0;
-  background:color-mix(in srgb,var(--paper) 92%,transparent);
-  -webkit-backdrop-filter:blur(14px) saturate(1.6);
-  backdrop-filter:blur(14px) saturate(1.6);
-  border-top:1px solid var(--border);
-  padding:12px 16px calc(12px + env(safe-area-inset-bottom)) 16px;
-  z-index:60;
-  box-shadow:0 -2px 12px rgba(0,0,0,.06);
-  display:none;
+  /* V8.27: deprecated. The floating bar is no longer rendered. Kept as no-op fallback for any cached references. */
+  display:none!important;
+}
+/* V8.27: inline status banner replaces the broken floating bar.
+   Sits at the top of the table view, scrolls with the toolbar, no positioning bugs. */
+.bulk-inline-banner{
+  display:flex;
   align-items:center;
   gap:8px;
   flex-wrap:wrap;
+  padding:10px 12px;
+  margin-bottom:10px;
+  background:color-mix(in srgb,var(--electric) 8%,var(--paper));
+  border:1px solid color-mix(in srgb,var(--electric) 30%,var(--border));
+  border-radius:var(--rsm);
   animation:bbbSlide .18s ease-out;
 }
-.bulk-bottom-bar.active{display:flex}
-@keyframes bbbSlide{from{transform:translateY(100%)}to{transform:translateY(0)}}
+@keyframes bbbSlide{from{transform:translateY(-4px);opacity:0}to{transform:translateY(0);opacity:1}}
 @media(max-width:768px){
-  .bulk-bottom-bar{padding:10px 12px calc(10px + env(safe-area-inset-bottom)) 12px}
-  .bulk-bottom-bar .btn{padding:8px 10px;font-size:11px}
+  .bulk-inline-banner{padding:8px 10px;gap:6px}
+  .bulk-inline-banner .btn{font-size:11px;padding:5px 8px}
 }
-/* When bulk bar is active, push the body content up so the last row isn't hidden */
-.bulk-active-pad{padding-bottom:80px}
+.bulk-active-pad{padding-bottom:0!important}
 .tx-sticky-toolbar{
   position:sticky;top:0;
   z-index:50;
@@ -1610,6 +1610,7 @@ body.privacy-on{padding-top:28px}
     <button class="nav-item nav-group" data-group="system" onclick="toggleGroup('system')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg> System <span class="nav-arrow" id="arr-system">&#8250;</span></button>
     <div id="nav-dd-system" class="nav-dd">
       <button onclick="sw('rules')">Transaction Rules</button>
+      <button onclick="sw('reviewqueue')" style="display:flex;justify-content:space-between;align-items:center">Review Queue <span id="nb-reviewqueue" style="display:none;font-size:10px;font-weight:600;padding:1px 6px;border-radius:8px;background:#7A5E20;color:#fff"></span></button>
       <button onclick="sw('sanity')" style="display:flex;justify-content:space-between;align-items:center">Sanity Check <span id="nb-sanity" style="display:none;font-size:10px;font-weight:600;padding:1px 6px;border-radius:8px;background:#7A1F1F;color:#fff"></span></button>
       <button onclick="sw('insights')">Usage Insights</button>
     </div>
@@ -1750,7 +1751,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='8.26';
+const VERSION='8.27';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -2534,7 +2535,11 @@ function getMainP(){
     version:VERSION,
     accounts:S.accounts,debts:S.debts,goals:S.goals,income:S.income,
     bills:S.bills,subs:S.subs,staff:S.staff,rules:S.rules,txnRules:S.txnRules,dismissed:S.dismissed,
-    deletedCats:S.deletedCats,deletedSubs:S.deletedSubs,customMainCats:S.customMainCats,customSubCats:S.customSubCats,catNameOverrides:S.catNameOverrides,catColorOverrides:S.catColorOverrides,subNameOverrides:S.subNameOverrides,subParentOverrides:S.subParentOverrides,billRules:S.billRules,familyMembers:S.familyMembers,settings:S.settings,monthlyBal:S.monthlyBal,matchedPairs:S.matchedPairs,submitters:S.submitters
+    deletedCats:S.deletedCats,deletedSubs:S.deletedSubs,customMainCats:S.customMainCats,customSubCats:S.customSubCats,catNameOverrides:S.catNameOverrides,catColorOverrides:S.catColorOverrides,subNameOverrides:S.subNameOverrides,subParentOverrides:S.subParentOverrides,billRules:S.billRules,familyMembers:S.familyMembers,settings:S.settings,monthlyBal:S.monthlyBal,matchedPairs:S.matchedPairs,submitters:S.submitters,
+    // V8.27 CRITICAL FIX: groups and formatLibrary were silently lost on every reload from V8.20/V8.19.
+    // These two fields were initialized in defaults but never persisted to vault. User-defined groups
+    // and learned format library entries reset on every refresh. Adding to persistence is additive-only.
+    groups:S.groups,formatLibrary:S.formatLibrary
   };
 }
 function restoreS(d){
@@ -2571,6 +2576,10 @@ function restoreS(d){
     S.familyMembers=d.familyMembers||[];
   S.settings={currency:'SAR',savingsTarget:20,backupReminderMonths:2,lastBackup:null,autoRuleSweep:true,...(d.settings||{})};  S.monthlyBal=d.monthlyBal||{};  S.matchedPairs=d.matchedPairs||[];
   S.submitters=d.submitters||[];
+  // V8.27 CRITICAL FIX: restore groups and formatLibrary (paired with getMainP fix above).
+  // Defaults to [] for vaults that predate the persistence fix.
+  S.groups=Array.isArray(d.groups)?d.groups:[];
+  S.formatLibrary=Array.isArray(d.formatLibrary)?d.formatLibrary:[];
   // txnCache stays separate - loaded in loadS
   applyDeletions();
   applyCatCustomizations();
@@ -2827,6 +2836,10 @@ function updateBadge(){
   setNB('nb-transfers',pt);
   setNB('nb-reimb',pr);
   setNB('nb-sanity',sc);
+  // V8.27: Review Queue badge — count of all flagged transactions across all months
+  let reviewCount=0;
+  Object.keys(S.txnCache).forEach(ym=>{(S.txnCache[ym]||[]).forEach(t=>{if(t.needsReview)reviewCount++;});});
+  setNB('nb-reviewqueue',reviewCount);
 }
 
 // ─── NAV ───
@@ -3173,6 +3186,7 @@ async function render(){
   else if(t==='transfers')el.innerHTML=rPendingMatches();
   else if(t==='reimbursements')el.innerHTML=await rReimbursements();
   else if(t==='rules')el.innerHTML=rMerchantRules();
+  else if(t==='reviewqueue')el.innerHTML=rReviewQueue();
   else if(t==='sanity')el.innerHTML=rSanityCheck();
   else if(t==='insights')el.innerHTML=rUsageInsights();
   else if(t==='settings')el.innerHTML=rSettings();
@@ -5529,6 +5543,9 @@ function openEditTxn(id,ym){
     billSel.value=t.billId||'';
   }
   document.getElementById('edit-txn-modal').classList.add('active');
+  // V8.27: populate the needs-review checkbox from the transaction state.
+  const reviewBox=document.getElementById('etxn-needsReview');
+  if(reviewBox)reviewBox.checked=!!t.needsReview;
 }
 function openCPEditTxn(){
   const curM=document.getElementById('etxn-mc').value;
@@ -5579,6 +5596,13 @@ async function saveEditTxn(){
   t.amount=newAmt;
   t.description=document.getElementById('etxn-desc').value.trim();
   t.notes=document.getElementById('etxn-notes').value.trim();
+  // V8.27: needsReview flag from Edit modal. Manual edit + checked = flag set; unchecked = flag cleared.
+  // Also: if user changed category here (manual recategorization), automatically clear any prior review flag.
+  const reviewBox=document.getElementById('etxn-needsReview');
+  if(reviewBox){
+    if(reviewBox.checked){t.needsReview=true;t.reviewReason=t.reviewReason||'manual';}
+    else{delete t.needsReview;delete t.reviewReason;}
+  }
   t.type=document.getElementById('etxn-type').value;
   t.direction=document.getElementById('etxn-dir').value;
   t.accountId=document.getElementById('etxn-acc').value||null;
@@ -6451,6 +6475,12 @@ async function doImport(directPayload){
     );
     if(isDup)continue;
     const txnItem={id:uid(),date:t.date,description:cleanDesc,raw_description:rawDesc,amount:amt,type:txnType,direction:dir,mainCatId:mid,subCatId:sid,accountId:ai,debtId:di,notes:(t.notes||'').trim(),flagged:!!t.flagged,ruleApplied:ruleApplied||false,statementBal:t.statement_balance!=null?parseFloat(t.statement_balance):undefined};
+    // V8.27 Decision C: auto-flag for review when applying a low-confidence rule.
+    // Low-confidence = AI-suggested rule with useCount <= 3 (still being learned, hasn't been confirmed by manual use).
+    if(ruleApplied&&rule&&rule._rule&&rule._rule.source==='ai'&&(rule._rule.useCount||0)<=3&&S.settings.autoFlagLowConfidenceRules!==false){
+      txnItem.needsReview=true;
+      txnItem.reviewReason='low_confidence_rule';
+    }
     // Auto-match to bill — high-confidence ID matches now run before category gating, so we may need to set the category.
     const linkBill=matchTransactionToBill(txnItem);
     if(linkBill){
@@ -6838,16 +6868,17 @@ function openRuleSweepModal(scoped){
       ${scoped?'None of the selected transactions match any rule, or they are all manually categorized (which rules never overwrite).':'All transactions are already up to date with your rules, or remaining ones are manually categorized.'}
     </div>`;
   }else{
-    body=`<div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:10px">Review the changes below. Untick any row you don't want to apply. Manual categorizations are never touched.</div>
+    body=`<div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:10px">Review the changes below. Untick any row you don't want to apply. <strong>Manual categorizations are never touched.</strong> Use the <span style="color:#7A5E20">Defer</span> column to apply the rule but flag the row for review later.</div>
     <div class="tbl-wrap" style="max-height:420px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--rsm)">
       <table class="tx-tbl" style="min-width:auto;width:100%">
         <thead><tr>
-          <th style="width:34px;padding:6px 6px"><input type="checkbox" id="sweep-all-cb" checked onclick="toggleAllSweepRows(this.checked)"></th>
+          <th style="width:34px;padding:6px 6px"><input type="checkbox" id="sweep-all-cb" checked onclick="toggleAllSweepRows(this.checked)" title="Toggle all"></th>
           <th style="width:80px;padding:6px 8px">Date</th>
           <th style="padding:6px 8px">Description</th>
           <th style="padding:6px 8px;width:170px">Current</th>
           <th style="padding:6px 8px;width:170px">After rule</th>
           <th style="padding:6px 8px;width:90px;text-align:right">Amount</th>
+          <th style="padding:6px 6px;width:60px;text-align:center" title="Apply but mark for review">Defer</th>
         </tr></thead>
         <tbody>
         ${changes.map((c,i)=>{
@@ -6855,13 +6886,17 @@ function openRuleSweepModal(scoped){
           const oldS=c.oldSubId?' / '+(getSC(c.oldSubId)?.name||c.oldSubId):'';
           const newM=getMC(c.newMainId)?.name||c.newMainId;
           const newS=c.newSubId?' / '+(getSC(c.newSubId)?.name||c.newSubId):'';
+          // V8.27: low-confidence rules (AI-suggested, low useCount) auto-suggest Defer.
+          const ruleObj=c.rule&&c.rule._rule;
+          const lowConfidence=ruleObj&&ruleObj.source==='ai'&&(ruleObj.useCount||0)<=3;
           return`<tr>
             <td style="padding:6px 6px"><input type="checkbox" class="sweep-row-cb" data-idx="${i}" checked></td>
             <td style="padding:6px 8px;font-size:10px;color:var(--text3);white-space:nowrap">${toDD(c.t.date)}</td>
             <td style="padding:6px 8px;font-size:var(--fs-xs)">${h((c.t.description||'').substr(0,44))}${(c.t.description||'').length>44?'…':''}</td>
             <td style="padding:6px 8px;font-size:10px;color:var(--text3)">${oldM}${oldS}</td>
-            <td style="padding:6px 8px;font-size:10px;color:var(--ok);font-weight:500">${h(newM)}${h(newS)}</td>
+            <td style="padding:6px 8px;font-size:10px;color:var(--ok);font-weight:500">${h(newM)}${h(newS)}${lowConfidence?` <span style="font-size:9px;background:color-mix(in srgb,var(--warn) 24%,transparent);color:#7A5E20;border-radius:3px;padding:1px 4px;margin-left:3px" title="Low-confidence rule">low conf</span>`:''}</td>
             <td style="padding:6px 8px;text-align:right;font-variant-numeric:tabular-nums;font-size:var(--fs-xs)">${fmtP(c.t.amount)}</td>
+            <td style="padding:6px 6px;text-align:center"><input type="checkbox" class="sweep-defer-cb" data-idx="${i}" ${lowConfidence?'checked title="Auto-suggested: low-confidence rule"':'title="Apply rule but flag for later review"'}></td>
           </tr>`;
         }).join('')}
         </tbody>
@@ -6894,23 +6929,37 @@ function toggleAllSweepRows(checked){
   document.querySelectorAll('.sweep-row-cb').forEach(cb=>{cb.checked=checked;});
 }
 async function applyRuleSweep(){
-  // Collect ticked rows
+  // Collect ticked rows. V8.27: also collect deferred (mark-for-review) state.
   const toApply=[];
+  const deferIdx=new Set();
   document.querySelectorAll('.sweep-row-cb').forEach(cb=>{
     if(cb.checked){
       const idx=parseInt(cb.getAttribute('data-idx'),10);
-      if(!isNaN(idx)&&_sweepChanges[idx])toApply.push(_sweepChanges[idx]);
+      if(!isNaN(idx)&&_sweepChanges[idx])toApply.push({change:_sweepChanges[idx],idx});
+    }
+  });
+  document.querySelectorAll('.sweep-defer-cb').forEach(cb=>{
+    if(cb.checked){
+      const idx=parseInt(cb.getAttribute('data-idx'),10);
+      if(!isNaN(idx))deferIdx.add(idx);
     }
   });
   if(!toApply.length){toast('Nothing selected to apply',false);return;}
   const affectedYms=new Set();
   // Suppress auto-sweep during manual apply so we don't double-run
   _autoSweepSuppressed=true;
-  toApply.forEach(c=>{
+  let deferredCount=0;
+  toApply.forEach(({change:c,idx})=>{
     c.t.mainCatId=c.newMainId;
     if(c.newSubId!==c.oldSubId)c.t.subCatId=c.newSubId;
     c.t.ruleApplied=true;
     c.t.type=resolveType(c.newMainId,c.newSubId,c.t.type);
+    // V8.27: if user marked Defer for this row, flag it for review
+    if(deferIdx.has(idx)){
+      c.t.needsReview=true;
+      c.t.reviewReason='manual';
+      deferredCount++;
+    }
     affectedYms.add(c.ym);
   });
   affectedYms.forEach(ym=>schedTxn(ym));
@@ -6919,7 +6968,7 @@ async function applyRuleSweep(){
   closeRuleSweepModal();
   if(_sweepScoped){BulkSelected.clear();BulkMode=false;}
   render();
-  toast(`Applied rules to ${toApply.length} transaction${toApply.length===1?'':'s'}`);
+  toast(`Applied rules to ${toApply.length} transaction${toApply.length===1?'':'s'}${deferredCount?' · '+deferredCount+' flagged for review':''}`);
 }
 
 // ─── CAT PICKER (Bug 4.1 fix: capture catCb before clearing) ───
@@ -6955,6 +7004,9 @@ function openCP(txnId,ym,curM,curS){
     const t=S.txnCache[ymk].find(x=>x.id===txnId);
     if(t){
       t.mainCatId=m||null;t.subCatId=s||null;t.ruleApplied=false;
+      // V8.27: manual recategorization auto-clears any prior review flag.
+      // Per Mohammad: "either change and it would go out from that list, or dismiss as inaccurate".
+      delete t.needsReview;delete t.reviewReason;
       if(m){
         delete t.prevCatName;delete t.prevCatReason;
         const prevType=t.type;
@@ -9519,7 +9571,7 @@ async function backfillSkip(permanent){
 // fields (sukuk maturity, joint ownership %, FX rates, etc.) defer to V9.0 Portfolio Engine.
 const ATG=[
   {g:'Bank Accounts',o:[
-    {v:'main_account',l:'Main Account (Current/Checking)'},
+    {v:'main_account',l:'Main Account'},
     {v:'sub_account',l:'Sub Account'},
     {v:'savings_account',l:'Savings Account'},
     {v:'joint_account',l:'Joint Account'},
@@ -10082,7 +10134,32 @@ function prefillHoldingsForm(holdings){
 
 function onATC(v){
   const r=document.getElementById('ac-row');if(r)r.style.display=INV.has(v)?'block':'none';
-  const cr=document.getElementById('ac-currency-row');if(cr)cr.style.display=(v==='credit_card'||v==='charge_card')?'flex':'none';
+  // V8.27: was display:flex which broke vertical alignment of label-above-input. Use block.
+  const cr=document.getElementById('ac-currency-row');if(cr)cr.style.display=(v==='credit_card'||v==='charge_card')?'block':'none';
+  // V8.27: account form per-type field rationalization. Show/hide platform vs custodian based on type.
+  refreshInvFieldsForType(v);
+}
+
+// V8.27: rationalize investment account fields per asset type.
+// Platform/Broker is appropriate for Brokerage, REIT, Sukuk, P2P Lending, Retirement.
+// Real Estate Direct, Physical Gold, Collectibles are physical assets without a broker — use Custodian/Storage instead.
+function refreshInvFieldsForType(accType){
+  const platLabel=document.getElementById('ac-inv-platform-label');
+  const platInput=document.getElementById('ac-inv-platform');
+  if(!platLabel||!platInput)return;
+  const physicalTypes=new Set(['real_estate_direct','physical_gold','collectibles']);
+  if(physicalTypes.has(accType)){
+    platLabel.textContent='Custodian / Storage (optional)';
+    platInput.placeholder='e.g. Home safe, bank vault, off-site storage';
+  }else{
+    platLabel.textContent='Platform / Broker';
+    platInput.placeholder='e.g. Tameed, Saudi Tadawul, Binance';
+  }
+  // Investment accounts do not need an Opening Balance — they have Current Value. Hide the cash-account opening row for investments.
+  const balRow=document.getElementById('ac-bal-row');
+  if(balRow)balRow.style.display=INV.has(accType)?'none':'';
+  const balHelp=document.getElementById('ac-bal-help');
+  if(balHelp)balHelp.style.display=INV.has(accType)?'none':'';
 }
 function rAcc(){
   const showBalance=false; // L1: explicit definition — rAcc never shows running balance
@@ -10277,7 +10354,7 @@ function rAcc(){
       <label class="lbl">Asset Class</label><select id="a-asclass">${ACS.map(o=>`<option value="${o.v}">${o.l}</option>`).join('')}</select>
       <!-- V8.21: investment-specific fields. V8.21.5: AI options enabled -->
       <div class="fr" style="margin-top:8px">
-        <div><label class="lbl">Platform / Broker</label><input type="text" id="ac-inv-platform" placeholder="e.g. Tameed, Saudi Tadawul, Binance"></div>
+        <div><label class="lbl" id="ac-inv-platform-label">Platform / Broker</label><input type="text" id="ac-inv-platform" placeholder="e.g. Tameed, Saudi Tadawul, Binance"></div>
         <div><label class="lbl">Update source</label>
           <select id="ac-inv-source" onchange="onUpdateSourceChange(this.value)">
             <option value="manual">Manual entry</option>
@@ -10301,11 +10378,11 @@ function rAcc(){
       </div>
       <div style="font-size:var(--fs-xxs);color:var(--text3);margin-top:4px;line-height:1.6">Current value is what the position is worth today. Update it from your platform dashboard or statement. Net deployed (deposits minus withdrawals) is calculated automatically from your transactions.</div>
     </div>
-    <div class="fr" style="margin-top:8px">
+    <div class="fr" id="ac-bal-row" style="margin-top:8px">
       <div><label class="lbl">Opening Balance (SAR)</label><input type="number" id="ac-bal" placeholder="e.g. 921.20" min="0" step="0.01"></div>
       <div><label class="lbl">Balance As Of (DD/MM/YYYY)</label><div class="date-inp-wrap"><input type="text" id="ac-bal-date" class="date-inp" placeholder="e.g. 31/12/2025" maxlength="10"><button type="button" class="cal-btn" onclick="openCal('ac-bal-date')" title="Pick date">📅</button></div></div>
     </div>
-    <div style="font-size:var(--fs-xxs);color:var(--text3);margin-top:4px;line-height:1.6">Set once from your statement. The system calculates the current balance automatically from imported transactions going forward.</div>
+    <div id="ac-bal-help" style="font-size:var(--fs-xxs);color:var(--text3);margin-top:4px;line-height:1.6">Set once from your statement. The system calculates the current balance automatically from imported transactions going forward.</div>
     <div class="fg" style="margin-top:10px">
       <button class="btn btn-p" id="acc-sbtn" onclick="saveAcc()">Save</button>
       <button class="btn" onclick="tp('acc-panel');editAccId=null">Cancel</button>
@@ -11713,7 +11790,7 @@ function rDebts(){
   ${act.length?`<div class="g3-fixed" style="margin-bottom:1.5rem">
     <div class="kpi"><div class="klbl">Total Loans Value</div><div class="kval">${fmtP(to)}</div><div class="ksub">Principal + bank profit</div></div>
     ${tb>0?`<div class="kpi"><div class="klbl">Total Borrowed</div><div class="kval">${fmtP(tb)}</div><div class="ksub">Actual principal received</div></div>`:''}
-    <div class="kpi"><div class="klbl">Outstanding</div><div class="kval c-warn">${fmtP(tr)}</div><div class="ksub">${act.length} active debt${act.length!==1?'s':''}</div></div>
+    <div class="kpi"><div class="klbl">Balance Owed</div><div class="kval c-warn">${fmtP(tr)}</div><div class="ksub">${act.length} active debt${act.length!==1?'s':''}</div></div>
     <div class="kpi"><div class="klbl">Paid to Date</div><div class="kval c-ok">${fmtP(to-tr)}</div><div class="ksub">vs. loan value</div></div>
   </div>`:''}
   ${ccSummaryHtml}
@@ -13598,16 +13675,19 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps, scopedAcc){
     }
   }
 
-  // V8.25: REVERTED Case 15 (V8.23) — the conditional column hide caused a column-shift bug
-  // where the Account column rendered with the wrong data when filtered. Row space will be
-  // recovered via Case 8 categorize cluster popover instead. The scopedAcc parameter is
-  // accepted for backward signature compat but no longer used to drop a column.
+  // V8.27: Smart column widths per Mohammad. Hide Account column when scoped (every row would show
+  // the same account anyway) and let Balance/Outstanding take its visual position. Both thead and
+  // tbody read from the same showAcc flag — avoiding the V8.23 Case 15 column-misalignment bug.
+  const showAcc=!scopedAcc;
   const colConfig=isCards
-    ?['date','desc','cat','acc','amount','outstanding','type','']
-    :['date','desc','cat','acc','amount','balance','type',''];
+    ?(showAcc?['date','desc','cat','acc','amount','type','']:['date','desc','cat','amount','outstanding','type',''])
+    :(showAcc?['date','desc','cat','acc','amount','type','']:['date','desc','cat','amount','balance','type','']);
   const labels={date:'Date',desc:'Description',cat:'Category / Sub-Category',acc:'Account',
-    amount:'Amount',balance:'Balance',outstanding:'Outstanding',type:'Type','':''};
-  const widths={date:'110px',desc:'auto',cat:'230px',acc:'130px',amount:'140px',balance:'140px',outstanding:'140px',type:'90px','':'270px'};
+    amount:'Amount',balance:'Balance',outstanding:'Balance Owed',type:'Type','':''};
+  // V8.27: when Account is dropped, donate its width to Amount so the Amount column visually fills the gap.
+  // V8.27: tightened Actions column width per Mohammad — empty space in the row was visually noisy.
+  // The 50px saved gets donated back to Description (the column that benefits most from extra room).
+  const widths={date:'110px',desc:'auto',cat:'230px',acc:'130px',amount:showAcc?'140px':'170px',balance:'140px',outstanding:'140px',type:'90px','':'220px'};
 
   const bulkCol=`<th style="width:32px;padding:8px 6px">${BulkMode?'<input type="checkbox" title="Select all displayed" onclick="if(this.checked)selectAllDisplayed();else clearBulkSelection()" style="cursor:pointer;width:15px;height:15px">':''}</th>`;
   const reconTh=hasRecon?`<th style="text-align:right;white-space:nowrap;font-size:var(--fs-xxs);color:var(--warn);width:110px">Stmt Bal</th>`:'';
@@ -13636,6 +13716,8 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps, scopedAcc){
     const ch=(t.mainCatId&&getMC(t.mainCatId))?ctag(t.mainCatId,t.subCatId):'<span style="color:var(--warn);font-size:11px">&#9888; Uncategorized</span>';
     const st=t.isSub?`<span class="stag">SUB <button onclick="event.stopPropagation();removeSub('${t.id}','${t.date.substr(0,7)}')" style="background:none;border:none;cursor:pointer;color:inherit;padding:0;margin-left:2px;font-size:9px;line-height:1;vertical-align:middle" title="Remove subscription tag">&#10005;</button></span>`:'';
     const ruleTag=t.ruleApplied?'<span style="font-size:9px;background:#EDE9FE;color:#5B21B6;border-radius:3px;padding:1px 5px;margin-left:4px" title="Category set by merchant learning rule">rule</span>':''
+    // V8.27: needsReview chip — visible amber dot, clickable to mark resolved without changing categorization
+    const reviewTag=t.needsReview?`<button onclick="event.stopPropagation();clearReviewFlag('${t.id}','${ym}')" class="badge" style="background:color-mix(in srgb,var(--warn) 28%,transparent);color:#7A5E20;font-size:9px;margin-left:4px;border:none;padding:1px 6px;cursor:pointer;font-weight:600" title="Flagged for review${t.reviewReason==='low_confidence_rule'?' (auto-flagged: low-confidence rule)':''} · click to mark reviewed">&#9888; review</button>`:''
     const rb=showBalance&&t.accountId&&rbMaps[t.accountId]?rbMaps[t.accountId].get(t.id):null;
     const ym=t.date?t.date.substr(0,7):S.month;
     const debtTag=debt?`<span style="font-size:10px;background:#FEF3C7;color:#92400E;border-radius:3px;padding:1px 5px;margin-left:4px">${h(debt.name)}</span>`:'';
@@ -13690,17 +13772,25 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps, scopedAcc){
     const rowSelectedClass=(BulkMode&&BulkSelected.has(t.id))?' tx-row-selected':'';
     return`<tr class="tx-row${rowSelectedClass}" data-tx-id="${t.id}" data-tx-ym="${ym}" style="${rowBg}">
       ${selCb}<td style="color:var(--text3);white-space:nowrap;font-size:var(--fs-xs)">${toDD(t.date)}</td>
-      <td><div class="tx-desc-clamp">${h(t.description)}${st}${ruleTag}${matchedTag}${toleranceTag}${pendingTag}${debtTag}${billTag}${staffTag}${refundTag}${t.notes?`<span class="tx-notes">${h(t.notes)}</span>`:''}</div></td>
+      <td><div class="tx-desc-clamp">${h(t.description)}${st}${ruleTag}${reviewTag}${matchedTag}${toleranceTag}${pendingTag}${debtTag}${billTag}${staffTag}${refundTag}${t.notes?`<span class="tx-notes">${h(t.notes)}</span>`:''}</div></td>
       <td>${ch}</td>
-      <td style="font-size:var(--fs-xs)">${acc?`<span style="font-weight:500">${h(acc.name)}</span>`:'--'}</td>
-      <td style="text-align:right;font-weight:500;white-space:nowrap" class="${ac}">${dir==='in'?'+':'-'}${fmtP(t.amount)}</td>
+      ${showAcc?`<td style="font-size:var(--fs-xs)">${acc?`<span style="font-weight:500">${h(acc.name)}</span>`:'--'}</td>`:''}
+      <td style="text-align:right;font-weight:500;white-space:nowrap" class="${ac}">${(()=>{
+        // V8.27 Decision B: cards use statement convention (charges as +, payments as -).
+        // Bank/investment views keep cash-flow convention (out as -, in as +).
+        if(isCards&&S.settings.cardsStatementSignConvention!==false){
+          // On a card: 'out' (a charge) shows as +, 'in' (a payment/refund) shows as -.
+          return (dir==='out'?'+':'-')+fmtP(t.amount);
+        }
+        return (dir==='in'?'+':'-')+fmtP(t.amount);
+      })()}</td>
       ${showBalance?`<td class="tx-balance-cell ${rb!==null?(rb<-0.005?'c-bad':rb>0.005?'c-ok':''):''}" style="text-align:right;font-size:var(--fs-xs);white-space:nowrap">${rb!==null?(Math.abs(rb)<0.005?fmt(0):fmtS(rb)):'--'}</td>`:''}
       <td class="tx-type-cell">${tbadge(t.type)}</td>
       <td class="tx-actions-cell" style="white-space:nowrap">
-        <button class="btn btn-xs" onclick="openEditTxn('${t.id}','${ym}')" title="Edit transaction">Edit</button>
-        <button class="btn btn-xs txn-cat-cluster" onclick="event.stopPropagation();openCatCluster(this,'${t.id}','${ym}','${t.mainCatId||''}','${t.subCatId||''}',${!t.isSub?'true':'false'})" title="Categorize: set category, sub-category, or use AI">Categorize ▾</button>
+        <button class="btn btn-xs" onclick="bulkAwareEditTxn('${t.id}','${ym}')" title="Edit transaction">Edit</button>
+        <button class="btn btn-xs txn-cat-cluster" onclick="event.stopPropagation();bulkAwareOpenCatCluster(this,'${t.id}','${ym}','${t.mainCatId||''}','${t.subCatId||''}',${!t.isSub?'true':'false'})" title="Categorize: set category, sub-category, or use AI">Categorize ▾</button>
         ${(t.type==='income'&&(t.subCatId==='sub_refund'||t.subCatId==='sub_reimbursement')&&!isRefundLinked(t))?`<button class="btn btn-xs" onclick="openRefundLinkModal('${t.id}','${ym}')" title="Link this refund/reimbursement to its original expense" style="padding:2px 6px"><span style="color:var(--ok);font-weight:600">↔</span></button>`:''}
-        <button class="btn btn-xs btn-d" onclick="delTxn('${t.id}','${ym}')" title="Delete transaction">&#10005;</button>
+        <button class="btn btn-xs btn-d" onclick="bulkAwareDelTxn('${t.id}','${ym}')" title="Delete transaction">&#10005;</button>
       </td>
       ${reconTd}
     </tr>`;}).join(''):`<tr><td colspan="${(showBalance?8:7)+1+(hasRecon?1:0)}" class="empty">No transactions found</td></tr>`;
@@ -13885,6 +13975,8 @@ async function rTxBank(){
   if(TF.mc)fl=fl.filter(t=>t.mainCatId===TF.mc);
   if(TF.sub)fl=fl.filter(t=>t.subCatId===TF.sub);
   if(TF.q){const q=TF.q.toLowerCase().trim();fl=fl.filter(t=>(t.description||'').toLowerCase().includes(q)||(t.raw_description||'').toLowerCase().includes(q)||String(t.amount||'').includes(q));}
+  // V8.27: needsReview filter — show only transactions flagged for review
+  if(TF.reviewOnly)fl=fl.filter(t=>t.needsReview===true);
   // Sorting
   if(TF.sortCol){fl.sort((a,b)=>{
     let va,vb;
@@ -13905,11 +13997,25 @@ async function rTxBank(){
     rbMaps[aid]=calcRunningBalance(accTxns,opening);
   });
   const showBalance=!!scopedAcc;
-  const accountPills=bankAccs.map(a=>{
-    const mk=a.id+'_'+S.month;
-    const hasFail=S.monthlyBal[mk]?.guardFail;
-    return`<button class="opill ${TF.txnAcc===a.id?'active':''}" onclick="setTxnAcc('${a.id}')">${h(a.name)}${hasFail?` <span style="color:#DC2626;font-size:11px" title="Balance discrepancy">⚠</span>`:''}</button>`;
-  }).join('');
+  // V8.27: visually separate main accounts from sub-accounts in the pill row.
+  // Helps with the "Subscriptions / Groceries / Fun Money" sub-accounts being visually distinct from
+  // primary checking accounts they're sub-accounts of.
+  const accountPills=(()=>{
+    const mainAccs=bankAccs.filter(a=>a.type!=='sub_account');
+    const subAccs=bankAccs.filter(a=>a.type==='sub_account');
+    const renderPill=a=>{
+      const mk=a.id+'_'+S.month;
+      const hasFail=S.monthlyBal[mk]?.guardFail;
+      return`<button class="opill ${TF.txnAcc===a.id?'active':''}" onclick="setTxnAcc('${a.id}')">${h(a.name)}${hasFail?` <span style="color:#DC2626;font-size:11px" title="Balance discrepancy">⚠</span>`:''}</button>`;
+    };
+    const mainPills=mainAccs.map(renderPill).join('');
+    const subPills=subAccs.map(renderPill).join('');
+    if(!subPills)return mainPills;
+    if(!mainPills)return subPills;
+    // V8.27: divider span between the two groups
+    const divider=`<span aria-hidden="true" style="display:inline-block;width:1px;height:24px;background:var(--border);margin:0 6px;align-self:center;opacity:.7"></span>`;
+    return mainPills+divider+subPills;
+  })();
   // V8.20: group filter pill row — appears above account pills when groups exist (Decision 2)
   const groupPillRow=buildGroupPillRow();
   const header=buildTxHeader(fl,scopedAcc,accountPills,'Bank Accounts',groupPillRow);
@@ -13969,6 +14075,8 @@ async function rTxCards(){
   if(TF.mc)fl=fl.filter(t=>t.mainCatId===TF.mc);
   if(TF.sub)fl=fl.filter(t=>t.subCatId===TF.sub);
   if(TF.q){const q=TF.q.toLowerCase().trim();fl=fl.filter(t=>(t.description||'').toLowerCase().includes(q)||(t.raw_description||'').toLowerCase().includes(q)||String(t.amount||'').includes(q));}
+  // V8.27: needsReview filter — show only transactions flagged for review
+  if(TF.reviewOnly)fl=fl.filter(t=>t.needsReview===true);
   if(TF.sortCol){fl.sort((a,b)=>{
     let va,vb;
     if(TF.sortCol==='date'){va=a.date||'';vb=b.date||'';}
@@ -13985,13 +14093,17 @@ async function rTxCards(){
     const debt=S.debts.find(d=>d.linkedAccountId===aid&&d.type==='credit_card');
     const opening=debt?(debt.openingBalance||0):(getAccountOpeningBal(aid,S.month)||0);
     const accTxns=(S.txnCache[S.month]||[]).filter(t=>t.accountId===aid);
-    // For cards: expenses increase outstanding, payments (transfers in) decrease it
+    // V8.27 Decision B: direction-based Balance Owed math.
+    // Out (charge, fee, foreign-currency purchase) increases debt.
+    // In (payment, refund, credit) decreases debt.
+    // Skips matched-pair transfers between own accounts where direction is unclear — they cancel out.
     let bal=opening;
     const sorted=[...accTxns].sort((a,b)=>a.date.localeCompare(b.date));
     const map=new Map();
     sorted.forEach(t=>{
-      if(t.type==='expense')bal+=t.amount;
-      else if(t.type==='transfer'&&txDir(t)==='in')bal-=t.amount;
+      const d=txDir(t);
+      if(d==='out')bal+=t.amount;
+      else if(d==='in')bal-=t.amount;
       map.set(t.id,bal);
     });
     rbMaps[aid]=map;
@@ -14051,6 +14163,8 @@ async function rTxInvestments(){
   if(TF.mc)fl=fl.filter(t=>t.mainCatId===TF.mc);
   if(TF.sub)fl=fl.filter(t=>t.subCatId===TF.sub);
   if(TF.q){const q=TF.q.toLowerCase().trim();fl=fl.filter(t=>(t.description||'').toLowerCase().includes(q)||(t.raw_description||'').toLowerCase().includes(q)||String(t.amount||'').includes(q));}
+  // V8.27: needsReview filter — show only transactions flagged for review
+  if(TF.reviewOnly)fl=fl.filter(t=>t.needsReview===true);
   if(TF.sortCol){fl.sort((a,b)=>{
     let va,vb;
     if(TF.sortCol==='date'){va=a.date||'';vb=b.date||'';}
@@ -14090,17 +14204,17 @@ function onTxSearchInput(v){
 function buildTxFilters(){
   return`
   <div class="tx-sticky-toolbar" id="tx-sticky-toolbar">
-  <!-- Bulk action bar — hidden until transactions are selected -->
-  <!-- Bulk action bar — V8.25 (Case 8): bottom-sticky toolbar in select mode -->
-  <div id="bulk-action-bar" class="bulk-bottom-bar">
-    <span id="bulk-count" style="font-size:var(--fs-xs);font-weight:600;color:var(--midnight)">0 selected</span>
+  <!-- V8.27: Inline bulk status banner replaces the broken floating bar.
+       Per Decision A: when select mode is on, single-row actions (Edit/Categorize/X) extend to all selected. -->
+  ${BulkMode?`<div class="bulk-inline-banner">
+    <span style="font-size:var(--fs-xs);font-weight:600;color:var(--midnight)"><span id="bulk-count">${BulkSelected.size}</span> selected</span>
+    <span style="font-size:11px;color:var(--text3);flex:1">${BulkSelected.size>1?'Edit, Categorize, or delete on any selected row applies to all '+BulkSelected.size+' selected.':'Tap rows to select. Actions on a selected row apply to the whole selection.'}</span>
     <button class="btn btn-xs" onclick="selectAllDisplayed()">Select all</button>
-    <button class="btn btn-xs" onclick="clearBulkSelection()">Clear</button>
-    <div style="flex:1"></div>
-    <button class="btn btn-xs btn-p" onclick="applyBulkCategory()">Assign Category</button>
-    <button class="btn btn-xs" onclick="openBulkAiCategorize()" title="Use AI with shared context to categorize all selected transactions at once" style="display:inline-flex;align-items:center;gap:4px"><span style="color:var(--electric)">${CASE9_AI_ICON_SVG}</span> AI Categorize</button>
-    <button class="btn btn-xs" onclick="openRuleSweepModal(true)" title="Apply learned rules to selected transactions (only touches uncategorized or previously rule-applied rows — manual categorizations are protected)">↻ Apply Rules</button>
-  </div>
+    <button class="btn btn-xs" onclick="clearBulkSelection();render()">Clear</button>
+    <button class="btn btn-xs btn-p" onclick="applyBulkCategory()" ${BulkSelected.size?'':'disabled'}>Assign Category</button>
+    <button class="btn btn-xs" onclick="openBulkAiCategorize()" ${BulkSelected.size?'':'disabled'} title="Use AI with shared context to categorize all selected transactions at once" style="display:inline-flex;align-items:center;gap:4px"><span style="color:var(--electric)">${CASE9_AI_ICON_SVG}</span> AI Categorize</button>
+    <button class="btn btn-xs" onclick="openRuleSweepModal(true)" ${BulkSelected.size?'':'disabled'} title="Apply learned rules to selected transactions">↻ Apply Rules</button>
+  </div>`:''}
   <div class="fg" style="gap:8px;flex-wrap:nowrap;align-items:center;margin-bottom:1rem;overflow-x:auto">
     <input type="text" id="tx-search-input" placeholder="Search" value="${TF.q||''}" oninput="onTxSearchInput(this.value)" autocomplete="off" style="flex:1;min-width:140px">
     <select onchange="TF.type=this.value;render()" style="min-width:130px;flex:1">
@@ -14123,7 +14237,12 @@ function buildTxFilters(){
       <input type="checkbox" ${TF.allMonths?'checked':''} onchange="TF.allMonths=this.checked;render()" style="margin:0">
       All months
     </label>
-    <button class="btn btn-sm" onclick="TF.type='';TF.mc='';TF.sub='';TF.q='';TF.allMonths=false;TF.sortCol='';TF.sortDir=1;render()">Clear</button>
+    <!-- V8.27: filter for transactions flagged for review -->
+    <label style="display:flex;align-items:center;gap:5px;font-size:var(--fs-xs);white-space:nowrap;cursor:pointer;${TF.reviewOnly?'color:var(--electric);font-weight:600':''}">
+      <input type="checkbox" ${TF.reviewOnly?'checked':''} onchange="TF.reviewOnly=this.checked;render()" style="margin:0">
+      Needs review
+    </label>
+    <button class="btn btn-sm" onclick="TF.type='';TF.mc='';TF.sub='';TF.q='';TF.allMonths=false;TF.reviewOnly=false;TF.sortCol='';TF.sortDir=1;render()">Clear</button>
     <button class="btn btn-sm ${BulkMode?'btn-p':''}" id="bulk-sel-btn" onclick="toggleBulkSelect()" style="white-space:nowrap">${BulkMode?'Exit Select':'Select'}</button>
     <button class="btn btn-sm" onclick="openRuleSweepModal(false)" style="white-space:nowrap" title="Scan all transactions and apply learned rules. Manual categorizations are protected.">↻ Apply Rules</button>
   </div>
@@ -14415,6 +14534,88 @@ function rMerchantRules(){
     });
   },0);
   return html;
+}
+
+// ─── REVIEW QUEUE PAGE (V8.27 Decision C) ────────────────────────────────────
+// Aggregates all transactions flagged needsReview across all months. Two action lanes per row:
+// (1) Edit/Categorize → opens existing flow which auto-clears the flag on save
+// (2) Mark reviewed → dismisses the flag without changing categorization
+function rReviewQueue(){
+  // Build the full flagged list across all months in cache
+  const flagged=[];
+  Object.keys(S.txnCache).forEach(ym=>{
+    (S.txnCache[ym]||[]).forEach(t=>{if(t.needsReview)flagged.push({t,ym});});
+  });
+  // Sort newest first
+  flagged.sort((a,b)=>b.t.date.localeCompare(a.t.date));
+  // Group counts by reason
+  const reasonCounts={manual:0,low_confidence_rule:0,other:0};
+  flagged.forEach(({t})=>{
+    if(t.reviewReason==='low_confidence_rule')reasonCounts.low_confidence_rule++;
+    else if(t.reviewReason==='manual')reasonCounts.manual++;
+    else reasonCounts.other++;
+  });
+  const total=flagged.length;
+  if(total===0){
+    return`<div class="pg">
+      <div class="hdr"><h1>Review Queue</h1><p class="sub">Transactions you've flagged for later review.</p></div>
+      <div class="card card-bordered">
+        <div class="empty" style="padding:2rem;text-align:center">
+          <div style="font-size:32px;margin-bottom:8px">&#10003;</div>
+          <div style="font-size:14px;color:var(--text2);font-weight:500">All clear</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:6px">No transactions are flagged for review. Use the "Mark for review later" checkbox in any transaction's Edit modal, or the Defer column when applying rules, to flag transactions you want to revisit.</div>
+        </div>
+      </div>
+    </div>`;
+  }
+  const allFlaggedIds=flagged.map(f=>f.t.id);
+  const rows=flagged.map(({t,ym})=>{
+    const acc=S.accounts.find(a=>a.id===t.accountId);
+    const mc=getMC(t.mainCatId),sc=getSC(t.subCatId);
+    const dir=txDir(t);
+    const ac=dir==='in'?'c-ok':(t.type==='external_transfer'?'c-ext':(t.type==='investment'?'c-inv':'c-bad'));
+    const reasonLabel=t.reviewReason==='low_confidence_rule'?'<span style="font-size:10px;background:color-mix(in srgb,var(--warn) 24%,transparent);color:#7A5E20;border-radius:3px;padding:1px 6px;margin-left:6px;font-weight:500" title="Auto-flagged: applied rule has low confidence">low confidence</span>':'<span style="font-size:10px;color:var(--text3);margin-left:6px">manual</span>';
+    return`<tr class="tx-row" data-tx-id="${t.id}">
+      <td style="font-size:var(--fs-xs);color:var(--text3);white-space:nowrap;padding:8px 8px">${toDD(t.date)}</td>
+      <td style="padding:8px 8px"><div class="tx-desc-clamp" style="font-size:var(--fs-xs)">${h(t.description||'')}${reasonLabel}</div>${t.notes?`<div style="font-size:10px;color:var(--text3);margin-top:2px">${h(t.notes)}</div>`:''}</td>
+      <td style="font-size:var(--fs-xs);padding:8px 8px"><div>${h(mc?.name||'<span style="color:var(--text3);font-style:italic">uncategorized</span>')}</div>${sc?`<div style="font-size:10px;color:var(--text3);margin-top:2px">${h(sc.name)}</div>`:''}</td>
+      <td style="font-size:var(--fs-xs);padding:8px 8px;color:var(--text2)">${acc?h(acc.name):'—'}</td>
+      <td style="text-align:right;font-weight:500;white-space:nowrap;padding:8px 8px;font-variant-numeric:tabular-nums" class="${ac} priv-mask">${dir==='in'?'+':'-'}${fmtP(t.amount)}</td>
+      <td class="tx-actions-cell" style="white-space:nowrap;padding:8px 8px">
+        <button class="btn btn-xs btn-p" onclick="openEditTxn('${t.id}','${ym}')" title="Edit and recategorize. Saving with a category change auto-clears the flag.">Review</button>
+        <button class="btn btn-xs" onclick="clearReviewFlag('${t.id}','${ym}')" title="Mark reviewed without changing the transaction">&#10003; Reviewed</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  return`<div class="pg">
+    <div class="hdr"><h1>Review Queue</h1><p class="sub">${total} transaction${total!==1?'s':''} flagged for review across all months. Recategorize or dismiss each one.</p></div>
+    <div class="card card-bordered" style="margin-bottom:1rem">
+      <div class="fg jb" style="align-items:center;flex-wrap:wrap;gap:10px">
+        <div class="fg" style="gap:18px;flex-wrap:wrap">
+          <div><span style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Total</span><div style="font-size:18px;font-weight:600;color:var(--text1);font-variant-numeric:tabular-nums">${total}</div></div>
+          ${reasonCounts.low_confidence_rule>0?`<div><span style="font-size:11px;color:#7A5E20;text-transform:uppercase;letter-spacing:.04em">Low confidence</span><div style="font-size:18px;font-weight:600;color:#7A5E20;font-variant-numeric:tabular-nums">${reasonCounts.low_confidence_rule}</div></div>`:''}
+          ${reasonCounts.manual>0?`<div><span style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Manual flag</span><div style="font-size:18px;font-weight:600;color:var(--text1);font-variant-numeric:tabular-nums">${reasonCounts.manual}</div></div>`:''}
+        </div>
+        <div class="fg" style="gap:8px">
+          <button class="btn btn-sm" onclick="if(confirm('Mark all ${total} as reviewed without changes? This cannot be undone.')){clearReviewFlagBulk(${JSON.stringify(allFlaggedIds).replace(/"/g,'&quot;')})}">&#10003; Mark all reviewed</button>
+        </div>
+      </div>
+    </div>
+    <div class="card card-bordered" style="padding:0">
+      <div class="tbl-wrap"><table class="tx-tbl" style="width:100%">
+        <thead><tr style="background:var(--bg2)">
+          <th style="text-align:left;padding:8px 8px;font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;font-weight:600;width:90px">Date</th>
+          <th style="text-align:left;padding:8px 8px;font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;font-weight:600">Description</th>
+          <th style="text-align:left;padding:8px 8px;font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;font-weight:600;width:200px">Category</th>
+          <th style="text-align:left;padding:8px 8px;font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;font-weight:600;width:150px">Account</th>
+          <th style="text-align:right;padding:8px 8px;font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;font-weight:600;width:120px">Amount</th>
+          <th style="text-align:left;padding:8px 8px;font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;font-weight:600;width:170px">Actions</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>
+    </div>
+  </div>`;
 }
 
 // ─── SANITY CHECK PAGE ───────────────────────────────────────────────────────
@@ -14740,10 +14941,192 @@ const REIMB_CATS=[
 let BulkSelected=new Set(); // Set of txn IDs currently selected
 let BulkMode=false;         // Whether selection mode is active
 
+// V8.27: Bulk-aware action wrappers. When select mode is on AND the clicked row is one of multiple
+// selected rows, the action applies to ALL selected rows (with confirmation for destructive ops).
+// Mohammad's redesign per Decision A: drops the floating bar entirely. The inline status banner
+// (rendered above the table) tells users that actions apply to all selected.
+
+// Returns the array of IDs the action should target. Either [id] (single) or all selected (bulk).
+function _bulkTargets(id){
+  if(!BulkMode||BulkSelected.size<=1)return[id];
+  if(!BulkSelected.has(id))return[id]; // user clicked a row they didn't select — single only
+  return Array.from(BulkSelected);
+}
+
+// V8.27: Bulk-aware Edit. If multiple selected and clicked row is one of them, opens bulk-edit modal.
+// V8.27: clear the needsReview flag on a transaction. Called from the row chip and from Review Queue.
+// Does not modify category — this is an explicit "I've reviewed this and it's correct as-is" dismiss.
+function clearReviewFlag(id,ym){
+  const ymk=ym||S.month;
+  // Search across cache to find the txn
+  for(const m of (ymk?[ymk]:Object.keys(S.txnCache))){
+    const arr=S.txnCache[m]||[];
+    const t=arr.find(x=>x.id===id);
+    if(t){
+      delete t.needsReview;delete t.reviewReason;
+      schedTxn(m);
+      toast('Marked reviewed');
+      render();
+      return;
+    }
+  }
+  // Fallback: scan all months
+  for(const m of Object.keys(S.txnCache)){
+    const arr=S.txnCache[m]||[];
+    const t=arr.find(x=>x.id===id);
+    if(t){
+      delete t.needsReview;delete t.reviewReason;
+      schedTxn(m);
+      toast('Marked reviewed');
+      render();
+      return;
+    }
+  }
+}
+
+// V8.27: bulk-clear review flag on a set of transaction IDs across all months. Used by Review Queue "mark all reviewed".
+async function clearReviewFlagBulk(ids){
+  if(!ids||!ids.length)return;
+  let count=0;
+  for(const ym of Object.keys(S.txnCache)){
+    const arr=S.txnCache[ym]||[];
+    arr.forEach(t=>{
+      if(ids.includes(t.id)&&t.needsReview){
+        delete t.needsReview;delete t.reviewReason;
+        schedTxn(ym);count++;
+      }
+    });
+  }
+  await flushTxnQueue();
+  toast(`Marked ${count} reviewed`);
+  render();
+}
+
+function bulkAwareEditTxn(id,ym){
+  const targets=_bulkTargets(id);
+  if(targets.length===1){openEditTxn(id,ym);return;}
+  openBulkEditModal(targets);
+}
+
+// V8.27: Bulk-aware Delete. If multiple selected and clicked row is one of them, deletes all with confirm.
+async function bulkAwareDelTxn(id,ym){
+  const targets=_bulkTargets(id);
+  if(targets.length===1){return delTxn(id,ym);}
+  if(!confirm(`Delete ${targets.length} transactions? This cannot be undone.`))return;
+  // Delete each — this is a multi-step op, scope to single confirmation per the bulk pattern
+  for(const tid of targets){
+    // Find ym for this txn from cache (txn might not be in current month view)
+    let foundYm=ym;
+    if(!foundYm){for(const m of Object.keys(S.txnCache)){if((S.txnCache[m]||[]).some(t=>t.id===tid)){foundYm=m;break;}}}
+    if(foundYm)await delTxn(tid,foundYm);
+  }
+  BulkSelected.clear();BulkMode=false;
+  toast(`Deleted ${targets.length} transactions`);
+  render();
+}
+
+// V8.27: Bulk-aware Categorize cluster anchor. When opening, passes target list to the cluster popover.
+function bulkAwareOpenCatCluster(anchorBtn,txnId,ym,curM,curS,canMakeSub){
+  const targets=_bulkTargets(txnId);
+  if(targets.length===1){openCatCluster(anchorBtn,txnId,ym,curM,curS,canMakeSub);return;}
+  // Bulk path: skip the cluster, jump straight to applyBulkCategory which already handles N rows
+  applyBulkCategory();
+}
+
 function toggleBulkSelect(){
   BulkMode=!BulkMode;
   BulkSelected.clear();
   _bulkLastClickedId=null; // reset shift-click anchor
+  render();
+}
+
+// V8.27: Bulk-edit modal — applies a common set of changes to all selected transactions.
+// Only edits fields that genuinely make sense to apply uniformly. Type/category/notes/account/needsReview.
+// Date and amount are NOT bulk-editable (would corrupt data). Description is NOT bulk-editable.
+function openBulkEditModal(targetIds){
+  document.getElementById('bulk-edit-modal')?.remove();
+  const m=document.createElement('div');
+  m.id='bulk-edit-modal';m.className='mo active';
+  m.innerHTML=`
+    <div class="md" style="max-width:520px;width:94%">
+      <div class="mdtitle">Editing ${targetIds.length} transactions</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:12px">Only fields you change will be applied. Date, amount, and description are kept per-transaction.</div>
+      <div class="fr" style="margin-bottom:8px">
+        <div>
+          <label class="lbl">Type <span style="color:var(--text3);font-weight:400">(leave blank to keep)</span></label>
+          <select id="be-type"><option value="">— Keep existing —</option><option value="expense">Expense</option><option value="income">Income</option><option value="transfer">Transfer</option><option value="investment">Investment</option><option value="external_transfer">External Transfer</option></select>
+        </div>
+        <div>
+          <label class="lbl">Account <span style="color:var(--text3);font-weight:400">(leave blank to keep)</span></label>
+          <select id="be-acc"><option value="">— Keep existing —</option>${S.accounts.slice().sort(accSortFn).map(a=>`<option value="${a.id}">${h(a.name)}</option>`).join('')}</select>
+        </div>
+      </div>
+      <div class="fr" style="margin-bottom:8px">
+        <div>
+          <label class="lbl">Main category <span style="color:var(--text3);font-weight:400">(blank = keep)</span></label>
+          <select id="be-mc" onchange="bulkEditMcChange()"><option value="">— Keep existing —</option>${getActiveCats().map(c=>`<option value="${c.id}">${h(c.name)}</option>`).join('')}</select>
+        </div>
+        <div>
+          <label class="lbl">Sub-category <span style="color:var(--text3);font-weight:400">(blank = keep)</span></label>
+          <select id="be-sc"><option value="">— Keep existing —</option></select>
+        </div>
+      </div>
+      <div style="margin-bottom:8px">
+        <label class="lbl">Append to notes <span style="color:var(--text3);font-weight:400">(blank = no change)</span></label>
+        <input type="text" id="be-notes" placeholder="e.g. Reviewed, Q3 expenses, etc.">
+      </div>
+      <div style="margin-bottom:14px">
+        <label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
+          <input type="checkbox" id="be-needsReview" style="margin:0;cursor:pointer">
+          <span>Mark all as <strong>needs review</strong></span>
+        </label>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px;margin-left:22px">Use this to flag a batch for later review without changing categorization.</div>
+      </div>
+      <div class="fg jb">
+        <button class="btn" onclick="document.getElementById('bulk-edit-modal').remove()">Cancel</button>
+        <button class="btn btn-p" onclick="saveBulkEdit('${targetIds.join(',')}')">Save to ${targetIds.length} transactions</button>
+      </div>
+    </div>`;
+  document.body.appendChild(m);
+}
+
+// V8.27: refresh sub-category dropdown when main is selected in bulk-edit
+function bulkEditMcChange(){
+  const mc=document.getElementById('be-mc').value;
+  const sc=document.getElementById('be-sc');
+  if(!sc)return;
+  const subs=mc?SUB_CATS.filter(s=>s.mainCatId===mc):[];
+  sc.innerHTML='<option value="">— Keep existing —</option>'+subs.sort((a,b)=>a.name.localeCompare(b.name)).map(s=>`<option value="${s.id}">${h(s.name)}</option>`).join('');
+}
+
+async function saveBulkEdit(idsStr){
+  const ids=idsStr.split(',').filter(Boolean);
+  const newType=document.getElementById('be-type').value;
+  const newAcc=document.getElementById('be-acc').value;
+  const newMc=document.getElementById('be-mc').value;
+  const newSc=document.getElementById('be-sc').value;
+  const noteAppend=(document.getElementById('be-notes').value||'').trim();
+  const setNeedsReview=document.getElementById('be-needsReview').checked;
+  let count=0;
+  // Touch every transaction in cache that matches an id, regardless of month
+  for(const ym of Object.keys(S.txnCache)){
+    const arr=S.txnCache[ym]||[];
+    arr.forEach(t=>{
+      if(!ids.includes(t.id))return;
+      if(newType)t.type=newType;
+      if(newAcc)t.accountId=newAcc;
+      if(newMc){t.mainCatId=newMc;t.userCategorized=true;}
+      if(newSc){t.subCatId=newSc;t.userCategorized=true;}
+      if(noteAppend){t.notes=t.notes?(t.notes+' · '+noteAppend):noteAppend;}
+      if(setNeedsReview){t.needsReview=true;t.reviewReason=t.reviewReason||'manual';}
+      schedTxn(ym);
+      count++;
+    });
+  }
+  document.getElementById('bulk-edit-modal').remove();
+  BulkSelected.clear();BulkMode=false;
+  toast(`Updated ${count} transactions`);
+  await flushTxnQueue();
   render();
 }
 
@@ -14827,25 +15210,15 @@ function clearBulkSelection(){
 }
 
 function updateBulkBar(){
-  const bar=document.getElementById('bulk-action-bar');
+  // V8.27: floating bar removed. Banner is part of the rendered toolbar.
+  // Updating just the count text avoids a full re-render on every checkbox click.
   const countEl=document.getElementById('bulk-count');
-  // V8.25 (Case 8): bottom-sticky bar uses .active class instead of inline display
-  if(bar){
-    if(BulkSelected.size>0){
-      bar.classList.add('active');
-      document.body.classList.add('bulk-active-pad');
-    }else{
-      bar.classList.remove('active');
-      document.body.classList.remove('bulk-active-pad');
-    }
-  }
-  if(countEl)countEl.textContent=BulkSelected.size+' selected';
+  if(countEl)countEl.textContent=BulkSelected.size;
   const btn=document.getElementById('bulk-sel-btn');
   if(btn){
-    btn.textContent=BulkMode?'Cancel':'Select';
-    btn.style.background=BulkMode?'var(--bg3)':'';
-    btn.style.fontWeight=BulkMode?'600':'';
+    btn.textContent=BulkMode?'Exit Select':'Select';
   }
+  // No body-pad toggle — banner is inline.
 }
 
 function applyBulkCategory(){
@@ -15457,6 +15830,25 @@ const MIGRATIONS=[
       if(typeof S.settings.ovZoneSpending!=='boolean')S.settings.ovZoneSpending=true;
       if(typeof S.settings.ovZoneRecurring!=='boolean')S.settings.ovZoneRecurring=true;
       if(typeof S.settings.ovZoneDebtCards!=='boolean')S.settings.ovZoneDebtCards=true;
+      return{noop:true};
+    }
+  },
+  // V8.27: persistence fix for groups/formatLibrary + Wave 1+2+3 features.
+  // Critical bug fix: groups and formatLibrary now persisted (see getMainP/restoreS).
+  // New: needsReview transaction flag, bulk-action redesign (act-on-any-row), cards sign convention,
+  // account form per-type field rationalization.
+  // REMOVE_AFTER: V9.0
+  {
+    id:'v8_27_persistenceAndUx',
+    description:'V8.27 vault marker — groups/formatLibrary persistence fix + UX redesigns',
+    removeAfter:'V9.0',
+    run:()=>{
+      if(!S.settings)S.settings={};
+      // Default: cards sign convention reversed (charges as +, payments as -, statement-style).
+      // Setting allows opt-out for users who prefer the bank-account convention everywhere.
+      if(typeof S.settings.cardsStatementSignConvention!=='boolean')S.settings.cardsStatementSignConvention=true;
+      // Default: low-confidence rule application auto-flags transactions for review.
+      if(typeof S.settings.autoFlagLowConfidenceRules!=='boolean')S.settings.autoFlagLowConfidenceRules=true;
       return{noop:true};
     }
   }
@@ -17737,6 +18129,14 @@ initAuth();
       </div>
     </div>
     <div style="margin-bottom:8px"><label class="lbl">Notes</label><input type="text" id="etxn-notes" placeholder="Optional"></div>
+    <!-- V8.27 Decision C: needsReview flag — accessible from Edit modal -->
+    <div style="margin-bottom:10px;padding:8px 10px;background:var(--bg2);border-radius:var(--rsm)">
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;margin:0">
+        <input type="checkbox" id="etxn-needsReview" style="margin:0;cursor:pointer;width:16px;height:16px">
+        <span style="color:var(--text1);font-weight:500">Mark for review later</span>
+      </label>
+      <div style="font-size:10px;color:var(--text3);margin-top:4px;margin-left:24px">Flag this transaction so you can revisit it from the Review Queue. Use when you're unsure about the categorization or want a second look.</div>
+    </div>
     <div id="etxn-inv-acc-row" style="margin-bottom:8px;display:none"><label class="lbl">Investment Account (link this txn to a specific investment)</label><select id="etxn-inv-acc"><option value="">-- None --</option></select></div>
     <div id="etxn-beneficiary-row" style="margin-bottom:8px;display:none"><label class="lbl">Beneficiary (Family Member)</label><select id="etxn-beneficiary"><option value="">Self</option></select></div>
     <div id="etxn-staff-row" style="margin-bottom:8px;display:none"><label class="lbl">Staff member</label><select id="etxn-staff"><option value="">-- None --</option></select><div style="font-size:var(--fs-xxs);color:var(--text3);margin-top:3px;line-height:1.5">Tagging a salary payment auto-records an advance deduction for that month if an active advance exists.</div></div>
