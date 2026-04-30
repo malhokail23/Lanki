@@ -3285,6 +3285,11 @@ async function rOv(){
   const prevMonths=months.map(m=>addM(m,-1));
   const allT=months.flatMap(m=>S.txnCache[m]||[]);
   const prevT=prevMonths.flatMap(m=>S.txnCache[m]||[]);
+  // V8.27: YoY comparison set — same period one year ago. Used by Performance Trio when
+  // 12+ months of data exist. Renders as a secondary chip below the existing "vs prior" chip.
+  const yoyMonths=months.map(m=>addM(m,-12));
+  const yoyT=yoyMonths.flatMap(m=>S.txnCache[m]||[]);
+  const yoyHasData=yoyT.length>0;
   const tx=allT;
   const pTx=prevT;
   const fDebts=S.debts;
@@ -3903,11 +3908,20 @@ async function rOv(){
           <div class="priv-mask" style="font-size:20px;font-weight:600;color:var(--ok);font-variant-numeric:tabular-nums">${fmtP(inc)}</div>
           <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-top:2px">Income</div>
           <div style="margin-top:2px">${compareChip(inc,prevInc,{label:'vs prior'})}</div>
+          ${yoyHasData?(()=>{
+            const yoyInc=yoyT.filter(t=>t.type==='income'&&txDir(t)==='in'&&!isRefundLinked(t)).reduce((s,t)=>s+t.amount,0);
+            return yoyInc>0?`<div style="margin-top:2px">${compareChip(inc,yoyInc,{label:'vs 1y ago'})}</div>`:'';
+          })():''}
         </div>
         <div style="flex:1;min-width:0">
           <div class="priv-mask" style="font-size:20px;font-weight:600;color:var(--bad);font-variant-numeric:tabular-nums">${fmtP(exp+ext)}</div>
           <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-top:2px">Expense</div>
           <div style="margin-top:2px">${compareChip(exp+ext,prevExp,{label:'vs prior',invert:true})}</div>
+          ${yoyHasData?(()=>{
+            const yoyExp=yoyT.filter(t=>txDir(t)==='out'&&t.type==='expense'&&!isRefundLinked(t)).reduce((s,t)=>s+t.amount,0);
+            const yoyExt=yoyT.filter(t=>t.type==='external_transfer'&&txDir(t)!=='in').reduce((s,t)=>s+t.amount,0);
+            return yoyExp>0?`<div style="margin-top:2px">${compareChip(exp+ext,yoyExp+yoyExt,{label:'vs 1y ago',invert:true})}</div>`:'';
+          })():''}
         </div>
       </div>
       <div style="margin-top:auto;padding-top:14px"><div style="padding-top:10px;border-top:1px solid var(--bg3)">
@@ -3930,6 +3944,18 @@ async function rOv(){
         const col=diff>0?'var(--ok)':'var(--bad)';
         return `<span style="color:${col}">${diff>0?'↑':'↓'} ${Math.abs(diff)} pts vs prior</span>`;
       })()}</div>
+      ${yoyHasData?(()=>{
+        const yInc=yoyT.filter(t=>t.type==='income'&&txDir(t)==='in'&&!isRefundLinked(t)).reduce((s,t)=>s+t.amount,0);
+        const yExp=yoyT.filter(t=>txDir(t)==='out'&&t.type==='expense'&&!isRefundLinked(t)).reduce((s,t)=>s+t.amount,0);
+        const yInv=yoyT.filter(t=>txDir(t)==='out'&&t.type==='investment').reduce((s,t)=>s+t.amount,0);
+        const yExt=yoyT.filter(t=>txDir(t)==='out'&&t.type==='external_transfer').reduce((s,t)=>s+t.amount,0);
+        const yNet=yInc-yExp-yInv-yExt;
+        const ySr=yInc>0?Math.round((yNet/yInc)*100):null;
+        if(ySr===null)return '';
+        const diff=sr-ySr;
+        const col=diff>0?'var(--ok)':diff<0?'var(--bad)':'var(--text3)';
+        return `<div style="font-size:11px;color:var(--text3);margin-top:2px">${diff===0?'→':diff>0?'↑':'↓'} <span style="color:${col}">${Math.abs(diff)} pts vs 1y ago</span></div>`;
+      })():''}
       <div style="margin-top:auto;padding-top:14px"><div style="padding-top:10px;border-top:1px solid var(--bg3)">
         <div style="font-size:10px;color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em">Last 6 months</div>
         <div class="fg" style="gap:4px;align-items:stretch">${srNewBars}</div>
@@ -3943,6 +3969,11 @@ async function rOv(){
       <div class="priv-mask" style="font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;color:${net>=0?'var(--ok)':'var(--bad)'};margin-top:8px;line-height:1.1">${fmtSP(net,true)}</div>
       <div style="font-size:11px;color:var(--text3);margin-top:8px;line-height:1.6">Income ${fmtP(inc)} &minus; Expense ${fmtP(exp)}${ext>0?` &minus; Ext ${fmtP(ext)}`:''}${inv>0?` &minus; Inv ${fmtP(inv)}`:''}</div>
       <div style="margin-top:6px">${compareChip(net,prevInc-prevExp,{label:'vs prior'})}</div>
+      ${yoyHasData?(()=>{
+        const yoyInc=yoyT.filter(t=>t.type==='income'&&txDir(t)==='in'&&!isRefundLinked(t)).reduce((s,t)=>s+t.amount,0);
+        const yoyExp=yoyT.filter(t=>txDir(t)==='out'&&t.type==='expense'&&!isRefundLinked(t)).reduce((s,t)=>s+t.amount,0);
+        return yoyInc>0?`<div style="margin-top:2px">${compareChip(net,yoyInc-yoyExp,{label:'vs 1y ago'})}</div>`:'';
+      })():''}
       <div style="margin-top:auto;padding-top:14px"><div style="padding-top:10px;border-top:1px solid var(--bg3)">
         <div style="font-size:10px;color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em">Last 6 months</div>
         <div class="fg" style="gap:4px;align-items:stretch">${nfBars}</div>
@@ -4078,13 +4109,21 @@ async function rOv(){
       });
 
       // Anomaly summary across categories
+      // V8.27: per-anomaly dismiss — stored in S.settings.dismissedAnomalies as ym|catId keys.
+      // Dismiss persists for the affected month only; the next month gets a fresh evaluation.
+      const dismissKeyFor=(ym,catId)=>`${ym}|${catId}`;
+      const dismissed=S.settings.dismissedAnomalies||{};
+      const anchorYm=anchor;
       const anomalies=[];
       top5.forEach(([mid,data])=>{
         const baseline=baselinePerCat[mid];
         if(!baseline)return;
         const currentMonthly=data.total/Math.max(n,1);
         const a=spendAnomaly(currentMonthly,baseline);
-        if(a.severity!=='normal'&&a.ratio>1)anomalies.push({label:data.mc?.name||'Uncategorized',ratio:a.ratio,severity:a.severity});
+        if(a.severity!=='normal'&&a.ratio>1){
+          if(dismissed[dismissKeyFor(anchorYm,mid)])return; // user dismissed this one
+          anomalies.push({label:data.mc?.name||'Uncategorized',ratio:a.ratio,severity:a.severity,catId:mid});
+        }
       });
 
       const rows=top5.map(([mid,data])=>{
@@ -4121,10 +4160,16 @@ async function rOv(){
 
       // Anomalies callout
       const anomalyAlert=anomalies.length?`<div style="margin-top:10px;padding:10px 12px;background:color-mix(in srgb,var(--warn) 10%,transparent);border-left:3px solid var(--warn);border-radius:var(--rsm)">
-        <div style="font-size:11px;font-weight:600;color:var(--text1);margin-bottom:4px">Spending anomalies</div>
+        <div class="fg jb" style="align-items:center;margin-bottom:4px">
+          <div style="font-size:11px;font-weight:600;color:var(--text1)">Spending anomalies</div>
+          <div style="font-size:10px;color:var(--text3)">Click &times; to dismiss for this month</div>
+        </div>
         ${anomalies.map(a=>{
           const col=a.severity==='extreme'?'var(--bad)':a.severity==='high'?'#B85F2E':'#7A5E20';
-          return`<div style="font-size:11px;color:var(--text2);margin-top:2px">&#9888; <span style="font-weight:500">${h(a.label)}</span> is <span style="color:${col};font-weight:600">${a.ratio}×</span> your 6-month median</div>`;
+          return`<div class="fg jb" style="font-size:11px;color:var(--text2);margin-top:2px;align-items:center;gap:8px">
+            <span style="flex:1">&#9888; <span style="font-weight:500">${h(a.label)}</span> is <span style="color:${col};font-weight:600">${a.ratio}×</span> your 6-month median</span>
+            <button onclick="dismissAnomaly('${anchorYm}','${a.catId}')" style="background:none;border:none;color:var(--text3);cursor:pointer;padding:2px 6px;font-size:13px;line-height:1;border-radius:3px" title="Dismiss this anomaly for ${anchorYm}">&times;</button>
+          </div>`;
         }).join('')}
       </div>`:'';
 
@@ -4137,6 +4182,50 @@ async function rOv(){
     <div style="font-size:10px;color:var(--text3);margin-bottom:8px">Outbound transfers to people not in your accounts &middot; ${fmtP(ext)} total</div>
     ${extRows}
   </div>`:''}
+
+  ${(()=>{
+    // V8.27: Top Recipients of the period — top 5 merchants/payees by spend.
+    // Helps spot concentration risk, unusual amounts, and merchants that grew unexpectedly.
+    // Uses raw_description if available (most authoritative), falls back to description.
+    // Excludes transfers, investments, debt payments — those have their own surfaces.
+    const recipientMap={};
+    tx.filter(t=>txDir(t)==='out'&&t.type==='expense'&&!isRefundLinked(t)).forEach(t=>{
+      // Normalize key: lowercase, trimmed, first 40 chars (matches rule learning convention)
+      const raw=(t.raw_description||t.description||'').trim();
+      if(!raw)return;
+      const key=raw.toLowerCase().substring(0,40);
+      if(!recipientMap[key])recipientMap[key]={display:raw,total:0,count:0,catId:t.mainCatId};
+      recipientMap[key].total+=t.amount;
+      recipientMap[key].count++;
+    });
+    const top=Object.values(recipientMap).sort((a,b)=>b.total-a.total).slice(0,5);
+    if(!top.length||top[0].total<=0)return '';
+    const totalTop=top.reduce((s,r)=>s+r.total,0);
+    return`<div class="card card-bordered" style="margin-bottom:1rem">
+      <div class="fg jb" style="align-items:flex-start;margin-bottom:10px">
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--text1)">Top Recipients</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:2px">Largest merchants and payees in this period &middot; click any row to see all transactions</div>
+        </div>
+        <div class="priv-mask" style="font-size:11px;color:var(--text3);font-variant-numeric:tabular-nums">${fmtP(totalTop)} across top 5</div>
+      </div>
+      ${top.map(r=>{
+        const pct=totalTop?Math.round(r.total/totalTop*100):0;
+        const cat=getMC(r.catId);
+        const catLabel=cat?h(cat.name):'<span style="color:var(--warn)">Uncategorized</span>';
+        return`<div class="fg jb" style="padding:8px 0;border-bottom:1px solid var(--bg3);cursor:pointer;align-items:center;gap:10px" onclick="TF.q='${r.display.replace(/'/g,'').substring(0,30)}';sw('txbank')" title="View transactions matching '${h(r.display.substring(0,40))}'">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:500;color:var(--text1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h(r.display.length>50?r.display.substring(0,48)+'...':r.display)}</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:2px">${catLabel} &middot; ${r.count} transaction${r.count!==1?'s':''}</div>
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            <div class="priv-mask" style="font-size:14px;font-weight:600;color:var(--text1);font-variant-numeric:tabular-nums">${fmtP(r.total)}</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:2px">${pct}% of top 5</div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+  })()}
   `:''}
 
   ${showZ('forecast')?`
@@ -7916,6 +8005,34 @@ async function rSubs(){
     </div>`;
   };
 
+  // V8.27: Account filter for Subscriptions tab. Subs themselves don't carry accountId — we infer
+  // the typical billing account from the most recent matching payment. The dropdown visually
+  // separates Bank accounts from Cards using <optgroup> elements per Mohammad's request.
+  if(!TF.subsAcc)TF.subsAcc='';
+  const subBillingAccount=(sub)=>{
+    const pays=subPayments(sub);
+    if(!pays.length)return null;
+    return pays[0].accountId||null; // most recent payment's account
+  };
+  const inferredAccountBySub=new Map();
+  subsWithData.forEach(({sub})=>inferredAccountBySub.set(sub.id,subBillingAccount(sub)));
+  // Build dropdown options grouped by account type
+  const cashAccs=S.accounts.filter(a=>a.type==='current'||a.type==='savings').sort(accSortFn);
+  const cardAccsForFilter=S.accounts.filter(a=>CARD_ACC_TYPES.has(a.type)).sort(accSortFn);
+  const subsAccFilter=`<select onchange="TF.subsAcc=this.value;render()" style="font-size:12px;padding:6px 10px;border:1px solid var(--border);border-radius:var(--rsm);background:var(--bg);color:var(--text1);min-width:180px">
+    <option value="">All accounts</option>
+    ${cashAccs.length?`<optgroup label="── Bank Accounts ──">${cashAccs.map(a=>`<option value="${a.id}" ${TF.subsAcc===a.id?'selected':''}>${h(a.name)}</option>`).join('')}</optgroup>`:''}
+    ${cardAccsForFilter.length?`<optgroup label="── Cards ──">${cardAccsForFilter.map(a=>`<option value="${a.id}" ${TF.subsAcc===a.id?'selected':''}>${h(a.name)}</option>`).join('')}</optgroup>`:''}
+    <option value="__none__" ${TF.subsAcc==='__none__'?'selected':''}>(no recent payments)</option>
+  </select>`;
+  // Apply filter to the rendered subs
+  const subsFilterFn=(item)=>{
+    if(!TF.subsAcc)return true;
+    const inferred=inferredAccountBySub.get(item.sub.id);
+    if(TF.subsAcc==='__none__')return !inferred;
+    return inferred===TF.subsAcc;
+  };
+
   const sectionLabel=(title,count,tone)=>`<div style="display:flex;align-items:center;gap:8px;margin:1.25rem 0 .5rem"><div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">${title}${count?` (${count})`:''}</div>${tone==='warn'?'<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--warn)"></span>':tone==='ok'?'<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--ok)"></span>':''}</div>`;
 
   const activeCount=subsWithData.filter(x=>x.status!=='cancelled').length;
@@ -7965,10 +8082,34 @@ async function rSubs(){
     <div class="fg" style="margin-top:10px"><button class="btn btn-p" onclick="addSub()">Add Subscription</button><button class="btn" onclick="tp('addsub-panel')">Cancel</button></div>
   </div>
   ${totalsBar}
-  ${attnSubs.length?sectionLabel('Needs attention',attnSubs.length,'warn')+attnSubs.map(renderSubCard).join(''):''}
-  ${activeSubs.length?sectionLabel('Active',activeSubs.length,'ok')+activeSubs.map(renderSubCard).join(''):''}
-  ${cancelledSubs.length?sectionLabel('Cancelled',cancelledSubs.length)+cancelledSubs.map(renderSubCard).join(''):''}
-  ${detected.length?`${sectionLabel('Auto-detected',detected.length)}<div class="card" style="padding:0;overflow:hidden">${detRows}</div>`:''}
+  ${(()=>{
+    // V8.27: account filter row — visible above the sectioned lists.
+    const totalSubs=attnSubs.length+activeSubs.length+cancelledSubs.length;
+    if(totalSubs===0)return '';
+    const filteredAttn=attnSubs.filter(subsFilterFn).length;
+    const filteredAct=activeSubs.filter(subsFilterFn).length;
+    const filteredCan=cancelledSubs.filter(subsFilterFn).length;
+    const visible=filteredAttn+filteredAct+filteredCan;
+    const hint=TF.subsAcc?`<span style="font-size:11px;color:var(--text3);margin-left:auto">${visible} of ${totalSubs} match</span>`:'';
+    return`<div class="fg" style="gap:10px;align-items:center;margin-bottom:1rem;flex-wrap:wrap">
+      <span style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.04em">Filter by billing account</span>
+      ${subsAccFilter}
+      ${hint}
+    </div>`;
+  })()}
+  ${(()=>{
+    const filtered=attnSubs.filter(subsFilterFn);
+    return filtered.length?sectionLabel('Needs attention',filtered.length,'warn')+filtered.map(renderSubCard).join(''):'';
+  })()}
+  ${(()=>{
+    const filtered=activeSubs.filter(subsFilterFn);
+    return filtered.length?sectionLabel('Active',filtered.length,'ok')+filtered.map(renderSubCard).join(''):'';
+  })()}
+  ${(()=>{
+    const filtered=cancelledSubs.filter(subsFilterFn);
+    return filtered.length?sectionLabel('Cancelled',filtered.length)+filtered.map(renderSubCard).join(''):'';
+  })()}
+  ${detected.length&&!TF.subsAcc?`${sectionLabel('Auto-detected',detected.length)}<div class="card" style="padding:0;overflow:hidden">${detRows}</div>`:''}
   ${!subsWithData.length&&!detected.length?`<div class="card"><div class="empty">No subscriptions yet. Import statements to auto-detect, or add manually.</div></div>`:''}`;
 }
 // Confirm a detected subscription with sensible defaults (Option B: zero-friction).
@@ -14424,6 +14565,52 @@ async function rTxCards(){
     rbMaps[aid]=map;
   });
   const showBalance=!!scopedAcc;
+  // V8.27: All Cards aggregate summary — appears when scopedAcc is null (i.e. All Cards is active).
+  // Shows total Balance Owed, total credit limit, utilization, count of active cards.
+  // Mohammad's request: parallel the Bank "All Accounts" experience with a meaningful aggregate view.
+  const buildAllCardsSummary=()=>{
+    if(scopedAcc)return ''; // only render in aggregate mode
+    if(!cardAccs.length)return '';
+    let totalOwed=0,totalLimit=0,activeCount=0;
+    cardAccs.forEach(a=>{
+      const debt=S.debts.find(d=>d.linkedAccountId===a.id&&d.type==='credit_card');
+      if(debt&&isLiveCard(debt)){
+        totalOwed+=calcCCBalance(debt)||0;
+        totalLimit+=debt.creditLimit||0;
+        activeCount++;
+      }
+    });
+    if(activeCount===0)return '';
+    const util=totalLimit>0?Math.round((totalOwed/totalLimit)*100):null;
+    const utilCol=util===null?'var(--text3)':util>=80?'var(--bad)':util>=30?'var(--warn)':'var(--ok)';
+    const available=totalLimit-totalOwed;
+    return`<div class="card card-bordered" style="margin-bottom:1rem;padding:1rem 1.25rem">
+      <div class="fg jb" style="align-items:flex-start;flex-wrap:wrap;gap:14px">
+        <div>
+          <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">All Cards Summary</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:2px">${activeCount} active card${activeCount!==1?'s':''} aggregated</div>
+        </div>
+        <div class="fg" style="gap:24px;flex-wrap:wrap;justify-content:flex-end">
+          <div style="text-align:right">
+            <div style="font-size:9px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Total Balance Owed</div>
+            <div class="priv-mask" style="font-size:18px;font-weight:600;font-variant-numeric:tabular-nums;color:${totalOwed>0?'var(--bad)':'var(--text3)'};margin-top:2px">${fmtP(totalOwed)}</div>
+          </div>
+          ${totalLimit>0?`<div style="text-align:right">
+            <div style="font-size:9px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Available Credit</div>
+            <div class="priv-mask" style="font-size:18px;font-weight:600;font-variant-numeric:tabular-nums;color:${available>0?'var(--ok)':'var(--bad)'};margin-top:2px">${fmtP(available)}</div>
+          </div>`:''}
+          ${util!==null?`<div style="text-align:right;min-width:90px">
+            <div style="font-size:9px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Utilization</div>
+            <div style="font-size:18px;font-weight:600;font-variant-numeric:tabular-nums;color:${utilCol};margin-top:2px">${util}%</div>
+          </div>`:''}
+        </div>
+      </div>
+      ${totalLimit>0?`<div style="margin-top:12px;height:6px;background:var(--bg3);border-radius:3px;overflow:hidden">
+        <div class="priv-mask" style="height:100%;width:${Math.min(100,util||0)}%;background:${utilCol};border-radius:3px;transition:width .3s"></div>
+      </div>`:''}
+    </div>`;
+  };
+  const allCardsSummary=buildAllCardsSummary();
   const accountPills=cardAccs.map(a=>{
     const mk=a.id+'_'+S.month;
     const hasFail=S.monthlyBal[mk]?.guardFail;
@@ -14439,7 +14626,7 @@ async function rTxCards(){
     :buildTxTable(fl,S.accounts,showBalance,true,rbMaps,scopedAcc);
   const impPanel=buildImpPanel();
   const addPanel=buildAddPanel();
-  return`${header}${impPanel}${addPanel}${filters}${table}`;
+  return`${header}${impPanel}${addPanel}${filters}${allCardsSummary}${table}`;
 }
 
 // V8.21: Transactions tab for investment accounts. Mirrors rTxCards structure but filters by INV.
@@ -15271,6 +15458,18 @@ function _bulkTargets(id){
 // V8.27: Bulk-aware Edit. If multiple selected and clicked row is one of them, opens bulk-edit modal.
 // V8.27: clear the needsReview flag on a transaction. Called from the row chip and from Review Queue.
 // Does not modify category — this is an explicit "I've reviewed this and it's correct as-is" dismiss.
+// V8.27: dismiss a spending anomaly for a given month + category. Persisted in S.settings so
+// the user's choice carries across renders. Per Mohammad's explicit feedback during round 2,
+// even with median-based baseline some anomalies will still appear that the user knows are
+// expected (school tuition, eid, etc.) — this gives an explicit way to silence them.
+async function dismissAnomaly(ym,catId){
+  if(!S.settings.dismissedAnomalies)S.settings.dismissedAnomalies={};
+  S.settings.dismissedAnomalies[`${ym}|${catId}`]=Date.now();
+  await saveState();
+  toast('Anomaly dismissed for '+ym);
+  render();
+}
+
 function clearReviewFlag(id,ym){
   const ymk=ym||S.month;
   // Search across cache to find the txn
