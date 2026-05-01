@@ -1751,7 +1751,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='8.27';
+const VERSION='8.28';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -7250,26 +7250,316 @@ async function undoLastAutoSweep(){
 
 // ─── MANUAL RULE SWEEP MODAL ───
 // scoped=true uses current BulkSelected, scoped=false sweeps every month.
+// V8.28: edit modal for transaction rules. Allows editing category, sub-category, and account scope.
+// AI-source rules flip to manual on save (user has confirmed the choice).
+// "Found in" panel shows historical account distribution from txnCache for context.
+let _editingRuleId=null;
+function openEditRuleModal(id){
+  const rule=(S.txnRules||[]).find(r=>r.id===id);
+  if(!rule){toast('Rule not found',true);return;}
+  _editingRuleId=id;
+
+  // Compute "found in" — count occurrences of this pattern across all accounts in cache.
+  // This is a historical reference, not a binding rule.
+  const pattern=rule.pattern;
+  const acctCounts={};
+  for(const ym of Object.keys(S.txnCache||{})){
+    for(const t of(S.txnCache[ym]||[])){
+      const desc=(t.description||'').toLowerCase().trim().substr(0,40);
+      if(desc.includes(pattern)||pattern.includes(desc)){
+        const aid=t.accountId||'_unknown';
+        acctCounts[aid]=(acctCounts[aid]||0)+1;
+      }
+    }
+  }
+  const acctRows=Object.entries(acctCounts)
+    .sort((a,b)=>b[1]-a[1])
+    .map(([aid,cnt])=>{
+      const acc=S.accounts.find(a=>a.id===aid);
+      const name=acc?acc.name:'(unknown account)';
+      return`<div style="display:flex;justify-content:space-between;font-size:11px;padding:3px 0;color:var(--text2)"><span>${h(name)}</span><span style="font-variant-numeric:tabular-nums;color:var(--text3)">${cnt}×</span></div>`;
+    }).join('');
+  const foundInPanel=Object.keys(acctCounts).length>0
+    ? `<div style="background:var(--bg2);border-radius:var(--rsm);padding:10px 12px;margin-top:8px">
+        <div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Found in (historical)</div>
+        ${acctRows}
+      </div>`
+    : `<div style="background:var(--bg2);border-radius:var(--rsm);padding:10px 12px;margin-top:8px;font-size:11px;color:var(--text3)">No matching transactions found in cache.</div>`;
+
+  // Build category dropdown
+  const cats=S.categories||[];
+  const catOptions=cats.map(c=>`<option value="${h(c.id)}" ${rule.mainCatId===c.id?'selected':''}>${h(c.name)}</option>`).join('');
+  // Sub-category dropdown — depends on selected category
+  const currentCat=cats.find(c=>c.id===rule.mainCatId);
+  const subs=currentCat?(currentCat.subs||[]):[];
+  const subOptions=`<option value="">(none)</option>`+subs.map(s=>`<option value="${h(s.id)}" ${rule.subCatId===s.id?'selected':''}>${h(s.name)}</option>`).join('');
+
+  // Account scope radio + dropdown
+  const allAccs=S.accounts.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  const accOptions=allAccs.map(a=>`<option value="${h(a.id)}" ${rule.accountId===a.id?'selected':''}>${h(a.name)}</option>`).join('');
+  const isGlobal=!rule.accountId;
+
+  const mo=document.createElement('div');
+  mo.id='edit-rule-modal';mo.className='mo active';
+  mo.innerHTML=`
+    <div class="md" style="max-width:540px;width:96%;padding:0;max-height:92vh;display:flex;flex-direction:column">
+      <div style="padding:1.1rem 1.3rem;border-bottom:1px solid var(--border)">
+        <div class="mdtitle" style="margin-bottom:2px">Edit rule</div>
+        <div style="font-size:var(--fs-xs);color:var(--text3);font-family:ui-monospace,SF Mono,Menlo,monospace">${h(rule.pattern)}</div>
+      </div>
+      <div style="padding:1.1rem 1.3rem;flex:1;overflow-y:auto">
+        <div style="margin-bottom:14px">
+          <label style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:5px">Category</label>
+          <select id="er-cat" onchange="_editRuleCatChange()" style="width:100%;padding:8px 10px;font-size:13px">
+            <option value="">(uncategorized)</option>
+            ${catOptions}
+          </select>
+        </div>
+        <div style="margin-bottom:14px" id="er-sub-wrap">
+          <label style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:5px">Sub-category</label>
+          <select id="er-sub" style="width:100%;padding:8px 10px;font-size:13px" ${subs.length===0?'disabled':''}>${subOptions}</select>
+        </div>
+        <div style="margin-bottom:8px">
+          <label style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:5px">Account scope</label>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+              <input type="radio" name="er-scope" value="global" ${isGlobal?'checked':''} onchange="_editRuleScopeChange()">
+              <span>All accounts (global)</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+              <input type="radio" name="er-scope" value="specific" ${!isGlobal?'checked':''} onchange="_editRuleScopeChange()">
+              <span>Specific account only</span>
+            </label>
+            <select id="er-acc" style="width:100%;padding:8px 10px;font-size:13px;margin-left:24px;width:calc(100% - 24px)" ${isGlobal?'disabled':''}>${accOptions}</select>
+          </div>
+          <div id="er-scope-note" style="font-size:11px;color:#7A5E20;background:color-mix(in srgb,var(--warn) 12%,transparent);padding:8px 10px;border-radius:var(--rsm);margin-top:8px;display:${isGlobal?'none':'block'}">
+            Choosing a specific account leaves future imports of this description on other accounts as Uncategorized — they will not be auto-flagged.
+          </div>
+        </div>
+        ${foundInPanel}
+        <div style="margin-top:14px;font-size:11px;color:var(--text3);line-height:1.5">
+          <strong>Source:</strong> ${rule.source==='manual'?'Manual':'AI'} · <strong>Used:</strong> ${rule.useCount||1}× ${rule.source==='ai'?' · saving will mark this rule as Manual (confirmed by you).':''}
+        </div>
+      </div>
+      <div style="padding:12px 1.3rem;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;background:var(--bg2)">
+        <button class="btn" onclick="closeEditRuleModal()">Cancel</button>
+        <button class="btn btn-p" onclick="saveEditRule()">Save</button>
+      </div>
+    </div>`;
+  document.body.appendChild(mo);
+}
+window.openEditRuleModal=openEditRuleModal;
+
+function _editRuleCatChange(){
+  const catId=document.getElementById('er-cat').value;
+  const cat=(S.categories||[]).find(c=>c.id===catId);
+  const subs=cat?(cat.subs||[]):[];
+  const sub=document.getElementById('er-sub');
+  sub.innerHTML=`<option value="">(none)</option>`+subs.map(s=>`<option value="${h(s.id)}">${h(s.name)}</option>`).join('');
+  sub.disabled=subs.length===0;
+}
+window._editRuleCatChange=_editRuleCatChange;
+
+function _editRuleScopeChange(){
+  const isGlobal=document.querySelector('input[name="er-scope"]:checked').value==='global';
+  document.getElementById('er-acc').disabled=isGlobal;
+  document.getElementById('er-scope-note').style.display=isGlobal?'none':'block';
+}
+window._editRuleScopeChange=_editRuleScopeChange;
+
+function closeEditRuleModal(){
+  document.getElementById('edit-rule-modal')?.remove();
+  _editingRuleId=null;
+}
+window.closeEditRuleModal=closeEditRuleModal;
+
+function saveEditRule(){
+  if(!_editingRuleId)return;
+  const rule=(S.txnRules||[]).find(r=>r.id===_editingRuleId);
+  if(!rule){toast('Rule not found',true);return;}
+  const newCat=document.getElementById('er-cat').value;
+  if(!newCat){toast('Pick a category',true);return;}
+  const newSub=document.getElementById('er-sub').value||'';
+  const isGlobal=document.querySelector('input[name="er-scope"]:checked').value==='global';
+  const newAcctId=isGlobal?null:document.getElementById('er-acc').value;
+  if(!isGlobal&&!newAcctId){toast('Pick an account or choose Global',true);return;}
+
+  rule.mainCatId=newCat;
+  rule.subCatId=newSub;
+  if(isGlobal){
+    delete rule.accountId;
+  }else{
+    rule.accountId=newAcctId;
+  }
+  // Promote AI rules to manual on edit (user has confirmed the choice)
+  if(rule.source==='ai')rule.source='manual';
+  rule.lastUsed=Date.now();
+  sched();
+  closeEditRuleModal();
+  toast('Rule saved');
+  render();
+}
+window.saveEditRule=saveEditRule;
+
+// V8.28: state for sweep modal toggles. Persisted defaults in S.settings, but per-modal-open
+// changes are session-only and reset on close.
+let _sweepOpts={hideHighConfidence:true,scopeToView:true};
+
+// V8.28: build the scope set from current TF filters when applying rules from the txn list.
+// Mirrors the same filter logic used to populate the visible transaction tables.
+function _buildSweepScopeFromView(){
+  const ids=new Set();
+  // Pick the right account scope based on which txn tab is active
+  const txnTab=TF.txnTab||'bank';
+  const allMonths=TF.allMonths;
+  const ymKeys=allMonths?Object.keys(S.txnCache||{}):[(typeof CY!=='undefined'&&CY?CY:new Date().toISOString().substr(0,7))];
+
+  for(const ym of ymKeys){
+    for(const t of(S.txnCache[ym]||[])){
+      const acc=S.accounts.find(a=>a.id===t.accountId);
+      if(!acc)continue;
+      // Match the active tab's account class
+      const isCard=acc.accountClass==='credit_card'||acc.type==='credit_card'||acc.type==='charge_card';
+      const isInv=acc.type==='investment'||acc.accountClass==='investment';
+      if(txnTab==='bank'&&(isCard||isInv))continue;
+      if(txnTab==='cards'&&!isCard)continue;
+      if(txnTab==='investments'&&!isInv)continue;
+      // Active account scope filter (txnAcc matches a specific acc id, '' = all)
+      if(TF.txnAcc&&t.accountId!==TF.txnAcc)continue;
+      // Group filter
+      if(TF.txnGroup==='__ungrouped__'&&acc.groupId)continue;
+      if(TF.txnGroup&&TF.txnGroup!=='__ungrouped__'&&acc.groupId!==TF.txnGroup)continue;
+      // Type/category/sub filters
+      if(TF.type&&t.type!==TF.type)continue;
+      if(TF.mc&&t.mainCatId!==TF.mc)continue;
+      if(TF.sub&&t.subCatId!==TF.sub)continue;
+      // Search query
+      if(TF.q){
+        const q=TF.q.toLowerCase().trim();
+        const desc=(t.description||'').toLowerCase();
+        const raw=(t.raw_description||'').toLowerCase();
+        const amt=String(t.amount||'');
+        if(!desc.includes(q)&&!raw.includes(q)&&!amt.includes(q))continue;
+      }
+      // Review-only filter
+      if(TF.reviewOnly&&!t.needsReview)continue;
+      ids.add(t.id);
+    }
+  }
+  return ids;
+}
+
+// V8.28: high-confidence detection. A change is "high confidence" if the same description
+// has appeared in 3+ distinct months in the same account, and none of those past
+// transactions have been manually re-categorized after a rule was applied.
+// Precomputed per-modal-open and indexed by description for performance.
+function _buildConfidenceMap(){
+  // Map<description+'|'+accountId, {months:Set, anyManual:boolean}>
+  const map=new Map();
+  for(const ym of Object.keys(S.txnCache||{})){
+    for(const t of(S.txnCache[ym]||[])){
+      if(!t.description||!t.accountId)continue;
+      const key=(t.description||'').toLowerCase().trim().substr(0,40)+'|'+t.accountId;
+      let entry=map.get(key);
+      if(!entry){entry={months:new Set(),anyManual:false};map.set(key,entry);}
+      entry.months.add(ym);
+      // Manual override = has a category but ruleApplied is false
+      if(t.mainCatId&&!t.ruleApplied)entry.anyManual=true;
+    }
+  }
+  return map;
+}
+
+function _isChangeHighConfidence(change,confMap){
+  const t=change.t;
+  const key=(t.description||'').toLowerCase().trim().substr(0,40)+'|'+(t.accountId||'');
+  const entry=confMap.get(key);
+  if(!entry)return false;
+  // 3+ distinct months and no manual overrides anywhere in history
+  return entry.months.size>=3&&!entry.anyManual;
+}
+
 let _sweepChanges=[];
 let _sweepScoped=false;
 function openRuleSweepModal(scoped){
   _sweepScoped=scoped;
+  // Initialize per-modal-open toggle state from settings
+  _sweepOpts.hideHighConfidence=S.settings?.applyRulesHideHighConfidence!==false;
+  _sweepOpts.scopeToView=S.settings?.applyRulesScopeToView!==false;
+
   // Build the scope set
   let scope=null;
+  let scopeLabel='';
   if(scoped){
     if(!BulkSelected.size){toast('No transactions selected',false);return;}
     scope={txnIds:new Set(BulkSelected)};
+    scopeLabel=`${BulkSelected.size} selected`;
+  }else if(_sweepOpts.scopeToView){
+    // V8.28: scope to current view filters when opened from the txn list "Apply Rules" button
+    const ids=_buildSweepScopeFromView();
+    if(ids.size>0){
+      scope={txnIds:ids};
+      // Build a human label of what's in scope
+      const parts=[];
+      const tab=TF.txnTab||'bank';
+      if(tab==='cards')parts.push('Cards');else if(tab==='investments')parts.push('Investments');else parts.push('Bank');
+      if(TF.txnAcc){const a=S.accounts.find(x=>x.id===TF.txnAcc);if(a)parts.push(a.name);}
+      else parts.push('all accounts');
+      parts.push(TF.allMonths?'all months':(typeof CY!=='undefined'&&CY?CY:'current month'));
+      if(TF.type)parts.push(TF.type);
+      if(TF.q)parts.push(`"${TF.q}"`);
+      scopeLabel=parts.join(' · ');
+    }else{
+      // No matches in view — fall back to no scope so user sees the empty state
+      scope={txnIds:new Set()};
+      scopeLabel='no transactions in current view';
+    }
   }
-  // Preview without mutation
-  const{changes}=sweepRules(scope,true);
+
+  _renderSweepModal(scope,scoped,scopeLabel);
+}
+
+// V8.28: extracted render helper so toggles can re-render without re-entering openRuleSweepModal logic
+function _renderSweepModal(scope,scoped,scopeLabel){
+  const{changes:rawChanges}=sweepRules(scope,true);
+
+  // Apply high-confidence filter if enabled
+  let changes=rawChanges;
+  let hiddenByConfidence=0;
+  if(_sweepOpts.hideHighConfidence){
+    const confMap=_buildConfidenceMap();
+    changes=rawChanges.filter(c=>{
+      if(_isChangeHighConfidence(c,confMap)){hiddenByConfidence++;return false;}
+      return true;
+    });
+  }
   _sweepChanges=changes;
+
+  // Remove existing modal if open (re-render)
+  document.getElementById('rule-sweep-modal')?.remove();
 
   const mo=document.createElement('div');
   mo.id='rule-sweep-modal';mo.className='mo active';
+
+  // V8.28: scope chip and toggle row
+  const scopeChip=scopeLabel?`<span style="display:inline-flex;align-items:center;gap:4px;background:color-mix(in srgb,var(--electric) 12%,transparent);color:var(--electric);padding:3px 10px;border-radius:99px;font-size:11px;font-weight:500">📍 ${h(scopeLabel)}</span>`:'';
+  const toggleRow=!scoped?`<div style="display:flex;flex-wrap:wrap;gap:14px;align-items:center;padding:10px 1.3rem;background:var(--bg2);border-bottom:1px solid var(--border)">
+    <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer">
+      <input type="checkbox" id="sweep-scope-cb" ${_sweepOpts.scopeToView?'checked':''} onchange="_sweepToggleScope(this.checked)">
+      <span>Scope to current view</span>
+    </label>
+    <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer" title="3+ distinct months in same account, with no manual override">
+      <input type="checkbox" id="sweep-conf-cb" ${_sweepOpts.hideHighConfidence?'checked':''} onchange="_sweepToggleConf(this.checked)">
+      <span>Hide proven-correct (3+ months no manual change)</span>
+    </label>
+    ${scopeChip}
+    ${hiddenByConfidence>0?`<span style="font-size:11px;color:var(--text3)">${hiddenByConfidence} hidden as proven-correct</span>`:''}
+  </div>`:'';
+
   let body='';
   if(changes.length===0){
     body=`<div style="padding:18px;background:var(--bg2);border-radius:var(--rsm);font-size:var(--fs-xs);color:var(--text3);text-align:center">
-      ${scoped?'None of the selected transactions match any rule, or they are all manually categorized (which rules never overwrite).':'All transactions are already up to date with your rules, or remaining ones are manually categorized.'}
+      ${scoped?'None of the selected transactions match any rule, or they are all manually categorized (which rules never overwrite).':(hiddenByConfidence>0?`All matched transactions are proven-correct (${hiddenByConfidence} hidden). Untick "Hide proven-correct" above to see them.`:'All transactions are already up to date with your rules, or remaining ones are manually categorized.')}
     </div>`;
   }else{
     body=`<div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:10px">Review the changes below. Untick any row you don't want to apply. <strong>Manual categorizations are never touched.</strong> Use the <span style="color:#7A5E20">Defer</span> column to apply the rule but flag the row for review later.</div>
@@ -7290,7 +7580,6 @@ function openRuleSweepModal(scoped){
           const oldS=c.oldSubId?' / '+(getSC(c.oldSubId)?.name||c.oldSubId):'';
           const newM=getMC(c.newMainId)?.name||c.newMainId;
           const newS=c.newSubId?' / '+(getSC(c.newSubId)?.name||c.newSubId):'';
-          // V8.27: low-confidence rules (AI-suggested, low useCount) auto-suggest Defer.
           const ruleObj=c.rule&&c.rule._rule;
           const lowConfidence=ruleObj&&ruleObj.source==='ai'&&(ruleObj.useCount||0)<=3;
           return`<tr>
@@ -7310,9 +7599,10 @@ function openRuleSweepModal(scoped){
   mo.innerHTML=`
     <div class="md" style="max-width:900px;width:96%;padding:0;max-height:92vh;display:flex;flex-direction:column">
       <div style="padding:1.1rem 1.3rem;border-bottom:1px solid var(--border)">
-        <div class="mdtitle" style="margin-bottom:2px">↻ Apply rules${scoped?' to selection':' (all transactions)'}</div>
-        <div style="font-size:var(--fs-xs);color:var(--text3)">Scans ${scoped?'the '+BulkSelected.size+' selected':'every'} transaction and applies learned rules to the ones that match. <strong>Manual categorizations are never overwritten.</strong></div>
+        <div class="mdtitle" style="margin-bottom:2px">↻ Apply rules${scoped?' to selection':''}</div>
+        <div style="font-size:var(--fs-xs);color:var(--text3)">Scans transactions and applies learned rules to the ones that match. <strong>Manual categorizations are never overwritten.</strong></div>
       </div>
+      ${toggleRow}
       <div style="padding:1.1rem 1.3rem;flex:1;overflow-y:auto">${body}</div>
       <div style="padding:12px 1.3rem;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:space-between;background:var(--bg2);align-items:center">
         <div style="font-size:10px;color:var(--text3)">${changes.length} transaction${changes.length===1?'':'s'} will be re-categorized.</div>
@@ -7324,6 +7614,41 @@ function openRuleSweepModal(scoped){
     </div>`;
   document.body.appendChild(mo);
 }
+
+function _sweepToggleScope(checked){
+  _sweepOpts.scopeToView=checked;
+  if(S.settings)S.settings.applyRulesScopeToView=checked;
+  sched();
+  // Re-build scope set and re-render
+  let scope=null;let scopeLabel='';
+  if(_sweepScoped){
+    scope={txnIds:new Set(BulkSelected)};
+    scopeLabel=`${BulkSelected.size} selected`;
+  }else if(checked){
+    const ids=_buildSweepScopeFromView();
+    scope=ids.size>0?{txnIds:ids}:{txnIds:new Set()};
+    scopeLabel='current view';
+  }
+  _renderSweepModal(scope,_sweepScoped,scopeLabel);
+}
+window._sweepToggleScope=_sweepToggleScope;
+
+function _sweepToggleConf(checked){
+  _sweepOpts.hideHighConfidence=checked;
+  if(S.settings)S.settings.applyRulesHideHighConfidence=checked;
+  sched();
+  let scope=null;let scopeLabel='';
+  if(_sweepScoped){
+    scope={txnIds:new Set(BulkSelected)};
+    scopeLabel=`${BulkSelected.size} selected`;
+  }else if(_sweepOpts.scopeToView){
+    const ids=_buildSweepScopeFromView();
+    scope=ids.size>0?{txnIds:ids}:{txnIds:new Set()};
+    scopeLabel='current view';
+  }
+  _renderSweepModal(scope,_sweepScoped,scopeLabel);
+}
+window._sweepToggleConf=_sweepToggleConf;
 function closeRuleSweepModal(){
   document.getElementById('rule-sweep-modal')?.remove();
   _sweepChanges=[];
@@ -14934,6 +15259,29 @@ function uploadTemplate(type,input){
 
 
 // ─── MERCHANT RULES PAGE ───
+// V8.28: rules page — sortable columns, source/account filters, click-to-edit modal.
+// Sort and filter state is module-scoped (session-only, not persisted to vault).
+let _rulesSort={col:'pattern',dir:'asc'};
+let _rulesFilter={source:'all',accountId:'all',q:''};
+
+function _rulesSortClick(col){
+  if(_rulesSort.col===col){
+    _rulesSort.dir=_rulesSort.dir==='asc'?'desc':'asc';
+  }else{
+    _rulesSort.col=col;
+    // Defaults: numeric/date columns descend first; text columns ascend first
+    _rulesSort.dir=(col==='useCount'||col==='lastUsed')?'desc':'asc';
+  }
+  render();
+}
+window._rulesSortClick=_rulesSortClick;
+
+function _rulesFilterChange(field,val){
+  _rulesFilter[field]=val;
+  render();
+}
+window._rulesFilterChange=_rulesFilterChange;
+
 function rMerchantRules(){
   const rules=S.txnRules||[];
 
@@ -14963,18 +15311,62 @@ function rMerchantRules(){
     <div class="card"><div class="empty">No rules yet. Assign or correct categories on any transaction and rules will be built automatically.</div></div>`;
   }
 
-  const sorted=[...rules].sort((a,b)=>(b.useCount||0)-(a.useCount||0)||(b.lastUsed||0)-(a.lastUsed||0));
-  const conflictCount=sorted.filter(r=>getConflicts(r.pattern).length>0).length;
+  // Apply filters first
+  let filtered=[...rules];
+  if(_rulesFilter.source!=='all')filtered=filtered.filter(r=>r.source===_rulesFilter.source);
+  if(_rulesFilter.accountId==='global')filtered=filtered.filter(r=>!r.accountId);
+  else if(_rulesFilter.accountId!=='all')filtered=filtered.filter(r=>r.accountId===_rulesFilter.accountId);
+  if(_rulesFilter.q){
+    const q=_rulesFilter.q.toLowerCase().trim();
+    filtered=filtered.filter(r=>{
+      const mc=getMC(r.mainCatId);const sc=getSC(r.subCatId);
+      const acc=r.accountId?(S.accounts.find(a=>a.id===r.accountId)||{}).name||'':'all accounts';
+      return (r.pattern||'').toLowerCase().includes(q)||
+             (mc?.name||'').toLowerCase().includes(q)||
+             (sc?.name||'').toLowerCase().includes(q)||
+             acc.toLowerCase().includes(q);
+    });
+  }
 
-  const rows=sorted.map(r=>{
-    const mc=getMC(r.mainCatId);const sc=getSC(r.subCatId);
+  // Apply sort
+  const dir=_rulesSort.dir==='asc'?1:-1;
+  filtered.sort((a,b)=>{
+    let av,bv;
+    if(_rulesSort.col==='pattern'){av=(a.pattern||'').toLowerCase();bv=(b.pattern||'').toLowerCase();}
+    else if(_rulesSort.col==='category'){
+      av=(getMC(a.mainCatId)?.name||'~').toLowerCase()+'|'+(getSC(a.subCatId)?.name||'').toLowerCase();
+      bv=(getMC(b.mainCatId)?.name||'~').toLowerCase()+'|'+(getSC(b.subCatId)?.name||'').toLowerCase();
+    }
+    else if(_rulesSort.col==='account'){
+      // "All accounts" always sorts to top in ascending direction (regardless of asc/desc)
+      av=a.accountId?(S.accounts.find(x=>x.id===a.accountId)?.name||'~~'):'';
+      bv=b.accountId?(S.accounts.find(x=>x.id===b.accountId)?.name||'~~'):'';
+      av=av.toLowerCase();bv=bv.toLowerCase();
+    }
+    else if(_rulesSort.col==='source'){av=a.source||'';bv=b.source||'';} // manual<ai alphabetically — manual first asc
+    else if(_rulesSort.col==='useCount'){av=a.useCount||0;bv=b.useCount||0;}
+    else if(_rulesSort.col==='lastUsed'){av=a.lastUsed||0;bv=b.lastUsed||0;}
+    else {av=0;bv=0;}
+    if(av<bv)return -1*dir;
+    if(av>bv)return 1*dir;
+    return 0;
+  });
+
+  const conflictCount=rules.filter(r=>getConflicts(r.pattern).length>0).length;
+  const totalAcctSpecific=rules.filter(r=>r.accountId).length;
+
+  // Sort header arrow
+  const arr=(col)=>_rulesSort.col===col?(_rulesSort.dir==='asc'?' ↑':' ↓'):'';
+  // Header click handler emits via inline onclick; uses module-scoped helper exposed on window.
+  const sortableTh=(col,label,style)=>`<th style="cursor:pointer;user-select:none;${style||''}" onclick="_rulesSortClick('${col}')" title="Click to sort">${label}${arr(col)}</th>`;
+
+  const rows=filtered.map(r=>{
+    const mc=getMC(r.mainCatId);
     const conflicts=getConflicts(r.pattern);
     const conflictTags=conflicts.map(c=>`<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:${c.color}22;color:${c.color};border:1px solid ${c.color}44">⚠ ${c.label}</span>`).join(' ');
     const sourceBadge=r.source==='manual'
       ?`<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:color-mix(in srgb,var(--electric) 12%,transparent);color:var(--electric)">Manual</span>`
       :`<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:var(--bg2);color:var(--text3)">AI</span>`;
-    // V8.22: Account scope display. Global rules show "All accounts"; account-specific
-    // rules show the account name with group color chip.
     let scopeHtml;
     if(r.accountId){
       const acc=S.accounts.find(a=>a.id===r.accountId);
@@ -14989,7 +15381,7 @@ function rMerchantRules(){
       scopeHtml=`<span style="font-size:11px;color:var(--text3)">All accounts</span>`;
     }
     const lastUsedStr=r.lastUsed?new Date(r.lastUsed).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'2-digit'}):'—';
-    return`<tr ${conflicts.length?'style="background:color-mix(in srgb,var(--warn) 4%,transparent)"':''}>
+    return`<tr style="cursor:pointer;${conflicts.length?'background:color-mix(in srgb,var(--warn) 4%,transparent)':''}" onclick="openEditRuleModal('${r.id}')" title="Click to edit">
       <td style="font-size:var(--fs-xs);max-width:200px;word-break:break-word">${h(r.pattern)}</td>
       <td>${mc?ctag(r.mainCatId,r.subCatId):'<span style="color:var(--warn);font-size:11px">⚠ Unknown</span>'}</td>
       <td>${scopeHtml}</td>
@@ -14997,41 +15389,67 @@ function rMerchantRules(){
       <td style="font-size:var(--fs-xs);text-align:right;font-variant-numeric:tabular-nums">${r.useCount||1}×</td>
       <td style="font-size:var(--fs-xxs);color:var(--text3)">${lastUsedStr}</td>
       <td style="font-size:var(--fs-xxs)">${conflictTags}</td>
-      <td style="white-space:nowrap"><button class="btn btn-xs btn-d mr-del-btn" data-pattern="${h(r.pattern)}" data-id="${r.id}">✕</button></td>
+      <td style="white-space:nowrap" onclick="event.stopPropagation()"><button class="btn btn-xs btn-d mr-del-btn" data-id="${r.id}" title="Delete this rule">✕</button></td>
     </tr>`;}).join('');
+
+  // Account filter dropdown options. "All accounts" is the global filter,
+  // "Global rules only" filters to rules with no accountId.
+  const allAccs=S.accounts.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  const accOptions=`<option value="all" ${_rulesFilter.accountId==='all'?'selected':''}>All</option>
+    <option value="global" ${_rulesFilter.accountId==='global'?'selected':''}>Global rules only</option>
+    ${allAccs.map(a=>`<option value="${h(a.id)}" ${_rulesFilter.accountId===a.id?'selected':''}>${h(a.name)}</option>`).join('')}`;
 
   const html=`
   <div class="pg-header-row">
     <div>
       <div class="pg-header-title">Transaction Rules</div>
-      <div class="pg-header-sub">${rules.length} rule${rules.length!==1?'s':''} · ${rules.filter(r=>r.accountId).length} account-specific · max ${TXN_RULES_MAX} · least-used evicted first${conflictCount>0?` · <span style="color:var(--warn)">${conflictCount} conflict${conflictCount!==1?'s':''} need review</span>`:''}</div>
+      <div class="pg-header-sub">${rules.length} rule${rules.length!==1?'s':''} · ${totalAcctSpecific} account-specific · max ${TXN_RULES_MAX} · least-used evicted first${conflictCount>0?` · <span style="color:var(--warn)">${conflictCount} conflict${conflictCount!==1?'s':''} need review</span>`:''}</div>
     </div>
     ${rules.length?`<button class="btn btn-d btn-sm" onclick="if(confirm('Clear all transaction rules?')){S.txnRules=[];sched();render();}">Clear all</button>`:''}
   </div>
   ${conflictCount>0?`<div style="padding:10px 14px;background:color-mix(in srgb,var(--warn) 8%,var(--bg));border:1px solid color-mix(in srgb,var(--warn) 30%,transparent);border-radius:var(--rsm);margin-bottom:12px;font-size:var(--fs-xs);color:var(--text)">
-    <strong>${conflictCount} rule${conflictCount!==1?'s':''}</strong> match names already defined in Bills, Staff, Debts, Income, or Subscriptions. Highlighted in amber below — review to make sure the rule isn't overriding the correct source.
+    <strong>${conflictCount} rule${conflictCount!==1?'s':''}</strong> match names already defined in Bills, Staff, Debts, Income, or Subscriptions. Highlighted in amber below.
   </div>`:''}
-  <div class="card"><div class="tbl-wrap"><table>
+  <div class="card" style="padding:10px 12px;margin-bottom:10px">
+    <div class="fg" style="gap:10px;flex-wrap:wrap;align-items:center">
+      <span style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.04em">Filter</span>
+      <label style="font-size:11px;color:var(--text2)">Source
+        <select onchange="_rulesFilterChange('source',this.value)" style="font-size:11px;padding:4px 8px;margin-left:4px">
+          <option value="all" ${_rulesFilter.source==='all'?'selected':''}>All</option>
+          <option value="manual" ${_rulesFilter.source==='manual'?'selected':''}>Manual</option>
+          <option value="ai" ${_rulesFilter.source==='ai'?'selected':''}>AI</option>
+        </select>
+      </label>
+      <label style="font-size:11px;color:var(--text2)">Account
+        <select onchange="_rulesFilterChange('accountId',this.value)" style="font-size:11px;padding:4px 8px;margin-left:4px">${accOptions}</select>
+      </label>
+      <input type="text" placeholder="Search pattern, category, account..." value="${h(_rulesFilter.q)}" oninput="_rulesFilterChange('q',this.value)" style="font-size:11px;padding:5px 10px;flex:1;min-width:160px">
+      <span style="font-size:11px;color:var(--text3)">${filtered.length} of ${rules.length}</span>
+    </div>
+  </div>
+  <div class="card" style="padding:0"><div class="tbl-wrap"><table>
     <thead><tr>
-      <th>Pattern (contains)</th><th>Category</th><th>Scope</th><th>Source</th>
-      <th style="text-align:right">Used</th><th>Last used</th><th>Conflicts</th><th></th>
+      ${sortableTh('pattern','Pattern (contains)')}
+      ${sortableTh('category','Category')}
+      ${sortableTh('account','Scope')}
+      ${sortableTh('source','Source')}
+      ${sortableTh('useCount','Used','text-align:right')}
+      ${sortableTh('lastUsed','Last used')}
+      <th>Conflicts</th>
+      <th></th>
     </tr></thead>
-    <tbody>${rows}</tbody>
+    <tbody>${rows||`<tr><td colspan="8" class="empty" style="padding:1.5rem">No rules match your filters.</td></tr>`}</tbody>
   </table></div></div>`;
 
   setTimeout(()=>{
     document.querySelectorAll('.mr-del-btn').forEach(btn=>{
-      btn.addEventListener('click',()=>{
+      btn.addEventListener('click',(e)=>{
+        e.stopPropagation();
         const id=btn.getAttribute('data-id');
-        if(id){
-          // V8.22: delete by id (lets us delete a specific scope when multiple rules share a pattern)
+        if(id&&confirm('Delete this rule? Past categorizations are unchanged. Future imports of matching descriptions will come in as Uncategorized until you re-categorize.')){
           S.txnRules=(S.txnRules||[]).filter(x=>x.id!==id);
-        }else{
-          const p=btn.getAttribute('data-pattern');
-          const rule=S.txnRules.find(r=>h(r.pattern)===p||r.pattern===p);
-          if(rule)S.txnRules=S.txnRules.filter(x=>x.id!==rule.id);
+          sched();render();
         }
-        sched();render();
       });
     });
   },0);
@@ -16363,6 +16781,24 @@ const MIGRATIONS=[
       if(typeof S.settings.cardsStatementSignConvention!=='boolean')S.settings.cardsStatementSignConvention=true;
       // Default: low-confidence rule application auto-flags transactions for review.
       if(typeof S.settings.autoFlagLowConfidenceRules!=='boolean')S.settings.autoFlagLowConfidenceRules=true;
+      return{noop:true};
+    }
+  },
+  // V8.28: rules page management — sortable columns, source/account filters, edit modal,
+  // account-scoped rule UI surfacing. Apply Rules respects current view filters and adds a
+  // high-confidence-hide checkbox using strict 3-month proven-correct logic.
+  {
+    id:'v8_28_rulesPageMgmt',
+    description:'V8.28 — rules page sort/filter/edit, scoped Apply Rules with confidence filter',
+    removeAfter:'V9.0',
+    run:()=>{
+      if(!S.settings)S.settings={};
+      // Default: when opening Apply Rules from the transaction list, hide transactions where
+      // the rule is already proven correct (3+ months without manual change). Off-toggle to see all.
+      if(typeof S.settings.applyRulesHideHighConfidence!=='boolean')S.settings.applyRulesHideHighConfidence=true;
+      // Default: when opening Apply Rules from the transaction list, scope to current view filters
+      // (account + month + type + search). Off-toggle to fall back to all transactions.
+      if(typeof S.settings.applyRulesScopeToView!=='boolean')S.settings.applyRulesScopeToView=true;
       return{noop:true};
     }
   }
