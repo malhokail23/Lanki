@@ -7286,12 +7286,15 @@ function openEditRuleModal(id){
       </div>`
     : `<div style="background:var(--bg2);border-radius:var(--rsm);padding:10px 12px;margin-top:8px;font-size:11px;color:var(--text3)">No matching transactions found in cache.</div>`;
 
-  // Build category dropdown
-  const cats=S.categories||[];
+  // Build category dropdown — use MAIN_CATS / SUB_CATS data sources, filtered through getActiveCats()
+  // to respect deleted categories. Sub-categories are filtered by FULL_SUB_PARENT to belong to the
+  // selected main category.
+  const cats=getActiveCats();
   const catOptions=cats.map(c=>`<option value="${h(c.id)}" ${rule.mainCatId===c.id?'selected':''}>${h(c.name)}</option>`).join('');
   // Sub-category dropdown — depends on selected category
-  const currentCat=cats.find(c=>c.id===rule.mainCatId);
-  const subs=currentCat?(currentCat.subs||[]):[];
+  const subs=rule.mainCatId
+    ? SUB_CATS.filter(s=>FULL_SUB_PARENT[s.id]===rule.mainCatId&&!(S.deletedSubs||[]).includes(s.id))
+    : [];
   const subOptions=`<option value="">(none)</option>`+subs.map(s=>`<option value="${h(s.id)}" ${rule.subCatId===s.id?'selected':''}>${h(s.name)}</option>`).join('');
 
   // Account scope radio + dropdown
@@ -7320,17 +7323,17 @@ function openEditRuleModal(id){
           <select id="er-sub" style="width:100%;padding:8px 10px;font-size:13px" ${subs.length===0?'disabled':''}>${subOptions}</select>
         </div>
         <div style="margin-bottom:8px">
-          <label style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:5px">Account scope</label>
-          <div style="display:flex;flex-direction:column;gap:6px">
-            <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
-              <input type="radio" name="er-scope" value="global" ${isGlobal?'checked':''} onchange="_editRuleScopeChange()">
+          <label style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:8px">Account scope</label>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <label class="cat-radio-row" style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;padding:0">
+              <input type="radio" name="er-scope" value="global" ${isGlobal?'checked':''} onchange="_editRuleScopeChange()" style="margin:0;flex-shrink:0">
               <span>All accounts (global)</span>
             </label>
-            <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
-              <input type="radio" name="er-scope" value="specific" ${!isGlobal?'checked':''} onchange="_editRuleScopeChange()">
+            <label class="cat-radio-row" style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;padding:0">
+              <input type="radio" name="er-scope" value="specific" ${!isGlobal?'checked':''} onchange="_editRuleScopeChange()" style="margin:0;flex-shrink:0">
               <span>Specific account only</span>
             </label>
-            <select id="er-acc" style="width:100%;padding:8px 10px;font-size:13px;margin-left:24px;width:calc(100% - 24px)" ${isGlobal?'disabled':''}>${accOptions}</select>
+            <select id="er-acc" style="padding:8px 10px;font-size:13px;margin-left:26px" ${isGlobal?'disabled':''}>${accOptions}</select>
           </div>
           <div id="er-scope-note" style="font-size:11px;color:#7A5E20;background:color-mix(in srgb,var(--warn) 12%,transparent);padding:8px 10px;border-radius:var(--rsm);margin-top:8px;display:${isGlobal?'none':'block'}">
             Choosing a specific account leaves future imports of this description on other accounts as Uncategorized — they will not be auto-flagged.
@@ -7352,8 +7355,9 @@ window.openEditRuleModal=openEditRuleModal;
 
 function _editRuleCatChange(){
   const catId=document.getElementById('er-cat').value;
-  const cat=(S.categories||[]).find(c=>c.id===catId);
-  const subs=cat?(cat.subs||[]):[];
+  const subs=catId
+    ? SUB_CATS.filter(s=>FULL_SUB_PARENT[s.id]===catId&&!(S.deletedSubs||[]).includes(s.id))
+    : [];
   const sub=document.getElementById('er-sub');
   sub.innerHTML=`<option value="">(none)</option>`+subs.map(s=>`<option value="${h(s.id)}">${h(s.name)}</option>`).join('');
   sub.disabled=subs.length===0;
@@ -15262,7 +15266,7 @@ function uploadTemplate(type,input){
 // V8.28: rules page — sortable columns, source/account filters, click-to-edit modal.
 // Sort and filter state is module-scoped (session-only, not persisted to vault).
 let _rulesSort={col:'pattern',dir:'asc'};
-let _rulesFilter={source:'all',accountId:'all',q:''};
+let _rulesFilter={source:'all',accountId:'all',q:'',conflictsOnly:false};
 
 function _rulesSortClick(col){
   if(_rulesSort.col===col){
@@ -15316,6 +15320,7 @@ function rMerchantRules(){
   if(_rulesFilter.source!=='all')filtered=filtered.filter(r=>r.source===_rulesFilter.source);
   if(_rulesFilter.accountId==='global')filtered=filtered.filter(r=>!r.accountId);
   else if(_rulesFilter.accountId!=='all')filtered=filtered.filter(r=>r.accountId===_rulesFilter.accountId);
+  if(_rulesFilter.conflictsOnly)filtered=filtered.filter(r=>getConflicts(r.pattern).length>0);
   if(_rulesFilter.q){
     const q=_rulesFilter.q.toLowerCase().trim();
     filtered=filtered.filter(r=>{
@@ -15411,20 +15416,29 @@ function rMerchantRules(){
     <strong>${conflictCount} rule${conflictCount!==1?'s':''}</strong> match names already defined in Bills, Staff, Debts, Income, or Subscriptions. Highlighted in amber below.
   </div>`:''}
   <div class="card" style="padding:10px 12px;margin-bottom:10px">
-    <div class="fg" style="gap:10px;flex-wrap:wrap;align-items:center">
-      <span style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.04em">Filter</span>
-      <label style="font-size:11px;color:var(--text2)">Source
-        <select onchange="_rulesFilterChange('source',this.value)" style="font-size:11px;padding:4px 8px;margin-left:4px">
+    <div class="fg" style="gap:12px;flex-wrap:wrap;align-items:flex-end">
+      <span style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;padding-bottom:7px">Filter</span>
+      <div style="display:flex;flex-direction:column;gap:3px">
+        <span style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Source</span>
+        <select onchange="_rulesFilterChange('source',this.value)" style="font-size:11px;padding:5px 8px;min-width:90px">
           <option value="all" ${_rulesFilter.source==='all'?'selected':''}>All</option>
           <option value="manual" ${_rulesFilter.source==='manual'?'selected':''}>Manual</option>
           <option value="ai" ${_rulesFilter.source==='ai'?'selected':''}>AI</option>
         </select>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:3px">
+        <span style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Account</span>
+        <select onchange="_rulesFilterChange('accountId',this.value)" style="font-size:11px;padding:5px 8px;min-width:140px">${accOptions}</select>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:160px">
+        <span style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Search</span>
+        <input type="text" placeholder="Pattern, category, account..." value="${h(_rulesFilter.q)}" oninput="_rulesFilterChange('q',this.value)" style="font-size:11px;padding:5px 10px">
+      </div>
+      <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text2);cursor:pointer;padding-bottom:6px;white-space:nowrap" title="Show only rules that match names defined elsewhere (Bills, Staff, Debts, Income, Subscriptions)">
+        <input type="checkbox" ${_rulesFilter.conflictsOnly?'checked':''} onchange="_rulesFilterChange('conflictsOnly',this.checked)" style="margin:0">
+        <span>Conflicts only${conflictCount>0?` (${conflictCount})`:''}</span>
       </label>
-      <label style="font-size:11px;color:var(--text2)">Account
-        <select onchange="_rulesFilterChange('accountId',this.value)" style="font-size:11px;padding:4px 8px;margin-left:4px">${accOptions}</select>
-      </label>
-      <input type="text" placeholder="Search pattern, category, account..." value="${h(_rulesFilter.q)}" oninput="_rulesFilterChange('q',this.value)" style="font-size:11px;padding:5px 10px;flex:1;min-width:160px">
-      <span style="font-size:11px;color:var(--text3)">${filtered.length} of ${rules.length}</span>
+      <span style="font-size:11px;color:var(--text3);padding-bottom:6px">${filtered.length} of ${rules.length}</span>
     </div>
   </div>
   <div class="card" style="padding:0"><div class="tbl-wrap"><table>
