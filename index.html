@@ -6788,6 +6788,18 @@ async function doImport(directPayload){
     accOverride=document.getElementById('imp-acc-override').value||null;
   }
 
+  // V8.28: per-import AI opt-in. From JSON paste: read DOM checkbox. From Statement Parser:
+  // commitAIImport handles AI separately, so directPayload-based imports skip this hook.
+  const useAiFromJson=!directPayload&&!!document.getElementById('imp-ai-opt-in')?.checked;
+  if(useAiFromJson)S.settings.lastImportAiOptIn=true;
+
+  // Capture which months the import will touch and snapshot pre-existing IDs across all of them.
+  // Used at the end of doImport to identify newly-added uncategorized txns for AI categorization.
+  // Only computed when the JSON flow opted in (avoids work for the directPayload path).
+  let _aiPreImportIdSnapshot=null;
+  let _aiTouchedMonths=null;
+  let _aiAccountForPostImport=null;
+
   const ym=data.month||S.month;
   const items=Array.isArray(data)?data:(data.transactions||[]);
   if(!items.length){
@@ -6815,6 +6827,18 @@ async function doImport(directPayload){
   preImportSnapshots.set(ym,[...txns]);
   let added=0;
   let crossMonthCount=0;
+
+  // V8.28: if AI opt-in, capture pre-existing IDs across ALL months the import will touch.
+  // After the loop, the helper diffs current cache vs this snapshot to find new uncategorized rows.
+  if(useAiFromJson){
+    _aiAccountForPostImport=rId;
+    _aiTouchedMonths=[...new Set(items.map(it=>it.date?it.date.substr(0,7):ym).filter(Boolean))];
+    _aiPreImportIdSnapshot=new Set();
+    for(const m of _aiTouchedMonths){
+      for(const x of(S.txnCache[m]||[]))_aiPreImportIdSnapshot.add(x.id);
+    }
+  }
+
   for(const t of items){
     if(!t.date||t.amount===undefined)continue;
     let ai=t.account_id||t.accountId||rId||null;
@@ -6952,6 +6976,12 @@ async function doImport(directPayload){
   if(closingBalVal===null){
     const crossNote=crossMonthCount>0?` · ${crossMonthCount} routed to other months`:'';
     toast(`Imported ${added} transaction${added!==1?'s':''}${crossNote}`);
+  }
+
+  // V8.28: post-import AI categorization for unmatched transactions (JSON paste flow only).
+  // The Statement Parser path handles its own AI hook in commitAIImport.
+  if(useAiFromJson&&_aiPreImportIdSnapshot&&_aiAccountForPostImport&&_aiTouchedMonths){
+    runPostImportAiCategorization(_aiTouchedMonths,_aiAccountForPostImport,_aiPreImportIdSnapshot);
   }
 }
 function lcMap(id){const m={'cat_income_salary':'cat_main_income','cat_income_other':'cat_main_income','cat_debt_payment':'cat_main_finance','cat_groceries':'cat_main_food','cat_kids':'cat_main_kids','cat_household':'cat_main_housing','cat_fuel':'cat_main_transport','cat_subscriptions':'cat_main_subscriptions','cat_shopping':'cat_main_shopping','cat_food_delivery':'cat_main_food','cat_staff':'cat_main_staff','cat_personal':'cat_main_personal','cat_medical':'cat_main_personal','cat_transfer':'cat_main_transfers','cat_investment':'cat_main_transfers','cat_external_transfer':'cat_main_transfers'};return m[id]||null;}
@@ -15094,6 +15124,15 @@ function buildImpPanel(){
       <div><label class="lbl">Closing Balance (SAR) — end of month</label><input type="number" id="imp-closing-bal" placeholder="Balance on last day of this statement" step="0.01"></div>
     </div>
     <div style="font-size:var(--fs-xxs);color:var(--text3);margin-bottom:8px;line-height:1.5">Balance guard: opening + all transactions = closing. All types counted by direction. Discrepancy above SAR 1 is flagged.</div>
+    <div style="background:var(--bg2);border-radius:var(--rsm);padding:10px 12px;margin-bottom:8px">
+      <label style="display:block;font-size:var(--fs-xs);cursor:pointer;color:var(--text);margin-bottom:4px">
+        <input type="checkbox" id="imp-ai-opt-in" ${S.settings.lastImportAiOptIn?'checked':''} style="width:auto;padding:0;margin:0 8px 0 0;border:none;vertical-align:middle">
+        <span style="vertical-align:middle">Use AI to categorize transactions that don't match any rule</span>
+      </label>
+      <div style="font-size:11px;color:var(--text3);line-height:1.5;margin-left:24px">
+        Useful for first-time imports or new banks. Once your rules cover most merchants, leave unchecked — unmatched transactions land in the Inbox for manual categorization, which builds stronger rules.
+      </div>
+    </div>
     <div class="fg jb" style="margin-top:8px;flex-wrap:wrap;gap:8px">
       <div class="fg" style="gap:6px">
         <button class="btn btn-p" onclick="doImport()">Import</button>
@@ -16804,7 +16843,7 @@ const MIGRATIONS=[
   // high-confidence-hide checkbox using strict 3-month proven-correct logic.
   {
     id:'v8_28_rulesPageMgmt',
-    description:'V8.28 — rules page sort/filter/edit, scoped Apply Rules with confidence filter',
+    description:'V8.28 — rules page sort/filter/edit, scoped Apply Rules with confidence filter, opt-in AI on import',
     removeAfter:'V9.0',
     run:()=>{
       if(!S.settings)S.settings={};
@@ -16814,6 +16853,10 @@ const MIGRATIONS=[
       // Default: when opening Apply Rules from the transaction list, scope to current view filters
       // (account + month + type + search). Off-toggle to fall back to all transactions.
       if(typeof S.settings.applyRulesScopeToView!=='boolean')S.settings.applyRulesScopeToView=true;
+      // V8.28: per-import AI opt-in. Default OFF — imports run rules only, unmatched stays
+      // uncategorized in the Inbox. User can opt in per-import via checkbox in PDF parser
+      // and JSON paste flows. Last-used state persists for convenience.
+      if(typeof S.settings.lastImportAiOptIn!=='boolean')S.settings.lastImportAiOptIn=false;
       return{noop:true};
     }
   }
@@ -17741,6 +17784,15 @@ function rAIUpload(){
     </div>
 
     ${_aiState.error?`<div style="color:var(--bad);font-size:var(--fs-xs);padding:8px;background:#FEE2E2;border-radius:var(--rsm);margin-bottom:10px">${h(_aiState.error)}</div>`:''}
+    <div style="background:var(--bg2);border-radius:var(--rsm);padding:10px 14px;margin-bottom:10px">
+      <label style="display:block;font-size:var(--fs-xs);cursor:pointer;color:var(--text);margin-bottom:4px">
+        <input type="checkbox" id="ai-import-opt-in" ${S.settings.lastImportAiOptIn?'checked':''} style="width:auto;padding:0;margin:0 8px 0 0;border:none;vertical-align:middle">
+        <span style="vertical-align:middle">Use AI to categorize transactions that don't match any rule</span>
+      </label>
+      <div style="font-size:11px;color:var(--text3);line-height:1.5;margin-left:24px">
+        Useful for first-time imports or new banks. Once your rules cover most merchants, leave this unchecked — unmatched transactions land in the Inbox for manual categorization, which builds stronger rules.
+      </div>
+    </div>
     <div class="fg" style="gap:8px">
       <button class="btn btn-p" onclick="commitAIImport()">Import ${willImport} Transaction${willImport!==1?'s':''} →</button>
       <button class="btn btn-d" onclick="_aiState.step=1;_aiState.extracted=[];_aiState._forceAll=false;render()">Discard & Start Over</button>
@@ -18615,6 +18667,44 @@ function clearMonthAndMark(ym,accountId){
   });
 }
 
+// V8.28: post-import AI helper. Identifies newly-added uncategorized transactions and routes
+// them through the existing bulk AI categorization flow. The user gets a confirm prompt if
+// the count exceeds the wave limit (BULK_AI_MAX = 20) so cost and time are visible.
+//
+// Note: the existing _aiState reset at the end of commitAIImport happens AFTER this fires,
+// but since this function reads from S.txnCache directly (not _aiState), the reset is safe.
+// However, we DO want to delay the page navigation (sw('txbank')) so the user sees the
+// AI modal — so the caller fires this BEFORE the navigation and reset.
+function runPostImportAiCategorization(months,accountId,preImportIds){
+  // Collect newly-added (post-import) transactions on the import's account that have no category
+  const newlyImported=[];
+  for(const ym of months){
+    for(const t of(S.txnCache[ym]||[])){
+      if(preImportIds&&preImportIds.has(t.id))continue; // pre-existing, not new
+      if(t.accountId!==accountId)continue; // safety: only the imported account
+      if(t.mainCatId)continue; // already categorized (by rule, bill, etc.)
+      newlyImported.push(t);
+    }
+  }
+  if(!newlyImported.length){
+    toast('All imported transactions matched rules — no AI needed',false);
+    return;
+  }
+  // For batches over the wave limit, confirm with the user before kicking off the AI flow
+  if(newlyImported.length>BULK_AI_MAX){
+    const proceed=confirm(`AI categorization is enabled for this import.\n\n${newlyImported.length} unmatched transaction${newlyImported.length===1?'':'s'} need categorization. This will run in waves of ${BULK_AI_MAX}, taking roughly ${Math.ceil(newlyImported.length/BULK_AI_MAX)} round${Math.ceil(newlyImported.length/BULK_AI_MAX)===1?'':'s'} of API calls.\n\nProceed?`);
+    if(!proceed){
+      toast(`AI categorization skipped — ${newlyImported.length} transaction${newlyImported.length===1?'':'s'} stayed uncategorized`,false);
+      return;
+    }
+  }
+  // Pre-populate BulkSelected with the new transaction IDs and open the existing bulk AI flow
+  BulkSelected.clear();
+  for(const t of newlyImported)BulkSelected.add(t.id);
+  // Defer to ensure the bulk AI modal renders cleanly after the import flow's render() completes
+  setTimeout(()=>openBulkAiCategorize(),200);
+}
+
 async function commitAIImport(){
   if(!_aiState.extracted.length)return;
   if(!_aiState.accountId){
@@ -18623,6 +18713,11 @@ async function commitAIImport(){
     return;
   }
   _aiState.error='';
+
+  // V8.28: per-import AI opt-in. Default OFF — imports run rules only, unmatched stays
+  // uncategorized in the Inbox.
+  const useAi=!!document.getElementById('ai-import-opt-in')?.checked;
+  S.settings.lastImportAiOptIn=useAi;
 
   const payload={
     account_id:_aiState.accountId,
@@ -18651,7 +18746,27 @@ async function commitAIImport(){
   const allMonths=[...new Set((_aiState.extracted||[]).map(t=>t.date?t.date.substr(0,7):_aiState.month).filter(Boolean))].sort();
   const primaryMonth=_aiState.month;
 
+  // V8.28: snapshot pre-existing transaction IDs across all affected months — used after
+  // doImport to identify which transactions are new (for the optional AI categorization step).
+  const preImportIdSnapshot=new Set();
+  if(useAi){
+    const monthsToSnap=allMonths.length?allMonths:[primaryMonth];
+    for(const m of monthsToSnap){
+      for(const t of(S.txnCache[m]||[])){
+        preImportIdSnapshot.add(t.id);
+      }
+    }
+  }
+
   await doImport(payload);
+
+  // V8.28: post-import AI categorization for unmatched transactions, if opted-in.
+  // Captures newly-added (non-duplicate) transactions from the import's primary month and
+  // any cross-month buckets, filters to those without a category, and routes through the
+  // existing bulk AI flow. Skipped silently if opt-in is false or no unmatched txns.
+  if(useAi){
+    runPostImportAiCategorization(allMonths.length?allMonths:[primaryMonth],_aiState.accountId,preImportIdSnapshot);
+  }
 
   // V8.19 Decision 3: save format to library only after successful import. This proves the parse
   // worked (user clicked Import on the review screen). If a known format was matched, increment
