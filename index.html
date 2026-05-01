@@ -7323,18 +7323,16 @@ function openEditRuleModal(id){
           <select id="er-sub" style="width:100%;padding:8px 10px;font-size:13px" ${subs.length===0?'disabled':''}>${subOptions}</select>
         </div>
         <div style="margin-bottom:8px">
-          <label style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:8px">Account scope</label>
-          <div style="display:flex;flex-direction:column;gap:8px">
-            <label class="cat-radio-row" style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;padding:0">
-              <input type="radio" name="er-scope" value="global" ${isGlobal?'checked':''} onchange="_editRuleScopeChange()" style="margin:0;flex-shrink:0">
-              <span>All accounts (global)</span>
-            </label>
-            <label class="cat-radio-row" style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;padding:0">
-              <input type="radio" name="er-scope" value="specific" ${!isGlobal?'checked':''} onchange="_editRuleScopeChange()" style="margin:0;flex-shrink:0">
-              <span>Specific account only</span>
-            </label>
-            <select id="er-acc" style="padding:8px 10px;font-size:13px;margin-left:26px" ${isGlobal?'disabled':''}>${accOptions}</select>
-          </div>
+          <div style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Account scope</div>
+          <label style="display:block;font-size:13px;cursor:pointer;padding:4px 0;color:var(--text);text-transform:none;letter-spacing:0;font-weight:400">
+            <input type="radio" name="er-scope" value="global" ${isGlobal?'checked':''} onchange="_editRuleScopeChange()" style="margin:0 8px 0 0;vertical-align:middle">
+            <span style="vertical-align:middle">All accounts (global)</span>
+          </label>
+          <label style="display:block;font-size:13px;cursor:pointer;padding:4px 0;color:var(--text);text-transform:none;letter-spacing:0;font-weight:400">
+            <input type="radio" name="er-scope" value="specific" ${!isGlobal?'checked':''} onchange="_editRuleScopeChange()" style="margin:0 8px 0 0;vertical-align:middle">
+            <span style="vertical-align:middle">Specific account only</span>
+          </label>
+          <select id="er-acc" style="display:block;width:100%;padding:8px 10px;font-size:13px;margin-top:6px" ${isGlobal?'disabled':''}>${accOptions}</select>
           <div id="er-scope-note" style="font-size:11px;color:#7A5E20;background:color-mix(in srgb,var(--warn) 12%,transparent);padding:8px 10px;border-radius:var(--rsm);margin-top:8px;display:${isGlobal?'none':'block'}">
             Choosing a specific account leaves future imports of this description on other accounts as Uncategorized — they will not be auto-flagged.
           </div>
@@ -7350,6 +7348,9 @@ function openEditRuleModal(id){
       </div>
     </div>`;
   document.body.appendChild(mo);
+  // Click-outside-to-close: clicks on the backdrop (mo itself) close the modal,
+  // but clicks on the inner card (.md) stop bubbling up so they don't trigger close.
+  mo.addEventListener('click',e=>{if(e.target===mo)closeEditRuleModal();});
 }
 window.openEditRuleModal=openEditRuleModal;
 
