@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Lanki — Tracker</title>
+
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/lanki-app-icon-light-180-apple-touch.png">
+<meta name="theme-color" content="#F3F1EF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#021751" media="(prefers-color-scheme: dark)">
+
+<style>
+:root {
+  --lanki-ink: #021751;
+  --lanki-ink-electric: #0077C1;
+  --lanki-paper: #F3F1EF;
+  --lanki-paper-pure: #FFFFFF;
+  --lanki-line: #E4E0DC;
+  --lanki-text-secondary: #707070;
+  --lanki-text-tertiary: #9CA0A8;
+  --lanki-positive: #B5CBB7;
+  --lanki-negative: #C98E8B;
+  --lanki-warning: #D6C88F;
+  --lanki-capital: #A3BCD7;
+  --lanki-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --bg-page: var(--lanki-paper);
+  --bg-card: var(--lanki-paper-pure);
+  --bg-soft: #FAF9F7;
+  --border: var(--lanki-line);
+  --text-1: var(--lanki-ink);
+  --text-2: var(--lanki-text-secondary);
+  --text-3: var(--lanki-text-tertiary);
+  --shadow-sm: 0 1px 2px rgba(2,23,81,0.04);
+  --shadow-md: 0 2px 8px rgba(2,23,81,0.06);
+  --shadow-lg: 0 8px 24px rgba(2,23,81,0.10);
+  --r-sm: 4px;
+  --r-md: 8px;
+  --r-lg: 12px;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: var(--lanki-font-sans);
+  background: var(--bg-page);
+  color: var(--text-1);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  font-variant-numeric: tabular-nums;
+}
+
+.app-header {
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand-mark { display: inline-flex; flex-direction: column; gap: 2.5px; align-items: flex-start; }
+.brand-mark span { display: block; height: 4px; background: var(--lanki-ink); border-radius: 1px; }
+.brand-mark span:nth-child(1) { width: 22px; }
+.brand-mark span:nth-child(2) { width: 14px; }
+.brand-mark span:nth-child(3) { width: 18px; }
+.brand-text { display: flex; flex-direction: column; line-height: 1; }
+.brand-text .word { font-size: 18px; font-weight: 500; letter-spacing: -0.4px; color: var(--lanki-ink); }
+.brand-text .sub {
+  font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--text-3); margin-top: 2px; display: flex; align-items: center; gap: 4px;
+}
+.brand-text .sub::before {
+  content: ''; display: inline-block; width: 7px; height: 7px;
+  background: var(--lanki-capital); border-radius: 1px;
+}
+.header-actions { display: flex; align-items: center; gap: 12px; }
+
+.container { max-width: 1100px; margin: 0 auto; padding: 24px; }
+
+label {
+  display: block; font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.04em; color: var(--text-3); margin-bottom: 6px;
+}
+input[type="text"], input[type="email"], textarea, select {
+  width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-md);
+  background: var(--bg-card); color: var(--text-1); font-family: inherit; font-size: 14px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+input[type="text"]:focus, input[type="email"]:focus, textarea:focus, select:focus {
+  outline: none; border-color: var(--lanki-ink-electric);
+  box-shadow: 0 0 0 3px rgba(0, 119, 193, 0.12);
+}
+textarea { resize: vertical; min-height: 80px; line-height: 1.5; }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 9px 14px; border: 1px solid var(--border); border-radius: var(--r-md);
+  background: var(--bg-card); color: var(--text-1); font-family: inherit;
+  font-size: 13px; font-weight: 500; cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+.btn:hover { background: var(--bg-soft); }
+.btn:active { transform: translateY(1px); }
+.btn-primary { background: var(--lanki-ink-electric); border-color: var(--lanki-ink-electric); color: white; }
+.btn-primary:hover { background: #0066A8; }
+.btn-danger { border-color: var(--lanki-negative); color: #8B4040; }
+.btn-danger:hover { background: color-mix(in srgb, var(--lanki-negative) 12%, transparent); }
+.btn-ghost { border-color: transparent; background: transparent; }
+.btn-ghost:hover { background: var(--bg-soft); }
+.btn-sm { padding: 5px 10px; font-size: 11px; }
+
+.card {
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--r-lg);
+  padding: 20px; margin-bottom: 16px; box-shadow: var(--shadow-sm);
+}
+.card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; gap: 12px; }
+.card-title { font-size: 15px; font-weight: 600; color: var(--text-1); }
+.card-sub { font-size: 11px; color: var(--text-3); margin-top: 2px; }
+
+.stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+.stat-tile {
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--r-md);
+  padding: 14px 18px; box-shadow: var(--shadow-sm);
+}
+.stat-label {
+  font-size: 10px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--text-3);
+}
+.stat-value { font-size: 24px; font-weight: 600; color: var(--text-1); margin-top: 4px; }
+
+.submit-form { display: grid; gap: 14px; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+.form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 720px) {
+  .form-row { grid-template-columns: 1fr; }
+  .form-row-2 { grid-template-columns: 1fr; }
+  .stats-row { grid-template-columns: 1fr; }
+}
+
+.screenshot-zone {
+  border: 2px dashed var(--border); border-radius: var(--r-md);
+  padding: 16px; text-align: center; background: var(--bg-soft);
+  transition: border-color 0.15s, background 0.15s; cursor: pointer;
+}
+.screenshot-zone:hover, .screenshot-zone.drag-over {
+  border-color: var(--lanki-ink-electric);
+  background: rgba(0, 119, 193, 0.04);
+}
+.screenshot-zone p { margin: 0; font-size: 12px; color: var(--text-2); }
+.screenshot-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.screenshot-thumb {
+  position: relative; width: 100px; height: 100px; border-radius: var(--r-sm);
+  overflow: hidden; border: 1px solid var(--border); background: var(--bg-card);
+}
+.screenshot-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.screenshot-thumb .remove-btn {
+  position: absolute; top: 4px; right: 4px; width: 22px; height: 22px;
+  border-radius: 50%; background: rgba(0, 0, 0, 0.7); color: white;
+  border: none; cursor: pointer; font-size: 14px; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+}
+.screenshot-thumb .remove-btn:hover { background: rgba(0, 0, 0, 0.9); }
+
+.bug-only-fields {
+  display: none; grid-column: 1 / -1; border-top: 1px solid var(--border);
+  padding-top: 14px; gap: 14px; grid-template-columns: 1fr 1fr;
+}
+.bug-only-fields.active { display: grid; }
+.bug-only-fields > div:first-child { grid-column: 1 / -1; }
+@media (max-width: 720px) { .bug-only-fields.active { grid-template-columns: 1fr; } }
+
+.filter-bar {
+  display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+  margin-bottom: 16px; padding: 12px 16px;
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--r-md);
+}
+.filter-bar select, .filter-bar input {
+  flex: 0 1 auto; min-width: 120px; padding: 6px 10px; font-size: 12px;
+}
+
+.export-bar {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  padding: 12px 16px; background: var(--bg-card);
+  border: 1px solid var(--border); border-radius: var(--r-md);
+  margin-bottom: 16px;
+}
+.export-hint {
+  flex-basis: 100%; font-size: 11px; color: var(--text-3); line-height: 1.5; margin-top: 4px;
+}
+
+.pipeline-item {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--r-md); margin-bottom: 8px; overflow: hidden;
+  transition: box-shadow 0.15s;
+}
+.pipeline-item:hover { box-shadow: var(--shadow-sm); }
+.pipeline-item.expanded { box-shadow: var(--shadow-md); }
+
+.pipeline-row {
+  display: grid; grid-template-columns: 60px 90px 80px 1fr 100px auto;
+  gap: 12px; align-items: center; padding: 12px 16px; cursor: pointer;
+}
+.pipeline-row:hover { background: var(--bg-soft); }
+@media (max-width: 720px) {
+  .pipeline-row { grid-template-columns: 1fr; gap: 6px; }
+  .pipeline-row > * { white-space: normal !important; }
+}
+
+.pipeline-id {
+  font-size: 10px; color: var(--text-3);
+  font-family: ui-monospace, SF Mono, Menlo, Consolas, monospace;
+}
+.pipeline-title {
+  font-size: 13px; font-weight: 500; color: var(--text-1);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pipeline-date { font-size: 10px; color: var(--text-3); text-align: right; }
+
+.chip {
+  display: inline-block; font-size: 9px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.04em; padding: 2px 7px; border-radius: 3px; white-space: nowrap;
+}
+.chip-type-bug { background: color-mix(in srgb, var(--lanki-negative) 24%, transparent); color: #8B4040; }
+.chip-type-enhancement { background: color-mix(in srgb, var(--lanki-positive) 32%, transparent); color: #3D6B4F; }
+.chip-type-layout { background: color-mix(in srgb, var(--lanki-capital) 40%, transparent); color: #2A4A6E; }
+.chip-type-feature { background: color-mix(in srgb, var(--lanki-ink-electric) 16%, transparent); color: #0066A8; }
+.chip-type-question { background: color-mix(in srgb, var(--lanki-warning) 28%, transparent); color: #7A5E20; }
+
+.chip-sev-critical { background: var(--lanki-negative); color: white; }
+.chip-sev-high { background: color-mix(in srgb, var(--lanki-negative) 30%, transparent); color: #8B4040; }
+.chip-sev-medium { background: color-mix(in srgb, var(--lanki-warning) 28%, transparent); color: #7A5E20; }
+.chip-sev-low { background: var(--bg-soft); color: var(--text-3); border: 1px solid var(--border); }
+
+.chip-page { background: transparent; color: var(--text-3); font-weight: 500; border: 1px solid var(--border); }
+
+.chip-status-open { background: var(--bg-soft); color: var(--text-2); border: 1px solid var(--border); }
+.chip-status-scoped { background: color-mix(in srgb, var(--lanki-ink-electric) 16%, transparent); color: #0066A8; }
+.chip-status-shipped { background: color-mix(in srgb, var(--lanki-positive) 32%, transparent); color: #3D6B4F; }
+.chip-status-dropped { background: var(--bg-soft); color: var(--text-3); }
+
+.pipeline-detail {
+  padding: 16px 24px 20px; border-top: 1px solid var(--border);
+  background: var(--bg-soft); display: none;
+}
+.pipeline-item.expanded .pipeline-detail { display: block; }
+.detail-section { margin-bottom: 14px; }
+.detail-section h4 {
+  font-size: 10px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--text-3); margin: 0 0 6px;
+}
+.detail-section p {
+  font-size: 13px; color: var(--text-1); margin: 0;
+  line-height: 1.6; white-space: pre-wrap;
+}
+.detail-actions {
+  display: flex; gap: 8px; flex-wrap: wrap;
+  padding-top: 12px; border-top: 1px solid var(--border);
+}
+
+#toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  background: var(--lanki-ink); color: white; padding: 10px 18px;
+  border-radius: var(--r-md); font-size: 13px; z-index: 100;
+  box-shadow: var(--shadow-lg); opacity: 0; pointer-events: none;
+  transition: opacity 0.2s, transform 0.2s;
+}
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(-4px); }
+#toast.error { background: #8B4040; }
+
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(2, 23, 81, 0.7);
+  z-index: 200; display: none; align-items: center; justify-content: center; padding: 20px;
+}
+.modal-backdrop.active { display: flex; }
+
+.empty-state {
+  text-align: center; padding: 40px 20px; background: var(--bg-card);
+  border: 1px dashed var(--border); border-radius: var(--r-md); color: var(--text-3);
+}
+.empty-state p { margin: 4px 0; }
+
+.collapsible-header {
+  display: flex; align-items: center; justify-content: space-between;
+  cursor: pointer; user-select: none;
+}
+.collapsible-header .arrow { transition: transform 0.2s; }
+.collapsible-header.collapsed .arrow { transform: rotate(-90deg); }
+.collapsible-body { margin-top: 16px; }
+.collapsible-body.hidden { display: none; }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <div class="brand">
+    <div class="brand-mark"><span></span><span></span><span></span></div>
+    <div class="brand-text">
+      <span class="word">lanki</span>
+      <span class="sub">Tracker</span>
+    </div>
+  </div>
+  <div class="header-actions">
+    <a href="https://lanki.app" class="btn btn-sm btn-ghost" style="text-decoration:none">&larr; Lanki</a>
+  </div>
+</header>
+
+<div class="container">
+
+  <div class="stats-row">
+    <div class="stat-tile">
+      <div class="stat-label">Open</div>
+      <div class="stat-value" id="stat-open">0</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-label">Scoped</div>
+      <div class="stat-value" id="stat-scoped">0</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-label">Shipped this month</div>
+      <div class="stat-value" id="stat-shipped">0</div>
+    </div>
+  </div>
+
+  <div class="card" id="submit-card">
+    <div class="collapsible-header" id="submit-toggle">
+      <div>
+        <div class="card-title">Submit a new item</div>
+        <div class="card-sub">Bug, enhancement, layout fix, or feature request</div>
+      </div>
+      <span class="arrow" style="font-size:18px;color:var(--text-3)">&#9660;</span>
+    </div>
+
+    <div class="collapsible-body" id="submit-body">
+      <form class="submit-form" id="submit-form">
+        <div>
+          <label for="f-title">Title *</label>
+          <input type="text" id="f-title" required maxlength="200" placeholder="One-line summary">
+        </div>
+
+        <div class="form-row">
+          <div>
+            <label for="f-type">Type *</label>
+            <select id="f-type" required>
+              <option value="bug">Bug</option>
+              <option value="enhancement">Enhancement</option>
+              <option value="layout">Layout / Polish</option>
+              <option value="feature">New Feature</option>
+              <option value="question">Question</option>
+            </select>
+          </div>
+          <div>
+            <label for="f-severity">Severity *</label>
+            <select id="f-severity" required>
+              <option value="low">Low</option>
+              <option value="medium" selected>Medium</option>
+              <option value="high">High</option>
+              <option value="critical">Critical</option>
+            </select>
+          </div>
+          <div>
+            <label for="f-page">Page *</label>
+            <select id="f-page" required>
+              <option value="overview">Overview</option>
+              <option value="projections">Projections</option>
+              <option value="txbank">Transactions — Bank</option>
+              <option value="txcards">Transactions — Cards</option>
+              <option value="txinvestments">Transactions — Investments</option>
+              <option value="income">Recurring — Income</option>
+              <option value="bills">Recurring — Bills</option>
+              <option value="subscriptions">Recurring — Subscriptions</option>
+              <option value="uncat">Inbox — Uncategorized</option>
+              <option value="transfers">Inbox — Pending Matches</option>
+              <option value="reimbursements">Inbox — Reimbursements</option>
+              <option value="accounts">Accounts &amp; Cards</option>
+              <option value="debts">Debts</option>
+              <option value="goals">Goals</option>
+              <option value="staff">Staff</option>
+              <option value="familyinv">Family Investments</option>
+              <option value="investments">Investments</option>
+              <option value="rules">System — Transaction Rules</option>
+              <option value="reviewqueue">System — Review Queue</option>
+              <option value="sanity">System — Sanity Check</option>
+              <option value="insights">System — Usage Insights</option>
+              <option value="settings">Settings</option>
+              <option value="auth">Auth / Vault</option>
+              <option value="brand">Brand / Visual</option>
+              <option value="cross-cutting">Cross-cutting</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label for="f-description">Description *</label>
+          <textarea id="f-description" required placeholder="What's the issue or idea? Be specific."></textarea>
+        </div>
+
+        <div class="bug-only-fields" id="bug-fields">
+          <div>
+            <label for="f-steps">Steps to reproduce</label>
+            <textarea id="f-steps" placeholder="1. Go to...&#10;2. Click on...&#10;3. Observe..."></textarea>
+          </div>
+          <div>
+            <label for="f-expected">Expected</label>
+            <textarea id="f-expected" placeholder="What should happen"></textarea>
+          </div>
+          <div>
+            <label for="f-actual">Actual</label>
+            <textarea id="f-actual" placeholder="What actually happens"></textarea>
+          </div>
+        </div>
+
+        <div>
+          <label>Screenshots <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-3)">(visible in export only)</span></label>
+          <div class="screenshot-zone" id="screenshot-zone">
+            <p><strong>Click to upload</strong>, drag &amp; drop, or paste from clipboard (Ctrl+V / Cmd+V)</p>
+            <input type="file" id="screenshot-input" accept="image/*" multiple style="display:none">
+          </div>
+          <div class="screenshot-list" id="screenshot-list"></div>
+        </div>
+
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+          <button type="button" class="btn" id="reset-btn">Reset</button>
+          <button type="submit" class="btn btn-primary" id="submit-btn">Submit</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="filter-bar">
+    <span style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:0.04em">Filter</span>
+    <select id="filter-status">
+      <option value="">All status</option>
+      <option value="open" selected>Open</option>
+      <option value="scoped">Scoped</option>
+      <option value="shipped">Shipped</option>
+      <option value="dropped">Dropped</option>
+    </select>
+    <select id="filter-type">
+      <option value="">All types</option>
+      <option value="bug">Bugs</option>
+      <option value="enhancement">Enhancements</option>
+      <option value="layout">Layout</option>
+      <option value="feature">Features</option>
+      <option value="question">Questions</option>
+    </select>
+    <select id="filter-severity">
+      <option value="">All severities</option>
+      <option value="critical">Critical</option>
+      <option value="high">High</option>
+      <option value="medium">Medium</option>
+      <option value="low">Low</option>
+    </select>
+    <select id="filter-page"><option value="">All pages</option></select>
+    <input type="text" id="filter-search" placeholder="Search title/description..." style="flex:1;min-width:140px">
+  </div>
+
+  <div class="export-bar">
+    <span style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:0.04em">Export &amp; backup</span>
+    <button class="btn btn-sm" id="export-scoped-btn">&darr; Scoped (MD)</button>
+    <button class="btn btn-sm" id="export-open-btn">&darr; Open + Scoped (MD)</button>
+    <button class="btn btn-sm" id="export-all-btn">&darr; All items (MD)</button>
+    <button class="btn btn-sm" id="export-json-btn">&darr; Backup (JSON)</button>
+    <button class="btn btn-sm" id="import-json-btn">&uarr; Restore (JSON)</button>
+    <input type="file" id="import-input" accept=".json,application/json" style="display:none">
+    <div class="export-hint">
+      Markdown exports include screenshots inline as base64 — paste into a fresh chat with Claude to start a build.
+      JSON backup exports everything; restore replaces current data.
+    </div>
+  </div>
+
+  <div id="pipeline-list"></div>
+
+</div>
+
+<div id="toast"></div>
+
+<div class="modal-backdrop" id="edit-modal">
+  <div class="card" style="max-width:600px;width:100%;margin:0;max-height:90vh;overflow-y:auto" id="edit-card">
+    <div class="card-header">
+      <div class="card-title">Edit item</div>
+      <button class="btn btn-ghost btn-sm" id="edit-close-btn">&times;</button>
+    </div>
+    <div class="submit-form" id="edit-form-fields"></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">
+      <button class="btn" id="edit-cancel-btn">Cancel</button>
+      <button class="btn btn-primary" id="edit-save-btn">Save changes</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  // ── Page label map ──
+  const PAGE_LABELS = {
+    overview:'Overview', projections:'Projections',
+    txbank:'Transactions — Bank', txcards:'Transactions — Cards', txinvestments:'Transactions — Investments',
+    income:'Income', bills:'Bills', subscriptions:'Subscriptions',
+    uncat:'Uncategorized', transfers:'Pending Matches', reimbursements:'Reimbursements',
+    accounts:'Accounts & Cards', debts:'Debts', goals:'Goals',
+    staff:'Staff', familyinv:'Family Investments', investments:'Investments',
+    rules:'Transaction Rules', reviewqueue:'Review Queue', sanity:'Sanity Check', insights:'Usage Insights',
+    settings:'Settings', auth:'Auth / Vault', brand:'Brand / Visual', 'cross-cutting':'Cross-cutting', other:'Other'
+  };
+
+  // ── State ──
+  const STORAGE_KEY = 'lanki_tracker_items_v1';
+  const State = {
+    items: [],
+    pendingScreenshots: [],
+    editingId: null,
+    editingScreenshots: []
+  };
+
+  // ── Storage ──
+  function loadFromStorage() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      State.items = raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      console.warn('Failed to load tracker data:', e);
+      State.items = [];
+    }
+  }
+
+  function saveToStorage() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(State.items));
+    } catch (e) {
+      // Likely quota exceeded
+      toast('Save failed — likely storage quota. Export a backup and delete shipped items.', true);
+      console.error(e);
+    }
+  }
+
+  // ── Utilities ──
+  function toast(msg, isError) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className = isError ? 'show error' : 'show';
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => { el.className = ''; }, 2400);
+  }
+
+  function h(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function uid() {
+    const bytes = crypto.getRandomValues(new Uint8Array(8));
+    return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  function slugify(s) {
+    return (s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').substring(0, 40);
+  }
+
+  // ── Submit form: type change toggles bug fields, sets default severity ──
+  let userTouchedSeverity = false;
+  document.getElementById('f-severity').addEventListener('change', () => { userTouchedSeverity = true; });
+
+  function onTypeChange() {
+    const type = document.getElementById('f-type').value;
+    const bugFields = document.getElementById('bug-fields');
+    if (type === 'bug') {
+      bugFields.classList.add('active');
+      if (!userTouchedSeverity) document.getElementById('f-severity').value = 'high';
+    } else {
+      bugFields.classList.remove('active');
+      if (!userTouchedSeverity) document.getElementById('f-severity').value = 'medium';
+    }
+  }
+  document.getElementById('f-type').addEventListener('change', onTypeChange);
+
+  // ── Submit toggle (collapse) ──
+  document.getElementById('submit-toggle').addEventListener('click', () => {
+    document.getElementById('submit-body').classList.toggle('hidden');
+    document.getElementById('submit-toggle').classList.toggle('collapsed');
+  });
+
+  // ── Screenshot handling ──
+  const screenshotZone = document.getElementById('screenshot-zone');
+  const screenshotInput = document.getElementById('screenshot-input');
+
+  screenshotZone.addEventListener('click', () => screenshotInput.click());
+  screenshotInput.addEventListener('change', e => handleFiles(e.target.files));
+  screenshotZone.addEventListener('dragover', e => { e.preventDefault(); screenshotZone.classList.add('drag-over'); });
+  screenshotZone.addEventListener('dragleave', () => screenshotZone.classList.remove('drag-over'));
+  screenshotZone.addEventListener('drop', e => {
+    e.preventDefault();
+    screenshotZone.classList.remove('drag-over');
+    handleFiles(e.dataTransfer.files);
+  });
+
+  document.addEventListener('paste', e => {
+    // Skip paste-image capture if a text input or textarea has focus and the
+    // user is pasting text (the items collection will be empty for text paste).
+    const items = e.clipboardData ? e.clipboardData.items : [];
+    for (const item of items) {
+      if (item.type && item.type.indexOf('image/') === 0) {
+        e.preventDefault();
+        handleFiles([item.getAsFile()]);
+        return;
+      }
+    }
+  });
+
+  async function handleFiles(files) {
+    for (const file of files) {
+      if (!file || !file.type || file.type.indexOf('image/') !== 0) continue;
+      if (file.size > 5 * 1024 * 1024) {
+        toast('Image too large (max 5MB): ' + file.name, true);
+        continue;
+      }
+      try {
+        const compressed = await compressImage(file);
+        State.pendingScreenshots.push(compressed);
+        renderPendingScreenshots();
+      } catch (err) {
+        toast('Failed to read image', true);
+      }
+    }
+  }
+
+  function compressImage(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = e => {
+        const img = new Image();
+        img.onload = () => {
+          const maxDim = 1600;
+          let w = img.width, hh = img.height;
+          if (w > maxDim || hh > maxDim) {
+            const ratio = Math.min(maxDim / w, maxDim / hh);
+            w = Math.round(w * ratio);
+            hh = Math.round(hh * ratio);
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = hh;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, hh);
+          resolve(canvas.toDataURL('image/jpeg', 0.82));
+        };
+        img.onerror = reject;
+        img.src = e.target.result;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function renderPendingScreenshots() {
+    const list = document.getElementById('screenshot-list');
+    list.innerHTML = State.pendingScreenshots.map((s, i) =>
+      `<div class="screenshot-thumb"><img src="${s}" alt=""><button type="button" class="remove-btn" data-idx="${i}">&times;</button></div>`
+    ).join('');
+    list.querySelectorAll('.remove-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        State.pendingScreenshots.splice(parseInt(btn.dataset.idx), 1);
+        renderPendingScreenshots();
+      });
+    });
+  }
+
+  // ── Submit form ──
+  document.getElementById('submit-form').addEventListener('submit', e => {
+    e.preventDefault();
+    const title = document.getElementById('f-title').value.trim();
+    const type = document.getElementById('f-type').value;
+    const severity = document.getElementById('f-severity').value;
+    const page = document.getElementById('f-page').value;
+    const description = document.getElementById('f-description').value.trim();
+    const steps = document.getElementById('f-steps').value.trim();
+    const expected = document.getElementById('f-expected').value.trim();
+    const actual = document.getElementById('f-actual').value.trim();
+
+    if (!title || !description) { toast('Title and description required', true); return; }
+
+    const item = {
+      id: uid(),
+      title, type, severity, page, description,
+      steps: steps || null,
+      expected: expected || null,
+      actual: actual || null,
+      screenshots: State.pendingScreenshots.slice(),
+      status: 'open',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      scoped_at: null,
+      shipped_at: null,
+      shipped_version: null
+    };
+
+    State.items.unshift(item);
+    saveToStorage();
+    toast('Submitted');
+    resetForm();
+    populatePageFilter();
+    renderStats();
+    renderPipeline();
+  });
+
+  document.getElementById('reset-btn').addEventListener('click', resetForm);
+
+  function resetForm() {
+    document.getElementById('submit-form').reset();
+    State.pendingScreenshots = [];
+    renderPendingScreenshots();
+    userTouchedSeverity = false;
+    onTypeChange();
+  }
+
+  // ── Filters & render ──
+  function populatePageFilter() {
+    const sel = document.getElementById('filter-page');
+    const cur = sel.value;
+    const used = new Set(State.items.map(i => i.page).filter(Boolean));
+    const all = Array.from(new Set([...Object.keys(PAGE_LABELS), ...used]));
+    sel.innerHTML = '<option value="">All pages</option>' +
+      all.map(p => `<option value="${h(p)}">${h(PAGE_LABELS[p] || p)}</option>`).join('');
+    sel.value = cur;
+  }
+
+  function renderStats() {
+    const open = State.items.filter(i => i.status === 'open').length;
+    const scoped = State.items.filter(i => i.status === 'scoped').length;
+    const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+    const shipped = State.items.filter(i => i.status === 'shipped' && i.shipped_at >= monthStart).length;
+    document.getElementById('stat-open').textContent = open;
+    document.getElementById('stat-scoped').textContent = scoped;
+    document.getElementById('stat-shipped').textContent = shipped;
+  }
+
+  function renderPipeline() {
+    const fStatus = document.getElementById('filter-status').value;
+    const fType = document.getElementById('filter-type').value;
+    const fSev = document.getElementById('filter-severity').value;
+    const fPage = document.getElementById('filter-page').value;
+    const fSearch = document.getElementById('filter-search').value.toLowerCase().trim();
+
+    let items = State.items.slice();
+    if (fStatus) items = items.filter(i => i.status === fStatus);
+    if (fType) items = items.filter(i => i.type === fType);
+    if (fSev) items = items.filter(i => i.severity === fSev);
+    if (fPage) items = items.filter(i => i.page === fPage);
+    if (fSearch) items = items.filter(i =>
+      (i.title || '').toLowerCase().includes(fSearch) ||
+      (i.description || '').toLowerCase().includes(fSearch)
+    );
+
+    const sevOrder = { critical: 4, high: 3, medium: 2, low: 1 };
+    items.sort((a, b) => {
+      const so = (sevOrder[b.severity] || 0) - (sevOrder[a.severity] || 0);
+      if (so !== 0) return so;
+      return (b.created_at || '').localeCompare(a.created_at || '');
+    });
+
+    const container = document.getElementById('pipeline-list');
+    if (!items.length) {
+      container.innerHTML = `<div class="empty-state">
+        <p style="font-size:14px;color:var(--text-2)">No items match your filters.</p>
+        <p>Submit something using the form above, or change the filters.</p>
+      </div>`;
+      return;
+    }
+
+    container.innerHTML = items.map(renderItem).join('');
+
+    // Wire up event handlers
+    container.querySelectorAll('.pipeline-item').forEach(el => {
+      const id = el.dataset.id;
+      el.querySelector('.pipeline-row').addEventListener('click', () => el.classList.toggle('expanded'));
+      el.querySelectorAll('[data-action]').forEach(btn => {
+        btn.addEventListener('click', e => {
+          e.stopPropagation();
+          handleAction(id, btn.dataset.action);
+        });
+      });
+    });
+  }
+
+  function renderItem(item) {
+    const idShort = item.id.substring(0, 8);
+    const date = new Date(item.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+    const pageLabel = PAGE_LABELS[item.page] || item.page || '—';
+    const sCount = (item.screenshots || []).length;
+
+    let statusActions = '';
+    if (item.status === 'open') {
+      statusActions = `<button class="btn btn-sm btn-primary" data-action="scope">Mark scoped</button>`;
+    } else if (item.status === 'scoped') {
+      statusActions = `<button class="btn btn-sm" data-action="unscope">Move back to open</button>
+                       <button class="btn btn-sm" data-action="ship">Mark shipped</button>`;
+    } else if (item.status === 'shipped') {
+      statusActions = `<button class="btn btn-sm" data-action="unship">Re-open as scoped</button>`;
+    }
+
+    const bugDetails = item.type === 'bug' && (item.steps || item.expected || item.actual)
+      ? `${item.steps ? `<div class="detail-section"><h4>Steps to reproduce</h4><p>${h(item.steps)}</p></div>` : ''}
+         ${item.expected ? `<div class="detail-section"><h4>Expected</h4><p>${h(item.expected)}</p></div>` : ''}
+         ${item.actual ? `<div class="detail-section"><h4>Actual</h4><p>${h(item.actual)}</p></div>` : ''}`
+      : '';
+
+    return `<div class="pipeline-item" data-id="${item.id}">
+      <div class="pipeline-row">
+        <div class="pipeline-id">${h(idShort)}</div>
+        <div><span class="chip chip-type-${item.type}">${item.type}</span></div>
+        <div><span class="chip chip-sev-${item.severity}">${item.severity}</span></div>
+        <div class="pipeline-title">${h(item.title)}</div>
+        <div class="pipeline-date">${h(date)}</div>
+        <div><span class="chip chip-status-${item.status}">${item.status}</span></div>
+      </div>
+      <div class="pipeline-detail">
+        <div class="detail-section"><h4>Page</h4><p><span class="chip chip-page">${h(pageLabel)}</span></p></div>
+        <div class="detail-section"><h4>Description</h4><p>${h(item.description || '')}</p></div>
+        ${bugDetails}
+        ${sCount > 0 ? `<div class="detail-section"><h4>Screenshots</h4><p style="color:var(--text-2);font-size:12px">${sCount} image${sCount===1?'':'s'} attached — visible in export only</p></div>` : ''}
+        <div class="detail-actions">
+          ${statusActions}
+          <button class="btn btn-sm" data-action="edit">Edit</button>
+          <button class="btn btn-sm" data-action="export">&darr; Export this</button>
+          <div style="flex:1"></div>
+          <button class="btn btn-sm btn-danger" data-action="delete">Delete</button>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  function handleAction(id, action) {
+    const item = State.items.find(i => i.id === id);
+    if (!item) return;
+    const now = new Date().toISOString();
+
+    if (action === 'scope') {
+      item.status = 'scoped'; item.scoped_at = now; item.updated_at = now;
+      saveToStorage(); toast('Status: scoped'); renderStats(); renderPipeline();
+    } else if (action === 'unscope') {
+      item.status = 'open'; item.scoped_at = null; item.shipped_at = null; item.shipped_version = null; item.updated_at = now;
+      saveToStorage(); toast('Status: open'); renderStats(); renderPipeline();
+    } else if (action === 'ship') {
+      const v = prompt('Shipped in which version?', 'V8.28');
+      if (v === null) return;
+      item.status = 'shipped'; item.shipped_at = now; item.shipped_version = v.trim() || null; item.updated_at = now;
+      saveToStorage(); toast('Marked shipped'); renderStats(); renderPipeline();
+    } else if (action === 'unship') {
+      item.status = 'scoped'; item.shipped_at = null; item.shipped_version = null; item.updated_at = now;
+      saveToStorage(); toast('Status: scoped'); renderStats(); renderPipeline();
+    } else if (action === 'edit') {
+      openEditModal(id);
+    } else if (action === 'export') {
+      exportSingleItem(item);
+    } else if (action === 'delete') {
+      if (!confirm('Delete this item permanently?')) return;
+      State.items = State.items.filter(x => x.id !== id);
+      saveToStorage(); toast('Deleted'); renderStats(); renderPipeline();
+    }
+  }
+
+  // ── Edit modal ──
+  function openEditModal(id) {
+    const item = State.items.find(i => i.id === id);
+    if (!item) return;
+    State.editingId = id;
+    State.editingScreenshots = (item.screenshots || []).slice();
+
+    document.getElementById('edit-form-fields').innerHTML = `
+      <div>
+        <label>Title</label>
+        <input type="text" id="e-title" value="${h(item.title)}" maxlength="200">
+      </div>
+      <div class="form-row">
+        <div>
+          <label>Type</label>
+          <select id="e-type">${['bug','enhancement','layout','feature','question'].map(t => `<option value="${t}" ${item.type===t?'selected':''}>${t}</option>`).join('')}</select>
+        </div>
+        <div>
+          <label>Severity</label>
+          <select id="e-severity">${['critical','high','medium','low'].map(s => `<option value="${s}" ${item.severity===s?'selected':''}>${s}</option>`).join('')}</select>
+        </div>
+        <div>
+          <label>Page</label>
+          <select id="e-page">${Object.keys(PAGE_LABELS).map(p => `<option value="${p}" ${item.page===p?'selected':''}>${h(PAGE_LABELS[p])}</option>`).join('')}</select>
+        </div>
+      </div>
+      <div><label>Description</label><textarea id="e-description">${h(item.description || '')}</textarea></div>
+      <div><label>Steps to reproduce</label><textarea id="e-steps">${h(item.steps || '')}</textarea></div>
+      <div class="form-row-2">
+        <div><label>Expected</label><textarea id="e-expected">${h(item.expected || '')}</textarea></div>
+        <div><label>Actual</label><textarea id="e-actual">${h(item.actual || '')}</textarea></div>
+      </div>
+      <div>
+        <label>Screenshots (${State.editingScreenshots.length})</label>
+        <div class="screenshot-list" id="e-thumbs"></div>
+        <p style="font-size:11px;color:var(--text-3);margin-top:6px">To add new screenshots, delete and re-create the item.</p>
+      </div>
+    `;
+    renderEditScreenshots();
+    document.getElementById('edit-modal').classList.add('active');
+  }
+
+  function renderEditScreenshots() {
+    const list = document.getElementById('e-thumbs');
+    if (!list) return;
+    list.innerHTML = State.editingScreenshots.map((s, i) =>
+      `<div class="screenshot-thumb"><img src="${s}" alt=""><button type="button" class="remove-btn" data-idx="${i}">&times;</button></div>`
+    ).join('');
+    list.querySelectorAll('.remove-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        State.editingScreenshots.splice(parseInt(btn.dataset.idx), 1);
+        renderEditScreenshots();
+      });
+    });
+  }
+
+  function closeEditModal() {
+    document.getElementById('edit-modal').classList.remove('active');
+    State.editingId = null;
+    State.editingScreenshots = [];
+  }
+
+  document.getElementById('edit-close-btn').addEventListener('click', closeEditModal);
+  document.getElementById('edit-cancel-btn').addEventListener('click', closeEditModal);
+  document.getElementById('edit-modal').addEventListener('click', e => {
+    if (e.target.id === 'edit-modal') closeEditModal();
+  });
+
+  document.getElementById('edit-save-btn').addEventListener('click', () => {
+    if (!State.editingId) return;
+    const item = State.items.find(i => i.id === State.editingId);
+    if (!item) return;
+    item.title = document.getElementById('e-title').value.trim();
+    item.type = document.getElementById('e-type').value;
+    item.severity = document.getElementById('e-severity').value;
+    item.page = document.getElementById('e-page').value;
+    item.description = document.getElementById('e-description').value.trim();
+    item.steps = document.getElementById('e-steps').value.trim() || null;
+    item.expected = document.getElementById('e-expected').value.trim() || null;
+    item.actual = document.getElementById('e-actual').value.trim() || null;
+    item.screenshots = State.editingScreenshots.slice();
+    item.updated_at = new Date().toISOString();
+
+    saveToStorage();
+    closeEditModal();
+    toast('Saved');
+    renderPipeline();
+  });
+
+  // ── Export ──
+  function buildItemMarkdown(item) {
+    const date = new Date(item.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    const pageLabel = PAGE_LABELS[item.page] || item.page || '—';
+    let md = `## [${(item.severity || '').toUpperCase()}] ${item.title}\n\n`;
+    md += `**ID:** \`${item.id.substring(0, 8)}\` · **Type:** ${item.type} · **Page:** ${pageLabel} · **Submitted:** ${date} · **Status:** ${item.status}\n\n`;
+    md += `### Description\n${item.description || '_(none)_'}\n\n`;
+    if (item.type === 'bug') {
+      if (item.steps) md += `### Steps to reproduce\n${item.steps}\n\n`;
+      if (item.expected) md += `### Expected\n${item.expected}\n\n`;
+      if (item.actual) md += `### Actual\n${item.actual}\n\n`;
+    }
+    if ((item.screenshots || []).length) {
+      md += `### Screenshots\n`;
+      item.screenshots.forEach((s, i) => {
+        md += `![Screenshot ${i + 1}](${s})\n\n`;
+      });
+    }
+    md += `---\n\n`;
+    return md;
+  }
+
+  function exportSingleItem(item) {
+    const md = `# Tracker Item — ${item.title}\n\n${buildItemMarkdown(item)}`;
+    download(md, `tracker-${item.id.substring(0, 8)}-${slugify(item.title)}.md`, 'text/markdown');
+    toast('Exported');
+  }
+
+  function exportBatch(items, label) {
+    if (!items.length) { toast('No items to export', true); return; }
+    const date = new Date().toISOString().substring(0, 10);
+    const sevOrder = { critical: 4, high: 3, medium: 2, low: 1 };
+    items = items.slice().sort((a, b) => (sevOrder[b.severity] || 0) - (sevOrder[a.severity] || 0));
+
+    let md = `# Lanki Tracker — ${label} batch export\n\n`;
+    md += `**Generated:** ${new Date().toLocaleString('en-GB')}\n\n`;
+    md += `**Items:** ${items.length}\n\n---\n\n## Summary\n\n`;
+    md += `| ID | Severity | Type | Page | Title |\n|----|----------|------|------|-------|\n`;
+    items.forEach(i => {
+      md += `| \`${i.id.substring(0, 8)}\` | ${i.severity} | ${i.type} | ${PAGE_LABELS[i.page] || i.page} | ${(i.title || '').replace(/\|/g, '\\|')} |\n`;
+    });
+    md += `\n---\n\n## Items\n\n`;
+    items.forEach(i => { md += buildItemMarkdown(i); });
+
+    download(md, `lanki-tracker-${label}-${date}.md`, 'text/markdown');
+    toast(`Exported ${items.length} item${items.length===1?'':'s'}`);
+  }
+
+  function download(content, filename, mime) {
+    const blob = new Blob([content], { type: (mime || 'text/plain') + ';charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 100);
+  }
+
+  document.getElementById('export-scoped-btn').addEventListener('click', () => {
+    exportBatch(State.items.filter(i => i.status === 'scoped'), 'scoped');
+  });
+  document.getElementById('export-open-btn').addEventListener('click', () => {
+    exportBatch(State.items.filter(i => i.status === 'open' || i.status === 'scoped'), 'open-and-scoped');
+  });
+  document.getElementById('export-all-btn').addEventListener('click', () => {
+    exportBatch(State.items, 'all');
+  });
+  document.getElementById('export-json-btn').addEventListener('click', () => {
+    const date = new Date().toISOString().substring(0, 10);
+    download(JSON.stringify(State.items, null, 2), `lanki-tracker-backup-${date}.json`, 'application/json');
+    toast(`Backup: ${State.items.length} item${State.items.length===1?'':'s'}`);
+  });
+  document.getElementById('import-json-btn').addEventListener('click', () => {
+    document.getElementById('import-input').click();
+  });
+  document.getElementById('import-input').addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        if (!Array.isArray(data)) throw new Error('Expected an array of items');
+        if (!confirm(`Replace current ${State.items.length} item(s) with ${data.length} from this file?`)) return;
+        State.items = data;
+        saveToStorage();
+        populatePageFilter();
+        renderStats();
+        renderPipeline();
+        toast(`Restored ${data.length} item${data.length===1?'':'s'}`);
+      } catch (err) {
+        toast('Restore failed: ' + err.message, true);
+      }
+      e.target.value = '';
+    };
+    reader.readAsText(file);
+  });
+
+  // ── Filter listeners ──
+  ['filter-status', 'filter-type', 'filter-severity', 'filter-page'].forEach(id => {
+    document.getElementById(id).addEventListener('change', renderPipeline);
+  });
+  document.getElementById('filter-search').addEventListener('input', renderPipeline);
+
+  // ── Bootstrap ──
+  loadFromStorage();
+  populatePageFilter();
+  renderStats();
+  renderPipeline();
+  onTypeChange();
+})();
+</script>
+</body>
+</html>
