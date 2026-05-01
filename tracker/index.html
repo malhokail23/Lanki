@@ -1,1 +1,1536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Lanki — Tracker</title>
 
+<!-- Favicons (parallel to main Lanki) -->
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/lanki-app-icon-light-180-apple-touch.png">
+<meta name="theme-color" content="#F3F1EF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#021751" media="(prefers-color-scheme: dark)">
+
+<style>
+/* ════════════════════════════════════════════════════════════════════
+   Lanki Tracker — Brand-aligned design tokens (mirror lanki-tokens.css)
+   ════════════════════════════════════════════════════════════════════ */
+:root {
+  --lanki-ink: #021751;
+  --lanki-ink-electric: #0077C1;
+  --lanki-paper: #F3F1EF;
+  --lanki-paper-pure: #FFFFFF;
+  --lanki-line: #E4E0DC;
+  --lanki-text-secondary: #707070;
+  --lanki-text-tertiary: #9CA0A8;
+  --lanki-positive: #B5CBB7;
+  --lanki-negative: #C98E8B;
+  --lanki-warning: #D6C88F;
+  --lanki-capital: #A3BCD7;
+  --lanki-health: #8FA9A3;
+  --lanki-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+
+  --bg-page: var(--lanki-paper);
+  --bg-card: var(--lanki-paper-pure);
+  --bg-soft: #FAF9F7;
+  --border: var(--lanki-line);
+  --text-1: var(--lanki-ink);
+  --text-2: var(--lanki-text-secondary);
+  --text-3: var(--lanki-text-tertiary);
+  --shadow-sm: 0 1px 2px rgba(2,23,81,0.04);
+  --shadow-md: 0 2px 8px rgba(2,23,81,0.06);
+  --shadow-lg: 0 8px 24px rgba(2,23,81,0.10);
+  --r-sm: 4px;
+  --r-md: 8px;
+  --r-lg: 12px;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: var(--lanki-font-sans);
+  background: var(--bg-page);
+  color: var(--text-1);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   Layout
+   ════════════════════════════════════════════════════════════════════ */
+.app-header {
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.brand-mark {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2.5px;
+  align-items: flex-start;
+}
+.brand-mark span {
+  display: block;
+  height: 4px;
+  background: var(--lanki-ink);
+  border-radius: 1px;
+}
+.brand-mark span:nth-child(1) { width: 22px; }
+.brand-mark span:nth-child(2) { width: 14px; }
+.brand-mark span:nth-child(3) { width: 18px; }
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  line-height: 1;
+}
+.brand-text .word {
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: -0.4px;
+  color: var(--lanki-ink);
+}
+.brand-text .sub {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.brand-text .sub::before {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  background: var(--lanki-capital);
+  border-radius: 1px;
+}
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   Auth gate
+   ════════════════════════════════════════════════════════════════════ */
+.auth-gate {
+  max-width: 420px;
+  margin: 80px auto;
+  padding: 32px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-md);
+}
+.auth-gate h1 {
+  font-size: 20px;
+  font-weight: 500;
+  margin: 0 0 8px;
+  color: var(--text-1);
+}
+.auth-gate p {
+  font-size: 13px;
+  color: var(--text-2);
+  margin: 0 0 20px;
+  line-height: 1.6;
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   Forms
+   ════════════════════════════════════════════════════════════════════ */
+label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-3);
+  margin-bottom: 6px;
+}
+input[type="text"], input[type="email"], textarea, select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--bg-card);
+  color: var(--text-1);
+  font-family: inherit;
+  font-size: 14px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+input[type="text"]:focus, input[type="email"]:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: var(--lanki-ink-electric);
+  box-shadow: 0 0 0 3px rgba(0, 119, 193, 0.12);
+}
+textarea {
+  resize: vertical;
+  min-height: 80px;
+  line-height: 1.5;
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--bg-card);
+  color: var(--text-1);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+.btn:hover { background: var(--bg-soft); }
+.btn:active { transform: translateY(1px); }
+.btn-primary {
+  background: var(--lanki-ink-electric);
+  border-color: var(--lanki-ink-electric);
+  color: white;
+}
+.btn-primary:hover { background: #0066A8; }
+.btn-danger {
+  background: var(--bg-card);
+  border-color: var(--lanki-negative);
+  color: #8B4040;
+}
+.btn-danger:hover { background: color-mix(in srgb, var(--lanki-negative) 12%, transparent); }
+.btn-ghost {
+  border-color: transparent;
+  background: transparent;
+}
+.btn-ghost:hover { background: var(--bg-soft); }
+.btn-sm { padding: 5px 10px; font-size: 11px; }
+.btn-xs { padding: 3px 8px; font-size: 10px; }
+
+/* ════════════════════════════════════════════════════════════════════
+   Cards & sections
+   ════════════════════════════════════════════════════════════════════ */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 20px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow-sm);
+}
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  gap: 12px;
+}
+.card-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+.card-sub {
+  font-size: 11px;
+  color: var(--text-3);
+  margin-top: 2px;
+}
+
+/* Stats row */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.stat-tile {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 14px 18px;
+  box-shadow: var(--shadow-sm);
+}
+.stat-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+}
+.stat-value {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-1);
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   Submit form
+   ════════════════════════════════════════════════════════════════════ */
+.submit-form {
+  display: grid;
+  gap: 14px;
+}
+.form-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+.form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 720px) {
+  .form-row { grid-template-columns: 1fr; }
+  .form-row-2 { grid-template-columns: 1fr; }
+  .stats-row { grid-template-columns: 1fr; }
+}
+
+/* Screenshot dropzone */
+.screenshot-zone {
+  border: 2px dashed var(--border);
+  border-radius: var(--r-md);
+  padding: 16px;
+  text-align: center;
+  background: var(--bg-soft);
+  transition: border-color 0.15s, background 0.15s;
+  cursor: pointer;
+}
+.screenshot-zone:hover, .screenshot-zone.drag-over {
+  border-color: var(--lanki-ink-electric);
+  background: rgba(0, 119, 193, 0.04);
+}
+.screenshot-zone p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.screenshot-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.screenshot-thumb {
+  position: relative;
+  width: 100px;
+  height: 100px;
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+}
+.screenshot-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.screenshot-thumb .remove-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.screenshot-thumb .remove-btn:hover { background: rgba(0, 0, 0, 0.9); }
+
+/* Bug-only fields collapse */
+.bug-only-fields {
+  display: none;
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+  gap: 14px;
+  grid-template-columns: 1fr 1fr;
+}
+.bug-only-fields.active { display: grid; }
+.bug-only-fields > div:first-child { grid-column: 1 / -1; }
+@media (max-width: 720px) {
+  .bug-only-fields.active { grid-template-columns: 1fr; }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   Filter bar
+   ════════════════════════════════════════════════════════════════════ */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+.filter-bar select, .filter-bar input {
+  flex: 0 1 auto;
+  min-width: 120px;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   Pipeline list
+   ════════════════════════════════════════════════════════════════════ */
+.pipeline-item {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  margin-bottom: 8px;
+  overflow: hidden;
+  transition: box-shadow 0.15s;
+}
+.pipeline-item:hover { box-shadow: var(--shadow-sm); }
+.pipeline-item.expanded { box-shadow: var(--shadow-md); }
+
+.pipeline-row {
+  display: grid;
+  grid-template-columns: 60px 90px 80px 1fr 100px auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 16px;
+  cursor: pointer;
+}
+.pipeline-row:hover { background: var(--bg-soft); }
+@media (max-width: 720px) {
+  .pipeline-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .pipeline-row > * { white-space: normal !important; }
+}
+
+.pipeline-id {
+  font-size: 10px;
+  color: var(--text-3);
+  font-family: ui-monospace, SF Mono, Menlo, Consolas, monospace;
+}
+.pipeline-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pipeline-date {
+  font-size: 10px;
+  color: var(--text-3);
+  text-align: right;
+}
+
+/* Chips */
+.chip {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 7px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+.chip-type-bug { background: color-mix(in srgb, var(--lanki-negative) 24%, transparent); color: #8B4040; }
+.chip-type-enhancement { background: color-mix(in srgb, var(--lanki-positive) 32%, transparent); color: #3D6B4F; }
+.chip-type-layout { background: color-mix(in srgb, var(--lanki-capital) 40%, transparent); color: #2A4A6E; }
+.chip-type-feature { background: color-mix(in srgb, var(--lanki-ink-electric) 16%, transparent); color: #0066A8; }
+.chip-type-question { background: color-mix(in srgb, var(--lanki-warning) 28%, transparent); color: #7A5E20; }
+
+.chip-sev-critical { background: var(--lanki-negative); color: white; }
+.chip-sev-high { background: color-mix(in srgb, var(--lanki-negative) 30%, transparent); color: #8B4040; }
+.chip-sev-medium { background: color-mix(in srgb, var(--lanki-warning) 28%, transparent); color: #7A5E20; }
+.chip-sev-low { background: var(--bg-soft); color: var(--text-3); border: 1px solid var(--border); }
+
+.chip-page {
+  background: transparent;
+  color: var(--text-3);
+  font-weight: 500;
+  border: 1px solid var(--border);
+}
+
+.chip-status-open { background: var(--bg-soft); color: var(--text-2); border: 1px solid var(--border); }
+.chip-status-scoped { background: color-mix(in srgb, var(--lanki-ink-electric) 16%, transparent); color: #0066A8; }
+.chip-status-shipped { background: color-mix(in srgb, var(--lanki-positive) 32%, transparent); color: #3D6B4F; }
+.chip-status-dropped { background: var(--bg-soft); color: var(--text-3); }
+
+/* Expanded detail */
+.pipeline-detail {
+  padding: 16px 24px 20px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-soft);
+  display: none;
+}
+.pipeline-item.expanded .pipeline-detail { display: block; }
+.detail-section {
+  margin-bottom: 14px;
+}
+.detail-section h4 {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+  margin: 0 0 6px;
+}
+.detail-section p {
+  font-size: 13px;
+  color: var(--text-1);
+  margin: 0;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+.detail-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.detail-screenshots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.detail-screenshots img {
+  max-width: 200px;
+  max-height: 200px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  cursor: zoom-in;
+}
+
+/* Toast */
+#toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--lanki-ink);
+  color: white;
+  padding: 10px 18px;
+  border-radius: var(--r-md);
+  font-size: 13px;
+  z-index: 100;
+  box-shadow: var(--shadow-lg);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s, transform 0.2s;
+}
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(-4px); }
+#toast.error { background: #8B4040; }
+
+/* Modal (image lightbox) */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 23, 81, 0.7);
+  z-index: 200;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.modal-backdrop.active { display: flex; }
+.modal-backdrop img { max-width: 95vw; max-height: 95vh; box-shadow: var(--shadow-lg); border-radius: var(--r-md); }
+
+/* Empty state */
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  background: var(--bg-card);
+  border: 1px dashed var(--border);
+  border-radius: var(--r-md);
+  color: var(--text-3);
+}
+.empty-state p { margin: 4px 0; }
+
+/* Loading */
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--lanki-ink-electric);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.collapsible-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+}
+.collapsible-header .arrow {
+  transition: transform 0.2s;
+}
+.collapsible-header.collapsed .arrow {
+  transform: rotate(-90deg);
+}
+.collapsible-body {
+  margin-top: 16px;
+}
+.collapsible-body.hidden { display: none; }
+
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <div class="brand">
+    <div class="brand-mark"><span></span><span></span><span></span></div>
+    <div class="brand-text">
+      <span class="word">lanki</span>
+      <span class="sub">Tracker</span>
+    </div>
+  </div>
+  <div class="header-actions" id="header-actions">
+    <a href="https://lanki.app" class="btn btn-sm btn-ghost" style="text-decoration:none">&larr; Lanki</a>
+    <button class="btn btn-sm btn-ghost" id="signout-btn" style="display:none" onclick="signOut()">Sign out</button>
+  </div>
+</header>
+
+<!-- Auth gate (shown when no session) -->
+<div id="auth-view" class="auth-gate" style="display:none">
+  <h1>Sign in to Tracker</h1>
+  <p>Enter your email and we'll send you a magic link. The link signs you in automatically — no password needed.</p>
+  <div style="display:grid;gap:14px">
+    <div>
+      <label for="auth-email">Email</label>
+      <input type="email" id="auth-email" placeholder="you@example.com" autocomplete="email">
+    </div>
+    <button class="btn btn-primary" id="auth-send-btn" onclick="sendMagicLink()">Send magic link</button>
+    <div id="auth-msg" style="font-size:12px;color:var(--text-2);text-align:center;min-height:18px"></div>
+  </div>
+</div>
+
+<!-- App view (shown when signed in) -->
+<div id="app-view" class="container" style="display:none">
+
+  <!-- Stats row -->
+  <div class="stats-row" id="stats-row">
+    <div class="stat-tile">
+      <div class="stat-label">Open</div>
+      <div class="stat-value" id="stat-open">—</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-label">Scoped</div>
+      <div class="stat-value" id="stat-scoped">—</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-label">Shipped this month</div>
+      <div class="stat-value" id="stat-shipped">—</div>
+    </div>
+  </div>
+
+  <!-- Submit form -->
+  <div class="card" id="submit-card">
+    <div class="collapsible-header" id="submit-toggle" onclick="toggleSubmit()">
+      <div>
+        <div class="card-title">Submit a new item</div>
+        <div class="card-sub">Bug, enhancement, layout fix, or feature request</div>
+      </div>
+      <span class="arrow" style="font-size:18px;color:var(--text-3)">&#9660;</span>
+    </div>
+
+    <div class="collapsible-body" id="submit-body">
+      <form class="submit-form" id="submit-form" onsubmit="event.preventDefault();handleSubmit()">
+        <div>
+          <label for="f-title">Title *</label>
+          <input type="text" id="f-title" required maxlength="200" placeholder="One-line summary">
+        </div>
+
+        <div class="form-row">
+          <div>
+            <label for="f-type">Type *</label>
+            <select id="f-type" required onchange="onTypeChange()">
+              <option value="bug">Bug</option>
+              <option value="enhancement">Enhancement</option>
+              <option value="layout">Layout / Polish</option>
+              <option value="feature">New Feature</option>
+              <option value="question">Question</option>
+            </select>
+          </div>
+          <div>
+            <label for="f-severity">Severity *</label>
+            <select id="f-severity" required>
+              <option value="low">Low</option>
+              <option value="medium" selected>Medium</option>
+              <option value="high">High</option>
+              <option value="critical">Critical</option>
+            </select>
+          </div>
+          <div>
+            <label for="f-page">Page *</label>
+            <select id="f-page" required>
+              <option value="overview">Overview</option>
+              <option value="projections">Projections</option>
+              <option value="txbank">Transactions — Bank</option>
+              <option value="txcards">Transactions — Cards</option>
+              <option value="txinvestments">Transactions — Investments</option>
+              <option value="income">Recurring — Income</option>
+              <option value="bills">Recurring — Bills</option>
+              <option value="subscriptions">Recurring — Subscriptions</option>
+              <option value="uncat">Inbox — Uncategorized</option>
+              <option value="transfers">Inbox — Pending Matches</option>
+              <option value="reimbursements">Inbox — Reimbursements</option>
+              <option value="accounts">Accounts &amp; Cards</option>
+              <option value="debts">Debts</option>
+              <option value="goals">Goals</option>
+              <option value="staff">Staff</option>
+              <option value="familyinv">Family Investments</option>
+              <option value="investments">Investments</option>
+              <option value="rules">System — Transaction Rules</option>
+              <option value="reviewqueue">System — Review Queue</option>
+              <option value="sanity">System — Sanity Check</option>
+              <option value="insights">System — Usage Insights</option>
+              <option value="settings">Settings</option>
+              <option value="auth">Auth / Vault</option>
+              <option value="brand">Brand / Visual</option>
+              <option value="cross-cutting">Cross-cutting</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label for="f-description">Description *</label>
+          <textarea id="f-description" required placeholder="What's the issue or idea? Be specific."></textarea>
+        </div>
+
+        <!-- Bug-only fields (shown only when type=bug) -->
+        <div class="bug-only-fields" id="bug-fields">
+          <div>
+            <label for="f-steps">Steps to reproduce</label>
+            <textarea id="f-steps" placeholder="1. Go to...&#10;2. Click on...&#10;3. Observe..."></textarea>
+          </div>
+          <div>
+            <label for="f-expected">Expected behavior</label>
+            <textarea id="f-expected" placeholder="What should happen"></textarea>
+          </div>
+          <div>
+            <label for="f-actual">Actual behavior</label>
+            <textarea id="f-actual" placeholder="What actually happens"></textarea>
+          </div>
+        </div>
+
+        <div>
+          <label>Screenshots</label>
+          <div class="screenshot-zone" id="screenshot-zone">
+            <p><strong>Click to upload</strong>, drag &amp; drop, or paste from clipboard (Ctrl+V / Cmd+V)</p>
+            <input type="file" id="screenshot-input" accept="image/*" multiple style="display:none">
+          </div>
+          <div class="screenshot-list" id="screenshot-list"></div>
+        </div>
+
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+          <button type="button" class="btn" onclick="resetForm()">Reset</button>
+          <button type="submit" class="btn btn-primary" id="submit-btn">Submit</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="filter-bar">
+    <span style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:0.04em">Filter</span>
+    <select id="filter-status" onchange="renderPipeline()">
+      <option value="">All status</option>
+      <option value="open" selected>Open</option>
+      <option value="scoped">Scoped</option>
+      <option value="shipped">Shipped</option>
+      <option value="dropped">Dropped</option>
+    </select>
+    <select id="filter-type" onchange="renderPipeline()">
+      <option value="">All types</option>
+      <option value="bug">Bugs</option>
+      <option value="enhancement">Enhancements</option>
+      <option value="layout">Layout</option>
+      <option value="feature">Features</option>
+      <option value="question">Questions</option>
+    </select>
+    <select id="filter-severity" onchange="renderPipeline()">
+      <option value="">All severities</option>
+      <option value="critical">Critical</option>
+      <option value="high">High</option>
+      <option value="medium">Medium</option>
+      <option value="low">Low</option>
+    </select>
+    <select id="filter-page" onchange="renderPipeline()">
+      <option value="">All pages</option>
+    </select>
+    <input type="text" id="filter-search" placeholder="Search title/description..." oninput="renderPipeline()" style="flex:1;min-width:140px">
+    <div style="flex:1"></div>
+    <button class="btn btn-sm" onclick="exportScoped()" id="export-scoped-btn">&darr; Export scoped</button>
+    <button class="btn btn-sm" onclick="exportOpen()">&darr; Export open</button>
+  </div>
+
+  <!-- Pipeline -->
+  <div id="pipeline-list"></div>
+
+</div>
+
+<!-- Toast notifications -->
+<div id="toast"></div>
+
+<!-- Image lightbox -->
+<div class="modal-backdrop" id="lightbox" onclick="closeLightbox()">
+  <img id="lightbox-img" src="" alt="">
+</div>
+
+<!-- Edit modal -->
+<div class="modal-backdrop" id="edit-modal">
+  <div class="card" style="max-width:600px;width:100%;margin:0;max-height:90vh;overflow-y:auto" onclick="event.stopPropagation()">
+    <div class="card-header">
+      <div class="card-title">Edit item</div>
+      <button class="btn btn-ghost btn-sm" onclick="closeEditModal()">&times;</button>
+    </div>
+    <div class="submit-form" id="edit-form-fields"></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">
+      <button class="btn" onclick="closeEditModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEdit()">Save changes</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+// ════════════════════════════════════════════════════════════════════
+// Lanki Tracker — Application Logic
+// Standalone tool. Lives at lanki.app/tracker/. Independent of main Lanki.
+// Auth: Supabase Auth via email magic link.
+// Storage: tracker_items table with user_id-keyed RLS.
+// ════════════════════════════════════════════════════════════════════
+
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+// ── Supabase config ──────────────────────────────────────────────────
+// Anon key is safe to embed publicly when RLS is enforced.
+// Project ID dgefsppkijrrvotggeom matches main Lanki.
+const SUPABASE_URL = 'https://dgefsppkijrrvotggeom.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyZWYiOiJkZ2Vmc3Bwa2lqcnJ2b3RnZ2VvbSIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzMzNTAwMDAwLCJleHAiOjIwNDkwNzYwMDB9.PLACEHOLDER_REPLACE_WITH_REAL_ANON_KEY';
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: { persistSession: true, autoRefreshToken: true }
+});
+
+// ── App state ────────────────────────────────────────────────────────
+const State = {
+  user: null,
+  items: [],
+  pendingScreenshots: [],   // base64 strings staged for the submit form
+  editingId: null,
+  editingScreenshots: []
+};
+
+// Page label map (for chips and filters)
+const PAGE_LABELS = {
+  overview:'Overview', projections:'Projections',
+  txbank:'Transactions — Bank', txcards:'Transactions — Cards', txinvestments:'Transactions — Investments',
+  income:'Income', bills:'Bills', subscriptions:'Subscriptions',
+  uncat:'Uncategorized', transfers:'Pending Matches', reimbursements:'Reimbursements',
+  accounts:'Accounts & Cards', debts:'Debts', goals:'Goals',
+  staff:'Staff', familyinv:'Family Investments', investments:'Investments',
+  rules:'Transaction Rules', reviewqueue:'Review Queue', sanity:'Sanity Check', insights:'Usage Insights',
+  settings:'Settings', auth:'Auth / Vault', brand:'Brand / Visual', 'cross-cutting':'Cross-cutting', other:'Other'
+};
+
+// ── Toast ────────────────────────────────────────────────────────────
+function toast(msg, isError = false) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = isError ? 'show error' : 'show';
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => { el.classList.remove('show'); }, 2400);
+}
+
+// ── HTML escape ──────────────────────────────────────────────────────
+function h(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// ── Auth flow ────────────────────────────────────────────────────────
+window.sendMagicLink = async function() {
+  const email = document.getElementById('auth-email').value.trim();
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    document.getElementById('auth-msg').textContent = 'Please enter a valid email.';
+    document.getElementById('auth-msg').style.color = 'var(--lanki-negative)';
+    return;
+  }
+  const btn = document.getElementById('auth-send-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Sending...';
+
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    options: { emailRedirectTo: window.location.href }
+  });
+
+  btn.disabled = false;
+  btn.textContent = 'Send magic link';
+
+  const msg = document.getElementById('auth-msg');
+  if (error) {
+    msg.textContent = 'Error: ' + error.message;
+    msg.style.color = 'var(--lanki-negative)';
+  } else {
+    msg.textContent = '✓ Check your inbox. The link will sign you in automatically.';
+    msg.style.color = 'var(--lanki-positive-text, #3D6B4F)';
+  }
+};
+
+window.signOut = async function() {
+  await supabase.auth.signOut();
+  State.user = null;
+  State.items = [];
+  showAuthView();
+  toast('Signed out');
+};
+
+function showAuthView() {
+  document.getElementById('auth-view').style.display = 'block';
+  document.getElementById('app-view').style.display = 'none';
+  document.getElementById('signout-btn').style.display = 'none';
+}
+function showAppView() {
+  document.getElementById('auth-view').style.display = 'none';
+  document.getElementById('app-view').style.display = 'block';
+  document.getElementById('signout-btn').style.display = 'inline-flex';
+}
+
+// ── Data load ────────────────────────────────────────────────────────
+async function loadItems() {
+  const { data, error } = await supabase
+    .from('tracker_items')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) { toast('Load failed: ' + error.message, true); return; }
+  State.items = data || [];
+  populatePageFilter();
+  renderStats();
+  renderPipeline();
+}
+
+function populatePageFilter() {
+  // Build filter options from pages actually represented in the data plus all label keys
+  const sel = document.getElementById('filter-page');
+  const cur = sel.value;
+  const usedPages = new Set(State.items.map(i => i.page).filter(Boolean));
+  const allPages = Array.from(new Set([...Object.keys(PAGE_LABELS), ...usedPages]));
+  sel.innerHTML = '<option value="">All pages</option>' +
+    allPages.map(p => `<option value="${h(p)}">${h(PAGE_LABELS[p] || p)}</option>`).join('');
+  sel.value = cur;
+}
+
+// ── Stats ────────────────────────────────────────────────────────────
+function renderStats() {
+  const open = State.items.filter(i => i.status === 'open').length;
+  const scoped = State.items.filter(i => i.status === 'scoped').length;
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  const shippedMo = State.items.filter(i => i.status === 'shipped' && i.shipped_at >= monthStart).length;
+  document.getElementById('stat-open').textContent = open;
+  document.getElementById('stat-scoped').textContent = scoped;
+  document.getElementById('stat-shipped').textContent = shippedMo;
+}
+
+// ── Type change handler (toggle bug-only fields) ────────────────────
+window.onTypeChange = function() {
+  const type = document.getElementById('f-type').value;
+  const bugFields = document.getElementById('bug-fields');
+  if (type === 'bug') {
+    bugFields.classList.add('active');
+    // Auto-bump severity to high for new bugs
+    if (!document.getElementById('f-severity').dataset.userTouched) {
+      document.getElementById('f-severity').value = 'high';
+    }
+  } else {
+    bugFields.classList.remove('active');
+    if (!document.getElementById('f-severity').dataset.userTouched) {
+      document.getElementById('f-severity').value = 'medium';
+    }
+  }
+};
+document.getElementById('f-severity')?.addEventListener('change', e => { e.target.dataset.userTouched = '1'; });
+
+// ── Submit form toggle ──────────────────────────────────────────────
+window.toggleSubmit = function() {
+  const body = document.getElementById('submit-body');
+  const header = document.getElementById('submit-toggle');
+  body.classList.toggle('hidden');
+  header.classList.toggle('collapsed');
+};
+
+// ── Screenshot handling ──────────────────────────────────────────────
+const screenshotZone = document.getElementById('screenshot-zone');
+const screenshotInput = document.getElementById('screenshot-input');
+
+screenshotZone.addEventListener('click', () => screenshotInput.click());
+screenshotInput.addEventListener('change', e => handleFiles(e.target.files));
+screenshotZone.addEventListener('dragover', e => { e.preventDefault(); screenshotZone.classList.add('drag-over'); });
+screenshotZone.addEventListener('dragleave', () => screenshotZone.classList.remove('drag-over'));
+screenshotZone.addEventListener('drop', e => {
+  e.preventDefault();
+  screenshotZone.classList.remove('drag-over');
+  handleFiles(e.dataTransfer.files);
+});
+
+// Paste from clipboard
+document.addEventListener('paste', e => {
+  if (document.getElementById('app-view').style.display === 'none') return;
+  // Only intercept paste when no input/textarea has focus and submit form is open
+  const tag = (document.activeElement?.tagName || '').toLowerCase();
+  if (['input','textarea','select'].includes(tag)) {
+    // Allow normal paste in fields, but also catch images
+    const items = e.clipboardData?.items || [];
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault();
+        handleFiles([item.getAsFile()]);
+        return;
+      }
+    }
+    return;
+  }
+  // No focused field — accept any image paste
+  const items = e.clipboardData?.items || [];
+  for (const item of items) {
+    if (item.type.startsWith('image/')) {
+      e.preventDefault();
+      handleFiles([item.getAsFile()]);
+      return;
+    }
+  }
+});
+
+async function handleFiles(files) {
+  for (const file of files) {
+    if (!file.type.startsWith('image/')) continue;
+    if (file.size > 2 * 1024 * 1024) {
+      toast('Image too large (max 2MB): ' + file.name, true);
+      continue;
+    }
+    try {
+      const compressed = await compressImage(file);
+      State.pendingScreenshots.push(compressed);
+      renderScreenshots();
+    } catch (err) {
+      toast('Failed to read image: ' + err.message, true);
+    }
+  }
+}
+
+// Compress image to under ~500KB by scaling and re-encoding as JPEG quality 0.8
+function compressImage(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const maxDim = 1600;
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          const ratio = Math.min(maxDim / width, maxDim / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.82));
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderScreenshots() {
+  const list = document.getElementById('screenshot-list');
+  list.innerHTML = State.pendingScreenshots.map((s, i) => `
+    <div class="screenshot-thumb">
+      <img src="${s}" alt="">
+      <button type="button" class="remove-btn" onclick="removeScreenshot(${i})" title="Remove">&times;</button>
+    </div>
+  `).join('');
+}
+window.removeScreenshot = function(i) {
+  State.pendingScreenshots.splice(i, 1);
+  renderScreenshots();
+};
+
+// ── Submit ───────────────────────────────────────────────────────────
+window.handleSubmit = async function() {
+  if (!State.user) { toast('Not signed in', true); return; }
+  const title = document.getElementById('f-title').value.trim();
+  const type = document.getElementById('f-type').value;
+  const severity = document.getElementById('f-severity').value;
+  const page = document.getElementById('f-page').value;
+  const description = document.getElementById('f-description').value.trim();
+  const steps = document.getElementById('f-steps').value.trim();
+  const expected = document.getElementById('f-expected').value.trim();
+  const actual = document.getElementById('f-actual').value.trim();
+
+  if (!title || !description || !type || !severity || !page) {
+    toast('Please fill in all required fields', true);
+    return;
+  }
+
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Submitting...';
+
+  const payload = {
+    user_id: State.user.id,
+    title, type, severity, page, description,
+    steps: steps || null,
+    expected: expected || null,
+    actual: actual || null,
+    screenshots: State.pendingScreenshots,
+    status: 'open'
+  };
+
+  const { data, error } = await supabase.from('tracker_items').insert(payload).select().single();
+
+  btn.disabled = false;
+  btn.textContent = 'Submit';
+
+  if (error) {
+    toast('Submit failed: ' + error.message, true);
+    return;
+  }
+
+  State.items.unshift(data);
+  toast('✓ Item submitted');
+  resetForm();
+  populatePageFilter();
+  renderStats();
+  renderPipeline();
+};
+
+window.resetForm = function() {
+  document.getElementById('submit-form').reset();
+  State.pendingScreenshots = [];
+  renderScreenshots();
+  document.getElementById('f-severity').dataset.userTouched = '';
+  onTypeChange();
+};
+
+// ── Pipeline list ────────────────────────────────────────────────────
+function renderPipeline() {
+  const fStatus = document.getElementById('filter-status').value;
+  const fType = document.getElementById('filter-type').value;
+  const fSev = document.getElementById('filter-severity').value;
+  const fPage = document.getElementById('filter-page').value;
+  const fSearch = document.getElementById('filter-search').value.toLowerCase().trim();
+
+  let items = [...State.items];
+  if (fStatus) items = items.filter(i => i.status === fStatus);
+  if (fType) items = items.filter(i => i.type === fType);
+  if (fSev) items = items.filter(i => i.severity === fSev);
+  if (fPage) items = items.filter(i => i.page === fPage);
+  if (fSearch) items = items.filter(i =>
+    (i.title || '').toLowerCase().includes(fSearch) ||
+    (i.description || '').toLowerCase().includes(fSearch)
+  );
+
+  // Sort: severity descending (critical → low), then created_at descending
+  const sevOrder = { critical: 4, high: 3, medium: 2, low: 1 };
+  items.sort((a, b) => {
+    const so = (sevOrder[b.severity] || 0) - (sevOrder[a.severity] || 0);
+    if (so !== 0) return so;
+    return (b.created_at || '').localeCompare(a.created_at || '');
+  });
+
+  const container = document.getElementById('pipeline-list');
+  if (!items.length) {
+    container.innerHTML = `<div class="empty-state">
+      <p style="font-size:14px;color:var(--text-2)">No items match your filters.</p>
+      <p>Submit something using the form above, or change the filters.</p>
+    </div>`;
+    return;
+  }
+
+  container.innerHTML = items.map(item => renderPipelineItem(item)).join('');
+}
+
+function renderPipelineItem(item) {
+  const idShort = item.id.substring(0, 8);
+  const date = new Date(item.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+  const typeChip = `<span class="chip chip-type-${item.type}">${item.type}</span>`;
+  const sevChip = `<span class="chip chip-sev-${item.severity}">${item.severity}</span>`;
+  const pageLabel = PAGE_LABELS[item.page] || item.page || '—';
+  const statusChip = `<span class="chip chip-status-${item.status}">${item.status}</span>`;
+
+  const hasScreenshots = (item.screenshots || []).length > 0;
+  const screenshotsHtml = hasScreenshots
+    ? `<div class="detail-section">
+        <h4>Screenshots (${item.screenshots.length})</h4>
+        <div class="detail-screenshots">
+          ${item.screenshots.map((s, i) => `<img src="${s}" alt="Screenshot ${i+1}" onclick="openLightbox('${item.id}', ${i})">`).join('')}
+        </div>
+      </div>`
+    : '';
+
+  const bugDetails = item.type === 'bug' && (item.steps || item.expected || item.actual)
+    ? `${item.steps ? `<div class="detail-section"><h4>Steps to reproduce</h4><p>${h(item.steps)}</p></div>` : ''}
+       ${item.expected ? `<div class="detail-section"><h4>Expected</h4><p>${h(item.expected)}</p></div>` : ''}
+       ${item.actual ? `<div class="detail-section"><h4>Actual</h4><p>${h(item.actual)}</p></div>` : ''}`
+    : '';
+
+  // Status-aware actions
+  let statusActions = '';
+  if (item.status === 'open') {
+    statusActions = `<button class="btn btn-sm btn-primary" onclick="setStatus('${item.id}', 'scoped')">Mark scoped</button>`;
+  } else if (item.status === 'scoped') {
+    statusActions = `<button class="btn btn-sm" onclick="setStatus('${item.id}', 'open')">Move back to open</button>
+                     <button class="btn btn-sm" onclick="markShipped('${item.id}')">Mark shipped</button>`;
+  } else if (item.status === 'shipped') {
+    statusActions = `<button class="btn btn-sm" onclick="setStatus('${item.id}', 'scoped')">Re-open as scoped</button>`;
+  }
+
+  return `<div class="pipeline-item" id="item-${item.id}">
+    <div class="pipeline-row" onclick="toggleExpand('${item.id}')">
+      <div class="pipeline-id">${h(idShort)}</div>
+      <div>${typeChip}</div>
+      <div>${sevChip}</div>
+      <div class="pipeline-title">${h(item.title)}</div>
+      <div class="pipeline-date">${h(date)}</div>
+      <div>${statusChip}</div>
+    </div>
+    <div class="pipeline-detail">
+      <div class="detail-section">
+        <h4>Page</h4>
+        <p><span class="chip chip-page">${h(pageLabel)}</span></p>
+      </div>
+      <div class="detail-section">
+        <h4>Description</h4>
+        <p>${h(item.description || '')}</p>
+      </div>
+      ${bugDetails}
+      ${screenshotsHtml}
+      <div class="detail-actions">
+        ${statusActions}
+        <button class="btn btn-sm" onclick="openEditModal('${item.id}')">Edit</button>
+        <button class="btn btn-sm" onclick="exportItem('${item.id}')">&darr; Export this item</button>
+        <div style="flex:1"></div>
+        <button class="btn btn-sm btn-danger" onclick="deleteItem('${item.id}')">Delete</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+window.toggleExpand = function(id) {
+  document.getElementById('item-' + id)?.classList.toggle('expanded');
+};
+
+// ── Status changes ──────────────────────────────────────────────────
+window.setStatus = async function(id, newStatus) {
+  const item = State.items.find(i => i.id === id);
+  if (!item) return;
+  const updates = { status: newStatus, updated_at: new Date().toISOString() };
+  if (newStatus === 'scoped') updates.scoped_at = new Date().toISOString();
+  if (newStatus === 'open') { updates.scoped_at = null; updates.shipped_at = null; updates.shipped_version = null; }
+
+  const { error } = await supabase.from('tracker_items').update(updates).eq('id', id);
+  if (error) { toast('Update failed: ' + error.message, true); return; }
+  Object.assign(item, updates);
+  toast('Status: ' + newStatus);
+  renderStats();
+  renderPipeline();
+};
+
+window.markShipped = async function(id) {
+  const version = prompt('Shipped in which version? (e.g. V8.28)', 'V8.28');
+  if (version === null) return;
+  const updates = {
+    status: 'shipped',
+    shipped_at: new Date().toISOString(),
+    shipped_version: version.trim() || null,
+    updated_at: new Date().toISOString()
+  };
+  const { error } = await supabase.from('tracker_items').update(updates).eq('id', id);
+  if (error) { toast('Update failed: ' + error.message, true); return; }
+  const item = State.items.find(i => i.id === id);
+  if (item) Object.assign(item, updates);
+  toast('Marked shipped');
+  renderStats();
+  renderPipeline();
+};
+
+window.deleteItem = async function(id) {
+  if (!confirm('Delete this item permanently? This cannot be undone.')) return;
+  const { error } = await supabase.from('tracker_items').delete().eq('id', id);
+  if (error) { toast('Delete failed: ' + error.message, true); return; }
+  State.items = State.items.filter(i => i.id !== id);
+  toast('Deleted');
+  renderStats();
+  renderPipeline();
+};
+
+// ── Edit modal ───────────────────────────────────────────────────────
+window.openEditModal = function(id) {
+  const item = State.items.find(i => i.id === id);
+  if (!item) return;
+  State.editingId = id;
+  State.editingScreenshots = [...(item.screenshots || [])];
+  const fields = document.getElementById('edit-form-fields');
+  fields.innerHTML = `
+    <div>
+      <label>Title</label>
+      <input type="text" id="e-title" value="${h(item.title)}" maxlength="200">
+    </div>
+    <div class="form-row">
+      <div>
+        <label>Type</label>
+        <select id="e-type">
+          ${['bug','enhancement','layout','feature','question'].map(t => `<option value="${t}" ${item.type===t?'selected':''}>${t}</option>`).join('')}
+        </select>
+      </div>
+      <div>
+        <label>Severity</label>
+        <select id="e-severity">
+          ${['critical','high','medium','low'].map(s => `<option value="${s}" ${item.severity===s?'selected':''}>${s}</option>`).join('')}
+        </select>
+      </div>
+      <div>
+        <label>Page</label>
+        <select id="e-page">
+          ${Object.keys(PAGE_LABELS).map(p => `<option value="${p}" ${item.page===p?'selected':''}>${h(PAGE_LABELS[p])}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div>
+      <label>Description</label>
+      <textarea id="e-description">${h(item.description || '')}</textarea>
+    </div>
+    <div>
+      <label>Steps to reproduce (bugs)</label>
+      <textarea id="e-steps">${h(item.steps || '')}</textarea>
+    </div>
+    <div>
+      <label>Expected (bugs)</label>
+      <textarea id="e-expected">${h(item.expected || '')}</textarea>
+    </div>
+    <div>
+      <label>Actual (bugs)</label>
+      <textarea id="e-actual">${h(item.actual || '')}</textarea>
+    </div>
+    <div>
+      <label>Screenshots (${State.editingScreenshots.length})</label>
+      <div class="screenshot-list" id="edit-screenshot-list">
+        ${State.editingScreenshots.map((s, i) => `
+          <div class="screenshot-thumb">
+            <img src="${s}" alt="">
+            <button type="button" class="remove-btn" onclick="removeEditScreenshot(${i})">&times;</button>
+          </div>
+        `).join('')}
+      </div>
+      <div style="font-size:11px;color:var(--text-3);margin-top:6px">To add new screenshots, delete and re-create the item, or paste from clipboard while editing.</div>
+    </div>
+  `;
+  document.getElementById('edit-modal').classList.add('active');
+};
+
+window.closeEditModal = function() {
+  document.getElementById('edit-modal').classList.remove('active');
+  State.editingId = null;
+  State.editingScreenshots = [];
+};
+
+window.removeEditScreenshot = function(i) {
+  State.editingScreenshots.splice(i, 1);
+  document.getElementById('edit-screenshot-list').innerHTML = State.editingScreenshots.map((s, idx) => `
+    <div class="screenshot-thumb">
+      <img src="${s}" alt="">
+      <button type="button" class="remove-btn" onclick="removeEditScreenshot(${idx})">&times;</button>
+    </div>
+  `).join('');
+};
+
+window.saveEdit = async function() {
+  if (!State.editingId) return;
+  const updates = {
+    title: document.getElementById('e-title').value.trim(),
+    type: document.getElementById('e-type').value,
+    severity: document.getElementById('e-severity').value,
+    page: document.getElementById('e-page').value,
+    description: document.getElementById('e-description').value.trim(),
+    steps: document.getElementById('e-steps').value.trim() || null,
+    expected: document.getElementById('e-expected').value.trim() || null,
+    actual: document.getElementById('e-actual').value.trim() || null,
+    screenshots: State.editingScreenshots,
+    updated_at: new Date().toISOString()
+  };
+  const { error } = await supabase.from('tracker_items').update(updates).eq('id', State.editingId);
+  if (error) { toast('Save failed: ' + error.message, true); return; }
+  const item = State.items.find(i => i.id === State.editingId);
+  if (item) Object.assign(item, updates);
+  closeEditModal();
+  toast('Saved');
+  renderPipeline();
+};
+
+// ── Lightbox ─────────────────────────────────────────────────────────
+window.openLightbox = function(itemId, idx) {
+  const item = State.items.find(i => i.id === itemId);
+  if (!item) return;
+  document.getElementById('lightbox-img').src = item.screenshots[idx];
+  document.getElementById('lightbox').classList.add('active');
+};
+window.closeLightbox = function() {
+  document.getElementById('lightbox').classList.remove('active');
+};
+
+// ── Export ───────────────────────────────────────────────────────────
+function buildItemMarkdown(item) {
+  const date = new Date(item.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  const pageLabel = PAGE_LABELS[item.page] || item.page || '—';
+  let md = `## [${item.severity.toUpperCase()}] ${item.title}\n\n`;
+  md += `**ID:** \`${item.id.substring(0, 8)}\` &middot; **Type:** ${item.type} &middot; **Page:** ${pageLabel} &middot; **Submitted:** ${date} &middot; **Status:** ${item.status}\n\n`;
+  md += `### Description\n${item.description || '_(none)_'}\n\n`;
+  if (item.type === 'bug') {
+    if (item.steps) md += `### Steps to reproduce\n${item.steps}\n\n`;
+    if (item.expected) md += `### Expected\n${item.expected}\n\n`;
+    if (item.actual) md += `### Actual\n${item.actual}\n\n`;
+  }
+  if ((item.screenshots || []).length) {
+    md += `### Screenshots\n`;
+    item.screenshots.forEach((s, i) => {
+      md += `![Screenshot ${i + 1}](${s})\n\n`;
+    });
+  }
+  md += `---\n\n`;
+  return md;
+}
+
+window.exportItem = function(id) {
+  const item = State.items.find(i => i.id === id);
+  if (!item) return;
+  const md = `# Tracker Item — ${item.title}\n\n${buildItemMarkdown(item)}`;
+  downloadMarkdown(md, `tracker-${item.id.substring(0, 8)}-${slugify(item.title)}.md`);
+  toast('Exported');
+};
+
+window.exportScoped = function() {
+  const scoped = State.items.filter(i => i.status === 'scoped');
+  if (!scoped.length) { toast('No scoped items to export', true); return; }
+  exportBatch(scoped, 'scoped');
+};
+
+window.exportOpen = function() {
+  const open = State.items.filter(i => i.status === 'open' || i.status === 'scoped');
+  if (!open.length) { toast('No open or scoped items to export', true); return; }
+  exportBatch(open, 'open-and-scoped');
+};
+
+function exportBatch(items, label) {
+  const date = new Date().toISOString().substring(0, 10);
+  const sevOrder = { critical: 4, high: 3, medium: 2, low: 1 };
+  items.sort((a, b) => (sevOrder[b.severity] || 0) - (sevOrder[a.severity] || 0));
+
+  let md = `# Lanki Tracker — ${label} batch export\n\n`;
+  md += `**Generated:** ${new Date().toLocaleString('en-GB')}\n\n`;
+  md += `**Items:** ${items.length}\n\n`;
+  md += `---\n\n`;
+
+  // Summary table
+  md += `## Summary\n\n`;
+  md += `| ID | Severity | Type | Page | Title |\n`;
+  md += `|----|----------|------|------|-------|\n`;
+  items.forEach(i => {
+    md += `| \`${i.id.substring(0, 8)}\` | ${i.severity} | ${i.type} | ${PAGE_LABELS[i.page] || i.page} | ${i.title.replace(/\|/g, '\\|')} |\n`;
+  });
+  md += `\n---\n\n`;
+
+  // Full details
+  md += `## Items\n\n`;
+  items.forEach(i => { md += buildItemMarkdown(i); });
+
+  downloadMarkdown(md, `lanki-tracker-${label}-${date}.md`);
+  toast(`Exported ${items.length} item${items.length === 1 ? '' : 's'}`);
+}
+
+function downloadMarkdown(content, filename) {
+  const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 100);
+}
+
+function slugify(s) {
+  return (s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').substring(0, 40);
+}
+
+// ── Auth state listener ──────────────────────────────────────────────
+supabase.auth.onAuthStateChange(async (event, session) => {
+  if (session?.user) {
+    State.user = session.user;
+    showAppView();
+    await loadItems();
+  } else {
+    State.user = null;
+    showAuthView();
+  }
+});
+
+// ── Initial bootstrap ───────────────────────────────────────────────
+(async () => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session?.user) {
+    State.user = session.user;
+    showAppView();
+    await loadItems();
+  } else {
+    showAuthView();
+  }
+  // Initialize bug-fields visibility
+  onTypeChange();
+})();
+
+</script>
+</body>
+</html>
