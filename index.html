@@ -1601,7 +1601,7 @@ body.privacy-on{padding-top:28px}
 
     <button class="nav-item nav-group" data-group="inbox" onclick="toggleGroup('inbox')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg> Inbox <span class="nav-badge" id="uncat-badge" style="display:none">0</span> <span class="nav-arrow" id="arr-inbox">&#8250;</span></button>
     <div id="nav-dd-inbox" class="nav-dd">
-      <button onclick="sw('uncat')" style="display:flex;justify-content:space-between;align-items:center">Uncategorized <span id="nb-uncat" style="display:none;font-size:10px;font-weight:600;padding:1px 6px;border-radius:8px;background:#7A1F1F;color:#fff"></span></button>
+      <button onclick="sw('uncat')" style="display:flex;justify-content:space-between;align-items:center">Uncategorized <span style="display:flex;gap:4px"><span id="nb-uncat" style="display:none;font-size:10px;font-weight:600;padding:1px 6px;border-radius:8px;background:#7A1F1F;color:#fff" title="Fully uncategorized — no main category"></span><span id="nb-missing-sub" style="display:none;font-size:10px;font-weight:600;padding:1px 6px;border-radius:8px;background:#7A5E20;color:#fff" title="Missing sub-category — main assigned but no sub"></span></span></button>
       <button onclick="sw('transfers')" style="display:flex;justify-content:space-between;align-items:center">Pending Matches <span id="nb-transfers" style="display:none;font-size:10px;font-weight:600;padding:1px 6px;border-radius:8px;background:#7A1F1F;color:#fff"></span></button>
       <button onclick="sw('reimbursements')" style="display:flex;justify-content:space-between;align-items:center">Reimbursements <span id="nb-reimb" style="display:none;font-size:10px;font-weight:600;padding:1px 6px;border-radius:8px;background:#7A1F1F;color:#fff"></span></button>
     </div>
@@ -1752,7 +1752,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='9.0-rc1.5';
+const VERSION='9.0-rc1.6';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -2806,9 +2806,16 @@ async function flushTxnQueue(){
 
 function allTxns(){return Object.values(S.txnCache).flat();}
 function uncatCount(){return allTxns().filter(t=>(!t.mainCatId||!getMC(t.mainCatId))&&!t.flagged&&(t.type==='expense'||t.type==='income')).length;}
+// V9.0-rc1.6 Item 12 (tracker 4441764f): missing-sub count.
+// Counts transactions that have a main category assigned but no sub-category.
+// Strict mode per locked decision: applies to all main cats, no exclusions.
+// Excludes flagged (those go through the Flagged section) and non-expense/income
+// types (transfers and investments don't follow the same sub-cat discipline).
+function missingSubCount(){return allTxns().filter(t=>t.mainCatId&&getMC(t.mainCatId)&&!t.subCatId&&!t.flagged&&(t.type==='expense'||t.type==='income')).length;}
 function pendingTransferCount(){return getPendingTransfers().filter(t=>!t.transferDismissed).length;}
 function updateBadge(){
   const uc=uncatCount();
+  const ms=missingSubCount();
   const pt=pendingTransferCount();
   const pr=_submissions.filter(s=>s.status==='pending').length;
   // Sanity check badge — count critical+warning issues matching rSanityCheck logic
@@ -2829,11 +2836,12 @@ function updateBadge(){
       return errors+warns;
     }catch(e){return 0;}
   })();
-  const total=uc+pt+pr;
+  const total=uc+ms+pt+pr;
   const b=document.getElementById('uncat-badge');
   if(b){b.textContent=total+sc;b.style.display=(total+sc)>0?'':'none';}
   const setNB=(id,n)=>{const el=document.getElementById(id);if(!el)return;el.textContent=n;el.style.display=n>0?'':'none';};
   setNB('nb-uncat',uc);
+  setNB('nb-missing-sub',ms);
   setNB('nb-transfers',pt);
   setNB('nb-reimb',pr);
   setNB('nb-sanity',sc);
@@ -7599,6 +7607,8 @@ function _buildSweepScopeFromView(){
       }
       // Review-only filter
       if(TF.reviewOnly&&!t.needsReview)continue;
+      // V9.0-rc1.6 Item 12: missing-sub filter for Apply Rules scope-to-view consistency
+      if(TF.missingSubOnly&&(!t.mainCatId||!getMC(t.mainCatId)||t.subCatId))continue;
       ids.add(t.id);
     }
   }
@@ -8248,6 +8258,8 @@ function searchDelTxn(id,ym){
 async function rUncat(){
   const all=allTxns();
   const uncat=all.filter(t=>(!t.mainCatId||!getMC(t.mainCatId))&&!t.flagged&&(t.type==='expense'||t.type==='income'));
+  // V9.0-rc1.6 Item 12: missing-sub bucket. Same exclusion logic as missingSubCount() helper.
+  const missingSub=all.filter(t=>t.mainCatId&&getMC(t.mainCatId)&&!t.subCatId&&!t.flagged&&(t.type==='expense'||t.type==='income'));
   const flagged=all.filter(t=>t.flagged);
   const uRows=uncat.length?uncat.map(t=>{
     const acc=S.accounts.find(a=>a.id===t.accountId);
@@ -8260,6 +8272,20 @@ async function rUncat(){
       <td style="text-align:right;font-weight:500" class="${t.type==='income'?'c-ok':'c-bad'}">${t.type==='income'?'+':'−'}${fmtP(t.amount)}</td>
       <td><button class="btn btn-xs btn-p" onclick="openCP('${t.id}','${ym}','','')">Assign</button><button class="btn btn-xs" onclick="openEditTxn('${t.id}','${ym}')">Edit</button></td>
     </tr>`;}).join(''):`<tr><td colspan="5" class="empty">&#10003; No uncategorized transactions</td></tr>`;
+  // V9.0-rc1.6 Item 12: rows for the missing-sub section. Action button opens the picker
+  // with the current main pre-filled and empty sub, so the user can immediately pick from
+  // the suggestion strip (which now also includes their frequently-used subs from item 8).
+  const msRows=missingSub.length?missingSub.map(t=>{
+    const acc=S.accounts.find(a=>a.id===t.accountId);
+    const ym=t.date?t.date.substr(0,7):S.month;
+    const mainTag=ctag(t.mainCatId,null);
+    return`<tr>
+      <td style="color:var(--text3);font-size:var(--fs-xs);white-space:nowrap">${toDD(t.date)}</td>
+      <td>${h(t.description)} ${mainTag}</td>
+      <td style="font-size:var(--fs-xs)">${acc?.name||'--'}</td>
+      <td style="text-align:right;font-weight:500" class="${t.type==='income'?'c-ok':'c-bad'}">${t.type==='income'?'+':'−'}${fmtP(t.amount)}</td>
+      <td style="white-space:nowrap"><button class="btn btn-xs btn-p" onclick="openCP('${t.id}','${ym}','${t.mainCatId}','')">Assign Sub</button><button class="btn btn-xs" onclick="openEditTxn('${t.id}','${ym}')">Edit</button></td>
+    </tr>`;}).join(''):'';
   const fRows=flagged.length?flagged.map(t=>{
     const acc=S.accounts.find(a=>a.id===t.accountId);
     const ym=t.date?t.date.substr(0,7):S.month;
@@ -8283,6 +8309,13 @@ async function rUncat(){
     <thead><tr><th>Date</th><th>Description</th><th>Account</th><th style="text-align:right">Amount</th><th></th></tr></thead>
     <tbody>${uRows}</tbody>
   </table></div></div>
+  ${missingSub.length?`
+  <div class="slbl">Missing Sub-Category (${missingSub.length})</div>
+  <div class="shint">Main category assigned but no sub-category. Assign a sub-category to improve reporting accuracy and feed the merchant learning engine.</div>
+  <div class="card"><div class="tbl-wrap"><table>
+    <thead><tr><th>Date</th><th>Description / Main Category</th><th>Account</th><th style="text-align:right">Amount</th><th></th></tr></thead>
+    <tbody>${msRows}</tbody>
+  </table></div></div>`:''}
   ${flagged.length?`
   <div class="slbl">Flagged for Review (${flagged.length})</div>
   <div class="shint">Auto-categorized but uncertain. Confirm or change each one.</div>
@@ -15013,6 +15046,8 @@ async function rTxBank(){
   if(TF.q){const q=TF.q.toLowerCase().trim();fl=fl.filter(t=>(t.description||'').toLowerCase().includes(q)||(t.raw_description||'').toLowerCase().includes(q)||String(t.amount||'').includes(q));}
   // V8.27: needsReview filter — show only transactions flagged for review
   if(TF.reviewOnly)fl=fl.filter(t=>t.needsReview===true);
+  // V9.0-rc1.6 Item 12: missing-sub filter — show only transactions with main but no sub
+  if(TF.missingSubOnly)fl=fl.filter(t=>t.mainCatId&&getMC(t.mainCatId)&&!t.subCatId);
   // Sorting
   if(TF.sortCol){fl.sort((a,b)=>{
     let va,vb;
@@ -15113,6 +15148,8 @@ async function rTxCards(){
   if(TF.q){const q=TF.q.toLowerCase().trim();fl=fl.filter(t=>(t.description||'').toLowerCase().includes(q)||(t.raw_description||'').toLowerCase().includes(q)||String(t.amount||'').includes(q));}
   // V8.27: needsReview filter — show only transactions flagged for review
   if(TF.reviewOnly)fl=fl.filter(t=>t.needsReview===true);
+  // V9.0-rc1.6 Item 12: missing-sub filter — show only transactions with main but no sub
+  if(TF.missingSubOnly)fl=fl.filter(t=>t.mainCatId&&getMC(t.mainCatId)&&!t.subCatId);
   if(TF.sortCol){fl.sort((a,b)=>{
     let va,vb;
     if(TF.sortCol==='date'){va=a.date||'';vb=b.date||'';}
@@ -15247,6 +15284,8 @@ async function rTxInvestments(){
   if(TF.q){const q=TF.q.toLowerCase().trim();fl=fl.filter(t=>(t.description||'').toLowerCase().includes(q)||(t.raw_description||'').toLowerCase().includes(q)||String(t.amount||'').includes(q));}
   // V8.27: needsReview filter — show only transactions flagged for review
   if(TF.reviewOnly)fl=fl.filter(t=>t.needsReview===true);
+  // V9.0-rc1.6 Item 12: missing-sub filter — show only transactions with main but no sub
+  if(TF.missingSubOnly)fl=fl.filter(t=>t.mainCatId&&getMC(t.mainCatId)&&!t.subCatId);
   if(TF.sortCol){fl.sort((a,b)=>{
     let va,vb;
     if(TF.sortCol==='date'){va=a.date||'';vb=b.date||'';}
@@ -15324,7 +15363,12 @@ function buildTxFilters(){
       <input type="checkbox" ${TF.reviewOnly?'checked':''} onchange="TF.reviewOnly=this.checked;render()" style="margin:0">
       Needs review
     </label>
-    <button class="btn btn-sm" onclick="TF.type='';TF.mc='';TF.sub='';TF.q='';TF.allMonths=false;TF.reviewOnly=false;TF.sortCol='';TF.sortDir=1;render()">Clear</button>
+    <!-- V9.0-rc1.6 Item 12: filter for transactions missing a sub-category -->
+    <label style="display:flex;align-items:center;gap:5px;font-size:var(--fs-xs);white-space:nowrap;cursor:pointer;${TF.missingSubOnly?'color:var(--electric);font-weight:600':''}" title="Show only transactions that have a main category but are missing a sub-category">
+      <input type="checkbox" ${TF.missingSubOnly?'checked':''} onchange="TF.missingSubOnly=this.checked;render()" style="margin:0">
+      Missing sub
+    </label>
+    <button class="btn btn-sm" onclick="TF.type='';TF.mc='';TF.sub='';TF.q='';TF.allMonths=false;TF.reviewOnly=false;TF.missingSubOnly=false;TF.sortCol='';TF.sortDir=1;render()">Clear</button>
     <button class="btn btn-sm ${BulkMode?'btn-p':''}" id="bulk-sel-btn" onclick="toggleBulkSelect()" style="white-space:nowrap">${BulkMode?'Exit Select':'Select'}</button>
     <button class="btn btn-sm" onclick="openRuleSweepModal(false)" style="white-space:nowrap" title="Scan all transactions and apply learned rules. Manual categorizations are protected.">↻ Apply Rules</button>
   </div>
