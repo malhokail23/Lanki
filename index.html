@@ -1752,7 +1752,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='9.0-rc1.1';
+const VERSION='9.0-rc1.2';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -4589,7 +4589,10 @@ function buildProjections(){
   // Helper: monthly average from history when fixedAmount is missing
   const billAvgFromHistory=(billId)=>{
     if(!billId)return 0;
-    const cutoff=addM(getYM(now),-6);
+    // V9.0-rc1.2 hotfix: `now` is already a YM string (set on line 4531 via getYM(new Date())).
+    // Previous code called getYM(now) which tried '2026-05'.getFullYear() and threw, silently
+    // breaking the Projections page render. Pre-existing V8.27 bug exposed by safeRender wrapper.
+    const cutoff=addM(now,-6);
     const recent=[];
     Object.entries(S.txnCache||{}).forEach(([ym,arr])=>{
       if(ym<cutoff)return;
@@ -4634,7 +4637,8 @@ function buildProjections(){
     const pays=subPayments(sub);
     if(!pays.length)return 0;
     // Filter to last 6 months from anchor
-    const cutoff=addM(getYM(now),-6);
+    // V9.0-rc1.2 hotfix: same getYM-on-string bug as billAvgFromHistory above.
+    const cutoff=addM(now,-6);
     const recent=pays.filter(p=>(p.date||'').substr(0,7)>=cutoff);
     if(!recent.length)return 0;
     // Sum SAR amounts and average per month observed
@@ -5060,7 +5064,10 @@ function rProjectionsScenarios(proj){
         }
         const pays=subPayments(s);
         if(!pays.length)return 0;
-        const cutoff=addM(getYM(now),-6);
+        // V9.0-rc1.2 hotfix: `now` was not in scope here (rProjectionsScenarios is a separate
+        // function from buildProjections). Code path was latent — would throw ReferenceError
+        // the first time a sub without nativeAmount but with payment history was evaluated.
+        const cutoff=addM(getYM(new Date()),-6);
         const recent=pays.filter(p=>(p.date||'').substr(0,7)>=cutoff);
         if(!recent.length)return 0;
         const monthsObs=new Set(recent.map(p=>(p.date||'').substr(0,7))).size;
@@ -5093,7 +5100,9 @@ function rProjectionsScenarios(proj){
       // now appear with their historical average, matching the projection model.
       const billAmt=(b)=>{
         if(b.fixedAmount>0)return b.fixedAmount;
-        const cutoff=addM(getYM(now),-6);
+        // V9.0-rc1.2 hotfix: same out-of-scope `now` bug as subAmt above. The user has
+        // 9 variable bills per the V8.27 design doc, so this path is hit on every render.
+        const cutoff=addM(getYM(new Date()),-6);
         const recent=[];
         Object.entries(S.txnCache||{}).forEach(([ym,arr])=>{
           if(ym<cutoff)return;
