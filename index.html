@@ -1752,7 +1752,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='9.0-rc1';
+const VERSION='9.0-rc1.1';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -14662,6 +14662,12 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps, scopedAcc){
   }).join('')}${reconTh}</tr></thead>`;
 
   const rows=fl.length?fl.map(t=>{
+    // V9.0-rc1 hotfix: ym MUST be declared before reviewTag below — the latter references
+    // ${ym} in its onclick handler. Previous order (ym declared after reviewTag) caused a
+    // temporal dead zone ReferenceError whenever a transaction had needsReview=true,
+    // silently breaking rTxBank/rTxCards renders. This was the suspected root cause for
+    // tracker items 5 (Bank Month View) and 6 (Cards page).
+    const ym=t.date?t.date.substr(0,7):S.month;
     const acc=accounts.find(a=>a.id===t.accountId);
     const debt=t.debtId?S.debts.find(d=>d.id===t.debtId):null;
     const dir=txDir(t);
@@ -14677,7 +14683,6 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps, scopedAcc){
     // V8.27: needsReview chip — visible amber dot, clickable to mark resolved without changing categorization
     const reviewTag=t.needsReview?`<button onclick="event.stopPropagation();clearReviewFlag('${t.id}','${ym}')" class="badge" style="background:color-mix(in srgb,var(--warn) 28%,transparent);color:#7A5E20;font-size:9px;margin-left:4px;border:none;padding:1px 6px;cursor:pointer;font-weight:600" title="Flagged for review${t.reviewReason==='low_confidence_rule'?' (auto-flagged: low-confidence rule)':''} · click to mark reviewed">&#9888; review</button>`:''
     const rb=showBalance&&t.accountId&&rbMaps[t.accountId]?rbMaps[t.accountId].get(t.id):null;
-    const ym=t.date?t.date.substr(0,7):S.month;
     const debtTag=debt?`<span style="font-size:10px;background:#FEF3C7;color:#92400E;border-radius:3px;padding:1px 5px;margin-left:4px">${h(debt.name)}</span>`:'';
     const linkedBill=t.billId?(S.bills||[]).find(b=>b.id===t.billId):null;
     const billTag=linkedBill?`<span style="font-size:10px;background:#E5EDF5;color:#1E3A6F;border-radius:3px;padding:1px 5px;margin-left:4px;font-weight:500" title="Linked to bill: ${h(linkedBill.name)}">↳ ${h(linkedBill.name)}</span>`:'';
