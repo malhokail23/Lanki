@@ -1752,7 +1752,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='9.0-rc1.3';
+const VERSION='9.0-rc1.4';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -7984,32 +7984,39 @@ function openCatCluster(anchorBtn,txnId,ym,curM,curS,canMakeSub){
     document.body.appendChild(bd);
   }else{
     // Desktop: anchored popover
-    // V9.0-rc1.3 Item 11 fix: previous version used a hardcoded 260px width estimate for
-    // bounds checking, but the popover had no max-width and rendered wider on most content,
-    // so it overflowed the viewport on the right. Also lacked vertical bounds, so it
-    // clipped off the bottom near the viewport edge. Solution: measure actual size after
-    // append, then position with proper bounds in both axes, including a right-align
-    // fallback (anchor to button's right edge) when the natural left would overflow.
+    // V9.0-rc1.4 Item 11 fix v2: previous attempt placed popover to the right of or below
+    // the button, which kept failing on rightmost-column buttons with no horizontal space.
+    // New strategy: by default, place popover to the LEFT of the button so its right edge
+    // ends just before the button starts. This keeps the menu close to the cursor (which is
+    // hovering on the button) and guarantees it's visible regardless of column position,
+    // since the entire viewport is available to the left of any button. Right-of-button is
+    // only used as fallback when there's somehow not enough room on the left (rare).
     const r=anchorBtn.getBoundingClientRect();
     pop.style.cssText='position:fixed;visibility:hidden;background:var(--bg);border:1px solid var(--border);border-radius:8px;box-shadow:0 6px 16px rgba(0,0,0,.10);padding:6px;z-index:9999;min-width:220px;max-width:280px;animation:cclFadeIn .12s ease-out';
     pop.innerHTML=items.map(it=>`<button class="cat-cluster-item" onclick="${it.onclick}" style="display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;background:none;border:none;border-radius:5px;cursor:pointer;text-align:left;font-size:12px;color:var(--text1)"><span style="color:var(--electric);flex-shrink:0">${it.iconSvg}</span><div style="flex:1"><div style="font-weight:500">${it.label}</div><div style="font-size:10px;color:var(--text3);margin-top:1px">${it.sub}</div></div></button>`).join('');
     document.body.appendChild(pop);
-    // Measure actual rendered size, then compute final position with proper bounds
+    // Measure actual rendered size
     const margin=8;
+    const gap=6;
     const popW=pop.offsetWidth;
     const popH=pop.offsetHeight;
-    // Horizontal: prefer left-aligned to anchor, but right-align if that would overflow
-    let left=r.left;
-    if(left+popW>window.innerWidth-margin){
-      // Right-align: anchor popover's right edge to button's right edge
-      left=r.right-popW;
+    // Horizontal: by default, place popover to the LEFT of the button
+    // (popover's right edge sits gap px before the button's left edge)
+    let left=r.left-popW-gap;
+    // Fallback: if not enough room on the left (button very close to viewport left edge),
+    // place popover to the RIGHT of the button instead
+    if(left<margin){
+      left=r.right+gap;
+      // Final clamp if right side also tight
+      if(left+popW>window.innerWidth-margin){
+        left=Math.max(margin,window.innerWidth-popW-margin);
+      }
     }
-    // Final clamp to keep within viewport
-    left=Math.max(margin,Math.min(window.innerWidth-popW-margin,left));
-    // Vertical: prefer below the button, but flip above if that would overflow bottom
-    let top=r.bottom+4;
+    // Vertical: align popover top with button top so user's eye stays near the cursor.
+    // If popover would clip off the bottom, shift it up so its bottom edge fits.
+    let top=r.top;
     if(top+popH>window.innerHeight-margin){
-      top=Math.max(margin,r.top-popH-4);
+      top=Math.max(margin,window.innerHeight-popH-margin);
     }
     pop.style.left=left+'px';
     pop.style.top=top+'px';
