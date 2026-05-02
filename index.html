@@ -1752,7 +1752,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='9.0-rc1.6';
+const VERSION='9.0-rc1.7';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -3783,22 +3783,25 @@ async function rOv(){
       const invPct=(totalInvestments/scaleMax)*100;
       const ccPct=(totalCC/scaleMax)*100;
       return`<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--bg3)">
-        <div class="fg jb" style="align-items:center;font-size:10px;color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em">
-          <span>Position composition</span>
-          <span style="text-transform:none;letter-spacing:0">Liquid assets <strong style="color:var(--text2);font-weight:500;font-variant-numeric:tabular-nums">${fmtP(grossPositive)}</strong> &minus; CC debt <strong style="color:var(--text2);font-weight:500;font-variant-numeric:tabular-nums">${fmtP(totalCC)}</strong></span>
-        </div>
+        <!-- V9.0-rc1.7 Item 14: composition header — title on its own line, then bar, then a
+             dedicated breakdown legend with proper spacing. Removes the cramped header overlap. -->
+        <div style="font-size:10px;color:var(--text3);margin-bottom:10px;text-transform:uppercase;letter-spacing:.04em">Position composition</div>
         <div class="fg" style="gap:8px;align-items:center">
-          <div style="flex:${grossPositive>0?grossPositive:0.01};display:flex;height:18px;border-radius:4px;overflow:hidden;background:var(--bg3)">
-            ${cashPct>0?`<div class="priv-mask" style="width:${(totalLiquidCash/Math.max(grossPositive,0.01))*100}%;background:var(--ink-electric,#0077C1);transition:width .3s" title="Cash ${fmtP(totalLiquidCash)}"></div>`:''}
-            ${invPct>0?`<div class="priv-mask" style="width:${(totalInvestments/Math.max(grossPositive,0.01))*100}%;background:var(--ok);transition:width .3s" title="Investments ${fmtP(totalInvestments)}"></div>`:''}
+          <div style="flex:${grossPositive>0?grossPositive:0.01};display:flex;height:24px;border-radius:4px;overflow:hidden;background:var(--bg3)">
+            ${cashPct>0?`<div class="priv-mask" style="width:${(totalLiquidCash/Math.max(grossPositive,0.01))*100}%;background:var(--ink-electric,#0077C1);transition:width .3s;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#fff;font-size:10px;font-weight:600;text-shadow:0 1px 2px rgba(0,0,0,.4);font-variant-numeric:tabular-nums" title="Cash ${fmtP(totalLiquidCash)}">${(totalLiquidCash/Math.max(grossPositive,0.01))>=0.18?fmtP(totalLiquidCash):''}</div>`:''}
+            ${invPct>0?`<div class="priv-mask" style="width:${(totalInvestments/Math.max(grossPositive,0.01))*100}%;background:var(--ok);transition:width .3s;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#fff;font-size:10px;font-weight:600;text-shadow:0 1px 2px rgba(0,0,0,.4);font-variant-numeric:tabular-nums" title="Investments ${fmtP(totalInvestments)}">${(totalInvestments/Math.max(grossPositive,0.01))>=0.18?fmtP(totalInvestments):''}</div>`:''}
           </div>
-          ${totalCC>0?`<div style="flex:${totalCC};display:flex;height:18px;border-radius:4px;overflow:hidden;background:var(--bg3);justify-content:flex-end">
-            <div class="priv-mask" style="width:100%;background:var(--bad);transition:width .3s" title="CC Debt ${fmtP(totalCC)}"></div>
+          ${totalCC>0?`<div style="flex:${totalCC};display:flex;height:24px;border-radius:4px;overflow:hidden;background:var(--bg3);justify-content:flex-end">
+            <div class="priv-mask" style="width:100%;background:var(--bad);transition:width .3s;display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:600;text-shadow:0 1px 2px rgba(0,0,0,.4);font-variant-numeric:tabular-nums" title="CC Debt ${fmtP(totalCC)}">${fmtP(totalCC)}</div>
           </div>`:''}
         </div>
-        <div class="fg jb" style="font-size:9px;color:var(--text3);margin-top:4px">
-          <span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:8px;height:8px;background:var(--ink-electric,#0077C1);border-radius:1px"></span>Cash${invPct>0?` &nbsp;<span style="display:inline-block;width:8px;height:8px;background:var(--ok);border-radius:1px"></span>Investments`:''}</span>
-          ${totalCC>0?`<span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:8px;height:8px;background:var(--bad);border-radius:1px"></span>CC Debt</span>`:''}
+        <!-- Breakdown legend below the bars with comfortable spacing -->
+        <div class="fg jb" style="font-size:10px;color:var(--text3);margin-top:8px;flex-wrap:wrap;gap:12px">
+          <div class="fg" style="gap:14px;flex-wrap:wrap">
+            <span style="display:flex;align-items:center;gap:5px"><span style="display:inline-block;width:10px;height:10px;background:var(--ink-electric,#0077C1);border-radius:2px"></span>Cash <strong class="priv-mask" style="color:var(--text2);font-weight:500;font-variant-numeric:tabular-nums;margin-left:2px">${fmtP(totalLiquidCash)}</strong></span>
+            ${invPct>0?`<span style="display:flex;align-items:center;gap:5px"><span style="display:inline-block;width:10px;height:10px;background:var(--ok);border-radius:2px"></span>Investments <strong class="priv-mask" style="color:var(--text2);font-weight:500;font-variant-numeric:tabular-nums;margin-left:2px">${fmtP(totalInvestments)}</strong></span>`:''}
+          </div>
+          ${totalCC>0?`<span style="display:flex;align-items:center;gap:5px"><span style="display:inline-block;width:10px;height:10px;background:var(--bad);border-radius:2px"></span>CC Debt <strong class="priv-mask" style="color:var(--text2);font-weight:500;font-variant-numeric:tabular-nums;margin-left:2px">${fmtP(totalCC)}</strong></span>`:''}
         </div>
       </div>`;
     })()}
@@ -3929,7 +3932,9 @@ async function rOv(){
 
     return`
   <!-- V8.27: PERFORMANCE ZONE — 3 cards with consistent height (title → figure → 6-month bars) -->
-  <div class="g3" style="margin-bottom:1rem">
+  <!-- V9.0-rc1.7 Item 14 (tracker 8d4a9a0b): stacked vertically (was g3 grid). Each card now
+       has full row width so 6-month bars and headline numbers have proper breathing room. -->
+  <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:1rem">
     <div class="card card-bordered" style="display:flex;flex-direction:column">
       <div class="fg jb" style="align-items:flex-start">
         <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Income vs Expense</div>
@@ -4060,9 +4065,12 @@ async function rOv(){
           <div style="font-size:11px;font-weight:500;color:${flexCol}">${flexLabel}</div>
         </div>
       </div>
-      <div style="margin-top:14px;height:18px;display:flex;border-radius:4px;overflow:hidden;background:var(--bg3)">
-        <div class="priv-mask" style="width:${recPct}%;background:var(--ink-electric,#0077C1);transition:width .3s" title="Recurring ${fmtP(recurring)} (${recPct}%)"></div>
-        <div class="priv-mask" style="width:${disPct}%;background:var(--cat-5,#A690A4);transition:width .3s" title="Discretionary ${fmtP(discretionary)} (${disPct}%)"></div>
+      <!-- V9.0-rc1.7 Item 14: bar height bumped 18→24px to accommodate inline white labels.
+           Labels show inside each segment (white text with shadow for contrast on dark blue
+           and dusty plum); only rendered when segment is wide enough (>=15%) to fit them. -->
+      <div style="margin-top:14px;height:24px;display:flex;border-radius:4px;overflow:hidden;background:var(--bg3)">
+        <div class="priv-mask" style="width:${recPct}%;background:var(--ink-electric,#0077C1);transition:width .3s;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#fff;font-size:11px;font-weight:600;text-shadow:0 1px 2px rgba(0,0,0,.4);font-variant-numeric:tabular-nums" title="Recurring ${fmtP(recurring)} (${recPct}%)">${recPct>=15?recPct+'%':''}</div>
+        <div class="priv-mask" style="width:${disPct}%;background:var(--cat-5,#A690A4);transition:width .3s;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#fff;font-size:11px;font-weight:600;text-shadow:0 1px 2px rgba(0,0,0,.4);font-variant-numeric:tabular-nums" title="Discretionary ${fmtP(discretionary)} (${disPct}%)">${disPct>=15?disPct+'%':''}</div>
       </div>
       <div class="fg jb" style="margin-top:10px;flex-wrap:wrap;gap:14px">
         <div style="flex:1;min-width:140px">
@@ -11072,6 +11080,8 @@ function openGroupsPanel(){
   editGroupId=null;
   ['grp-name','grp-desc'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
   document.getElementById('grp-color').value=nextGroupColor();
+  // V9.0-rc1.7 Item 15: reset scope select to default 'both' on new-group panel open.
+  const scopeEl=document.getElementById('grp-scope');if(scopeEl)scopeEl.value='both';
   document.getElementById('grp-name-lbl').textContent='New group name';
   document.getElementById('grp-sbtn').textContent='Add group';
   highlightGroupColor(document.getElementById('grp-color').value);
@@ -11092,6 +11102,8 @@ function editGroup(id){
   document.getElementById('grp-name').value=g.name||'';
   document.getElementById('grp-desc').value=g.description||'';
   document.getElementById('grp-color').value=g.color||nextGroupColor();
+  // V9.0-rc1.7 Item 15: legacy groups without a scope field default to 'both'.
+  const scopeEl=document.getElementById('grp-scope');if(scopeEl)scopeEl.value=g.scope||'both';
   document.getElementById('grp-name-lbl').textContent='Group name';
   document.getElementById('grp-sbtn').textContent='Save changes';
   highlightGroupColor(g.color||'');
@@ -11101,16 +11113,37 @@ function saveGroup(){
   const name=(document.getElementById('grp-name').value||'').trim();
   const color=(document.getElementById('grp-color').value||'').trim()||nextGroupColor();
   const desc=(document.getElementById('grp-desc').value||'').trim();
+  // V9.0-rc1.7 Item 15: read scope. Default to 'both' if select isn't in DOM (defensive).
+  const scopeEl=document.getElementById('grp-scope');
+  const scope=scopeEl?scopeEl.value:'both';
+  if(!['bank','card','both'].includes(scope)){toast('Invalid scope');return;}
   if(!name){toast('Group name required');return;}
   if(!Array.isArray(S.groups))S.groups=[];
   if(editGroupId){
     const g=S.groups.find(x=>x.id===editGroupId);if(!g)return;
-    g.name=name;g.color=color;g.description=desc;
+    // V9.0-rc1.7 Item 15: when narrowing scope from 'both', warn about excluded members.
+    const oldScope=g.scope||'both';
+    if(oldScope==='both'&&scope!=='both'){
+      const excluded=(S.accounts||[]).filter(a=>{
+        if(a.groupId!==g.id)return false;
+        const isCard=CARD_ACC_TYPES.has(a.type);
+        const isBank=BANK_ACC_TYPES.has(a.type);
+        if(scope==='bank'&&!isBank)return true;
+        if(scope==='card'&&!isCard)return true;
+        return false;
+      });
+      if(excluded.length>0){
+        const names=excluded.map(a=>a.name).slice(0,5).join(', ')+(excluded.length>5?` and ${excluded.length-5} more`:'');
+        if(!confirm(`Narrowing scope to "${scope==='bank'?'Bank accounts only':'Credit cards only'}" will remove ${excluded.length} account${excluded.length===1?'':'s'} from this group:\n\n${names}\n\nThey will become Ungrouped (no data lost — you can reassign later).\n\nContinue?`))return;
+        excluded.forEach(a=>delete a.groupId);
+      }
+    }
+    g.name=name;g.color=color;g.description=desc;g.scope=scope;
   }else{
     // Check for duplicate name (case-insensitive)
     if(S.groups.some(g=>g.name.toLowerCase()===name.toLowerCase())){toast('A group with that name already exists');return;}
     const maxIdx=S.groups.reduce((m,g)=>Math.max(m,typeof g.sortIndex==='number'?g.sortIndex:-1),-1);
-    S.groups.push({id:'grp_'+uid(),name,color,description:desc,sortIndex:maxIdx+1,createdAt:localISO(new Date())});
+    S.groups.push({id:'grp_'+uid(),name,color,description:desc,scope,sortIndex:maxIdx+1,createdAt:localISO(new Date())});
   }
   editGroupId=null;
   saveState().then(()=>{render();toast('Saved');});
@@ -11189,6 +11222,32 @@ function onATC(v){
   const cr=document.getElementById('ac-currency-row');if(cr)cr.style.display=(v==='credit_card'||v==='charge_card')?'block':'none';
   // V8.27: account form per-type field rationalization. Show/hide platform vs custodian based on type.
   refreshInvFieldsForType(v);
+  // V9.0-rc1.7 Item 15: refresh group dropdown to filter by account type's group scope.
+  refreshGroupSelectForType(v);
+}
+
+// V9.0-rc1.7 Item 15: filter the account form's Group dropdown to only those groups
+// whose scope includes this account type. Preserves the current selection if still valid;
+// otherwise resets to Ungrouped. Investment accounts only see 'both'-scoped groups.
+function refreshGroupSelectForType(accType){
+  const sel=document.getElementById('ac-group');
+  if(!sel)return;
+  const isCard=CARD_ACC_TYPES.has(accType);
+  const isBank=BANK_ACC_TYPES.has(accType);
+  const isInv=INV.has(accType);
+  const groups=(S.groups||[]).slice().sort(groupSortFn).filter(g=>{
+    const s=g.scope||'both';
+    if(s==='both')return true;
+    if(isBank&&s==='bank')return true;
+    if(isCard&&s==='card')return true;
+    // Investment accounts only see 'both' (already returned true above)
+    return false;
+  });
+  const prevValue=sel.value;
+  sel.innerHTML='<option value="">— Ungrouped —</option>'+groups.map(g=>`<option value="${g.id}">${h(g.name)}</option>`).join('');
+  // Restore selection if still valid, else fall back to Ungrouped
+  if(prevValue&&groups.some(g=>g.id===prevValue))sel.value=prevValue;
+  else sel.value='';
 }
 
 // V8.27: rationalize investment account fields per asset type.
@@ -11372,6 +11431,19 @@ function rAcc(){
         <input type="hidden" id="grp-color" value="">
       </div>
     </div>
+    <!-- V9.0-rc1.7 Item 15 (tracker 540819c8): scope determines which account-type pages this
+         group appears on. 'both' (default) preserves the legacy behavior for groups created
+         before this change — they appear everywhere. -->
+    <div class="fr" style="margin-top:8px">
+      <div><label class="lbl">Applies to</label>
+        <select id="grp-scope">
+          <option value="both">Both bank accounts and credit cards</option>
+          <option value="bank">Bank accounts only</option>
+          <option value="card">Credit cards only</option>
+        </select>
+      </div>
+      <div></div>
+    </div>
     <div style="margin-top:8px">
       <label class="lbl">Description (optional)</label><input type="text" id="grp-desc" placeholder="e.g. Joint household accounts" maxlength="80">
     </div>
@@ -11469,7 +11541,7 @@ function rAcc(){
     </div>
   </div>`:''}`;
 }
-function openAddAcc(){editAccId=null;['ac-name','ac-inst','ac-no','ac-purp','ac-inv-platform','ac-inv-value','ac-inv-asof'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});const sourceEl=document.getElementById('ac-inv-source');if(sourceEl)sourceEl.value='manual';const holdingsRows=document.getElementById('ac-inv-holdings-rows');if(holdingsRows)holdingsRows.innerHTML='';const holdingsWrap=document.getElementById('ac-inv-holdings-wrap');if(holdingsWrap)holdingsWrap.style.display='none';document.getElementById('acc-ptitle').textContent='Add account';document.getElementById('acc-sbtn').textContent='Add account';const p=document.getElementById('acc-panel');if(p&&!p.classList.contains('open')){p.classList.add('open');p.scrollIntoView({behavior:'smooth'});}}
+function openAddAcc(){editAccId=null;['ac-name','ac-inst','ac-no','ac-purp','ac-inv-platform','ac-inv-value','ac-inv-asof'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});const sourceEl=document.getElementById('ac-inv-source');if(sourceEl)sourceEl.value='manual';const holdingsRows=document.getElementById('ac-inv-holdings-rows');if(holdingsRows)holdingsRows.innerHTML='';const holdingsWrap=document.getElementById('ac-inv-holdings-wrap');if(holdingsWrap)holdingsWrap.style.display='none';document.getElementById('acc-ptitle').textContent='Add account';document.getElementById('acc-sbtn').textContent='Add account';/* V9.0-rc1.7 Item 15: filter group select for the default type so the dropdown is correct from the first paint */const typeEl=document.getElementById('ac-type');if(typeEl)refreshGroupSelectForType(typeEl.value);const p=document.getElementById('acc-panel');if(p&&!p.classList.contains('open')){p.classList.add('open');p.scrollIntoView({behavior:'smooth'});}}
 // V8.18: archive/close/reopen — three-state account status (active/closed/archived).
 // Each setter writes BOTH `status` (V8.18+) AND `archived` (legacy V8.17 fallback) so a user
 // reverting to V8.17 still sees these accounts excluded from active dropdowns.
@@ -15088,7 +15160,8 @@ async function rTxBank(){
     return mainPills+divider+subPills;
   })();
   // V8.20: group filter pill row — appears above account pills when groups exist (Decision 2)
-  const groupPillRow=buildGroupPillRow();
+  // V9.0-rc1.7 Item 15: pass tab context so pills filter by group scope
+  const groupPillRow=buildGroupPillRow("bank");
   const header=buildTxHeader(fl,scopedAcc,accountPills,'Bank Accounts',groupPillRow);
   const filters=buildTxFilters();
   const table=buildTxTable(fl,S.accounts,showBalance,false,rbMaps,scopedAcc);
@@ -15098,13 +15171,38 @@ async function rTxBank(){
 }
 
 // V8.20: shared group pill row used on both Bank and Cards tabs
-function buildGroupPillRow(){
-  const groups=(S.groups||[]).slice().sort(groupSortFn);
-  if(!groups.length)return '';
-  const ungroupedCount=(S.accounts||[]).filter(a=>!a.groupId&&isLiveAccount(a)).length;
+function buildGroupPillRow(tabContext){
+  // V9.0-rc1.7 Item 15: tabContext is one of 'bank', 'card', 'inv'. Determines which groups
+  // appear as pills and which accounts count toward the "Ungrouped" pill on this tab.
+  // - 'bank' tab: shows groups with scope 'bank' or 'both'; Ungrouped counts only bank accounts
+  // - 'card' tab: shows groups with scope 'card' or 'both'; Ungrouped counts only card accounts
+  // - 'inv' tab: only 'both'-scoped groups apply (preserves legacy behavior); Ungrouped counts only inv accounts
+  // Legacy groups without a scope field default to 'both'. Defensive default if context missing.
+  const ctx=tabContext||'bank';
+  const groups=(S.groups||[]).slice().sort(groupSortFn).filter(g=>{
+    const s=g.scope||'both';
+    if(s==='both')return true;
+    return s===ctx;
+  });
+  if(!groups.length){
+    // Even with no scope-matching groups, still show Ungrouped if any unscoped accounts exist
+    // for this tab type. This matches the brief's intent: pill row stays useful per tab.
+  }
+  // Account-type predicate for this tab's Ungrouped count
+  const tabMatch=a=>{
+    if(ctx==='bank')return BANK_ACC_TYPES.has(a.type);
+    if(ctx==='card')return CARD_ACC_TYPES.has(a.type);
+    if(ctx==='inv')return INV.has(a.type);
+    return true;
+  };
+  const ungroupedCount=(S.accounts||[]).filter(a=>!a.groupId&&isLiveAccount(a)&&tabMatch(a)).length;
+  // If no groups apply on this tab AND no ungrouped accounts of this type, render nothing.
+  if(!groups.length&&ungroupedCount===0)return '';
   const allBtn=`<button class="opill ${!TF.txnGroup?'active':''}" onclick="setTxnGroup('')" title="Show all accounts">All Groups</button>`;
   const groupBtns=groups.map(g=>{
-    const memberCount=(S.accounts||[]).filter(a=>a.groupId===g.id&&isLiveAccount(a)).length;
+    // Member count uses the same tab predicate so a 'both' group on the Cards tab shows
+    // its card-member count (not its bank-member count).
+    const memberCount=(S.accounts||[]).filter(a=>a.groupId===g.id&&isLiveAccount(a)&&tabMatch(a)).length;
     if(memberCount===0)return '';
     const active=TF.txnGroup===g.id;
     return`<button class="opill ${active?'active':''}" onclick="setTxnGroup('${g.id}')" title="${memberCount} account${memberCount===1?'':'s'}"><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${g.color||'#9CA0A8'};margin-right:5px;vertical-align:middle"></span>${h(g.name)}</button>`;
@@ -15235,7 +15333,8 @@ async function rTxCards(){
   }).join('');
   const noCards=cardAccs.length===0;
   // V8.20: group pill row for cards tab
-  const groupPillRow=buildGroupPillRow();
+  // V9.0-rc1.7 Item 15: pass tab context
+  const groupPillRow=buildGroupPillRow("card");
   const header=buildTxHeader(fl,scopedAcc,accountPills,'Cards',groupPillRow);
   const filters=buildTxFilters();
   const table=noCards
@@ -15299,7 +15398,8 @@ async function rTxInvestments(){
   const accountPills=invAccs.map(a=>{
     return`<button class="opill ${TF.txnAcc===a.id?'active':''}" onclick="setTxnAcc('${a.id}')">${h(a.name)} <span style="font-size:10px;opacity:.7">${ATL[a.type]||a.type}</span></button>`;
   }).join('');
-  const groupPillRow=buildGroupPillRow();
+  // V9.0-rc1.7 Item 15: pass tab context — investments only show 'both'-scoped groups
+  const groupPillRow=buildGroupPillRow('inv');
   const header=buildTxHeader(fl,scopedAcc,accountPills,'Investments',groupPillRow);
   const filters=buildTxFilters();
   const table=noInv
