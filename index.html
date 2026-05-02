@@ -1752,7 +1752,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='9.0-rc1.4';
+const VERSION='9.0-rc1.5';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -7874,6 +7874,25 @@ async function applyRuleSweep(){
 }
 
 // ─── CAT PICKER (Bug 4.1 fix: capture catCb before clearing) ───
+// V9.0-rc1.5 Item 8 (tracker 25926656): Frequent sub-categories overlay.
+// Returns up to 3 sub-cat IDs that the user has assigned to this main cat at least 3 times,
+// excluding any already in the SUGGESTED constant (those would be duplicates). Per-vault
+// scope. Used to enrich the picker suggestion strip so users don't have to dig into the
+// full sub-cat dropdown for sub-cats they use often but aren't in the default shortlist.
+function getFrequentSubsForMain(mainCatId){
+  if(!mainCatId)return [];
+  const counts={};
+  allTxns().forEach(t=>{
+    if(t.mainCatId===mainCatId&&t.subCatId)counts[t.subCatId]=(counts[t.subCatId]||0)+1;
+  });
+  const existing=new Set(SUGGESTED[mainCatId]||[]);
+  return Object.entries(counts)
+    .filter(([sid,n])=>n>=3&&!existing.has(sid)&&getSC(sid))
+    .sort((a,b)=>b[1]-a[1])
+    .slice(0,3)
+    .map(([sid])=>sid);
+}
+
 function buildCM(curM,curS){
   const ms=document.getElementById('catm-main');
   ms.innerHTML=getActiveCats().map(m=>`<option value="${m.id}">${m.name}</option>`).join('');
@@ -7882,9 +7901,19 @@ function buildCM(curM,curS){
 }
 function onCMC(preS){
   const mid=document.getElementById('catm-main').value;
-  const sugg=SUGGESTED[mid]||[];
+  // V9.0-rc1.5 Item 8: merge built-in suggestions with user's frequently-used sub-cats.
+  // Frequent ones appear after the built-in ones, so the original short-list ordering is preserved.
+  const baseSugg=SUGGESTED[mid]||[];
+  const frequentExtras=getFrequentSubsForMain(mid);
+  const sugg=[...baseSugg,...frequentExtras];
+  const frequentSet=new Set(frequentExtras);
   const sg=document.getElementById('catm-sugg');
-  if(sg)sg.innerHTML=sugg.map(sid=>{const s=getSC(sid);return s?`<button class="spill" data-sid="${s.id}" onclick="pSugg(this.dataset.sid)">${s.name}</button>`:''}).join('');
+  if(sg)sg.innerHTML=sugg.map(sid=>{
+    const s=getSC(sid);
+    if(!s)return '';
+    const titleAttr=frequentSet.has(sid)?' title="You use this sub-category often"':'';
+    return `<button class="spill" data-sid="${s.id}"${titleAttr} onclick="pSugg(this.dataset.sid)">${s.name}</button>`;
+  }).join('');
   const ss=document.getElementById('catm-sub');
   if(ss){
     ss.innerHTML=SUB_CATS.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
