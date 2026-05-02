@@ -1720,9 +1720,10 @@ const NAV_GROUPS={
   recurring:{tabs:['income','bills','subscriptions'],labels:{income:'Income',bills:'Bills',subscriptions:'Subscriptions'}},
   inbox:{tabs:['uncat','transfers','reimbursements'],labels:{uncat:'Uncategorized',transfers:'Pending Matches',reimbursements:'Reimbursements'}},
   // V8.25 (Case 7): System section — audit, reference, diagnostics
-  system:{tabs:['rules','sanity','insights'],labels:{rules:'Transaction Rules',sanity:'Sanity Check',insights:'Usage Insights'}},
+  // V9.0 Item 4: reviewqueue added to fix dropdown collapsing on click. Order matches DOM order in nav.
+  system:{tabs:['rules','reviewqueue','sanity','insights'],labels:{rules:'Transaction Rules',reviewqueue:'Review Queue',sanity:'Sanity Check',insights:'Usage Insights'}},
 };
-const TAB_TO_GROUP={txbank:'transactions',txcards:'transactions',txinvestments:'transactions',aiupload:'transactions',income:'recurring',bills:'recurring',subscriptions:'recurring',accounts:'',debts:'',goals:'',uncat:'inbox',transfers:'inbox',reimbursements:'inbox',rules:'system',sanity:'system',insights:'system',staff:'',familyinv:'',investments:'',settings:'',projections:''};
+const TAB_TO_GROUP={txbank:'transactions',txcards:'transactions',txinvestments:'transactions',aiupload:'transactions',income:'recurring',bills:'recurring',subscriptions:'recurring',accounts:'',debts:'',goals:'',uncat:'inbox',transfers:'inbox',reimbursements:'inbox',rules:'system',reviewqueue:'system',sanity:'system',insights:'system',staff:'',familyinv:'',investments:'',settings:'',projections:''};
 
 // ─── SUBSCRIPTION CATEGORIES ───
 // 12 categories covering every kind of recurring consumer/professional subscription.
@@ -3122,6 +3123,27 @@ function setOvP(p){
 let _rendering=false,_renderPending=false;
 // V8.23: tracks whether ovDefaultPeriod has been applied for the current vault session.
 // Reset on lock/unlock so the user's persistent default re-applies on re-unlock.
+// V9.0: safeTabRender wraps tab render functions so silent throws surface visibly.
+// Was added to address the V9.0 tracker items 3 (Projections), 5 (Bank Month View),
+// 6 (Cards) where the symptom was "tab nav highlights but content never appears".
+// The previous render() had a `try {} finally { _rendering=false; }` with no catch,
+// so any throw inside a tab render left el.innerHTML untouched (stale or empty)
+// and silently logged nothing. With this wrapper, errors render as a visible card
+// with stack trace and also log to console for DevTools follow-up.
+function _renderErrorCard(tabName, e){
+  const msg=(e&&e.stack)||(e&&e.message)||String(e);
+  const safe=msg.replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'})[c]);
+  return `<div class="pg"><div class="pg-header"><div class="pg-header-title" style="color:var(--bad)">Render error: ${tabName}</div><div class="pg-header-sub">An error occurred rendering this tab. Refresh and check the browser DevTools console for the full stack trace.</div></div><div class="card card-bordered" style="padding:1rem;border-color:var(--bad)"><pre style="margin:0;white-space:pre-wrap;font-family:monospace;font-size:11px;color:var(--bad);line-height:1.4">${safe}</pre></div></div>`;
+}
+async function safeTabRender(tabName, fn){
+  try{return await fn();}
+  catch(e){console.error(`[render error: ${tabName}]`,e);return _renderErrorCard(tabName,e);}
+}
+function safeTabRenderSync(tabName, fn){
+  try{return fn();}
+  catch(e){console.error(`[render error: ${tabName}]`,e);return _renderErrorCard(tabName,e);}
+}
+
 let _ovPeriodApplied=false;
 async function render(){
   if(_rendering){_renderPending=true;return;}
@@ -3168,30 +3190,34 @@ async function render(){
   const hadSearchFocus=searchEl&&document.activeElement===searchEl;
   const searchVal=searchEl?searchEl.value:null;
   const t=S.tab;
-  if(t==='overview')el.innerHTML=await rOv();
-  else if(t==='projections')el.innerHTML=rProjections();
-  else if(t==='txbank')el.innerHTML=await rTxBank();
-  else if(t==='txcards')el.innerHTML=await rTxCards();
-  else if(t==='txinvestments')el.innerHTML=await rTxInvestments();
-  else if(t==='income')el.innerHTML=rInc();
-  else if(t==='bills')el.innerHTML=rBills();
-  else if(t==='subscriptions')el.innerHTML=await rSubs();
-  else if(t==='staff')el.innerHTML=rStaff();
-  else if(t==='familyinv')el.innerHTML=rFamilyInv();
-  else if(t==='investments'){el.innerHTML=rInvestments();setTimeout(triggerAutoRefreshIfStale,200);}
-  else if(t==='accounts')el.innerHTML=rAcc();
-  else if(t==='debts')el.innerHTML=rDebts();
-  else if(t==='goals')el.innerHTML=rGoals();
-  else if(t==='uncat')el.innerHTML=await rUncat();
-  else if(t==='transfers')el.innerHTML=rPendingMatches();
-  else if(t==='reimbursements')el.innerHTML=await rReimbursements();
-  else if(t==='rules')el.innerHTML=rMerchantRules();
-  else if(t==='reviewqueue')el.innerHTML=rReviewQueue();
-  else if(t==='sanity')el.innerHTML=rSanityCheck();
-  else if(t==='insights')el.innerHTML=rUsageInsights();
-  else if(t==='settings')el.innerHTML=rSettings();
-  else if(t==='catdrill')el.innerHTML=await rCatDrill();
-  else if(t==='aiupload')el.innerHTML=rAIUpload();
+  // V9.0: safeTabRender wraps each tab render in try/catch so silent throws (the suspected
+  // root cause for items 3/5/6 in the V9.0 tracker) surface as a visible error card with
+  // stack trace instead of leaving el.innerHTML in a stale or empty state. Console always
+  // logs full error for follow-up.
+  if(t==='overview')el.innerHTML=await safeTabRender('overview',()=>rOv());
+  else if(t==='projections')el.innerHTML=safeTabRenderSync('projections',()=>rProjections());
+  else if(t==='txbank')el.innerHTML=await safeTabRender('txbank',()=>rTxBank());
+  else if(t==='txcards')el.innerHTML=await safeTabRender('txcards',()=>rTxCards());
+  else if(t==='txinvestments')el.innerHTML=await safeTabRender('txinvestments',()=>rTxInvestments());
+  else if(t==='income')el.innerHTML=safeTabRenderSync('income',()=>rInc());
+  else if(t==='bills')el.innerHTML=safeTabRenderSync('bills',()=>rBills());
+  else if(t==='subscriptions')el.innerHTML=await safeTabRender('subscriptions',()=>rSubs());
+  else if(t==='staff')el.innerHTML=safeTabRenderSync('staff',()=>rStaff());
+  else if(t==='familyinv')el.innerHTML=safeTabRenderSync('familyinv',()=>rFamilyInv());
+  else if(t==='investments'){el.innerHTML=safeTabRenderSync('investments',()=>rInvestments());setTimeout(triggerAutoRefreshIfStale,200);}
+  else if(t==='accounts')el.innerHTML=safeTabRenderSync('accounts',()=>rAcc());
+  else if(t==='debts')el.innerHTML=safeTabRenderSync('debts',()=>rDebts());
+  else if(t==='goals')el.innerHTML=safeTabRenderSync('goals',()=>rGoals());
+  else if(t==='uncat')el.innerHTML=await safeTabRender('uncat',()=>rUncat());
+  else if(t==='transfers')el.innerHTML=safeTabRenderSync('transfers',()=>rPendingMatches());
+  else if(t==='reimbursements')el.innerHTML=await safeTabRender('reimbursements',()=>rReimbursements());
+  else if(t==='rules')el.innerHTML=safeTabRenderSync('rules',()=>rMerchantRules());
+  else if(t==='reviewqueue')el.innerHTML=safeTabRenderSync('reviewqueue',()=>rReviewQueue());
+  else if(t==='sanity')el.innerHTML=safeTabRenderSync('sanity',()=>rSanityCheck());
+  else if(t==='insights')el.innerHTML=safeTabRenderSync('insights',()=>rUsageInsights());
+  else if(t==='settings')el.innerHTML=safeTabRenderSync('settings',()=>rSettings());
+  else if(t==='catdrill')el.innerHTML=await safeTabRender('catdrill',()=>rCatDrill());
+  else if(t==='aiupload')el.innerHTML=safeTabRenderSync('aiupload',()=>rAIUpload());
   // V8.22: prepend rule conflict hint strip if active. Inline confirmation per Decision 3.
   if(_ruleConflictHint&&_ruleConflictHint.conflict){
     const c=_ruleConflictHint.conflict;
@@ -5893,6 +5919,20 @@ function openEditTxn(id,ym){
   document.getElementById('etxn-amount').value=t.amount;
   document.getElementById('etxn-desc').value=t.description||'';
   document.getElementById('etxn-notes').value=t.notes||'';
+  // V9.0 Item 2A: surface raw_description (statement original). Hidden if absent or
+  // identical to the cleaned description (manual entries, no useful added info).
+  const rawRow=document.getElementById('etxn-raw-desc-row');
+  const rawEl=document.getElementById('etxn-raw-desc');
+  if(rawRow&&rawEl){
+    const raw=(t.raw_description||'').trim();
+    const cleaned=(t.description||'').trim();
+    if(raw&&raw!==cleaned){
+      rawEl.textContent=raw;
+      rawRow.style.display='block';
+    }else{
+      rawRow.style.display='none';
+    }
+  }
   document.getElementById('etxn-type').value=t.type||'expense';
   document.getElementById('etxn-dir').value=txDir(t);
   autoDir(t.type||'expense','etxn-dir'); // gray out if not transfer
@@ -6016,11 +6056,28 @@ async function saveEditTxn(){
   const invAccId=document.getElementById('etxn-inv-acc')?.value||null;
   if(invAccId)t.investmentAccountId=invAccId;
   else delete t.investmentAccountId;
+  // V9.0 Item 10: read category form values up-front so the bill-link block can use the
+  // post-edit mainCatId rather than the stale t.mainCatId. Also: when a bill is freshly
+  // linked, adopt the bill's category to keep the txn aligned with bill metadata.
+  let newMid=document.getElementById('etxn-mc').value||null;
+  let newSid=document.getElementById('etxn-sc').value||null;
   // Bill tag — only meaningful for Housing/Subscriptions categories
   const prevBillId=t.billId||null;
   const newBillId=document.getElementById('etxn-bill')?.value||null;
-  if(BILL_CATEGORY_IDS.has(t.mainCatId))t.billId=newBillId||null;
-  else delete t.billId; // category changed away from bill-eligible → drop the link
+  if(newBillId&&newBillId!==prevBillId){
+    // V9.0 Item 10: when a bill is linked manually, adopt the bill's category. Mirrors
+    // the statement-import path (lines ~6915-6926) which already does this. Keeps txn
+    // category consistent with the bill it represents.
+    const linkedBill=(S.bills||[]).find(b=>b.id===newBillId);
+    if(linkedBill&&linkedBill.mainCatId){
+      newMid=linkedBill.mainCatId;
+      newSid=linkedBill.subCatId||null;
+      toast(`Category set from bill: ${linkedBill.name||'bill'}`);
+    }
+  }
+  // Apply bill-link based on the FINAL category (no longer stale t.mainCatId).
+  if(BILL_CATEGORY_IDS.has(newMid))t.billId=newBillId||null;
+  else delete t.billId; // category not bill-eligible → drop the link
   // Learn manual bill link → so future similar descriptions auto-link without prompting
   if(newBillId&&newBillId!==prevBillId)learnBillRule(t.description,newBillId);
   // Staff tag — only meaningful for Household Staff category, but we preserve selection regardless
@@ -6035,8 +6092,7 @@ async function saveEditTxn(){
   }
   // Sync debt payments whenever a transaction's debtId, amount, or type may have changed
   syncDebtsFromTxns();
-  const newMid=document.getElementById('etxn-mc').value||null;
-  const newSid=document.getElementById('etxn-sc').value||null;
+  // newMid / newSid were declared above — Item 10 may have already overridden them from a bill link.
   t.mainCatId=newMid;t.subCatId=newSid;
   if(newMid){
     // Clear breadcrumb — transaction is no longer uncategorized from a deletion
@@ -7055,6 +7111,21 @@ function delRule(pattern){S.txnRules=(S.txnRules||[]).filter(r=>r.pattern!==patt
 // Detects when a manual categorization conflicts with an existing global rule, on an account
 // that has no existing account-specific rule for this description. Returns conflict info or null.
 // Per Decision 2: only when categories differ AND user hasn't dismissed this combination.
+// V9.0 Item 9: counts how many transactions in the vault match a global-rule pattern.
+// Used to suppress rule-conflict prompts when the pattern only matches a few transactions
+// (where the prompt cost outweighs the benefit of clarifying intent).
+function countTxnsMatchingPattern(pattern){
+  if(!pattern)return 0;
+  let n=0;
+  for(const ym of Object.keys(S.txnCache||{})){
+    for(const t of(S.txnCache[ym]||[])){
+      const desc=(t.description||'').toLowerCase().trim().substr(0,40);
+      if(desc===pattern)n++;
+    }
+  }
+  return n;
+}
+
 function detectRuleConflict(desc,accountId,newMid,newSid){
   if(!desc||!accountId||!newMid)return null;
   const pattern=(desc||'').toLowerCase().trim().substr(0,40);
@@ -7069,6 +7140,10 @@ function detectRuleConflict(desc,accountId,newMid,newSid){
   // the user is just updating their account-specific rule, learnTxnRule handles it.
   const existingAcctRule=(S.txnRules||[]).find(r=>r.pattern===pattern&&r.accountId===accountId);
   if(existingAcctRule)return null;
+  // V9.0 Item 9: Suppress prompt when the global pattern only matches a handful of transactions
+  // (per-vault count). At <3 matches, the prompt cost outweighs the disambiguation benefit.
+  // Behavior matches the existing convention at the same call site (silent override).
+  if(countTxnsMatchingPattern(pattern)<3)return null;
   // True first-time conflict.
   return{
     pattern,
@@ -7466,7 +7541,7 @@ function _buildSweepScopeFromView(){
   // Pick the right account scope based on which txn tab is active
   const txnTab=TF.txnTab||'bank';
   const allMonths=TF.allMonths;
-  const ymKeys=allMonths?Object.keys(S.txnCache||{}):[S.month||new Date().toISOString().substr(0,7)];
+  const ymKeys=allMonths?Object.keys(S.txnCache||{}):[S.month||localISO(new Date()).substr(0,7)];
 
   for(const ym of ymKeys){
     for(const t of(S.txnCache[ym]||[])){
@@ -13162,6 +13237,16 @@ function rDiagnostics(){
 
   // ─── FX variance txns ────────────────────────────────────────────────────
   const fxTxns=tx.filter(t=>t.fxPairId);
+  // V9.0 Item 13: connect the FX variance system (lines ~6185-6244) to the imbalance diagnostic.
+  // When a transfer is matched with mismatched amounts (typical SAR→USD CC payment), the difference
+  // is auto-recorded as an FX variance txn (expense or income) on the receiving account. That txn
+  // EXPLAINS the transfer imbalance — the diagnostic was previously flagging the consequence as
+  // a problem. fxExplained is the signed FX flow that should reconcile against tImbalance.
+  // Sign convention: income fxTxn = +amt, expense fxTxn = -amt. tImbalance = tIn - tOut.
+  // For SAR→USD CC: tIn<tOut so tImbalance<0; FX expense recorded for |diff|, so fxExplained<0.
+  // Residual = tImbalance - fxExplained should net to ~0 in a clean case.
+  const fxExplained=fxTxns.reduce((s,t)=>s+(t.type==='expense'?-t.amount:t.amount),0);
+  const tImbalanceResidual=Math.round((tImbalance-fxExplained)*100)/100;
 
   // ─── Type/category drift ─────────────────────────────────────────────────
   const drifted=tx.filter(t=>{
@@ -13198,7 +13283,7 @@ function rDiagnostics(){
     const issues=[];
     if(orphans.length>0)issues.push(`${orphans.length} orphan transfer${orphans.length===1?'':'s'}`);
     if(drifted.length>0)issues.push(`${drifted.length} type/category drift${drifted.length===1?'':'s'}`);
-    if(Math.abs(tImbalance)>=1)issues.push(`SAR ${Math.abs(tImbalance).toFixed(2)} transfer imbalance`);
+    if(Math.abs(tImbalanceResidual)>=1)issues.push(`SAR ${Math.abs(tImbalanceResidual).toFixed(2)} transfer imbalance`);
     if(unexplained!=null&&Math.abs(unexplained)>=1)issues.push(`SAR ${Math.abs(unexplained).toFixed(2)} unexplained gap`);
     if(issues.length===0){
       return`<div style="padding:14px 16px;background:color-mix(in srgb,var(--ok) 10%,transparent);border-left:3px solid var(--ok);border-radius:var(--rsm);margin-bottom:1rem">
@@ -13246,8 +13331,11 @@ function rDiagnostics(){
     <div style="display:grid;grid-template-columns:1fr auto;gap:6px 14px;font-size:13px;padding:10px 0;line-height:1.5">
       <div style="color:var(--text2)">Transfers IN</div><div style="font-weight:500;text-align:right;font-variant-numeric:tabular-nums" class="fmt-money">${fmt(tIn)}</div>
       <div style="color:var(--text2)">Transfers OUT</div><div style="font-weight:500;text-align:right;font-variant-numeric:tabular-nums" class="fmt-money">${fmt(tOut)}</div>
-      <div style="border-top:1px solid var(--border);padding-top:6px;color:var(--text1);font-weight:500">Imbalance ${Math.abs(tImbalance)<0.5?'&#10003;':'&#9888;'}</div>
-      <div style="border-top:1px solid var(--border);padding-top:6px;font-weight:600;text-align:right;font-variant-numeric:tabular-nums;color:${Math.abs(tImbalance)<0.5?'var(--ok)':'var(--warn)'}" class="fmt-money">${fmtS(tImbalance,true)}</div>
+      <div style="border-top:1px solid var(--border);padding-top:6px;color:var(--text1)">Imbalance (raw)</div>
+      <div style="border-top:1px solid var(--border);padding-top:6px;font-weight:500;text-align:right;font-variant-numeric:tabular-nums;color:var(--text2)" class="fmt-money">${fmtS(tImbalance,true)}</div>
+      ${fxTxns.length>0?`<div style="color:var(--text2)" title="Sum of FX variance transactions auto-created when matched transfers had mismatched amounts (e.g. SAR funding USD CC)">Explained by FX variance <span style="color:var(--text3);font-size:11px">(${fxTxns.length} txn${fxTxns.length===1?'':'s'})</span></div><div style="font-weight:500;text-align:right;font-variant-numeric:tabular-nums;color:var(--text2)" class="fmt-money">${fmtS(fxExplained,true)}</div>`:''}
+      <div style="border-top:1px solid var(--border);padding-top:6px;color:var(--text1);font-weight:500">Residual ${Math.abs(tImbalanceResidual)<0.5?'&#10003;':'&#9888;'}</div>
+      <div style="border-top:1px solid var(--border);padding-top:6px;font-weight:600;text-align:right;font-variant-numeric:tabular-nums;color:${Math.abs(tImbalanceResidual)<0.5?'var(--ok)':'var(--warn)'}" class="fmt-money">${fmtS(tImbalanceResidual,true)}</div>
     </div>
   </div>
 
@@ -15127,9 +15215,9 @@ function buildTxFilters(){
     <span style="font-size:11px;color:var(--text3);flex:1">${BulkSelected.size>1?'Edit, Categorize, or delete on any selected row applies to all '+BulkSelected.size+' selected.':'Tap rows to select. Actions on a selected row apply to the whole selection.'}</span>
     <button class="btn btn-xs" onclick="selectAllDisplayed()">Select all</button>
     <button class="btn btn-xs" onclick="clearBulkSelection();render()">Clear</button>
-    <button class="btn btn-xs btn-p" onclick="applyBulkCategory()" ${BulkSelected.size?'':'disabled'}>Assign Category</button>
-    <button class="btn btn-xs" onclick="openBulkAiCategorize()" ${BulkSelected.size?'':'disabled'} title="Use AI with shared context to categorize all selected transactions at once" style="display:inline-flex;align-items:center;gap:4px"><span style="color:var(--electric)">${CASE9_AI_ICON_SVG}</span> AI Categorize</button>
-    <button class="btn btn-xs" onclick="openRuleSweepModal(true)" ${BulkSelected.size?'':'disabled'} title="Apply learned rules to selected transactions">↻ Apply Rules</button>
+    <button class="btn btn-xs btn-p" data-bulk-action onclick="applyBulkCategory()" ${BulkSelected.size?'':'disabled'}>Assign Category</button>
+    <button class="btn btn-xs" data-bulk-action onclick="openBulkAiCategorize()" ${BulkSelected.size?'':'disabled'} title="Use AI with shared context to categorize all selected transactions at once" style="display:inline-flex;align-items:center;gap:4px"><span style="color:var(--electric)">${CASE9_AI_ICON_SVG}</span> AI Categorize</button>
+    <button class="btn btn-xs" data-bulk-action onclick="openRuleSweepModal(true)" ${BulkSelected.size?'':'disabled'} title="Apply learned rules to selected transactions">↻ Apply Rules</button>
   </div>`:''}
   <div class="fg" style="gap:8px;flex-wrap:nowrap;align-items:center;margin-bottom:1rem;overflow-x:auto">
     <input type="text" id="tx-search-input" placeholder="Search" value="${TF.q||''}" oninput="onTxSearchInput(this.value)" autocomplete="off" style="flex:1;min-width:140px">
@@ -15606,7 +15694,10 @@ function rReviewQueue(){
   const total=flagged.length;
   if(total===0){
     return`<div class="pg">
-      <div class="hdr"><h1>Review Queue</h1><p class="sub">Transactions you've flagged for later review.</p></div>
+      <div class="pg-header">
+        <div class="pg-header-title">Review Queue</div>
+        <div class="pg-header-sub">Transactions you've flagged for later review.</div>
+      </div>
       <div class="card card-bordered">
         <div class="empty" style="padding:2rem;text-align:center">
           <div style="font-size:32px;margin-bottom:8px">&#10003;</div>
@@ -15637,7 +15728,10 @@ function rReviewQueue(){
   }).join('');
 
   return`<div class="pg">
-    <div class="hdr"><h1>Review Queue</h1><p class="sub">${total} transaction${total!==1?'s':''} flagged for review across all months. Recategorize or dismiss each one.</p></div>
+    <div class="pg-header">
+      <div class="pg-header-title">Review Queue</div>
+      <div class="pg-header-sub">${total} transaction${total!==1?'s':''} flagged for review across all months. Recategorize or dismiss each one.</div>
+    </div>
     <div class="card card-bordered" style="margin-bottom:1rem">
       <div class="fg jb" style="align-items:center;flex-wrap:wrap;gap:10px">
         <div class="fg" style="gap:18px;flex-wrap:wrap">
@@ -16278,6 +16372,15 @@ function updateBulkBar(){
   if(btn){
     btn.textContent=BulkMode?'Exit Select':'Select';
   }
+  // V9.0 Item 1: live-toggle disabled state on bulk action buttons. The inline `disabled`
+  // attribute is set at render time keyed to BulkSelected.size at that moment, so once a
+  // user selects rows after entering bulk mode the buttons stay disabled until next render.
+  // This loop fixes that without a full re-render on every checkbox click.
+  const hasSel=BulkSelected.size>0;
+  document.querySelectorAll('[data-bulk-action]').forEach(b=>{
+    if(hasSel)b.removeAttribute('disabled');
+    else b.setAttribute('disabled','');
+  });
   // No body-pad toggle — banner is inline.
 }
 
@@ -19253,6 +19356,11 @@ initAuth();
       <div><label class="lbl">Amount (SAR)</label><input type="number" id="etxn-amount" min="0" step="0.01"></div>
     </div>
     <div style="margin-bottom:8px"><label class="lbl">Description</label><input type="text" id="etxn-desc"></div>
+    <!-- V9.0 Item 2A: Original description from statement (raw_description) for reference. -->
+    <div id="etxn-raw-desc-row" style="margin-bottom:8px;display:none">
+      <label class="lbl" style="color:var(--text3)">Original description (from statement)</label>
+      <div id="etxn-raw-desc" style="font-family:monospace;font-size:11px;color:var(--text3);background:var(--bg2);padding:6px 8px;border-radius:var(--rsm);word-break:break-all;line-height:1.4"></div>
+    </div>
     <div class="fr" style="margin-bottom:8px">
       <div><label class="lbl">Type</label>
         <select id="etxn-type" onchange="autoDir(this.value,'etxn-dir');const br=document.getElementById('etxn-beneficiary-row');if(br)br.style.display=(this.value==='investment'||this.value==='income')?'block':'none'">
