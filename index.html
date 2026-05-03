@@ -16832,6 +16832,7 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps, scopedAcc){
       <td class="tx-actions-cell" style="white-space:nowrap">
         <button class="btn btn-xs" onclick="bulkAwareEditTxn('${t.id}','${ym}')" title="Edit transaction">Edit</button>
         <button class="btn btn-xs txn-cat-cluster" onclick="event.stopPropagation();bulkAwareOpenCatCluster(this,'${t.id}','${ym}','${t.mainCatId||''}','${t.subCatId||''}',${!t.isSub?'true':'false'})" title="Categorize: set category, sub-category, or use AI">Categorize ▾</button>
+        ${!t.isSub?`<button class="btn btn-xs" onclick="event.stopPropagation();mkSub('${t.id}','${ym}')" title="Mark as subscription" style="padding:2px 6px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></button>`:''}
         ${(t.type==='income'&&(t.subCatId==='sub_refund'||t.subCatId==='sub_reimbursement')&&!isRefundLinked(t))?`<button class="btn btn-xs" onclick="openRefundLinkModal('${t.id}','${ym}')" title="Link this refund/reimbursement to its original expense" style="padding:2px 6px"><span style="color:var(--ok);font-weight:600">↔</span></button>`:''}
         <button class="btn btn-xs btn-d" onclick="bulkAwareDelTxn('${t.id}','${ym}')" title="Delete transaction">&#10005;</button>
       </td>
