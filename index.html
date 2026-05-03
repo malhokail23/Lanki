@@ -659,6 +659,19 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overfl
 .tx-tbl{table-layout:fixed;width:100%;min-width:1200px}
 .tx-tbl td,.tx-tbl th{overflow:hidden;text-overflow:ellipsis}
 .tx-tbl td>div{overflow:hidden;text-overflow:ellipsis}
+/* Phase A polish: actions cell must NOT be clipped. The universal
+   overflow:hidden;text-overflow:ellipsis rule above was clipping the × delete
+   button and the SUB ×-tag close button at the cell boundary, then Chrome
+   added an ellipsis indicator that visually rendered as "..." next to the
+   Edit and Categorize ▾ buttons — making it look like there was an overflow
+   menu rather than a delete button. The actions cell content is interactive
+   (clickable buttons) and must always be fully visible. The cell already
+   has white-space:nowrap inline so it lays out on one line; this rule
+   just ensures the column expands or buttons remain visible past the
+   computed column width. Same rule applies to the description cell which
+   contains badges (SUB ×, rule, review, etc.) that must remain clickable. */
+.tx-tbl td.tx-actions-cell,
+.tx-tbl td.tx-actions-cell>div{overflow:visible;text-overflow:clip}
 /* Description cell: clamp to 2 lines max, notes appear inline as a secondary line */
 .tx-desc-clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;line-height:1.4}
 .tx-desc-clamp .tx-notes{display:block;font-size:10px;color:var(--text3);margin-top:2px}
