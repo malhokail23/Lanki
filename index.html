@@ -6,6 +6,9 @@
 <title>Lanki Platform</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='4' y='4' width='24' height='6' rx='2' fill='%23021751'/%3E%3Crect x='4' y='13' width='16' height='6' rx='2' fill='%23021751'/%3E%3Crect x='4' y='22' width='20' height='6' rx='2' fill='%23021751'/%3E%3C/svg%3E">
 <meta name="application-name" content="Lanki Platform">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#021751" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#021751" media="(prefers-color-scheme: dark)">
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
@@ -23,74 +26,135 @@
 html{zoom:1.1}
 
 :root{
-  /* ── Lanki Brand Tokens v2.0 ── */
-  --font:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Helvetica,Arial,sans-serif;
-  --font-mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  /* ============================================================
+     LANKI COMPASS — DESIGN TOKENS v2.0
+     Anchor: Royal Midnight #021751
+     Replaced V9.0 v2.0 brand tokens during Compass migration Phase A.
+     Legacy V9.0 names retained as aliases for un-migrated render functions.
+     ============================================================ */
 
-  /* Brand identity */
-  --midnight:#021751;       /* Royal Midnight — mark, headings, body */
-  --electric:#0077C1;       /* Electric Blue  — actions, links, buttons */
-  --feather:#F3F1EF;        /* Feather White  — page background */
+  /* ── Layer 1: Compass canonical (Section 3 spec) ── */
+  --ink:#021751;
+  --action:#0E40C5;
+  --action-tint:#E8EDFB;
+  --action-tint-2:#D4DEF7;
+  --page:#F2F4F9;
+  --card:#FFFFFF;
+  --card-inset:#FAFBFD;
+  --card-tint:#F6F8FC;
+  --line:#DDE2ED;
+  --line-strong:#BFC8DA;
+  --hairline:#EBEEF5;
+  --text:#021751;
+  --text2:#4A5774;
+  --text3:#7E89A3;
+  --pos:#0F7A53;
+  --pos-bg:#E0F2EA;
+  --neg:#B33A3F;
+  --neg-bg:#F8E5E6;
+  --warn:#9C6A0E;
+  --warn-bg:#FBEFD7;
+  --capital:#4A6FB5;
+  --health:#3F8B82;
+  --c1:#021751;
+  --c2:#4A6FB5;
+  --c3:#A690A4;
+  --c4:#C9B9A3;
+  --c5:#D9A59A;
+  --c6:#9C6A0E;
+  --c7:#3F8B82;
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","Segoe UI","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
 
-  /* Domain accents */
-  --powderblue:#A3BCD7;     /* Powder Blue    — Capital OS */
-  --teal:#8FA9A3;           /* Dusty Teal     — Health OS */
-
-  /* Semantic states — brand-defined */
-  --mint:#B5CBB7;           /* Dusty Mint     — income, gains, success */
-  --rose:#C98E8B;           /* Faded Rose     — expenses, losses, debt */
-  --gold:#D6C88F;           /* Mellow Gold    — pending, warning, caution */
-
-  /* Category palette */
-  --plum:#A690A4;           /* Dusty Plum */
-  --sand:#C9B9A3;           /* Cool Sand */
-  --coral:#D9A59A;          /* Muted Coral */
-
-  /* Neutrals */
-  --charcoal:#707070;       /* Charcoal Fog — secondary text */
-
-  /* Surfaces */
-  --bg:#FFFFFF;             /* Pure White — cards, inputs */
-  --bg2:#F3F1EF;            /* Feather White — page background */
-  --bg3:#EAE8E4;            /* Slightly darker — hover, dividers */
-  --bg4:#E0DEDA;            /* Deeper — pressed states */
-
-  /* Borders */
-  --border:#E4E0DC;         /* Lanki line */
-  --border2:#CCC8C2;        /* Stronger border */
-
-  /* Text — all Royal Midnight family */
-  --text:#021751;           /* Primary — Royal Midnight */
-  --text2:#707070;          /* Secondary — Charcoal Fog */
-  --text3:#9CA0A8;          /* Tertiary — soft */
-
-  /* Semantic aliases pointing to brand tokens */
-  --ok:#3D6B4F;             /* Darker mint for text legibility */
-  --ok-bg:#B5CBB7;          /* Dusty Mint — backgrounds, fills */
-  --bad:#8B4040;            /* Darker rose for text legibility */
-  --bad-bg:#C98E8B;         /* Faded Rose — backgrounds, fills */
-  --warn:#7A5E20;           /* Darker gold for text legibility */
-  --warn-bg:#D6C88F;        /* Mellow Gold — backgrounds, fills */
-  --info:#0077C1;           /* Electric Blue */
+  /* ── Layer 2: V9.0 unprefixed legacy aliases (no Compass collision) ── */
+  /* These are referenced by un-migrated V9.0 render functions. Each phase
+     migrates its render functions to Compass tokens; the corresponding alias
+     can be removed in Phase H cleanup. */
+  --midnight:var(--ink);
+  --electric:var(--action);
+  --feather:var(--page);
+  --powderblue:#A3BCD7;
+  --teal:#8FA9A3;
+  --rose:#C98E8B;
+  --mint:#B5CBB7;
+  --gold:#D6C88F;
+  --plum:var(--c3);
+  --sand:var(--c4);
+  --coral:var(--c5);
+  --charcoal:#707070;
+  --bg:var(--card);
+  --bg2:#F3F1EF;
+  --bg3:#EAE8E4;
+  --bg4:#E0DEDA;
+  --border:var(--line);
+  --border2:var(--line-strong);
+  --ok:#3D6B4F;
+  --ok-bg:#B5CBB7;
+  --bad:#8B4040;
+  --bad-bg:#C98E8B;
+  --info:var(--action);
   --inv:#4A3CB8;
   --ext:#5B2D8A;
-
-  /* Radius */
   --r:10px;
   --rsm:7px;
-
-  /* Type scale */
   --fs:15px;
   --fs-sm:14px;
   --fs-xs:13px;
   --fs-xxs:12px;
+  --font-mono:var(--mono);
+  --lanki-font-mono:var(--mono);
+}
+
+/* ============================================================
+   Layer 3: V9.0 collision shim — six shadowed tokens + eight
+   orphan aliases. Scoped to .lanki-legacy so they apply only
+   to un-migrated V9.0 page bodies and modals.
+   ============================================================ */
+.lanki-legacy{
+  /* Shadowed tokens — V9.0 values restored inside legacy scope */
+  --text2:#707070;          /* V9.0 Charcoal Fog (Compass: #4A5774) */
+  --text3:#9CA0A8;          /* V9.0 light gray (Compass: #7E89A3) */
+  --warn:#7A5E20;           /* V9.0 darker gold (Compass: #9C6A0E mustard) */
+  --warn-bg:#D6C88F;        /* V9.0 mellow gold (Compass: #FBEFD7 light yellow) */
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --line:#E4E0DC;           /* V9.0 lanki line (Compass: #DDE2ED) */
+
+  /* Orphan token aliases — locked to current visual resolution.
+     Each was referenced in V9.0 without :root definition. */
+  --text1:var(--ink);
+  --paper:var(--page);
+  --surface-elevated:var(--card);
+  --ink-electric:var(--action);
+  --rlg:12px;
+  --rmd:10px;
+  --bg1:var(--card-tint);
+  --cat-5:var(--c3);
+}
+
+/* ============================================================
+   Compass reset — restores Compass token values inside migrated
+   render scopes. Applied at the top-level element of any phase-
+   migrated render function: <main class="spread compass">.
+   ============================================================ */
+.spread.compass,
+.lanki-legacy .compass{
+  --text2:#4A5774;
+  --text3:#7E89A3;
+  --warn:#9C6A0E;
+  --warn-bg:#FBEFD7;
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","Segoe UI","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --line:#DDE2ED;
 }
 
 *{box-sizing:border-box;margin:0;padding:0}
 ::selection{background:rgba(0,119,193,.15);color:var(--midnight);} /* Electric Blue tint */
 ::-moz-selection{background:rgba(2,23,81,.15);color:var(--midnight);}
-html{overflow-x:hidden;height:100%}
-body{font-family:var(--font);background:var(--feather);color:var(--text);min-height:100%;font-size:var(--fs);-webkit-font-smoothing:antialiased;overflow-x:hidden} /* Feather White per brand */
+/* Phase A: html and body must NOT have overflow-x:hidden — it silently
+   downgrades position:sticky on descendants by making body the scroll
+   container in a way that breaks sticky engagement. Horizontal overflow
+   is now prevented per-element instead (see .pg, tables, charts). */
+html{height:100%}
+body{font-family:var(--font);background:var(--feather);color:var(--text);min-height:100%;font-size:var(--fs);-webkit-font-smoothing:antialiased} /* Feather White per brand */
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes fi{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
 @keyframes dotPulse{0%,80%,100%{opacity:.2;transform:scale(.8)}40%{opacity:1;transform:scale(1)}}
@@ -233,18 +297,15 @@ body{font-family:var(--font);background:var(--feather);color:var(--text);min-hei
 .eng-overlay.active{display:flex;animation:fi .15s ease}
 
 /* ── APP SHELL ────────────────────────────────────────── */
-#app{display:none;flex-direction:row;min-height:100vh;align-items:stretch;overflow-x:hidden}
+/* Phase A: #app contains the Compass Ribbon (top), then a body row
+   (Compass Index + .app-content). Old fixed-right-sidebar layout is gone. */
+#app{display:none;flex-direction:column;min-height:100vh}
 #app.active{display:flex}
 
-/* ── RIGHT SIDEBAR NAV ─────────────────────────────────── */
-/* Desktop: fixed right sidebar. Mobile: bottom tab bar */
-
-/* App shell: content + right sidebar */
-#app{flex-direction:row!important}
+/* App shell: content fills remaining space inside .body row */
 .app-content{
   flex:1;min-width:0;
   display:flex;flex-direction:column;
-  margin-left:200px; /* offset for fixed left sidebar */
   /* No overflow-x here — html/body already handle it. Setting overflow on .app-content
      would create an internal scroll container and break position:sticky inside .pg. */
 }
@@ -354,7 +415,7 @@ body{font-family:var(--font);background:var(--feather);color:var(--text);min-hei
 /* Content area right margin to account for sidebar */
 .pg{
   flex:1;padding:2rem 2.25rem 4rem;
-  min-width:0;box-sizing:border-box;
+  min-width:0;max-width:100%;box-sizing:border-box;
   animation:fi .18s ease;
 }
 
@@ -426,7 +487,8 @@ body{font-family:var(--font);background:var(--feather);color:var(--text);min-hei
   .burger-bar{display:flex;}
 
   /* Content pushed down below burger bar */
-  .app-content{padding-top:52px;}
+  /* Phase A: removed padding-top:52px — Compass Ribbon is now in-flow at top of #app */
+  /* .app-content padding-top no longer needed */
   .pg{
     padding:1rem 1.1rem 3rem;
     margin-left:0;
@@ -1067,10 +1129,13 @@ tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overfl
    The content area must mirror this growth — a fixed 52px push doesn't account
    for the additional notch area on iPhone 12/13/14/15 Pro and Pro Max. */
 @media(max-width:768px){
-  .app-content{padding-top:calc(52px + env(safe-area-inset-top, 0))}
-  /* Sticky toolbar must also shift down by the same amount */
-  .tx-sticky-toolbar{top:calc(52px + env(safe-area-inset-top, 0))}
-  /* Demo banner pushes the burger bar — banner itself respects safe area */
+  /* Phase A: Ribbon (56px on mobile) is now in-flow as first child of #app.
+     We only need to honor the safe-area inset for notched devices.
+     The 52px shifted to 0 because the Ribbon takes its own space in the column flex. */
+  .app-content{padding-top:env(safe-area-inset-top, 0)}
+  /* Sticky toolbar must shift below the in-flow Ribbon (56px on mobile) */
+  .tx-sticky-toolbar{top:calc(56px + env(safe-area-inset-top, 0))}
+  /* Demo banner respects safe area */
   #demo-banner{padding-top:calc(8px + env(safe-area-inset-top, 0))}
 }
 
@@ -1278,13 +1343,1721 @@ body.privacy-on .privacy-indicator{
   pointer-events:none;
 }
 @media(max-width:768px){
-  .privacy-indicator{top:calc(52px + env(safe-area-inset-top, 0))}
+  /* Privacy indicator sits below the 56px Ribbon plus safe area */
+  .privacy-indicator{top:calc(56px + env(safe-area-inset-top, 0))}
 }
 body.privacy-on{padding-top:28px}
 @media(max-width:768px){
   body.privacy-on{padding-top:0}
-  body.privacy-on .app-content{padding-top:calc(52px + 28px + env(safe-area-inset-top, 0))}
+  /* Phase A: Ribbon now in flex flow; only need to push for the privacy banner (28px) and safe area */
+  body.privacy-on .app-content{padding-top:calc(28px + env(safe-area-inset-top, 0))}
 }
+
+
+/* ============================================================
+   COMPASS COMPONENT CSS — Phase A injection
+   Scoped under .compass so component classes (.btn, .card, .pill,
+   .empty, .settings-row, etc.) do NOT override V9.0 component
+   styles in legacy bodies. The .compass marker class is applied
+   to:
+     - The new Ribbon and Index roots (Phase A).
+     - Migrated render functions <main class="spread compass"> (Phase B+).
+   Host chrome from the design pack (.host, .frame, .surface-bar)
+   was excluded during extraction.
+   ============================================================ */
+
+/* ─── Compass element resets (descendant universal, button, svg) ───
+   These were carried by the design pack's `.lanki *`, `.lanki button`,
+   and `.lanki svg` rules. Without them, bare <button> elements inside
+   the Ribbon and Index pick up browser-default button styling (visible
+   border, gray background) and SVG icons can shrink in flex contexts.
+   IMPORTANT — these resets are scoped to the CHROME containers only
+   (Ribbon, Index, mobile-period-strip, drawer-backdrop, and any future
+   .spread). They MUST NOT match V9.0 page bodies inside .lanki-legacy:
+   doing so would strip every V9.0 button class (.cal-btn, .opill,
+   .pw-toggle, etc.) of its inherited browser defaults. */
+.compass .ribbon *,
+.compass .index *,
+.compass .mobile-period-strip *,
+.compass .drawer-backdrop *,
+.compass .spread *{box-sizing:border-box}
+
+.compass .ribbon button,
+.compass .index button,
+.compass .mobile-period-strip button,
+.compass .spread button{cursor:pointer;border:none;background:none;color:inherit;font-family:inherit}
+/* Phase A polish: font-size deliberately NOT in this reset. With
+   font-size:inherit, this rule (specificity 0,2,1) was beating
+   .compass .index-item{font-size:12.5px} (specificity 0,2,0) — top-level
+   menu items inherited body's --fs:15px and rendered ~20% too large. That
+   inflated the Index height and pushed Settings, Switch Engine, and Demo
+   Mode below the viewport fold. Each chrome surface declares its own
+   font-size explicitly: .index-item 12.5px, .index-sub .index-item 11.5px,
+   .index-foot button 11.5px, .ribbon-period button 11px,
+   .mobile-period-strip button 12px. Icon-only buttons (ribbon-actions)
+   have no text content so font-size is irrelevant. */
+
+.compass .ribbon svg,
+.compass .index svg,
+.compass .mobile-period-strip svg,
+.compass .spread svg{flex-shrink:0;display:block}
+
+/* ============================================================
+   LANKI APP SHELL
+   ============================================================ */
+
+.compass .num{font-variant-numeric:tabular-nums;letter-spacing:-.005em}
+
+/* Mobile preview mode for the lanki frame */
+
+/* ============================================================
+   THE RIBBON
+   ============================================================ */
+
+.compass .ribbon{height:52px;background:var(--ink);color:#fff;display:flex;align-items:center;padding:0 18px;gap:16px;flex-shrink:0;position:relative;z-index:10}
+
+.compass .ribbon-mark{display:flex;align-items:center;gap:9px;padding-right:14px;border-right:1px solid rgba(255,255,255,.12);height:100%}
+
+.compass .ribbon-mark svg rect{fill:#fff}
+
+.compass .ribbon-mark .r-name{font-size:13px;font-weight:600;letter-spacing:-.04em;color:#fff;line-height:1}
+
+.compass .ribbon-context{display:flex;align-items:center;gap:10px;font-size:12px;color:rgba(255,255,255,.7);font-weight:500;letter-spacing:.005em}
+
+.compass .ribbon-context .r-engine{color:#fff}
+
+.compass .ribbon-context .r-dot{width:3px;height:3px;border-radius:50%;background:rgba(255,255,255,.3)}
+
+.compass .ribbon-period{display:flex;align-items:center;gap:1px;background:rgba(255,255,255,.08);border-radius:7px;padding:3px;margin-left:auto}
+
+.compass .ribbon-period button{padding:4px 11px;font-size:11px;font-weight:500;color:rgba(255,255,255,.65);border-radius:5px;letter-spacing:.01em}
+
+.compass .ribbon-period button.active{background:rgba(255,255,255,.16);color:#fff}
+
+.compass .ribbon-period button:hover:not(.active){color:#fff}
+
+.compass .ribbon-range{display:flex;align-items:center;gap:6px;padding:5px 4px 5px 10px;background:rgba(255,255,255,.06);border-radius:7px;font-size:11.5px;color:#fff;font-variant-numeric:tabular-nums;font-weight:500}
+
+.compass .ribbon-range .r-arrow{width:22px;height:22px;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.65);border-radius:5px;font-size:14px}
+
+.compass .ribbon-range .r-arrow:hover{color:#fff;background:rgba(255,255,255,.08)}
+
+.compass .ribbon-position{display:flex;align-items:center;gap:12px;padding:0 16px;border-left:1px solid rgba(255,255,255,.12);height:100%}
+
+.compass .ribbon-position .r-pos-label{font-size:9.5px;color:rgba(255,255,255,.55);letter-spacing:.1em;text-transform:uppercase;font-weight:600}
+
+.compass .ribbon-position .r-pos-num{font-size:14px;color:#fff;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.01em;line-height:1}
+
+.compass .ribbon-actions{display:flex;align-items:center;gap:2px;padding-left:12px;border-left:1px solid rgba(255,255,255,.12);height:100%}
+
+.compass .ribbon-actions button{width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.7);position:relative}
+
+.compass .ribbon-actions button:hover{background:rgba(255,255,255,.08);color:#fff}
+
+.compass .ribbon-actions button svg{width:15px;height:15px}
+
+.compass .ribbon-badge{position:absolute;top:5px;right:5px;background:#E76A6E;color:#fff;font-size:9px;font-weight:600;width:14px;height:14px;border-radius:50%;display:flex;align-items:center;justify-content:center;line-height:1;border:1.5px solid var(--ink)}
+
+/* Mobile burger button (hidden on desktop) */
+
+.compass .ribbon-burger{display:none;width:32px;height:32px;border-radius:7px;align-items:center;justify-content:center;color:#fff;flex-shrink:0;margin-right:6px}
+
+.compass .ribbon-burger svg{width:18px;height:18px}
+
+/* Period strip for mobile (below ribbon, visible on Overview/Projections) */
+
+.compass .mobile-period-strip{display:none;background:var(--ink);padding:0 14px 10px;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+
+.compass .mobile-period-strip button{padding:6px 14px;font-size:12px;color:rgba(255,255,255,.65);border-radius:6px;background:rgba(255,255,255,.08);font-weight:500;flex-shrink:0}
+
+.compass .mobile-period-strip button.active{background:rgba(255,255,255,.18);color:#fff;font-weight:600}
+
+/* MOBILE RIBBON COLLAPSE */
+@media (max-width:768px){
+  
+.compass .ribbon{height:56px;padding:0 12px;gap:8px}
+  
+.compass .ribbon-burger{display:flex}
+  
+.compass .ribbon-mark{padding-right:0;border-right:none}
+  
+.compass .ribbon-context,
+.compass .ribbon-period,
+.compass .ribbon-range,
+.compass .ribbon-position{display:none}
+  
+.compass .ribbon-actions{margin-left:auto;border-left:none;padding-left:0}
+  
+.compass .mobile-period-strip{display:flex}
+}
+
+/* ============================================================
+   THE BODY (Index + Spread)
+   ============================================================ */
+
+.compass .body{flex:1;display:flex;min-height:0}
+
+/* ============================================================
+   THE INDEX (typographic nav)
+   ============================================================ */
+
+.compass .index{width:204px;background:transparent;padding:22px 0 16px;display:flex;flex-direction:column;flex-shrink:0;border-right:1px solid var(--line)}
+
+.compass .index-section{margin-bottom:18px}
+
+.compass .index-chapter{display:flex;align-items:baseline;gap:8px;padding:0 22px 8px;font-size:9.5px;color:var(--text3);text-transform:uppercase;letter-spacing:.14em;font-weight:600}
+
+.compass .index-chapter .ch-num{font-family:var(--mono);font-size:9px;color:var(--text3);opacity:.7;letter-spacing:0}
+
+.compass .index-item{display:flex;align-items:center;gap:9px;padding:5px 22px;font-size:12.5px;color:var(--text);font-weight:450;cursor:pointer;border-left:2px solid transparent;line-height:1.3;letter-spacing:.005em}
+
+.compass .index-item:hover{color:var(--action);background:rgba(14,64,197,.03)}
+
+.compass .index-item.active{color:var(--ink);font-weight:600;border-left-color:var(--ink)}
+
+.compass .index-item svg{width:13px;height:13px;color:currentColor;opacity:.55}
+
+.compass .index-item.active svg{opacity:.85}
+
+.compass .index-item .ix-badge{margin-left:auto;font-size:10px;background:var(--neg);color:#fff;padding:1px 6px;border-radius:8px;font-weight:600;line-height:1.5}
+
+.compass .index-item .ix-arrow{margin-left:auto;font-size:14px;color:var(--text3);transition:transform .15s}
+
+.compass .index-item.expanded .ix-arrow{transform:rotate(90deg)}
+
+.compass .index-sub{margin-left:22px;border-left:1px solid var(--line);padding-left:14px;display:none}
+
+.compass .index-section.expanded .index-sub{display:block}
+
+.compass .index-sub .index-item{padding-left:0;font-size:11.5px;color:var(--text2)}
+
+.compass .index-sub .index-item.active{color:var(--ink);font-weight:600;border-left-color:transparent}
+
+.compass .index-foot{margin-top:auto;padding:14px 16px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:5px}
+
+.compass .index-foot button{font-size:11.5px;color:var(--text2);padding:6px 8px;border-radius:6px;text-align:left;display:flex;align-items:center;gap:7px;font-weight:500}
+
+.compass .index-foot button:hover{color:var(--ink);background:var(--card)}
+/* Phase A polish: .active rule for foot buttons. The Settings button no
+   longer carries .index-item, so .compass .index-item.active does not
+   apply. This rule highlights the active foot button (currently only
+   Settings has data-tab; Switch Engine and Demo Mode never get .active). */
+.compass .index-foot button.active{color:var(--ink);background:var(--card);font-weight:600}
+
+.compass .index-foot button svg{width:12px;height:12px;opacity:.7}
+
+/* MOBILE: Index hidden by default, shown as drawer */
+@media (max-width:768px){
+  
+.compass .index{display:none}
+  
+.compass .index.drawer-open{display:flex;position:fixed;left:0;top:0;bottom:0;width:280px;background:var(--page);z-index:100;box-shadow:0 0 40px rgba(2,23,81,.2);padding-top:72px}
+  
+.compass .drawer-backdrop{display:none}
+  
+.compass .drawer-backdrop.open{display:block;position:fixed;inset:0;background:rgba(2,23,81,.4);z-index:99}
+}
+
+/* ============================================================
+   THE SPREAD
+   ============================================================ */
+
+.compass .spread{flex:1;overflow-y:auto;padding:28px 36px 56px;max-width:1180px;margin:0 auto;width:100%;min-width:0}
+
+@media (max-width:768px){
+  
+.compass .spread{padding:18px 16px 80px}
+}
+
+/* ============================================================
+   PAGE HEAD
+   ============================================================ */
+
+.compass .page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-bottom:22px;flex-wrap:wrap}
+
+.compass .page-head .ph-eyebrow{display:flex;align-items:center;gap:8px;font-size:10.5px;color:var(--text3);letter-spacing:.16em;text-transform:uppercase;font-weight:600;margin-bottom:8px}
+
+.compass .page-head .ph-eyebrow .ph-num{font-family:var(--mono);font-size:10px;color:var(--text3);letter-spacing:0;font-weight:500}
+
+.compass .page-head h1{font-size:26px;font-weight:600;color:var(--ink);letter-spacing:-.018em;line-height:1.1}
+
+.compass .page-head .ph-sub{font-size:13px;color:var(--text2);margin-top:6px;max-width:540px;line-height:1.5}
+
+.compass .page-head .ph-actions{display:flex;align-items:center;gap:8px}
+
+@media (max-width:768px){
+  
+.compass .page-head{margin-bottom:16px;gap:14px}
+  
+.compass .page-head h1{font-size:22px}
+  
+.compass .page-head .ph-actions{width:100%}
+  
+.compass .page-head .ph-actions .btn{flex:1;justify-content:center}
+}
+
+/* Period banner (Overview only, between PageHead and Hero zone) */
+
+.compass .period-banner{display:flex;justify-content:space-between;align-items:center;padding:8px 0 16px;border-bottom:1px solid var(--hairline);margin-bottom:18px;font-size:12px;color:var(--text2);font-variant-numeric:tabular-nums}
+
+.compass .period-banner b{color:var(--ink);font-weight:600}
+
+@media (max-width:768px){
+  
+.compass .period-banner{flex-direction:column;align-items:flex-start;gap:4px}
+}
+
+/* Buttons */
+
+.compass .btn{display:inline-flex;align-items:center;gap:7px;padding:8px 14px;font-size:13px;font-weight:500;border-radius:7px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer;letter-spacing:.005em;transition:background .12s,border-color .12s;min-height:36px}
+
+.compass .btn:hover{background:var(--card-tint);border-color:var(--line-strong)}
+
+.compass .btn.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+
+.compass .btn.primary:hover{background:#0A2370;border-color:#0A2370}
+
+.compass .btn.action{background:var(--action);color:#fff;border-color:var(--action)}
+
+.compass .btn.action:hover{background:#0A36A8;border-color:#0A36A8}
+
+.compass .btn.ghost{background:transparent;border-color:transparent;color:var(--text2)}
+
+.compass .btn.ghost:hover{background:var(--card);color:var(--ink)}
+
+.compass .btn.danger{color:var(--neg);border-color:var(--neg-bg)}
+
+.compass .btn.danger:hover{background:var(--neg-bg);border-color:var(--neg-bg)}
+
+.compass .btn svg{width:13px;height:13px}
+
+.compass .btn-sm{padding:5px 9px;font-size:12px;min-height:28px}
+
+.compass .btn-icon{width:32px;height:32px;padding:0;justify-content:center}
+
+/* Form controls */
+
+.compass .input{padding:8px 12px;font-size:13px;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:7px;font-family:inherit;width:100%;font-variant-numeric:tabular-nums;outline:none;transition:border-color .12s,box-shadow .12s;min-height:36px}
+
+.compass .input:focus{border-color:var(--action);box-shadow:0 0 0 3px rgba(14,64,197,.08)}
+
+.compass .input::placeholder{color:var(--text3)}
+
+.compass .select{padding:8px 32px 8px 12px;font-size:13px;color:var(--ink);background:var(--card) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%237E89A3' stroke-width='1.5' stroke-linecap='round'/></svg>") right 11px center/10px no-repeat;border:1px solid var(--line);border-radius:7px;font-family:inherit;outline:none;appearance:none;cursor:pointer;min-height:36px}
+
+.compass .label{font-size:11px;color:var(--text2);letter-spacing:.04em;text-transform:uppercase;font-weight:600;margin-bottom:6px;display:block}
+
+/* Pills */
+
+.compass .pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:3px 8px;border-radius:5px;letter-spacing:.04em;line-height:1.4}
+
+.compass .pill.pos{background:var(--pos-bg);color:var(--pos)}
+
+.compass .pill.neg{background:var(--neg-bg);color:var(--neg)}
+
+.compass .pill.warn{background:var(--warn-bg);color:var(--warn)}
+
+.compass .pill.info{background:var(--action-tint);color:var(--action)}
+
+.compass .pill.neutral{background:var(--card-tint);color:var(--text2);border:1px solid var(--line)}
+
+/* Tabs */
+
+.compass .tabs{display:flex;gap:4px;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:3px;width:fit-content}
+
+.compass .tabs button{padding:6px 12px;font-size:12px;color:var(--text2);border-radius:5px;font-weight:500}
+
+.compass .tabs button:hover{color:var(--ink)}
+
+.compass .tabs button.active{background:var(--ink);color:#fff}
+
+/* ============================================================
+   COMPONENT: MARQUEE (Overview hero)
+   ============================================================ */
+
+.compass .marquee{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:28px 32px;margin-bottom:14px;display:grid;grid-template-columns:1.4fr 1fr;gap:36px;position:relative;overflow:hidden}
+
+.compass .marquee::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--ink)}
+
+.compass .marquee-left{display:flex;flex-direction:column}
+
+.compass .marquee-eyebrow{display:flex;align-items:center;gap:10px;font-size:10.5px;color:var(--text3);letter-spacing:.16em;text-transform:uppercase;font-weight:600;margin-bottom:14px}
+
+.compass .marquee-eyebrow .m-tag{background:var(--action-tint);color:var(--action);padding:3px 8px;border-radius:5px;font-size:10px;letter-spacing:.08em}
+
+.compass .marquee-num{font-size:54px;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums;letter-spacing:-.032em;line-height:1}
+
+.compass .marquee-num .m-cents{font-size:32px;color:var(--text3);font-weight:500}
+
+.compass .marquee-num.neg{color:var(--neg)}
+
+.compass .marquee-context{display:flex;align-items:center;gap:18px;margin-top:14px;font-size:13px;color:var(--text2);font-variant-numeric:tabular-nums;flex-wrap:wrap}
+
+.compass .marquee-context b{color:var(--ink);font-weight:600}
+
+.compass .marquee-context .m-divider{width:1px;height:14px;background:var(--line)}
+
+.compass .comp{margin-top:22px;padding-top:18px;border-top:1px solid var(--hairline)}
+
+.compass .comp-label{font-size:10.5px;color:var(--text3);letter-spacing:.14em;text-transform:uppercase;font-weight:600;margin-bottom:10px}
+
+.compass .comp-bar{height:7px;background:var(--line);border-radius:4px;overflow:hidden;display:flex;margin-bottom:12px}
+
+.compass .comp-legend{display:flex;flex-wrap:wrap;gap:18px;font-size:12px;color:var(--text2)}
+
+.compass .comp-legend .c-leg{display:flex;align-items:center;gap:7px}
+
+.compass .comp-legend .c-sw{width:8px;height:8px;border-radius:2px}
+
+.compass .comp-legend b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+
+
+.compass .runway{background:var(--neg-bg);border-radius:10px;padding:20px 22px;display:flex;flex-direction:column;justify-content:space-between}
+
+.compass .runway-eyebrow{font-size:10.5px;color:var(--neg);letter-spacing:.16em;text-transform:uppercase;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:7px}
+
+.compass .runway-eyebrow .r-pulse{width:6px;height:6px;border-radius:50%;background:var(--neg);animation:r-pulse 2s ease-in-out infinite}
+@keyframes r-pulse{0%,100%{opacity:.4}50%{opacity:1}}
+
+.compass .runway-num{font-size:42px;font-weight:600;color:var(--neg);font-variant-numeric:tabular-nums;letter-spacing:-.025em;line-height:1}
+
+.compass .runway-text{font-size:12.5px;color:var(--ink);margin-top:6px;font-weight:500;line-height:1.4}
+
+.compass .runway-track{margin-top:16px;height:6px;background:rgba(179,58,63,.15);border-radius:3px;position:relative;overflow:hidden}
+
+.compass .runway-fill{position:absolute;left:0;top:0;height:100%;background:var(--neg);border-radius:3px}
+
+.compass .runway-target{position:absolute;top:-3px;width:1px;height:12px;background:var(--neg);opacity:.5}
+
+.compass .runway-scale{display:flex;justify-content:space-between;margin-top:8px;font-size:10.5px;color:var(--text2);font-variant-numeric:tabular-nums;font-weight:500}
+
+.compass .runway-scale .target-label{color:var(--neg);font-weight:600}
+
+@media (max-width:768px){
+  
+.compass .marquee{grid-template-columns:1fr;padding:22px 20px;gap:18px}
+  
+.compass .marquee-num{font-size:36px}
+  
+.compass .marquee-num .m-cents{font-size:22px}
+  
+.compass .runway-num{font-size:32px}
+}
+
+/* ============================================================
+   COMPONENT: NET POSITION BY GROUP
+   ============================================================ */
+
+.compass .npg{background:var(--card);border:1px solid var(--line);border-radius:12px;margin-bottom:14px;overflow:hidden}
+
+.compass .npg-head{padding:14px 22px;display:flex;align-items:center;justify-content:space-between;cursor:pointer}
+
+.compass .npg-head:hover{background:var(--card-tint)}
+
+.compass .npg-head h3{font-size:11px;color:var(--ink);letter-spacing:.16em;text-transform:uppercase;font-weight:600}
+
+.compass .npg-head .npg-meta{font-size:12px;color:var(--text2);font-variant-numeric:tabular-nums}
+
+.compass .npg-head .npg-toggle{font-size:14px;color:var(--text3);transition:transform .15s}
+
+.compass .npg.expanded .npg-toggle{transform:rotate(180deg)}
+
+.compass .npg-body{display:none;border-top:1px solid var(--hairline);padding:6px 22px}
+
+.compass .npg.expanded .npg-body{display:block}
+
+.compass .npg-row{display:grid;grid-template-columns:auto 1fr 90px 90px 90px 110px;gap:14px;padding:10px 0;border-bottom:1px solid var(--hairline);align-items:center;font-variant-numeric:tabular-nums}
+
+.compass .npg-row:last-of-type{border-bottom:none}
+
+.compass .npg-row .np-sw{width:10px;height:10px;border-radius:2px}
+
+.compass .npg-row .np-name{font-size:13px;font-weight:500;color:var(--ink)}
+
+.compass .npg-row .np-count{font-size:11px;color:var(--text3);margin-top:1px}
+
+.compass .npg-row .np-val{text-align:right;font-size:13px;color:var(--ink);font-weight:500}
+
+.compass .npg-row .np-val.neg{color:var(--neg)}
+
+.compass .npg-row .np-val.pos{color:var(--pos)}
+
+.compass .npg-row .np-val.muted{color:var(--text3)}
+
+.compass .npg-row .np-val .np-lbl{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;display:block;margin-top:1px;font-weight:600}
+
+.compass .npg-row .np-net{font-size:14px;font-weight:600}
+
+.compass .npg-grand{display:grid;grid-template-columns:auto 1fr 90px 90px 90px 110px;gap:14px;padding:12px 0 4px;border-top:2px solid var(--ink);margin-top:4px;font-variant-numeric:tabular-nums;align-items:center}
+
+.compass .npg-grand .np-name{font-weight:600;font-size:13px}
+
+@media (max-width:768px){
+  
+.compass .npg-row,
+.compass .npg-grand{grid-template-columns:auto 1fr;row-gap:10px}
+  
+.compass .npg-row .np-val,
+.compass .npg-grand .np-val{grid-column:2;text-align:left}
+  
+.compass .npg-row{padding:14px 0}
+}
+
+/* ============================================================
+   COMPONENT: TRIO (3-up performance cards)
+   ============================================================ */
+
+.compass .trio{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+
+.compass .trio-card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 20px}
+
+.compass .trio-card .t-eyebrow{font-size:10.5px;color:var(--text3);letter-spacing:.14em;text-transform:uppercase;font-weight:600;margin-bottom:8px}
+
+.compass .trio-card .t-num{font-size:24px;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums;letter-spacing:-.018em;line-height:1.1}
+
+.compass .trio-card .t-num.pos{color:var(--pos)}
+
+.compass .trio-card .t-num.neg{color:var(--neg)}
+
+.compass .trio-card .t-num.warn{color:var(--warn)}
+
+.compass .trio-card .t-meta{font-size:11.5px;color:var(--text2);margin-top:5px;font-variant-numeric:tabular-nums}
+
+.compass .trio-card .t-meta .t-up{color:var(--pos);font-weight:600}
+
+.compass .trio-card .t-meta .t-down{color:var(--neg);font-weight:600}
+
+.compass .trio-card .t-spark{margin-top:12px;height:24px}
+
+@media (max-width:768px){
+  
+.compass .trio{grid-template-columns:1fr;gap:8px}
+}
+
+/* ============================================================
+   COMPONENT: OPS (operations rows)
+   ============================================================ */
+
+.compass .ops{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-bottom:14px}
+
+.compass .ops-head{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid var(--line)}
+
+.compass .ops-head h3{font-size:11px;color:var(--ink);letter-spacing:.16em;text-transform:uppercase;font-weight:600}
+
+.compass .ops-head .ops-meta{font-size:11.5px;color:var(--text3);font-weight:500}
+
+.compass .ops-row{display:grid;grid-template-columns:18px 1.4fr 110px 140px 130px;gap:18px;padding:14px 24px;border-bottom:1px solid var(--hairline);align-items:center}
+
+.compass .ops-row:last-child{border-bottom:none}
+
+.compass .ops-row:hover{background:var(--card-tint)}
+
+.compass .ops-marker{font-family:var(--mono);font-size:10px;color:var(--text3);font-weight:500}
+
+.compass .ops-label{font-size:13.5px;color:var(--ink);font-weight:500}
+
+.compass .ops-label .ops-meta-text{font-size:11.5px;color:var(--text3);font-weight:400;margin-top:1px}
+
+.compass .ops-num{text-align:right;font-size:17px;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums;letter-spacing:-.012em}
+
+.compass .ops-num.neg{color:var(--neg)}
+
+.compass .ops-num.pos{color:var(--pos)}
+
+.compass .ops-delta{text-align:right;font-size:11.5px;color:var(--text3);font-variant-numeric:tabular-nums;font-weight:500}
+
+.compass .ops-delta b{font-weight:600}
+
+.compass .ops-delta .up{color:var(--pos)}
+
+.compass .ops-delta .down{color:var(--neg)}
+
+.compass .ops-spark{height:24px}
+
+.compass .ops-row.subtotal{background:var(--card-tint);border-top:1px solid var(--line)}
+
+.compass .ops-row.subtotal .ops-marker{color:var(--ink);font-weight:600}
+
+.compass .ops-row.subtotal .ops-label{font-weight:600}
+
+.compass .ops-row.subtotal .ops-num{font-size:19px}
+
+@media (max-width:768px){
+  
+.compass .ops-row{grid-template-columns:18px 1fr auto;gap:10px;padding:14px 18px;row-gap:6px}
+  
+.compass .ops-row .ops-spark,
+.compass .ops-row .ops-delta{display:none}
+  
+.compass .ops-head{padding:14px 18px}
+}
+
+/* ============================================================
+   COMPONENT: SPLIT
+   ============================================================ */
+
+.compass .split{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 22px;margin-bottom:14px}
+
+.compass .split-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px}
+
+.compass .split-title{font-size:11px;color:var(--ink);letter-spacing:.16em;text-transform:uppercase;font-weight:600}
+
+.compass .split-title .s-meta{font-size:11.5px;color:var(--text3);font-weight:500;letter-spacing:.01em;margin-left:10px;text-transform:none}
+
+.compass .split-grid{display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-bottom:12px}
+
+.compass .split-side .split-label{font-size:10.5px;color:var(--text3);letter-spacing:.14em;text-transform:uppercase;font-weight:600;margin-bottom:5px;display:flex;align-items:baseline;gap:8px}
+
+.compass .split-side .split-pct{color:var(--ink);font-family:var(--mono);font-weight:600;font-size:11px;letter-spacing:0}
+
+.compass .split-side .split-num{font-size:22px;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums;letter-spacing:-.015em;line-height:1.1}
+
+.compass .split-side .split-text{font-size:12px;color:var(--text2);margin-top:4px;line-height:1.45}
+
+.compass .split-bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden;display:flex}
+
+@media (max-width:768px){
+  
+.compass .split-grid{grid-template-columns:1fr;gap:14px}
+}
+
+/* ============================================================
+   COMPONENT: SPENDING INTELLIGENCE
+   ============================================================ */
+
+.compass .si{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-bottom:14px}
+
+.compass .si-head{padding:16px 24px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between}
+
+.compass .si-head h3{font-size:11px;color:var(--ink);letter-spacing:.16em;text-transform:uppercase;font-weight:600}
+
+.compass .si-head .si-meta{font-size:11.5px;color:var(--text3)}
+
+.compass .si-body{padding:6px 0}
+
+.compass .si-cat{padding:14px 24px;border-bottom:1px solid var(--hairline)}
+
+.compass .si-cat:last-child{border-bottom:none}
+
+.compass .si-cat:hover{background:var(--card-tint);cursor:pointer}
+
+.compass .si-cat-row{display:grid;grid-template-columns:1fr 110px 110px;gap:14px;align-items:center;margin-bottom:6px}
+
+.compass .si-cat-name{display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:600;color:var(--ink);letter-spacing:-.005em}
+
+.compass .si-cat-name .si-sw{width:8px;height:8px;border-radius:2px}
+
+.compass .si-cat-amt{text-align:right;font-size:15px;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums;letter-spacing:-.008em}
+
+.compass .si-cat-bar{position:relative;height:5px;background:var(--line);border-radius:3px;overflow:hidden}
+
+.compass .si-cat-bar-fill{position:absolute;left:0;top:0;height:100%;background:var(--ink);border-radius:3px}
+
+.compass .si-cat-anomaly{margin-top:4px}
+
+.compass .si-subs{margin-left:18px;margin-top:8px;border-left:1px dashed var(--line);padding-left:12px}
+
+.compass .si-sub{display:grid;grid-template-columns:1fr 90px 90px;gap:10px;padding:5px 0;align-items:center;font-size:12px;color:var(--text2)}
+
+.compass .si-sub-name{font-weight:500}
+
+.compass .si-sub-amt{text-align:right;font-variant-numeric:tabular-nums;color:var(--ink);font-weight:500}
+
+.compass .si-sub-bar{position:relative;height:3px;background:var(--hairline);border-radius:2px;overflow:hidden}
+
+.compass .si-sub-bar-fill{position:absolute;left:0;top:0;height:100%;background:var(--c3);border-radius:2px}
+
+@media (max-width:768px){
+  
+.compass .si-cat-row{grid-template-columns:1fr auto;row-gap:8px}
+  
+.compass .si-cat-bar{grid-column:1/-1}
+  
+.compass .si-subs{margin-left:8px;padding-left:10px}
+  
+.compass .si-sub{grid-template-columns:1fr auto}
+  
+.compass .si-sub-bar{display:none}
+}
+
+/* ============================================================
+   COMPONENT: FORECAST STRIP
+   ============================================================ */
+
+.compass .forecast{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-bottom:14px}
+
+.compass .forecast-head{padding:16px 24px;border-bottom:1px solid var(--line)}
+
+.compass .forecast-head h3{font-size:11px;color:var(--ink);letter-spacing:.16em;text-transform:uppercase;font-weight:600;margin-bottom:3px}
+
+.compass .forecast-head .f-sub{font-size:11.5px;color:var(--text3)}
+
+.compass .forecast-strip{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--hairline)}
+
+.compass .forecast-cell{background:var(--card);padding:18px 22px}
+
+.compass .forecast-cell .fc-label{font-size:10.5px;color:var(--text3);letter-spacing:.14em;text-transform:uppercase;font-weight:600;margin-bottom:6px}
+
+.compass .forecast-cell .fc-num{font-size:22px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.015em;line-height:1.1}
+
+.compass .forecast-cell .fc-num.pos{color:var(--pos)}
+
+.compass .forecast-cell .fc-num.neg{color:var(--neg)}
+
+.compass .forecast-cell .fc-num.warn{color:var(--warn)}
+
+.compass .forecast-cell .fc-meta{font-size:11.5px;color:var(--text2);margin-top:5px}
+
+.compass .forecast-row-label{padding:8px 24px;font-size:10.5px;color:var(--text3);letter-spacing:.14em;text-transform:uppercase;font-weight:600;background:var(--card-inset);border-bottom:1px solid var(--hairline)}
+
+@media (max-width:768px){
+  
+.compass .forecast-strip{grid-template-columns:1fr;gap:0}
+  
+.compass .forecast-cell{border-bottom:1px solid var(--hairline)}
+  
+.compass .forecast-cell:last-child{border-bottom:none}
+}
+
+/* ============================================================
+   COMPONENT: REFERENCE STRIP
+   ============================================================ */
+
+.compass .ref-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+
+.compass .ref-card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+
+.compass .ref-card .rc-eyebrow{font-size:10px;color:var(--text3);letter-spacing:.12em;text-transform:uppercase;font-weight:600;margin-bottom:6px}
+
+.compass .ref-card .rc-num{font-size:18px;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums;letter-spacing:-.012em;line-height:1.1}
+
+.compass .ref-card .rc-num.pos{color:var(--pos)}
+
+.compass .ref-card .rc-num.neg{color:var(--neg)}
+
+.compass .ref-card .rc-num.warn{color:var(--warn)}
+
+.compass .ref-card .rc-meta{font-size:11px;color:var(--text2);margin-top:5px;line-height:1.4}
+
+@media (max-width:768px){
+  
+.compass .ref-strip{grid-template-columns:1fr 1fr}
+}
+
+/* ============================================================
+   COMPONENT: INTELLIGENCE CARD
+   ============================================================ */
+
+.compass .intel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px 26px;margin-bottom:14px;background-image:linear-gradient(135deg,var(--card) 0%,#FAFBFD 100%)}
+
+.compass .intel-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px}
+
+.compass .intel-title{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--ink);letter-spacing:.16em;text-transform:uppercase;font-weight:600}
+
+.compass .intel-title .intel-icon{width:24px;height:24px;border-radius:6px;background:var(--action-tint);color:var(--action);display:inline-flex;align-items:center;justify-content:center}
+
+.compass .intel-title .intel-icon svg{width:13px;height:13px}
+
+.compass .intel-body{font-size:13px;color:var(--text2);line-height:1.6}
+
+.compass .intel-empty{padding:18px 0;color:var(--text3);font-size:12.5px}
+
+/* ============================================================
+   COMPONENT: ALERTS STRIP
+   ============================================================ */
+
+.compass .alerts{background:var(--card);border:1px solid var(--line);border-radius:12px;margin-bottom:14px;overflow:hidden}
+
+.compass .alerts-head{padding:12px 22px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;font-size:12px;color:var(--ink)}
+
+.compass .alerts-head:hover{background:var(--card-tint)}
+
+.compass .alerts-head h3{font-size:11px;color:var(--ink);letter-spacing:.16em;text-transform:uppercase;font-weight:600}
+
+.compass .alerts-counts{display:flex;align-items:center;gap:14px;font-size:11.5px;color:var(--text2);font-variant-numeric:tabular-nums}
+
+.compass .alerts-counts .ac-crit{color:var(--neg);font-weight:600}
+
+.compass .alerts-counts .ac-warn{color:var(--warn);font-weight:600}
+
+.compass .alerts-counts .ac-info{color:var(--action);font-weight:600}
+
+.compass .alerts-body{display:none;padding:6px 22px 14px;border-top:1px solid var(--hairline)}
+
+.compass .alerts.expanded .alerts-body{display:block}
+
+/* Form controls */
+
+/* ============================================================
+   CARD / DETAIL CARD
+   ============================================================ */
+
+.compass .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 22px;margin-bottom:12px}
+
+.compass .card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:12px}
+
+.compass .card-title{font-size:14px;font-weight:600;color:var(--ink);letter-spacing:-.005em}
+
+.compass .card-meta{font-size:12px;color:var(--text2);margin-top:3px;font-variant-numeric:tabular-nums}
+
+.compass .card-actions{display:flex;align-items:center;gap:6px;flex-shrink:0}
+
+/* ============================================================
+   TABLE
+   ============================================================ */
+
+.compass .table-wrap{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:12px}
+
+.compass .table{width:100%;border-collapse:separate;border-spacing:0}
+
+.compass .table thead th{text-align:left;padding:12px 18px;font-size:10.5px;font-weight:600;color:var(--text3);letter-spacing:.12em;text-transform:uppercase;background:var(--card-inset);border-bottom:1px solid var(--line);white-space:nowrap}
+
+.compass .table thead th.right{text-align:right}
+
+.compass .table tbody td{padding:12px 18px;font-size:13px;color:var(--ink);border-bottom:1px solid var(--hairline);font-variant-numeric:tabular-nums}
+
+.compass .table tbody tr:last-child td{border-bottom:none}
+
+.compass .table tbody tr:hover{background:var(--card-tint)}
+
+.compass .table tbody td.right{text-align:right}
+
+.compass .table tbody td.num{font-weight:500}
+
+.compass .table tbody td.neg{color:var(--neg);font-weight:500}
+
+.compass .table tbody td.pos{color:var(--pos);font-weight:500}
+
+.compass .table tbody td.muted{color:var(--text2)}
+
+.compass .table tbody td .row-meta{font-size:11.5px;color:var(--text3);margin-top:2px;font-weight:400}
+
+/* Mobile: collapse 5+ column tables to card-rows */
+@media (max-width:768px){
+  
+.compass .table.collapse-mobile{display:block}
+  
+.compass .table.collapse-mobile thead{display:none}
+  
+.compass .table.collapse-mobile tbody,
+.compass .table.collapse-mobile tr,
+.compass .table.collapse-mobile td{display:block;width:100%;text-align:left}
+  
+.compass .table.collapse-mobile tr{padding:14px 18px;border-bottom:1px solid var(--hairline)}
+  
+.compass .table.collapse-mobile td{padding:3px 0;border:none;display:flex;justify-content:space-between;align-items:baseline;gap:14px}
+  
+.compass .table.collapse-mobile td::before{content:attr(data-label);font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;font-weight:600;flex-shrink:0}
+  
+.compass .table.collapse-mobile td:first-child{padding-bottom:8px;font-weight:600;border-bottom:1px solid var(--hairline);margin-bottom:6px;font-size:14px}
+  
+.compass .table.collapse-mobile td:first-child::before{display:none}
+  
+.compass .table.collapse-mobile td.right{text-align:right;justify-content:flex-end}
+}
+
+/* ============================================================
+   FILTER BAR
+   ============================================================ */
+
+.compass .filter-bar{display:flex;align-items:center;gap:10px;padding:14px 0;flex-wrap:wrap;margin-bottom:6px}
+
+.compass .filter-bar .input,
+.compass .filter-bar .select{height:36px}
+
+.compass .filter-bar .search-input{flex:1;min-width:220px;max-width:380px}
+
+.compass .filter-bar .filter-spacer{flex:1}
+
+@media (max-width:768px){
+  
+.compass .filter-bar{padding:10px 0}
+  
+.compass .filter-bar .search-input{max-width:none;width:100%;flex-basis:100%}
+  
+.compass .filter-bar .select{flex:1;min-width:140px}
+}
+
+/* CHIP ROW */
+
+.compass .chip-row{display:flex;flex-wrap:wrap;gap:6px;padding:14px 0 4px;align-items:center}
+
+.compass .chip{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;font-size:12px;font-weight:500;color:var(--text2);background:var(--card);border:1px solid var(--line);border-radius:7px;cursor:pointer;letter-spacing:.005em;white-space:nowrap}
+
+.compass .chip:hover{border-color:var(--line-strong);color:var(--ink)}
+
+.compass .chip.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+
+.compass .chip .chip-dot{width:7px;height:7px;border-radius:2px;background:var(--text3)}
+
+.compass .chip.active .chip-dot{background:#fff}
+
+@media (max-width:768px){
+  
+.compass .chip-row{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px;margin:0 -16px;padding-left:16px;padding-right:16px}
+}
+
+/* ============================================================
+   KPI STRIP
+   ============================================================ */
+
+.compass .kpi-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:14px}
+
+.compass .kpi-strip.k3{grid-template-columns:repeat(3,1fr)}
+
+.compass .kpi-cell{background:var(--card);padding:14px 18px}
+
+.compass .kpi-cell .k-label{font-size:10.5px;color:var(--text3);letter-spacing:.12em;text-transform:uppercase;font-weight:600;margin-bottom:5px}
+
+.compass .kpi-cell .k-num{font-size:20px;color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.012em;line-height:1.1}
+
+.compass .kpi-cell .k-num.neg{color:var(--neg)}
+
+.compass .kpi-cell .k-num.pos{color:var(--pos)}
+
+.compass .kpi-cell .k-num.warn{color:var(--warn)}
+
+.compass .kpi-cell .k-meta{font-size:11px;color:var(--text2);margin-top:4px;font-variant-numeric:tabular-nums}
+
+@media (max-width:768px){
+  
+.compass .kpi-strip{grid-template-columns:repeat(2,1fr)}
+  
+.compass .kpi-strip.k3{grid-template-columns:1fr}
+  
+.compass .kpi-cell{padding:14px 16px}
+}
+
+/* SECTION HEAD */
+
+.compass .section-head{display:flex;align-items:baseline;gap:10px;margin:6px 0 10px;padding-top:8px}
+
+.compass .section-head h3{font-size:11px;color:var(--ink);letter-spacing:.18em;text-transform:uppercase;font-weight:600}
+
+.compass .section-head .sh-num{font-family:var(--mono);font-size:10px;color:var(--text3);font-weight:500}
+
+.compass .section-head .sh-meta{font-size:11.5px;color:var(--text3);font-weight:500;margin-left:auto}
+
+/* EMPTY STATE */
+
+.compass .empty{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:64px 40px;text-align:center;margin:8px 0}
+
+.compass .empty-icon{width:48px;height:48px;border-radius:12px;background:var(--card-tint);border:1px solid var(--line);display:inline-flex;align-items:center;justify-content:center;margin-bottom:14px;color:var(--text2)}
+
+.compass .empty-icon svg{width:20px;height:20px}
+
+.compass .empty-title{font-size:15px;font-weight:600;color:var(--ink);margin-bottom:5px;letter-spacing:-.005em}
+
+.compass .empty-text{font-size:13px;color:var(--text2);max-width:380px;margin:0 auto;line-height:1.5}
+
+/* ALERT BANNER */
+
+.compass .alert{display:flex;align-items:flex-start;gap:12px;padding:14px 18px;border-radius:10px;margin-bottom:12px;border-left:3px solid var(--text3);background:var(--card-tint)}
+
+.compass .alert.warn{border-left-color:var(--warn);background:var(--warn-bg)}
+
+.compass .alert.crit{border-left-color:var(--neg);background:var(--neg-bg)}
+
+.compass .alert.info{border-left-color:var(--action);background:var(--action-tint)}
+
+.compass .alert.ok{border-left-color:var(--pos);background:var(--pos-bg)}
+
+.compass .alert-body{flex:1}
+
+.compass .alert-title{font-size:13px;font-weight:600;color:var(--ink);letter-spacing:-.005em}
+
+.compass .alert.warn .alert-title{color:var(--warn)}
+
+.compass .alert.crit .alert-title{color:var(--neg)}
+
+.compass .alert.info .alert-title{color:var(--action)}
+
+.compass .alert.ok .alert-title{color:var(--pos)}
+
+.compass .alert-text{font-size:12.5px;color:var(--text2);margin-top:3px;line-height:1.5}
+
+/* ============================================================
+   SETTINGS LAYOUT
+   ============================================================ */
+
+.compass .settings-shell{display:grid;grid-template-columns:200px 1fr;gap:32px;align-items:flex-start}
+
+.compass .settings-nav{position:sticky;top:0}
+
+.compass .settings-nav .sn-title{font-size:10.5px;color:var(--text3);letter-spacing:.16em;text-transform:uppercase;font-weight:600;margin-bottom:10px}
+
+.compass .settings-nav .sn-item{display:flex;align-items:center;gap:9px;padding:8px 12px;font-size:13px;color:var(--text);font-weight:500;border-radius:7px;cursor:pointer;margin-bottom:1px;letter-spacing:-.003em}
+
+.compass .settings-nav .sn-item:hover{background:var(--card)}
+
+.compass .settings-nav .sn-item.active{background:var(--card);color:var(--ink);font-weight:600;box-shadow:inset 0 0 0 1px var(--line)}
+
+.compass .settings-nav .sn-item svg{width:14px;height:14px;opacity:.65}
+
+.compass .settings-nav .sn-item.active svg{opacity:.95}
+
+
+.compass .settings-main{min-width:0}
+
+.compass .settings-section{background:var(--card);border:1px solid var(--line);border-radius:12px;margin-bottom:14px;overflow:hidden}
+
+.compass .settings-section-head{padding:16px 22px 8px}
+
+.compass .settings-section-head h3{font-size:11px;color:var(--ink);letter-spacing:.16em;text-transform:uppercase;font-weight:600}
+
+.compass .settings-section-head .ss-text{font-size:12.5px;color:var(--text2);margin-top:4px;line-height:1.5}
+
+.compass .settings-row{display:grid;grid-template-columns:1fr auto;gap:24px;align-items:center;padding:14px 22px;border-top:1px solid var(--hairline)}
+
+.compass .settings-row:first-of-type{border-top:1px solid var(--line);margin-top:8px}
+
+.compass .settings-row .sr-label{font-size:13.5px;font-weight:500;color:var(--ink);letter-spacing:-.003em}
+
+.compass .settings-row .sr-text{font-size:12px;color:var(--text2);margin-top:2px;line-height:1.45;max-width:560px}
+
+.compass .settings-row .sr-control{display:flex;align-items:center;gap:8px}
+
+@media (max-width:768px){
+  
+.compass .settings-shell{grid-template-columns:1fr;gap:14px}
+  
+.compass .settings-nav{position:static;display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:6px;margin:0 -16px;padding-left:16px;padding-right:16px}
+  
+.compass .settings-nav .sn-title{display:none}
+  
+.compass .settings-nav .sn-item{flex-shrink:0;white-space:nowrap;background:var(--card);border:1px solid var(--line)}
+  
+.compass .settings-row{grid-template-columns:1fr;gap:8px;padding:14px 18px}
+  
+.compass .settings-row .sr-control{justify-self:flex-start}
+}
+
+/* TOGGLE */
+
+.compass .toggle{position:relative;width:38px;height:22px;background:var(--line);border-radius:11px;cursor:pointer;transition:background .12s;flex-shrink:0}
+
+.compass .toggle.on{background:var(--action)}
+
+.compass .toggle::after{content:'';position:absolute;top:2px;left:2px;width:18px;height:18px;background:#fff;border-radius:50%;transition:transform .12s;box-shadow:0 1px 2px rgba(2,23,81,.2)}
+
+.compass .toggle.on::after{transform:translateX(16px)}
+
+/* CATEGORIES GRID */
+
+.compass .cat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+
+.compass .cat-card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;cursor:pointer;transition:border-color .12s}
+
+.compass .cat-card:hover{border-color:var(--line-strong)}
+
+.compass .cat-card .cc-head{display:flex;align-items:center;gap:8px}
+
+.compass .cat-card .cc-sw{width:14px;height:14px;border-radius:4px}
+
+.compass .cat-card .cc-name{font-size:13px;font-weight:600;color:var(--ink);flex:1}
+
+.compass .cat-card .cc-lock{font-size:10px;color:var(--text3)}
+
+.compass .cat-card .cc-meta{font-size:11.5px;color:var(--text2);font-variant-numeric:tabular-nums}
+
+.compass .cat-card .cc-text{font-size:11.5px;color:var(--text3);line-height:1.4}
+
+.compass .cat-card .cc-actions{display:flex;gap:4px;margin-top:6px;border-top:1px solid var(--hairline);padding-top:8px}
+
+/* ============================================================
+   ACCOUNT CARDS
+   ============================================================ */
+
+.compass .account-card{background:var(--card);border:1px solid var(--line);border-radius:12px;display:grid;grid-template-columns:36px 1fr 140px 140px 140px auto;gap:18px;align-items:center;padding:14px 18px;margin-bottom:8px}
+
+.compass .account-card .ac-sw{width:10px;height:36px;border-radius:3px;background:var(--ink);justify-self:start}
+
+.compass .account-card .ac-name{font-size:14px;font-weight:600;color:var(--ink);letter-spacing:-.005em}
+
+.compass .account-card .ac-meta{font-size:11.5px;color:var(--text3);font-variant-numeric:tabular-nums;margin-top:2px}
+
+.compass .account-card .ac-inst{font-size:13px;color:var(--text2);font-weight:500}
+
+.compass .account-card .ac-type{font-size:11.5px;color:var(--text3)}
+
+.compass .account-card .ac-balance{text-align:right}
+
+.compass .account-card .ac-balance .ac-num{font-size:15px;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums;letter-spacing:-.005em}
+
+.compass .account-card .ac-balance .ac-sub{font-size:11px;color:var(--text3);margin-top:2px}
+
+.compass .account-card .ac-actions{display:flex;gap:4px}
+
+@media (max-width:768px){
+  
+.compass .account-card{grid-template-columns:1fr;gap:8px;padding:14px 16px}
+  
+.compass .account-card .ac-sw{display:none}
+  
+.compass .account-card .ac-name::before{content:'';display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--ink);margin-right:8px;vertical-align:middle}
+  
+.compass .account-card .ac-balance{text-align:left}
+  
+.compass .account-card .ac-balance::before{content:attr(data-label);font-size:10.5px;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;font-weight:600;display:block;margin-bottom:2px}
+}
+
+/* ============================================================
+   DETAIL CARD
+   ============================================================ */
+
+.compass .detail-card{background:var(--card);border:1px solid var(--line);border-radius:12px;margin-bottom:10px;overflow:hidden}
+
+.compass .detail-card-head{padding:16px 22px;display:grid;grid-template-columns:1fr auto auto;gap:18px;align-items:center}
+
+.compass .detail-card-info{min-width:0}
+
+.compass .detail-card-name{font-size:15px;font-weight:600;color:var(--ink);letter-spacing:-.008em;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+
+.compass .detail-card-meta{font-size:12px;color:var(--text2);margin-top:3px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+
+.compass .detail-card-meta .m-dot{width:3px;height:3px;border-radius:50%;background:var(--text3)}
+
+.compass .detail-card-num{text-align:right}
+
+.compass .detail-card-num .dn-amount{font-size:18px;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums;letter-spacing:-.012em;line-height:1}
+
+.compass .detail-card-num .dn-sub{font-size:11px;color:var(--text3);margin-top:3px;font-variant-numeric:tabular-nums}
+
+.compass .detail-card-payments{border-top:1px solid var(--hairline);padding:0 22px 4px;background:var(--card-tint)}
+
+.compass .detail-card-payments-head{padding:10px 0;font-size:10.5px;color:var(--text3);letter-spacing:.12em;text-transform:uppercase;font-weight:600;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px}
+
+.compass .payment-row{display:grid;grid-template-columns:90px 1fr auto auto;gap:14px;padding:8px 0;font-size:12.5px;color:var(--ink);font-variant-numeric:tabular-nums;border-top:1px solid var(--hairline);align-items:center}
+
+.compass .payment-row:first-child{border-top:none}
+
+.compass .payment-row .pr-date{color:var(--text2)}
+
+.compass .payment-row .pr-amount{font-weight:600}
+
+@media (max-width:768px){
+  
+.compass .detail-card-head{grid-template-columns:1fr;gap:10px}
+  
+.compass .detail-card-num{text-align:left;padding-top:6px;border-top:1px solid var(--hairline)}
+  
+.compass .card-actions{justify-content:flex-end;flex-wrap:wrap}
+  
+.compass .payment-row{grid-template-columns:1fr auto;gap:6px}
+}
+
+/* ============================================================
+   STATEMENT PARSER (Wizard + Dropzone)
+   ============================================================ */
+
+.compass .wizard{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:24px 28px;margin-bottom:14px}
+
+.compass .wizard-steps{display:flex;align-items:center;gap:8px;margin-bottom:24px;flex-wrap:wrap}
+
+.compass .wizard-step{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text3);font-weight:500}
+
+.compass .wizard-step .ws-num{width:22px;height:22px;border-radius:50%;background:var(--card-tint);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:var(--text3);letter-spacing:0}
+
+.compass .wizard-step.active{color:var(--ink)}
+
+.compass .wizard-step.active .ws-num{background:var(--ink);color:#fff;border-color:var(--ink)}
+
+.compass .wizard-step.done{color:var(--pos)}
+
+.compass .wizard-step.done .ws-num{background:var(--pos-bg);color:var(--pos);border-color:var(--pos-bg)}
+
+.compass .wizard-step .ws-line{width:30px;height:1px;background:var(--line)}
+
+@media (max-width:768px){
+  
+.compass .wizard{padding:18px 20px}
+  
+.compass .wizard-steps{gap:4px}
+  
+.compass .wizard-step .ws-line{width:14px}
+  
+.compass .wizard-step:not(.active) span:last-child{display:none}
+}
+
+
+.compass .dropzone{border:1.5px dashed var(--line-strong);border-radius:12px;padding:48px 24px;text-align:center;background:var(--card-tint)}
+
+.compass .dropzone-icon{width:44px;height:44px;border-radius:10px;background:var(--card);border:1px solid var(--line);display:inline-flex;align-items:center;justify-content:center;margin-bottom:12px;color:var(--action)}
+
+.compass .dropzone-title{font-size:14px;font-weight:600;color:var(--ink);margin-bottom:5px}
+
+.compass .dropzone-text{font-size:12.5px;color:var(--text2);margin-bottom:14px}
+
+/* ============================================================
+   MODAL
+   ============================================================ */
+
+.compass .modal-host{position:relative;background:rgba(2,23,81,.4);min-height:760px;display:flex;align-items:flex-start;justify-content:center;padding:60px 24px}
+
+.compass .modal{background:var(--card);border-radius:14px;border:1px solid var(--line);width:100%;max-width:560px;box-shadow:0 24px 64px rgba(2,23,81,.18),0 4px 12px rgba(2,23,81,.08)}
+
+.compass .modal.lg{max-width:680px}
+
+.compass .modal.xl{max-width:900px}
+
+.compass .modal-head{padding:20px 24px 14px;border-bottom:1px solid var(--hairline);display:flex;align-items:flex-start;justify-content:space-between;gap:18px}
+
+.compass .modal-title{font-size:16px;font-weight:600;color:var(--ink);letter-spacing:-.012em}
+
+.compass .modal-sub{font-size:12.5px;color:var(--text2);margin-top:3px}
+
+.compass .modal-close{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;color:var(--text2);background:none;border:none;cursor:pointer;flex-shrink:0}
+
+.compass .modal-close:hover{background:var(--card-tint);color:var(--ink)}
+
+.compass .modal-body{padding:18px 24px}
+
+.compass .modal-foot{padding:14px 24px;border-top:1px solid var(--hairline);display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--card-tint);flex-wrap:wrap}
+
+.compass .modal-foot .mf-actions{display:flex;gap:8px}
+
+.compass .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
+
+.compass .form-row{margin-bottom:14px}
+
+.compass .form-row:last-child{margin-bottom:0}
+
+@media (max-width:768px){
+  
+.compass .modal-host{padding:0;align-items:stretch}
+  
+.compass .modal{max-width:none;width:100%;border-radius:0;height:100%;display:flex;flex-direction:column;border:none;box-shadow:none}
+  
+.compass .modal.xl,
+.compass .modal.lg{max-width:none}
+  
+.compass .modal-body{flex:1;overflow-y:auto}
+  
+.compass .modal-head{padding:env(safe-area-inset-top, 16px) 18px 14px}
+  
+.compass .modal-foot{flex-direction:column;align-items:stretch;gap:8px}
+  
+.compass .modal-foot .mf-actions{width:100%;flex-direction:column-reverse}
+  
+.compass .modal-foot .mf-actions .btn{justify-content:center}
+  
+.compass .form-grid{grid-template-columns:1fr}
+}
+
+/* CAT PICKER GRID */
+
+.compass .cat-picker-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
+
+.compass .cat-picker-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;background:var(--card);border:1px solid var(--line)}
+
+.compass .cat-picker-item:hover{background:var(--card-tint);border-color:var(--line-strong)}
+
+.compass .cat-picker-item.selected{background:var(--action-tint);border-color:var(--action)}
+
+.compass .cat-picker-item .cpi-sw{width:12px;height:12px;border-radius:3px}
+
+.compass .cat-picker-item .cpi-name{flex:1;font-size:13px;font-weight:500;color:var(--ink);letter-spacing:-.003em}
+
+.compass .cat-picker-item .cpi-meta{font-size:11px;color:var(--text3)}
+
+/* SWEEP MODAL TABLE */
+
+.compass .sweep-table{width:100%;border-collapse:separate;border-spacing:0;font-size:12px}
+
+.compass .sweep-table thead th{padding:8px 10px;background:var(--card-inset);border-bottom:1px solid var(--line);font-size:10px;text-align:left;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+
+.compass .sweep-table tbody td{padding:8px 10px;border-bottom:1px solid var(--hairline);vertical-align:top}
+
+.compass .sweep-table tbody tr:last-child td{border-bottom:none}
+
+.compass .sweep-table .sw-old{color:var(--text3)}
+
+.compass .sweep-table .sw-new{color:var(--pos);font-weight:500}
+
+.compass .sweep-table .sw-amt{text-align:right;font-variant-numeric:tabular-nums}
+
+.compass .sweep-table .sw-cb{text-align:center}
+
+/* ============================================================
+   LOCKED VAULT / AUTH
+   ============================================================ */
+
+.compass .locked-screen{background:var(--ink);color:#fff;min-height:760px;display:flex;align-items:center;justify-content:center;padding:32px}
+
+.compass .locked-card{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:18px;padding:48px 44px;width:100%;max-width:420px;text-align:center;backdrop-filter:blur(20px)}
+
+.compass .locked-mark svg{margin:0 auto 18px}
+
+.compass .locked-mark svg rect{fill:#fff}
+
+.compass .locked-name{font-size:17px;font-weight:600;letter-spacing:-.018em;color:#fff;margin-bottom:6px}
+
+.compass .locked-sub{font-size:12.5px;color:rgba(255,255,255,.6);margin-bottom:32px;letter-spacing:.005em}
+
+.compass .locked-h2{font-size:14px;font-weight:600;color:rgba(255,255,255,.85);margin-bottom:18px;text-align:left}
+
+.compass .locked-input{padding:14px 16px;font-size:15px;color:#fff;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.16);border-radius:10px;width:100%;font-family:var(--font);outline:none;margin-bottom:14px}
+
+.compass .locked-input::placeholder{color:rgba(255,255,255,.35)}
+
+.compass .locked-input:focus{border-color:rgba(255,255,255,.4);background:rgba(255,255,255,.08)}
+
+.compass .locked-btn{width:100%;padding:13px 16px;background:#fff;color:var(--ink);border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;letter-spacing:-.005em}
+
+.compass .locked-meta{margin-top:24px;font-size:11.5px;color:rgba(255,255,255,.4);letter-spacing:.04em}
+
+.compass .locked-hint{margin-top:14px;font-size:11.5px;color:rgba(255,255,255,.5);line-height:1.55;text-align:left}
+
+.compass .locked-error{margin-bottom:14px;font-size:12px;color:#FFA8A8;background:rgba(231,106,110,.1);border:1px solid rgba(231,106,110,.3);padding:10px 12px;border-radius:8px;text-align:left}
+
+@media (max-width:768px){
+  
+.compass .locked-card{padding:36px 24px}
+}
+
+/* ============================================================
+   CHART CARD
+   ============================================================ */
+
+.compass .chart-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px 24px 16px;margin-bottom:14px}
+
+.compass .chart-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:14px;flex-wrap:wrap}
+
+.compass .chart-card-head .cc-info{flex:1}
+
+.compass .chart-card-head .cc-info h3{font-size:14px;font-weight:600;color:var(--ink);letter-spacing:-.005em}
+
+.compass .chart-card-head .cc-info .cc-sub{font-size:11.5px;color:var(--text2);margin-top:3px}
+
+.compass .chart-area{position:relative;height:280px;width:100%}
+
+.compass .chart-legend{display:flex;gap:18px;justify-content:flex-end;padding-top:10px;border-top:1px solid var(--hairline);margin-top:6px;font-size:11.5px;color:var(--text2);flex-wrap:wrap}
+
+.compass .chart-legend .cl-item{display:flex;align-items:center;gap:6px}
+
+.compass .chart-legend .cl-sw{width:14px;height:2px}
+
+@media (max-width:768px){
+  
+.compass .chart-area{height:200px}
+  
+.compass .chart-card{padding:18px 18px 14px}
+}
+
+/* ============================================================
+   SUBNAV
+   ============================================================ */
+
+.compass .subnav{display:flex;gap:0;background:var(--card);border:1px solid var(--line);border-radius:9px;padding:0;margin-bottom:14px;overflow:hidden;width:fit-content;max-width:100%}
+
+.compass .subnav button{padding:8px 16px;font-size:12.5px;color:var(--text2);font-weight:500;border-right:1px solid var(--line);letter-spacing:-.003em;white-space:nowrap}
+
+.compass .subnav button:last-child{border-right:none}
+
+.compass .subnav button.active{background:var(--ink);color:#fff}
+
+.compass .subnav button:hover:not(.active){color:var(--ink);background:var(--card-tint)}
+
+.compass .subnav button .sn-badge{display:inline-block;font-size:10px;background:var(--neg);color:#fff;padding:1px 6px;border-radius:8px;margin-left:6px;font-weight:600;line-height:1.5}
+
+.compass .subnav button.active .sn-badge{background:rgba(255,255,255,.2);color:#fff}
+
+@media (max-width:768px){
+  
+.compass .subnav{width:auto;max-width:none;overflow-x:auto;-webkit-overflow-scrolling:touch}
+}
+
+/* REIMB CARDS */
+
+.compass .reimb-card{background:var(--card);border:1px solid var(--line);border-radius:12px;margin-bottom:10px;overflow:hidden}
+
+.compass .reimb-head{padding:16px 22px;display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center;cursor:pointer}
+
+.compass .reimb-arrow{width:18px;height:18px;color:var(--text2);transform:rotate(0deg);transition:transform .15s}
+
+.compass .reimb-card.open .reimb-arrow{transform:rotate(90deg)}
+
+.compass .reimb-info .reimb-name{font-size:14px;font-weight:600;color:var(--ink)}
+
+.compass .reimb-info .reimb-meta{font-size:12px;color:var(--text2);margin-top:3px;display:flex;flex-wrap:wrap;gap:10px}
+
+.compass .reimb-info .reimb-meta .rm-pill{font-size:10.5px;background:var(--card-tint);border:1px solid var(--line);padding:2px 6px;border-radius:5px;color:var(--text2);font-weight:500}
+
+.compass .reimb-info .reimb-meta .rm-pill b{color:var(--ink)}
+
+.compass .reimb-num{text-align:right;font-size:17px;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+
+.compass .reimb-body{border-top:1px solid var(--hairline);background:var(--card-tint);padding:6px 22px}
+
+.compass .reimb-line{display:grid;grid-template-columns:90px 1fr auto auto;gap:14px;padding:9px 0;border-top:1px solid var(--hairline);align-items:center;font-size:12.5px}
+
+.compass .reimb-line:first-child{border-top:none}
+
+.compass .reimb-line .rl-date{color:var(--text2);font-variant-numeric:tabular-nums}
+
+.compass .reimb-line .rl-cat{font-size:11px;color:var(--text2);background:var(--card);border:1px solid var(--line);padding:2px 7px;border-radius:5px;font-weight:500}
+
+.compass .reimb-line .rl-amt{font-weight:600;font-variant-numeric:tabular-nums;color:var(--ink)}
+
+.compass .reimb-foot{display:flex;justify-content:flex-end;padding:12px 22px;border-top:1px solid var(--hairline);background:var(--card-tint);gap:8px;flex-wrap:wrap}
+
+@media (max-width:768px){
+  
+.compass .reimb-line{grid-template-columns:1fr auto;gap:6px}
+  
+.compass .reimb-line .rl-date,
+.compass .reimb-line .rl-cat{grid-column:1}
+}
+
+/* DIAG ROWS */
+
+.compass .diag-row{display:grid;grid-template-columns:auto 1fr auto;gap:14px;padding:12px 18px;border-bottom:1px solid var(--hairline);align-items:center;font-size:13px}
+
+.compass .diag-row:last-child{border-bottom:none}
+
+.compass .diag-icon{width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600}
+
+.compass .diag-icon.ok{background:var(--pos-bg);color:var(--pos)}
+
+.compass .diag-icon.warn{background:var(--warn-bg);color:var(--warn)}
+
+.compass .diag-icon.crit{background:var(--neg-bg);color:var(--neg)}
+
+.compass .diag-info .di-title{font-size:13px;color:var(--ink);font-weight:500}
+
+.compass .diag-info .di-text{font-size:11.5px;color:var(--text2);margin-top:2px}
+
+.compass .diag-row .diag-val{font-size:13px;color:var(--ink);font-variant-numeric:tabular-nums;font-weight:500}
+
+.compass .diag-row .diag-val.neg{color:var(--neg)}
+
+.compass .diag-row .diag-val.warn{color:var(--warn)}
+
+/* PAIR ROWS (Pending Matches) */
+
+.compass .pair-card{background:var(--card);border:1px solid var(--line);border-radius:12px;margin-bottom:10px;overflow:hidden}
+
+.compass .pair-grid{display:grid;grid-template-columns:1fr 50px 1fr auto;gap:0;align-items:stretch}
+
+.compass .pair-side{padding:18px 22px;min-width:0}
+
+.compass .pair-side.left{border-right:1px solid var(--hairline)}
+
+.compass .pair-side .ps-eyebrow{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;margin-bottom:6px;color:var(--text3)}
+
+.compass .pair-side.left .ps-eyebrow{color:var(--text3)}
+
+.compass .pair-side.right .ps-eyebrow{color:var(--pos);display:flex;justify-content:space-between}
+
+.compass .pair-side .ps-name{font-size:14px;font-weight:600;color:var(--ink)}
+
+.compass .pair-side .ps-meta{font-size:12px;color:var(--text2);margin-top:4px}
+
+.compass .pair-side .ps-amt{font-size:18px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.012em;margin-top:10px}
+
+.compass .pair-side.left .ps-amt{color:var(--neg)}
+
+.compass .pair-side.right .ps-amt{color:var(--pos)}
+
+.compass .pair-connector{display:flex;align-items:center;justify-content:center;background:var(--card-tint)}
+
+.compass .pair-actions{padding:18px 22px;border-left:1px solid var(--hairline);display:flex;flex-direction:column;justify-content:center;gap:6px;background:var(--card-inset);min-width:160px}
+
+@media (max-width:768px){
+  
+.compass .pair-grid{grid-template-columns:1fr}
+  
+.compass .pair-side.left{border-right:none;border-bottom:1px solid var(--hairline)}
+  
+.compass .pair-connector{padding:8px;border-bottom:1px solid var(--hairline)}
+  
+.compass .pair-actions{border-left:none;border-top:1px solid var(--hairline);min-width:0}
+}
+
+/* PRIVACY MODE */
+
+/* Phase A polish: privacy-mask styling. The original design pack rule was
+   `.compass .priv-mask{filter:blur(8px); user-select:none; letter-spacing:-.01em}`
+   — it blurred every priv-mask element unconditionally. That was correct for
+   the design-pack demo (where every value is shown blurred) but WRONG for
+   production: V9.0's privacy toggle should control when blur applies. The
+   Ribbon's Net Position element has class="priv-mask" and lives inside
+   `.compass`, so the unconditional blur made the number invisible even when
+   privacy mode was off.
+   Fix: remove the `filter` declaration here. V9.0's existing rule
+   `body.privacy-on .priv-mask{filter:blur(6px) saturate(0); ...}` (specificity
+   0,2,1) already handles the conditional blur correctly — it activates when
+   the user toggles privacy on, and is dormant otherwise. Keep user-select:none
+   so values can't be accidentally selected/copied. */
+.compass .priv-mask{user-select:none;letter-spacing:-.01em}
+
+/* DEMO BANNER */
+
+.compass .demo-banner{background:var(--warn-bg);border-bottom:1px solid #E8D9A8;padding:8px 22px;display:flex;align-items:center;justify-content:space-between;gap:14px;font-size:12px;color:var(--warn);font-weight:500}
+
+.compass .demo-banner .db-label{display:flex;align-items:center;gap:8px}
+
+.compass .demo-banner .db-label svg{width:14px;height:14px}
+
+
+/* ============================================================
+   PHASE A — Compass shell integration adjustments
+   The chrome lives inside <div class="compass" id="compass-shell">.
+   The Ribbon, mobile-period-strip, and body row are descendants.
+   The body row contains the Index and the .app-content (V9.0 page).
+   ============================================================ */
+
+/* Compass shell takes up remaining space inside #app (flex column) */
+#compass-shell{
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  min-height:0;
+}
+
+/* Phase A bug fix: keep the Ribbon visible while the body scrolls.
+   The body (html/body) is the scroll container; without sticky, the
+   Ribbon would scroll out of view as the user scrolls down. */
+#compass-shell > .ribbon{
+  position:sticky;
+  top:0;
+  z-index:100;
+}
+
+/* Mobile-period-strip sticks below the Ribbon on mobile. On desktop the
+   strip is hidden anyway (handled by Compass CSS), so the rule is mobile-scoped. */
+@media (max-width:768px){
+  #compass-shell > .mobile-period-strip{
+    position:sticky;
+    top:56px;                          /* Ribbon is 56px on mobile */
+    z-index:99;
+  }
+}
+
+/* The body row inside the shell: lay Index on the left, app-content on the right */
+#compass-shell > .body{
+  flex:1;
+  display:flex;
+  min-height:0;
+  position:relative;
+}
+
+/* Ensure the Index does not stretch the row in unexpected ways */
+#compass-shell > .body > .index{
+  flex-shrink:0;
+}
+
+/* Phase A bug fix: keep the Index visible while the body scrolls.
+   Without this, the Index column stretches to match page-content height
+   (flex default), and the .index-foot (margin-top:auto) ends up at the
+   bottom of the long page rather than the bottom of the viewport.
+   Sticky desktop-only — mobile uses position:fixed drawer pattern.
+
+   Phase A polish: zoom-aware height. Line 26 declares html{zoom:1.1}
+   for global +10% scaling. Chrome's `100vh` resolves to the unzoomed
+   viewport in CSS pixels, but the entire page is then inflated 1.1x
+   at paint time. So `calc(100vh - 52px)` gave the Index ~1028 CSS px
+   on a 1080px viewport, which rendered at 1028 × 1.1 = 1131 device
+   pixels — overflowing the available space (1080 − 57.2 = 1022.8 dev
+   px below the rendered Ribbon) by ~108 dev px. That overflow pushed
+   the .index-foot (Switch Engine + Demo Mode) below the visible fold;
+   user had to scroll to see them.
+
+   Fix: height = (100vh − rendered_ribbon_height) / zoom_factor.
+   - rendered Ribbon = 52 × 1.1 = 57.2 device px
+   - dividing the remaining space by 1.1 reverses the page-level zoom
+     inflation, so the rendered height matches the available space exactly.
+   `top:52px` stays as-is — 52 in CSS px gets zoom-inflated to 57.2 dev
+   px, which is exactly where the Index should start (below the Ribbon).
+   Verified across 720/900/1080/1440 viewports: the foot now sits at
+   the bottom of the visible Index column, no scroll required. */
+@media (min-width:769px){
+  #compass-shell > .body > .index{
+    position:sticky;
+    top:52px;                                    /* below Ribbon (52px CSS, 57.2 dev) */
+    align-self:flex-start;                       /* required for sticky inside flex */
+    height:calc((100vh - 57.2px) / 1.1);         /* zoom-corrected fill of remaining viewport */
+    overflow-y:auto;                             /* scroll only if Index content exceeds viewport */
+  }
+}
+
+/* Phase A bug fix: Compass CSS expects `.expanded` on `.index-section` to
+   reveal the sub-menu (`.index-section.expanded .index-sub{display:block}`).
+   But V9.0's `toggleGroup()` adds `.open` to the `.index-sub` (formerly
+   `.nav-dd`) element directly. To bridge the two without touching V9.0
+   logic, accept the V9.0 class form here. */
+.compass .index-sub.open{display:block}
+.compass .index-section .index-sub.open{display:block}
+
+/* The drawer-backdrop is hidden by default; only opens on mobile */
+.compass .drawer-backdrop{display:none}
+@media (max-width:768px){
+  .compass .drawer-backdrop.open{display:block;position:fixed;inset:0;background:rgba(2,23,81,.4);z-index:99}
+}
+
+/* Mobile drawer state for the Index (overrides default mobile-hidden from Compass CSS) */
+@media (max-width:768px){
+  #compass-shell > .body > .index.drawer-open{
+    display:flex;position:fixed;left:0;top:0;bottom:0;width:280px;
+    background:var(--page);z-index:100;
+    box-shadow:0 0 40px rgba(2,23,81,.2);
+    padding-top:72px;
+  }
+}
+
+/* ─── SEARCH OVERLAY (Phase A: minimal shell) ─── */
+.search-overlay{
+  display:none;position:fixed;inset:0;
+  background:rgba(2,23,81,.4);
+  z-index:9000;
+  align-items:flex-start;justify-content:center;
+  padding-top:14vh;padding-left:16px;padding-right:16px;
+}
+.search-overlay.open{display:flex}
+.search-overlay-card{
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:14px;
+  width:100%;max-width:560px;
+  box-shadow:0 24px 64px rgba(2,23,81,.18), 0 4px 12px rgba(2,23,81,.08);
+  overflow:hidden;
+}
+.search-overlay-head{
+  display:flex;align-items:center;gap:10px;
+  padding:14px 18px;
+  border-bottom:1px solid var(--hairline);
+  color:var(--text2);
+}
+.search-overlay-head svg{flex-shrink:0;color:var(--text3)}
+.search-overlay-head input{
+  flex:1;border:none;outline:none;background:transparent;
+  font-family:var(--font);font-size:15px;color:var(--text);
+  padding:6px 0;
+}
+.search-overlay-head input::placeholder{color:var(--text3)}
+.search-overlay-close{
+  background:none;border:none;font-size:24px;line-height:1;
+  color:var(--text3);cursor:pointer;padding:4px 8px;
+  border-radius:6px;
+}
+.search-overlay-close:hover{background:var(--card-tint);color:var(--text)}
+.search-overlay-caption{
+  padding:14px 18px;
+  font-size:12px;color:var(--text3);
+  background:var(--card-tint);
+  border-top:1px solid var(--hairline);
+}
+
+/* Touch-target safety on Ribbon controls (mobile) */
+@media (max-width:768px){
+  .compass .ribbon-burger,
+  .compass .ribbon-actions button{
+    min-width:44px;min-height:44px;
+  }
+}
+
+/* ============================================================
+   PHASE A ROOT CAUSE 2 FIX — .lanki-legacy reset block
+   ============================================================
+   The Compass component CSS is scoped under `.compass`, but V9.0's
+   page-content (`.pg`) lives INSIDE the `.compass` shell wrapper:
+       <div class="compass" id="compass-shell">
+         ...chrome...
+         <div class="body">
+           <div class="app-content lanki-legacy">
+             <div class="pg" id="page-content">  ← V9.0 markup
+   So `.compass .X` rules MATCH V9.0 markup (because V9.0 markup is
+   a descendant of `.compass`), causing component CSS bleed: V9.0
+   `.btn`, `.card`, `.cat-card`, `.cat-grid`, `.empty`, `.pill`,
+   `.priv-mask`, `.settings-row`, `.settings-section`, and `.btn-sm`
+   all render with Compass values instead of V9.0 values.
+   This block restores V9.0's exact rules inside `.lanki-legacy` by:
+   - Equal specificity (0,2,0) to Compass `.compass .X` rules
+   - Source order AFTER the Compass block, so it wins on tie
+   Collision inventory (10 classes — see A.E18 entry in debt ledger):
+     .btn / .btn-sm — buttons throughout V9.0
+     .card / .card-bordered — card surfaces (95 HTML uses)
+     .cat-card / .cat-grid — Categories settings page
+     .empty — inline empty-state messages (28 uses)
+     .pill — tag pills
+     .priv-mask — privacy blur (87 uses, conditional in V9.0)
+     .settings-row / .settings-section — Settings page
+   ============================================================ */
+
+/* .btn — restore V9.0 rule (was: padding 7px 13px, var(--border), etc.) */
+.lanki-legacy .btn{
+  padding:7px 13px;border:1px solid var(--border);
+  background:var(--bg);border-radius:var(--rsm);
+  cursor:pointer;font-size:13px;color:var(--text);
+  font-family:var(--font);min-height:34px;font-weight:500;
+  transition:all .12s;
+  display:inline-block;align-items:initial;gap:initial;letter-spacing:initial;
+}
+.lanki-legacy .btn:hover{background:var(--bg2);border-color:var(--border2)}
+.lanki-legacy .btn-sm{padding:5px 11px;font-size:12px;min-height:30px}
+
+/* .card — restore V9.0 rule */
+.lanki-legacy .card{
+  background:var(--bg);border:1px solid var(--border);
+  border-radius:var(--r);padding:1.25rem 1.4rem;margin-bottom:1.5rem;
+}
+
+/* .cat-grid + .cat-card — Categories page; V9.0's auto-fill 260px floor (Compass uses 200px floor) */
+.lanki-legacy .cat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.lanki-legacy .cat-card{
+  background:var(--surface-elevated,#fff);
+  border:1px solid var(--border);
+  border-radius:var(--rlg,10px);
+  padding:12px 14px;
+  transition:border-color .15s;
+  display:block;flex-direction:initial;gap:initial;cursor:auto;
+}
+.lanki-legacy .cat-card:hover{border-color:color-mix(in srgb,var(--electric) 30%,var(--border))}
+
+/* .empty — V9.0 inline empty-state (small padding); Compass renders huge 64px-padded card. */
+.lanki-legacy .empty{
+  padding:2rem;text-align:center;color:var(--text3);font-size:var(--fs-sm);
+  background:initial;border:initial;border-radius:initial;margin:initial;
+}
+
+/* .pill — V9.0 small rounded pill */
+.lanki-legacy .pill{
+  font-size:10px;padding:2px 8px;border-radius:100px;font-weight:500;
+  display:initial;align-items:initial;gap:initial;letter-spacing:initial;line-height:initial;
+}
+
+/* .priv-mask — V9.0 only blurs when body.privacy-on. Compass blurs always.
+   Restore conditional blur: undo Compass declarations here, keep V9.0
+   `body.privacy-on .priv-mask` rule (specificity 0,2,1) winning when active. */
+.lanki-legacy .priv-mask{filter:none;user-select:auto;letter-spacing:normal}
+
+/* .settings-section + .settings-row — V9.0 settings layout */
+.lanki-legacy .settings-section{
+  margin-bottom:32px;padding-bottom:32px;border-bottom:1px solid var(--border);
+  background:initial;border-top:initial;border-left:initial;border-right:initial;
+  border-radius:initial;overflow:initial;
+}
+.lanki-legacy .settings-section:last-child{border-bottom:none}
+.lanki-legacy .settings-row{
+  display:flex;align-items:center;justify-content:space-between;gap:16px;
+  padding:12px 0;border-bottom:1px solid var(--bg3);
+  grid-template-columns:initial;border-top:initial;
+}
+.lanki-legacy .settings-row:last-child{border-bottom:none}
+.lanki-legacy .settings-row:first-of-type{border-top:initial;margin-top:initial}
+
+/* Mobile responsive — restore V9.0 mobile overrides for collision classes */
+@media(max-width:768px){
+  .lanki-legacy .btn{min-height:44px;font-size:14px}
+  .lanki-legacy .btn-sm{min-height:38px}
+  .lanki-legacy .card{padding:.85rem .9rem}
+  .lanki-legacy .settings-row{
+    grid-template-columns:initial;
+    /* keep V9.0 flex layout on mobile — Compass tries to convert to 1-col grid */
+    display:flex;
+  }
+}
+
 </style>
 </head>
 <body>
@@ -1296,7 +3069,7 @@ body.privacy-on{padding-top:28px}
 </div>
 
 
-<div id="s-loading" class="auth-screen active">
+<div id="s-loading" class="auth-screen active lanki-legacy">
   <div class="auth-brand" style="margin-bottom:2rem">
     <svg width="36" height="30" viewBox="0 0 40 33" fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect y="0" width="40" height="8" rx="2" fill="#021751"/>
@@ -1312,7 +3085,7 @@ body.privacy-on{padding-top:28px}
   <button id="load-retry-btn" onclick="location.reload()" style="display:none;margin-top:20px;background:none;border:1px solid var(--border);border-radius:var(--rsm);padding:8px 20px;font-size:12px;color:var(--text3);cursor:pointer;font-family:var(--font)">Retry</button>
 </div>
 
-<div id="s-setup" class="auth-screen">
+<div id="s-setup" class="auth-screen lanki-legacy">
   <div class="auth-brand" style="margin-bottom:2rem">
     <svg width="36" height="30" viewBox="0 0 40 33" fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect y="0" width="40" height="8" rx="2" fill="#021751"/>
@@ -1339,7 +3112,7 @@ body.privacy-on{padding-top:28px}
   </div>
 </div>
 
-<div id="s-unlock" class="auth-screen">
+<div id="s-unlock" class="auth-screen lanki-legacy">
   <div class="auth-brand" style="margin-bottom:2.5rem">
     <svg width="36" height="30" viewBox="0 0 40 33" fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect y="0" width="40" height="8" rx="2" fill="#021751"/>
@@ -1365,7 +3138,7 @@ body.privacy-on{padding-top:28px}
 </div>
 
 <!-- MODULE SELECTOR -->
-<div id="s-modules" class="mod-screen">
+<div id="s-modules" class="mod-screen lanki-legacy">
   <div class="mod-screen-inner">
 
   <!-- LOGO BLOCK -->
@@ -1494,7 +3267,7 @@ body.privacy-on{padding-top:28px}
 </div>
 
 <!-- ENGINE SWITCHER OVERLAY -->
-<div class="eng-overlay" id="eng-overlay" onclick="if(event.target===this)closeEngOverlay()">
+<div class="eng-overlay lanki-legacy" id="eng-overlay" onclick="if(event.target===this)closeEngOverlay()">
   <div class="md" style="max-width:640px">
     <div class="mdtitle">Switch Engine</div>
     <div style="display:flex;align-items:center;gap:7px;margin:14px 0 8px">
@@ -1548,103 +3321,166 @@ body.privacy-on{padding-top:28px}
   <div id="demo-banner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:700;background:var(--midnight);color:var(--feather);padding:8px 16px;font-size:12px;font-weight:500;letter-spacing:.01em;text-align:center;border-bottom:1px solid color-mix(in srgb,var(--feather) 20%,transparent)">
     <span style="opacity:.8">DEMO MODE</span> · You're viewing a sample dashboard with anonymized data. Nothing is saved.
   </div>
-  <!-- Burger top bar (mobile only) -->
-  <div class="burger-bar" id="burger-bar">
-    <div class="bar-title">
-      <svg width="16" height="13" viewBox="0 0 40 33" fill="none" xmlns="http://www.w3.org/2000/svg"><rect y="0" width="40" height="8" rx="2" fill="#021751"/><rect y="12.5" width="26" height="8" rx="2" fill="#021751"/><rect y="25" width="34" height="8" rx="2" fill="#021751"/></svg>
-      <span id="mob-page-title">Overview</span>
-    </div>
-    <button class="burger-btn" id="burger-btn" onclick="toggleSidebar()" aria-label="Menu">
-      <span></span><span></span><span></span>
+
+  <!-- Compass shell wrapper — provides ancestor scope for `.compass .X` descendant selectors -->
+  <div class="compass" id="compass-shell">
+
+  <!-- ═══ COMPASS RIBBON (Phase A) ═══ -->
+  <header class="ribbon" id="compass-ribbon">
+    <button class="ribbon-burger" id="burger-btn" onclick="toggleSidebar()" aria-label="Menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>
-  </div>
-  <!-- Sidebar overlay (mobile tap-outside to close) -->
-  <div class="nav-overlay" id="nav-overlay" onclick="closeSidebar()"></div>
-  <!-- Main content area -->
-  <div class="app-content">
-    <div class="pg" id="page-content"></div>
+    <div class="ribbon-mark" onclick="sw('overview')" style="cursor:pointer">
+      <svg width="22" height="18" viewBox="0 0 24 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="0" y="0" width="24" height="5" rx="1.5"/>
+        <rect x="0" y="7.5" width="16" height="5" rx="1.5"/>
+        <rect x="0" y="15" width="20" height="5" rx="1.5"/>
+      </svg>
+      <span class="r-name">lanki</span>
+    </div>
+    <div class="ribbon-context">
+      <span style="color:rgba(255,255,255,.7)">Capital OS</span>
+      <span class="r-dot"></span>
+      <span class="r-engine">Cash Flow Engine</span>
+    </div>
+    <div class="ribbon-period" id="ribbon-period-pills">
+      <button data-period="1m" onclick="setRibbonPeriod('1m')">1M</button>
+      <button data-period="3m" onclick="setRibbonPeriod('3m')">3M</button>
+      <button data-period="6m" onclick="setRibbonPeriod('6m')">6M</button>
+      <button data-period="12m" onclick="setRibbonPeriod('12m')">12M</button>
+      <button data-period="ytd" onclick="setRibbonPeriod('ytd')">YTD</button>
+      <button data-period="all" onclick="setRibbonPeriod('all')">All</button>
+    </div>
+    <div class="ribbon-range">
+      <button class="r-arrow" onclick="ribbonRangeStep(-1)" aria-label="Previous month">&#8249;</button>
+      <span id="ribbon-range-text">—</span>
+      <button class="r-arrow" onclick="ribbonRangeStep(1)" aria-label="Next month">&#8250;</button>
+    </div>
+    <div class="ribbon-position">
+      <div>
+        <div class="r-pos-label">Net</div>
+        <div class="r-pos-num priv-mask" id="ribbon-net-pos">SAR —</div>
+      </div>
+      <svg id="ribbon-spark" width="56" height="22" viewBox="0 0 56 22" aria-hidden="true"><polyline points="0,16 8,15 16,17 24,12 32,9 40,7 48,5 56,4" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="1.4"/></svg>
+    </div>
+    <div class="ribbon-actions">
+      <button title="Search" onclick="openSearchOverlay()" aria-label="Search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      </button>
+      <button title="Inbox" onclick="sw('uncat')" aria-label="Inbox">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+        <span class="ribbon-badge" id="uncat-badge" style="display:none">0</span>
+      </button>
+      <button title="Privacy" id="priv-btn" onclick="togglePrivacy()" aria-label="Privacy">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+      </button>
+      <button title="Refresh" id="refresh-btn" onclick="refreshData()" aria-label="Refresh">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+      </button>
+      <button title="Lock" onclick="lockApp()" aria-label="Lock">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Mobile period strip — shown only on Overview/Projections at ≤768px -->
+  <div class="mobile-period-strip" id="mobile-period-strip" style="display:none">
+    <button data-period="1m" onclick="setRibbonPeriod('1m')">1M</button>
+    <button data-period="3m" onclick="setRibbonPeriod('3m')">3M</button>
+    <button data-period="6m" onclick="setRibbonPeriod('6m')">6M</button>
+    <button data-period="12m" onclick="setRibbonPeriod('12m')">12M</button>
+    <button data-period="ytd" onclick="setRibbonPeriod('ytd')">YTD</button>
+    <button data-period="all" onclick="setRibbonPeriod('all')">All</button>
   </div>
 
-  <!-- RIGHT SIDEBAR NAV -->
-  <nav class="nav" id="main-nav">
-    <div class="nav-logo">
-      <div style="display:flex;align-items:center;gap:10px">
-        <svg width="24" height="20" viewBox="0 0 24 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect y="0" width="24" height="5" rx="1.5" fill="#021751"/>
-          <rect y="7.5" width="16" height="5" rx="1.5" fill="#021751"/>
-          <rect y="15" width="20" height="5" rx="1.5" fill="#021751"/>
-        </svg>
-        <div>
-          <div style="font-size:14px;font-weight:600;color:var(--midnight);letter-spacing:-.04em;line-height:1">lanki</div>
-          <div style="font-size:9px;color:var(--powderblue);font-weight:600;letter-spacing:.06em;text-transform:uppercase;margin-top:1px">Capital OS</div>
+  <!-- ═══ COMPASS BODY (Index + Spread) ═══ -->
+  <div class="body" id="compass-body">
+    <nav class="index" id="compass-index" aria-label="Primary navigation">
+
+      <div class="index-section" id="ix-pulse">
+        <div class="index-chapter"><span class="ch-num">I</span><span>Pulse</span></div>
+        <button class="index-item" data-tab="overview" onclick="sw('overview')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Overview</button>
+        <button class="index-item" data-tab="projections" onclick="sw('projections')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="14 7 21 7 21 14"/></svg>Projections</button>
+      </div>
+
+      <div class="index-section" id="ix-activity">
+        <div class="index-chapter"><span class="ch-num">II</span><span>Activity</span></div>
+
+        <button class="index-item nav-group" data-group="transactions" onclick="toggleGroup('transactions')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/></svg>Transactions<span class="ix-arrow nav-arrow" id="arr-transactions">&#8250;</span></button>
+        <div class="index-sub" id="nav-dd-transactions">
+          <button class="index-item" data-tab="txbank" onclick="sw('txbank')">Bank Accounts</button>
+          <button class="index-item" data-tab="txcards" onclick="sw('txcards')">Cards</button>
+          <button class="index-item" data-tab="txinvestments" onclick="sw('txinvestments')">Investments</button>
+          <button class="index-item" data-tab="aiupload" onclick="sw('aiupload')">Statement Parser</button>
+        </div>
+
+        <button class="index-item nav-group" data-group="recurring" onclick="toggleGroup('recurring')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>Recurring<span class="ix-arrow nav-arrow" id="arr-recurring">&#8250;</span></button>
+        <div class="index-sub" id="nav-dd-recurring">
+          <button class="index-item" data-tab="income" onclick="sw('income')">Income</button>
+          <button class="index-item" data-tab="bills" onclick="sw('bills')">Bills</button>
+          <button class="index-item" data-tab="subscriptions" onclick="sw('subscriptions')">Subscriptions</button>
+        </div>
+
+        <button class="index-item nav-group" data-group="inbox" onclick="toggleGroup('inbox')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>Inbox<span class="ix-arrow nav-arrow" id="arr-inbox">&#8250;</span></button>
+        <div class="index-sub" id="nav-dd-inbox">
+          <button class="index-item" data-tab="uncat" onclick="sw('uncat')" style="display:flex;justify-content:space-between;align-items:center">Uncategorized <span style="display:flex;gap:4px"><span id="nb-uncat" style="display:none;font-size:10px;font-weight:600;padding:1px 6px;border-radius:8px;background:#7A1F1F;color:#fff" title="Fully uncategorized — no main category"></span><span id="nb-missing-sub" style="display:none;font-size:10px;font-weight:600;padding:1px 6px;border-radius:8px;background:#7A5E20;color:#fff" title="Missing sub-category — main assigned but no sub"></span></span></button>
+          <button class="index-item" data-tab="transfers" onclick="sw('transfers')" style="display:flex;justify-content:space-between;align-items:center">Pending Matches <span id="nb-transfers" style="display:none;font-size:10px;font-weight:600;padding:1px 6px;border-radius:8px;background:#7A1F1F;color:#fff"></span></button>
+          <button class="index-item" data-tab="reimbursements" onclick="sw('reimbursements')" style="display:flex;justify-content:space-between;align-items:center">Reimbursements <span id="nb-reimb" style="display:none;font-size:10px;font-weight:600;padding:1px 6px;border-radius:8px;background:#7A1F1F;color:#fff"></span></button>
+        </div>
+
+        <button class="index-item nav-group" data-group="system" onclick="toggleGroup('system')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>System<span class="ix-arrow nav-arrow" id="arr-system">&#8250;</span></button>
+        <div class="index-sub" id="nav-dd-system">
+          <button class="index-item" data-tab="rules" onclick="sw('rules')">Transaction Rules</button>
+          <button class="index-item" data-tab="reviewqueue" onclick="sw('reviewqueue')" style="display:flex;justify-content:space-between;align-items:center">Review Queue <span id="nb-reviewqueue" style="display:none;font-size:10px;font-weight:600;padding:1px 6px;border-radius:8px;background:#7A5E20;color:#fff"></span></button>
+          <button class="index-item" data-tab="sanity" onclick="sw('sanity')" style="display:flex;justify-content:space-between;align-items:center">Sanity Check <span id="nb-sanity" style="display:none;font-size:10px;font-weight:600;padding:1px 6px;border-radius:8px;background:#7A1F1F;color:#fff"></span></button>
+          <button class="index-item" data-tab="insights" onclick="sw('insights')">Usage Insights</button>
         </div>
       </div>
-    </div>
-    <!-- V3.1: Restructured nav — ACTIVITY / FINANCES / HOUSEHOLD / Settings -->
-    <button class="nav-item active" data-tab="overview" onclick="sw('overview')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg> Overview</button>
-    <button class="nav-item" data-tab="projections" onclick="sw('projections')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="14 7 21 7 21 14"/></svg> Projections</button>
 
-    <div class="nav-section-label">Activity</div>
-    <button class="nav-item nav-group" data-group="transactions" onclick="toggleGroup('transactions')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg> Transactions <span class="nav-arrow" id="arr-transactions">&#8250;</span></button>
-    <div id="nav-dd-transactions" class="nav-dd">
-      <button onclick="sw('txbank')">Bank Accounts</button>
-      <button onclick="sw('txcards')">Cards</button>
-      <button onclick="sw('aiupload')">Statement Parser</button>
-    </div>
-
-    <button class="nav-item nav-group" data-group="recurring" onclick="toggleGroup('recurring')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg> Recurring <span class="nav-arrow" id="arr-recurring">&#8250;</span></button>
-    <div id="nav-dd-recurring" class="nav-dd">
-      <button onclick="sw('income')">Income</button>
-      <button onclick="sw('bills')">Bills</button>
-      <button onclick="sw('subscriptions')">Subscriptions</button>
-    </div>
-
-    <button class="nav-item nav-group" data-group="inbox" onclick="toggleGroup('inbox')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg> Inbox <span class="nav-badge" id="uncat-badge" style="display:none">0</span> <span class="nav-arrow" id="arr-inbox">&#8250;</span></button>
-    <div id="nav-dd-inbox" class="nav-dd">
-      <button onclick="sw('uncat')" style="display:flex;justify-content:space-between;align-items:center">Uncategorized <span style="display:flex;gap:4px"><span id="nb-uncat" style="display:none;font-size:10px;font-weight:600;padding:1px 6px;border-radius:8px;background:#7A1F1F;color:#fff" title="Fully uncategorized — no main category"></span><span id="nb-missing-sub" style="display:none;font-size:10px;font-weight:600;padding:1px 6px;border-radius:8px;background:#7A5E20;color:#fff" title="Missing sub-category — main assigned but no sub"></span></span></button>
-      <button onclick="sw('transfers')" style="display:flex;justify-content:space-between;align-items:center">Pending Matches <span id="nb-transfers" style="display:none;font-size:10px;font-weight:600;padding:1px 6px;border-radius:8px;background:#7A1F1F;color:#fff"></span></button>
-      <button onclick="sw('reimbursements')" style="display:flex;justify-content:space-between;align-items:center">Reimbursements <span id="nb-reimb" style="display:none;font-size:10px;font-weight:600;padding:1px 6px;border-radius:8px;background:#7A1F1F;color:#fff"></span></button>
-    </div>
-
-    <!-- V8.25 (Case 7): System section — audit, reference, diagnostics. Separate from Inbox (which is action-required only). -->
-    <button class="nav-item nav-group" data-group="system" onclick="toggleGroup('system')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg> System <span class="nav-arrow" id="arr-system">&#8250;</span></button>
-    <div id="nav-dd-system" class="nav-dd">
-      <button onclick="sw('rules')">Transaction Rules</button>
-      <button onclick="sw('reviewqueue')" style="display:flex;justify-content:space-between;align-items:center">Review Queue <span id="nb-reviewqueue" style="display:none;font-size:10px;font-weight:600;padding:1px 6px;border-radius:8px;background:#7A5E20;color:#fff"></span></button>
-      <button onclick="sw('sanity')" style="display:flex;justify-content:space-between;align-items:center">Sanity Check <span id="nb-sanity" style="display:none;font-size:10px;font-weight:600;padding:1px 6px;border-radius:8px;background:#7A1F1F;color:#fff"></span></button>
-      <button onclick="sw('insights')">Usage Insights</button>
-    </div>
-
-    <div class="nav-section-label">Finances</div>
-    <button class="nav-item" data-tab="accounts" onclick="sw('accounts')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> Accounts &amp; Cards</button>
-    <button class="nav-item" data-tab="debts" onclick="sw('debts')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> Debts</button>
-    <button class="nav-item" data-tab="goals" onclick="sw('goals')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg> Goals</button>
-
-    <div class="nav-section-label">Household</div>
-    <button class="nav-item" data-tab="staff" onclick="sw('staff')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Staff</button>
-    <button class="nav-item" data-tab="familyinv" onclick="sw('familyinv')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg> Family Investments</button>
-    <button class="nav-item" data-tab="investments" onclick="sw('investments')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg> Investments</button>
-
-    <div style="border-top:1px solid var(--border);margin:6px 0"></div>
-    <button class="nav-item" data-tab="settings" onclick="sw('settings')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Settings</button>
-    <div class="nav-utils">
-      <div class="nav-save-row">
-        <span style="font-size:11px;transition:color .3s;font-weight:500" id="save-st"></span>
-        <button class="nav-btn" style="width:auto;padding:3px 8px" id="refresh-btn" onclick="refreshData()" title="Refresh">&#8635;</button>
+      <div class="index-section" id="ix-finances">
+        <div class="index-chapter"><span class="ch-num">III</span><span>Finances</span></div>
+        <button class="index-item" data-tab="accounts" onclick="sw('accounts')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>Accounts &amp; Cards</button>
+        <button class="index-item" data-tab="debts" onclick="sw('debts')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Debts</button>
+        <button class="index-item" data-tab="goals" onclick="sw('goals')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>Goals</button>
       </div>
-      <button id="demo-btn" class="nav-btn" onclick="onDemoBtnClick()" style="font-size:11px;font-weight:500">Demo Mode</button>
-      <button class="nav-btn" id="priv-btn" onclick="togglePrivacy()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg> Hide Values</button>
-      <button class="nav-btn nav-lock" onclick="lockApp()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Lock Vault</button>
-      <button class="nav-btn" onclick="document.getElementById('eng-overlay').classList.add('active')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg> Switch Engine</button>
+
+      <div class="index-section" id="ix-household">
+        <div class="index-chapter"><span class="ch-num">IV</span><span>Household</span></div>
+        <button class="index-item" data-tab="staff" onclick="sw('staff')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>Staff</button>
+        <button class="index-item" data-tab="familyinv" onclick="sw('familyinv')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>Family Investments</button>
+        <button class="index-item" data-tab="investments" onclick="sw('investments')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>Investments</button>
+      </div>
+
+      <div class="index-foot">
+        <button data-tab="settings" onclick="sw('settings')" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Settings</button>
+        <button onclick="document.getElementById('eng-overlay').classList.add('active')" title="Switch Engine" aria-label="Switch Engine"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>Switch Engine</button>
+        <button id="demo-btn" onclick="onDemoBtnClick()" title="Demo Mode" aria-label="Demo Mode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16" fill="currentColor"/></svg>Demo Mode</button>
+      </div>
+    </nav>
+
+    <!-- Drawer backdrop for mobile -->
+    <div class="drawer-backdrop" id="drawer-backdrop" onclick="closeSidebar()"></div>
+
+    <!-- Spread (V9.0 page-content lives inside) -->
+    <div class="app-content lanki-legacy">
+      <div class="pg" id="page-content"></div>
     </div>
-  </nav>
-  <div id="nav-dropdown" class="nav-dd" style="display:none"></div>
+  </div>
+
+  </div>
+
+  <!-- Hidden mob-page-title kept for backward-compatible sw() updates -->
+  <span id="mob-page-title" style="display:none">Overview</span>
+
+  <!-- Backward-compatible static container for floating mobile dropdown (used by toggleGroup mobile path) -->
+  <div id="nav-dropdown" class="nav-dd lanki-legacy" style="display:none"></div>
+
 </div>
 
-<div class="toast" id="toast"></div>
+<div class="toast lanki-legacy" id="toast"></div>
 
 <!-- CAT PICKER MODAL -->
-<div class="mo" id="cat-modal">
+<div class="mo lanki-legacy" id="cat-modal">
   <div class="md">
     <div class="mdtitle">Assign Category</div>
     <div style="margin-bottom:10px">
@@ -1670,7 +3506,7 @@ body.privacy-on{padding-top:28px}
 </div>
 
 <!-- PIN CONFIRM MODAL -->
-<div class="mo" id="pin-modal">
+<div class="mo lanki-legacy" id="pin-modal">
   <div class="md">
     <div class="mdtitle" id="pinm-title">Confirm with Passphrase</div>
     <div class="mddesc" id="pinm-desc">Enter your passphrase to continue.</div>
@@ -1687,7 +3523,7 @@ body.privacy-on{padding-top:28px}
 </div>
 
 <!-- DELETE MODAL -->
-<div class="mo" id="del-modal">
+<div class="mo lanki-legacy" id="del-modal">
   <div class="md">
     <div class="mdtitle">&#9888; Data Reset Options</div>
     <div class="mddesc">Choose what to reset. Accounts, debts, goals, income, bills, and staff are kept unless you choose Reset Everything.</div>
@@ -2248,9 +4084,19 @@ function togglePrivacy(){
   S.privacy=!S.privacy;
   document.body.classList.toggle('privacy-on',S.privacy);
   const b=document.getElementById('priv-btn');
+  // Phase A polish: Compass ribbon action buttons are icon-only (~30x30px).
+  // V9.0 injected " Show Values" / " Hide Values" text alongside the SVG —
+  // that text broke the Compass layout, rendering as a two-line label that
+  // pushed the icon out of position. Use icon-only innerHTML; aria-label
+  // and title carry the semantic info. Eye-with-slash = privacy on (values
+  // hidden); plain eye = privacy off (values visible).
   if(b)b.innerHTML=S.privacy
-    ?'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-10-8-10-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 10 8 10 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg> Show Values'
-    :'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg> Hide Values';
+    ?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-10-8-10-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 10 8 10 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>'
+    :'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>';
+  if(b){
+    b.setAttribute('aria-label',S.privacy?'Show values':'Hide values');
+    b.setAttribute('title',S.privacy?'Show values':'Hide values');
+  }
   render();
 }
 function tp(id){const el=document.getElementById(id);if(el){el.classList.toggle('open');if(id==='atxn-panel'&&el.classList.contains('open')){setTimeout(()=>{const t=document.getElementById('nt-type');if(t)autoDir(t.value,'nt-dir');},10);}}}
@@ -2454,7 +4300,7 @@ function openOrphanModal(){
   document.getElementById('orphan-modal')?.remove();
   const mo=document.createElement('div');
   mo.id='orphan-modal';
-  mo.className='mo active';
+  mo.className='mo active lanki-legacy';
   mo.innerHTML=`
     <div class="md" style="max-width:760px;width:94%;padding:0;max-height:85vh;display:flex;flex-direction:column">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;padding:1.25rem 1.4rem;border-bottom:1px solid var(--border)">
@@ -2887,10 +4733,15 @@ function toggleGroup(g){
     }
     activeGroup=g;
     if(dd){
-      // Update active state of sub-buttons
-      dd.querySelectorAll('button').forEach((btn,i)=>{
-        btn.className=S.tab===grp.tabs[i]?'dd-active':'';
-      });
+      // Phase A polish: do NOT replace btn.className on sub-buttons.
+      // V9.0's original logic set className='dd-active' or '' to mark the
+      // active sub-button — but that wipes the .index-item class that
+      // Compass styling depends on. Without .index-item the button loses
+      // display:flex/padding/gap/font-size and falls back to browser default
+      // (inline-block), making sub-items render flush-left and run inline.
+      // Active state on the new Index is already handled by updateIndexActive
+      // (called from sw() at line 4863), which uses classList.add/remove
+      // on the .active class. toggleGroup only needs to toggle .open here.
       dd.classList.add('open');
     }
     document.querySelectorAll('.nav-arrow').forEach(a=>a.style.transform='');
@@ -3070,6 +4921,12 @@ function sw(tab){
     const dd=document.getElementById('nav-dropdown');
     if(dd)dd.innerHTML=g.tabs.map(t=>`<button class="${tab===t?'dd-active':''}" onclick="sw('${t}')">${g.labels[t]}</button>`).join('');
   } else if(activeGroup&&activeGroup!==grp){closeGroup();}
+  // Phase A: update Compass Index active state and Ribbon range text
+  if(typeof updateIndexActive==='function')updateIndexActive(tab);
+  if(typeof updateRibbonRangeText==='function')updateRibbonRangeText();
+  // Phase A: show mobile period strip only on Overview/Projections
+  const mps=document.getElementById('mobile-period-strip');
+  if(mps)mps.style.display=(tab==='overview'||tab==='projections')?'':'none';
   render();updateBadge();
 }
 async function refreshData(){
@@ -3262,6 +5119,37 @@ async function render(){
   setTimeout(initDateInputs,0);
   // Re-attach sticky-stuck observer after every render (DOM elements are recreated)
   setTimeout(initStickyToolbar,0);
+  // Phase A: keep Compass Ribbon synced with current S
+  if(typeof syncRibbonPeriodFromS==='function')syncRibbonPeriodFromS();
+  if(typeof updateRibbonRangeText==='function')updateRibbonRangeText();
+  if(typeof syncRibbonNetFromOverview==='function')syncRibbonNetFromOverview();
+}
+
+// Phase A: read net liquid position from current Overview state and update Ribbon.
+// Computed via the same helpers V9.0 uses in rOv() — we call them here without modifying rOv.
+// Phase A polish: compute Net Liquid Position directly using V9.0's
+// canonical formula from rOv() instead of scraping the Overview DOM.
+// The previous implementation only worked when Overview was the active
+// page (because it queried `#page-content .priv-mask[font-size:34px]`,
+// which only exists in rendered Overview). On every other page the
+// query returned null and the Ribbon fell through to "SAR —".
+// Now: use the same helpers V9.0 exposes globally — calcAccBalance,
+// calcCCBalance, isInvestmentAccount, getInvestmentValue — and produce
+// the same number Overview's hero shows, regardless of active page.
+function syncRibbonNetFromOverview(){
+  if(typeof S==='undefined'||!Array.isArray(S.accounts))return;
+  try{
+    const cashTypes=new Set(['main_account','savings_account','sub_account','joint_account','foreign_currency_account','debit_card','prepaid_card','cash']);
+    const totalLiquidCash=S.accounts.filter(a=>cashTypes.has(a.type)).reduce((s,a)=>{const b=calcAccBalance(a);return b!==null?s+b:s;},0);
+    const totalCC=(S.debts||[]).filter(d=>d.type==='credit_card'&&d.status==='active').reduce((s,d)=>s+calcCCBalance(d),0);
+    const totalInvestments=S.accounts.filter(a=>isInvestmentAccount(a)).reduce((s,a)=>{const v=getInvestmentValue(a);return v!==null?s+v:s;},0);
+    const net=totalLiquidCash-totalCC+totalInvestments;
+    const sign=net>0?'+':(net<0?'-':'');
+    const formatted=sign+'SAR '+Math.abs(net).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+    updateRibbonNetPosition(formatted);
+  }catch(e){
+    updateRibbonNetPosition('SAR —');
+  }
 }
 
 // ─── STICKY TOOLBAR OBSERVER ───
@@ -5250,7 +7138,7 @@ function openAiCategorize(id,ym){
   _aiCatTxnRef={txnId:id,ym:ymk};
   const acc=S.accounts.find(a=>a.id===t.accountId);
   const mo=document.createElement('div');
-  mo.id='ai-cat-modal';mo.className='mo active';
+  mo.id='ai-cat-modal';mo.className='mo active lanki-legacy';
   mo.innerHTML=`
     <div class="md" style="max-width:560px;width:94%;padding:0">
       <div style="padding:1.1rem 1.3rem;border-bottom:1px solid var(--border)">
@@ -5574,7 +7462,7 @@ function openBulkAiWaveModal(totalRemaining){
   if(existing)existing.remove();
 
   const mo=document.createElement('div');
-  mo.id='bulk-ai-modal';mo.className='mo active';
+  mo.id='bulk-ai-modal';mo.className='mo active lanki-legacy';
   mo.innerHTML=`
     <div class="md" style="max-width:880px;width:96%;padding:0;max-height:92vh;display:flex;flex-direction:column">
       <div style="padding:1.1rem 1.3rem;border-bottom:1px solid var(--border)">
@@ -5792,7 +7680,7 @@ function openRefundLinkModal(refundId,ym){
   const isReimb=refund.subCatId==='sub_reimbursement';
 
   const mo=document.createElement('div');
-  mo.id='refund-link-modal';mo.className='mo active';
+  mo.id='refund-link-modal';mo.className='mo active lanki-legacy';
   mo.innerHTML=`
     <div class="md" style="max-width:820px;width:94%;padding:0;max-height:92vh;display:flex;flex-direction:column">
       <div style="padding:1.1rem 1.3rem;border-bottom:1px solid var(--border)">
@@ -6381,6 +8269,7 @@ function showMatchPopover(pairId,txnId,anchorEl){
     :`<span style="color:var(--bad)">-${fmtP(outT.amount)}</span> <span style="color:var(--text3);font-size:10px">debit</span> &nbsp; <span style="color:var(--ok)">+${fmtP(inT.amount)}</span> <span style="color:var(--text3);font-size:10px">credit</span>`;
 
   const pop=document.createElement('div');
+  pop.className='lanki-legacy';
   pop.id='match-popover';
   pop.style.cssText='z-index:8000;width:300px;background:var(--bg);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.14);padding:0;overflow:hidden';
   pop.innerHTML=`
@@ -6649,7 +8538,7 @@ function renderMatchModal(){
   </div>`;
 
   const mo=document.createElement('div');
-  mo.id='match-modal';mo.className='mo active';
+  mo.id='match-modal';mo.className='mo active lanki-legacy';
   mo.innerHTML=`<div class="md" style="max-width:560px;padding:0;width:94%">
     <div style="padding:18px 20px 14px;border-bottom:1px solid var(--border)">
       <div class="mdtitle">Manual Match</div>
@@ -7308,7 +9197,7 @@ function openAutoSweepReview(){
   const snap=_lastAutoSweep;
   if(!snap||!snap.changes.length){toast('No recent auto-sweep to review',false);return;}
   const mo=document.createElement('div');
-  mo.id='auto-sweep-review-modal';mo.className='mo active';
+  mo.id='auto-sweep-review-modal';mo.className='mo active lanki-legacy';
   const rows=snap.changes.map((c,i)=>{
     const oldM=c.before.mainCatId?(getMC(c.before.mainCatId)?.name||c.before.mainCatId):'<em style="color:var(--text3)">uncategorized</em>';
     const oldS=c.before.subCatId?' / '+(getSC(c.before.subCatId)?.name||c.before.subCatId):'';
@@ -7452,7 +9341,7 @@ function openEditRuleModal(id){
   const isGlobal=!rule.accountId||!acctExists;
 
   const mo=document.createElement('div');
-  mo.id='edit-rule-modal';mo.className='mo active';
+  mo.id='edit-rule-modal';mo.className='mo active lanki-legacy';
   mo.innerHTML=`
     <div class="md" style="max-width:540px;width:96%;padding:0;max-height:92vh;display:flex;flex-direction:column">
       <div style="padding:1.1rem 1.3rem;border-bottom:1px solid var(--border)">
@@ -7724,7 +9613,7 @@ function _renderSweepModal(scope,scoped,scopeLabel){
   document.getElementById('rule-sweep-modal')?.remove();
 
   const mo=document.createElement('div');
-  mo.id='rule-sweep-modal';mo.className='mo active';
+  mo.id='rule-sweep-modal';mo.className='mo active lanki-legacy';
 
   // V8.28: scope chip and toggle row
   const scopeChip=scopeLabel?`<span style="display:inline-flex;align-items:center;gap:4px;background:color-mix(in srgb,var(--electric) 12%,transparent);color:var(--electric);padding:3px 10px;border-radius:99px;font-size:11px;font-weight:500">📍 ${h(scopeLabel)}</span>`:'';
@@ -8007,7 +9896,7 @@ function openCatCluster(anchorBtn,txnId,ym,curM,curS,canMakeSub){
   document.querySelectorAll('.cat-cluster-pop').forEach(el=>el.remove());
   const isMobile=window.innerWidth<=640;
   const pop=document.createElement('div');
-  pop.className='cat-cluster-pop';
+  pop.className='cat-cluster-pop lanki-legacy';
   pop.setAttribute('role','menu');
   const items=[
     {label:'Set category',sub:'Choose a main + sub-category',onclick:`closeCatCluster();openCP('${txnId}','${ym}','${curM}','${curS}')`,iconSvg:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>'},
@@ -8025,7 +9914,7 @@ function openCatCluster(anchorBtn,txnId,ym,curM,curS,canMakeSub){
     `;
     // Backdrop
     const bd=document.createElement('div');
-    bd.className='cat-cluster-backdrop';
+    bd.className='cat-cluster-backdrop lanki-legacy';
     bd.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9998';
     bd.onclick=closeCatCluster;
     document.body.appendChild(bd);
@@ -8843,7 +10732,7 @@ function openEditSub(id){
   document.getElementById('esub-modal')?.remove();
   const mo=document.createElement('div');
   mo.id='esub-modal';
-  mo.className='mo active';
+  mo.className='mo active lanki-legacy';
   mo.innerHTML=`
     <div class="md" style="max-width:560px;width:94%">
       <div class="mdtitle">Edit subscription</div>
@@ -9868,7 +11757,7 @@ function openMarkDeductedModal(st,a,sid,ai,month,defAmt,remaining){
   document.getElementById('mark-ded-modal')?.remove();
   const mo=document.createElement('div');
   mo.id='mark-ded-modal';
-  mo.className='mo active';
+  mo.className='mo active lanki-legacy';
   mo.innerHTML=`
     <div class="md" style="max-width:520px;width:94%;max-height:88vh;display:flex;flex-direction:column;padding:0">
       <div style="padding:1.1rem 1.3rem;border-bottom:1px solid var(--border)">
@@ -10530,7 +12419,7 @@ function renderBackfillModal(){
   document.getElementById('backfill-modal')?.remove();
   const mo=document.createElement('div');
   mo.id='backfill-modal';
-  mo.className='mo active';
+  mo.className='mo active lanki-legacy';
   mo.innerHTML=`
     <div class="md" style="max-width:580px;width:94%;max-height:88vh;display:flex;flex-direction:column;padding:0">
       <div style="padding:1.1rem 1.3rem;border-bottom:1px solid var(--border)">
@@ -14105,7 +15994,7 @@ function openAddMainCatModal(){
   closeCatModal();
   const defColor=nextUnusedPaletteColor();
   const mo=document.createElement('div');
-  mo.id='cat-modal';mo.className='mo active';
+  mo.id='cat-modal';mo.className='mo active lanki-legacy';
   mo.innerHTML=`
     <div class="md" style="max-width:520px;width:94%;padding:0">
       <div style="padding:1.1rem 1.3rem;border-bottom:1px solid var(--border)">
@@ -14138,7 +16027,7 @@ function openEditMainCatModal(id){
   const locked=isTierCMain(id);
   const custom=isCustomMain(id);
   const mo=document.createElement('div');
-  mo.id='cat-modal';mo.className='mo active';
+  mo.id='cat-modal';mo.className='mo active lanki-legacy';
   mo.innerHTML=`
     <div class="md" style="max-width:520px;width:94%;padding:0">
       <div style="padding:1.1rem 1.3rem;border-bottom:1px solid var(--border)">
@@ -14178,7 +16067,7 @@ function openDeleteMainCatModal(id){
   const others=candidates.filter(c=>c.type!==m.type);
   const buildOptions=(list)=>list.map(c=>`<option value="${c.id}">${h(c.name)}</option>`).join('');
   const mo=document.createElement('div');
-  mo.id='cat-modal';mo.className='mo active';
+  mo.id='cat-modal';mo.className='mo active lanki-legacy';
   mo.innerHTML=`
     <div class="md" style="max-width:560px;width:94%;padding:0">
       <div style="padding:1.1rem 1.3rem;border-bottom:1px solid var(--border)">
@@ -14241,7 +16130,7 @@ function openAddSubCatModal(){
   closeCatModal();
   const mainOptions=MAIN_CATS.map(c=>`<option value="${c.id}">${h(c.name)}</option>`).join('');
   const mo=document.createElement('div');
-  mo.id='cat-modal';mo.className='mo active';
+  mo.id='cat-modal';mo.className='mo active lanki-legacy';
   mo.innerHTML=`
     <div class="md" style="max-width:520px;width:94%;padding:0">
       <div style="padding:1.1rem 1.3rem;border-bottom:1px solid var(--border)">
@@ -14275,7 +16164,7 @@ function openEditSubCatModal(id){
   // Parent dropdown options
   const parentOpts=MAIN_CATS.map(c=>`<option value="${c.id}" ${c.id===curParent?'selected':''}>${h(c.name)}</option>`).join('');
   const mo=document.createElement('div');
-  mo.id='cat-modal';mo.className='mo active';
+  mo.id='cat-modal';mo.className='mo active lanki-legacy';
   mo.innerHTML=`
     <div class="md" style="max-width:520px;width:94%;padding:0">
       <div style="padding:1.1rem 1.3rem;border-bottom:1px solid var(--border)">
@@ -14319,7 +16208,7 @@ function openDeleteSubCatModal(id){
   // Reassignment candidates: other subs under the same parent
   const siblings=parentMid?(SUGGESTED[parentMid]||[]).filter(x=>x!==id).map(x=>SUB_CATS.find(sx=>sx.id===x)).filter(Boolean):[];
   const mo=document.createElement('div');
-  mo.id='cat-modal';mo.className='mo active';
+  mo.id='cat-modal';mo.className='mo active lanki-legacy';
   mo.innerHTML=`
     <div class="md" style="max-width:520px;width:94%;padding:0">
       <div style="padding:1.1rem 1.3rem;border-bottom:1px solid var(--border)">
@@ -15915,8 +17804,7 @@ function rReviewQueue(){
   });
   const total=flagged.length;
   if(total===0){
-    return`<div class="pg">
-      <div class="pg-header">
+    return`<div class="pg-header">
         <div class="pg-header-title">Review Queue</div>
         <div class="pg-header-sub">Transactions you've flagged for later review.</div>
       </div>
@@ -15926,8 +17814,7 @@ function rReviewQueue(){
           <div style="font-size:14px;color:var(--text2);font-weight:500">All clear</div>
           <div style="font-size:12px;color:var(--text3);margin-top:6px">No transactions are flagged for review. Use the "Mark for review later" checkbox in any transaction's Edit modal, or the Defer column when applying rules, to flag transactions you want to revisit.</div>
         </div>
-      </div>
-    </div>`;
+      </div>`;
   }
   const allFlaggedIds=flagged.map(f=>f.t.id);
   const rows=flagged.map(({t,ym})=>{
@@ -15949,8 +17836,7 @@ function rReviewQueue(){
     </tr>`;
   }).join('');
 
-  return`<div class="pg">
-    <div class="pg-header">
+  return`<div class="pg-header">
       <div class="pg-header-title">Review Queue</div>
       <div class="pg-header-sub">${total} transaction${total!==1?'s':''} flagged for review across all months. Recategorize or dismiss each one.</div>
     </div>
@@ -15978,8 +17864,7 @@ function rReviewQueue(){
         </tr></thead>
         <tbody>${rows}</tbody>
       </table></div>
-    </div>
-  </div>`;
+    </div>`;
 }
 
 // ─── SANITY CHECK PAGE ───────────────────────────────────────────────────────
@@ -16422,7 +18307,7 @@ function toggleBulkSelect(){
 function openBulkEditModal(targetIds){
   document.getElementById('bulk-edit-modal')?.remove();
   const m=document.createElement('div');
-  m.id='bulk-edit-modal';m.className='mo active';
+  m.id='bulk-edit-modal';m.className='mo active lanki-legacy';
   m.innerHTML=`
     <div class="md" style="max-width:520px;width:94%">
       <div class="mdtitle">Editing ${targetIds.length} transactions</div>
@@ -16690,28 +18575,200 @@ function applyBulkCategory(){
 }
 
 
-// ─── BURGER MENU ───
+// ─── BURGER MENU (Phase A: Compass drawer) ───
+// Drives the Compass Index drawer on mobile. The Index has class "compass index";
+// when the drawer-open class is present, mobile CSS reveals it as a fixed left drawer.
+// The drawer-backdrop element renders the dim overlay behind the drawer.
 function toggleSidebar(){
-  const nav=document.getElementById('main-nav');
-  const btn=document.getElementById('burger-btn');
-  const overlay=document.getElementById('nav-overlay');
-  const isOpen=nav&&nav.classList.contains('open');
+  const idx=document.getElementById('compass-index');
+  const bd=document.getElementById('drawer-backdrop');
+  const isOpen=idx&&idx.classList.contains('drawer-open');
   if(isOpen){closeSidebar();}
   else{
-    if(nav)nav.classList.add('open');
-    if(btn)btn.classList.add('open');
-    if(overlay)overlay.classList.add('active');
+    if(idx)idx.classList.add('drawer-open');
+    if(bd)bd.classList.add('open');
     document.body.style.overflow='hidden'; // prevent background scroll
   }
 }
 function closeSidebar(){
-  const nav=document.getElementById('main-nav');
-  const btn=document.getElementById('burger-btn');
-  const overlay=document.getElementById('nav-overlay');
-  if(nav)nav.classList.remove('open');
-  if(btn)btn.classList.remove('open');
-  if(overlay)overlay.classList.remove('active');
+  const idx=document.getElementById('compass-index');
+  const bd=document.getElementById('drawer-backdrop');
+  if(idx)idx.classList.remove('drawer-open');
+  if(bd)bd.classList.remove('open');
   document.body.style.overflow='';
+}
+
+// Escape-key dismissal for drawer and search overlay
+document.addEventListener('keydown',function(e){
+  if(e.key==='Escape'){
+    const idx=document.getElementById('compass-index');
+    if(idx&&idx.classList.contains('drawer-open')){closeSidebar();return;}
+    const so=document.getElementById('search-overlay');
+    if(so&&so.classList.contains('open')){closeSearchOverlay();return;}
+  }
+});
+
+// Swipe-left dismissal for drawer
+(function(){
+  let touchStartX=null,touchStartY=null;
+  document.addEventListener('touchstart',function(e){
+    const idx=document.getElementById('compass-index');
+    if(!idx||!idx.classList.contains('drawer-open'))return;
+    if(e.touches&&e.touches[0]){touchStartX=e.touches[0].clientX;touchStartY=e.touches[0].clientY;}
+  },{passive:true});
+  document.addEventListener('touchmove',function(e){
+    if(touchStartX===null)return;
+    const idx=document.getElementById('compass-index');
+    if(!idx||!idx.classList.contains('drawer-open'))return;
+    if(e.touches&&e.touches[0]){
+      const dx=e.touches[0].clientX-touchStartX;
+      const dy=Math.abs(e.touches[0].clientY-touchStartY);
+      if(dx<-40&&dy<40){closeSidebar();touchStartX=null;}
+    }
+  },{passive:true});
+  document.addEventListener('touchend',function(){touchStartX=null;touchStartY=null;},{passive:true});
+})();
+
+// ─── COMPASS RIBBON HELPERS (Phase A) ───
+// Ribbon period pills: bind to existing setOvP(). The Compass design uses '1m' as the label
+// for 1 month; V9.0 internally uses 'month'. Translate at the boundary; do not modify V9.0.
+function setRibbonPeriod(p){
+  if(typeof setOvP!=='function')return;
+  // Translate Compass period code to V9.0 internal code
+  const v9code = (p==='1m') ? 'month' : p;
+  setOvP(v9code);
+  // Active state for both desktop pills and mobile period strip
+  document.querySelectorAll('#ribbon-period-pills button, #mobile-period-strip button').forEach(b=>{
+    b.classList.toggle('active', b.getAttribute('data-period')===p);
+  });
+}
+
+// Sync Ribbon pill active state from current S.ovPeriod (called on render)
+function syncRibbonPeriodFromS(){
+  if(typeof S==='undefined')return;
+  const p=S.ovPeriod;
+  // Translate V9.0 'month' to Compass '1m'
+  const compassCode = (p==='month') ? '1m' : p;
+  document.querySelectorAll('#ribbon-period-pills button, #mobile-period-strip button').forEach(b=>{
+    b.classList.toggle('active', b.getAttribute('data-period')===compassCode);
+  });
+}
+
+// Range navigator: bind to existing addM() mechanics on S.month
+function ribbonRangeStep(delta){
+  if(typeof S==='undefined'||typeof addM!=='function')return;
+  S.month=addM(S.month,delta);
+  updateRibbonRangeText();
+  if(typeof sw==='function'&&S.tab){sw(S.tab);}
+}
+
+// Phase A polish: produce the correct label for every period pill.
+// The previous implementation called labelMY() — a function that does
+// not exist anywhere in the codebase — so it always fell through to
+// the raw S.month value (or empty string on initial render).
+// The Ribbon also had to handle V9.0's canonical period code 'month'
+// alongside the Compass pill code '1m', which mean the same thing.
+// Now: explicit branches for 'all', 'ytd', 'month'/'1m', '3m', '6m',
+// '12m'. Uses V9.0's existing fmtYM and addM helpers.
+function updateRibbonRangeText(){
+  if(typeof S==='undefined')return;
+  const el=document.getElementById('ribbon-range-text');
+  if(!el)return;
+  try{
+    let period=S.ovPeriod||'month';
+    if(period==='1m')period='month';
+    const month=S.month||(typeof getYM==='function'?getYM(new Date()):'');
+    const fmt=(ym)=>(typeof fmtYM==='function'?fmtYM(ym):ym);
+    if(period==='all'){el.textContent='All time';return;}
+    if(period==='ytd'){el.textContent='YTD '+((month||'').split('-')[0]||new Date().getFullYear());return;}
+    if(period==='month'){el.textContent=fmt(month)||'—';return;}
+    const monthsBack={'3m':2,'6m':5,'12m':11}[period]||0;
+    if(typeof addM==='function'&&month&&monthsBack>0){
+      el.textContent=fmt(addM(month,-monthsBack))+' – '+fmt(month);return;
+    }
+    el.textContent=fmt(month)||'—';
+  }catch(e){
+    el.textContent=S.month||'—';
+  }
+}
+
+function updateRibbonNetPosition(value){
+  const el=document.getElementById('ribbon-net-pos');
+  if(!el)return;
+  if(typeof value==='number'){
+    try{
+      el.textContent=(typeof fmt==='function')?('SAR '+fmt(value)):('SAR '+value.toFixed(2));
+    }catch(e){el.textContent='SAR —';}
+  }else if(typeof value==='string'){
+    el.textContent=value;
+  }
+}
+
+// Update Index active-state to match S.tab. Called from sw() at the end.
+// Phase A polish: enforces group exclusivity. The previous implementation
+// only added .open to the active group's sub-menu; it never collapsed the
+// previously open group. As the user navigated the platform, sub-menus
+// accumulated open and pushed the Index foot below the viewport fold.
+// Now: iterate every group and toggle .open exclusively on the active one.
+function updateIndexActive(tab){
+  // Phase A polish: select by [data-tab] attribute, not .index-item class.
+  // The Settings button in the index-foot no longer carries .index-item
+  // (it's styled by .compass .index-foot button{} for visual uniformity
+  // with Switch Engine and Demo Mode). It still has data-tab="settings"
+  // so this attribute selector catches it. Switch Engine and Demo Mode
+  // have no data-tab so they're correctly excluded from .active toggling.
+  document.querySelectorAll('#compass-index button[data-tab]').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('#compass-index button[data-tab="'+tab+'"]').forEach(b=>b.classList.add('active'));
+  const grp=(typeof TAB_TO_GROUP==='object')?(TAB_TO_GROUP[tab]||null):null;
+  document.querySelectorAll('#compass-index .index-sub[id^="nav-dd-"]').forEach(sub=>{
+    const groupId=sub.id.replace('nav-dd-','');
+    const arr=document.getElementById('arr-'+groupId);
+    if(groupId===grp){
+      sub.classList.add('open');
+      if(arr)arr.style.transform='rotate(90deg)';
+    } else {
+      sub.classList.remove('open');
+      if(arr)arr.style.transform='';
+    }
+  });
+  if(typeof activeGroup!=='undefined')activeGroup=grp;
+}
+
+// ─── SEARCH OVERLAY (Phase A: minimal shell) ───
+// Phase A treats Search as a placeholder. Tapping the search icon opens an overlay
+// containing a focused input and a "coming soon" caption. Pressing Enter, Escape,
+// or clicking the backdrop dismisses. No query is executed in Phase A.
+function openSearchOverlay(){
+  let so=document.getElementById('search-overlay');
+  if(!so){
+    so=document.createElement('div');
+    so.id='search-overlay';
+    so.className='search-overlay compass';
+    so.innerHTML='<div class="search-overlay-card" onclick="event.stopPropagation()">'
+      +'<div class="search-overlay-head">'
+      +'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>'
+      +'<input type="text" id="search-overlay-input" placeholder="Search transactions, accounts, anything..." autofocus>'
+      +'<button class="search-overlay-close" onclick="closeSearchOverlay()" aria-label="Close">&times;</button>'
+      +'</div>'
+      +'<div class="search-overlay-caption">Search is coming soon.</div>'
+      +'</div>';
+    so.onclick=function(e){if(e.target===so)closeSearchOverlay();};
+    document.body.appendChild(so);
+  }
+  so.classList.add('open');
+  setTimeout(function(){
+    const inp=document.getElementById('search-overlay-input');
+    if(inp){
+      inp.focus();
+      inp.onkeydown=function(e){
+        if(e.key==='Enter'||e.key==='Escape'){e.preventDefault();closeSearchOverlay();}
+      };
+    }
+  },10);
+}
+function closeSearchOverlay(){
+  const so=document.getElementById('search-overlay');
+  if(so)so.classList.remove('open');
 }
 
 
@@ -17545,7 +19602,7 @@ function openSettlementModal(name){
   document.getElementById('settle-modal')?.remove();
   const mo=document.createElement('div');
   mo.id='settle-modal';
-  mo.className='mo active';
+  mo.className='mo active lanki-legacy';
   mo.innerHTML=`
     <div class="md" style="max-width:620px;width:94%;max-height:88vh;display:flex;flex-direction:column;padding:0">
       <div style="padding:1.25rem 1.4rem;border-bottom:1px solid var(--border)">
@@ -19019,6 +21076,7 @@ function openAITxnEdit(idx){
   const sc=SUB_CATS.sort((a,b)=>a.name.localeCompare(b.name)).map(s=>`<option value="${s.id}" ${t.subCatId===s.id?'selected':''}>${s.name}</option>`).join('');
   const existing=document.getElementById('ai-edit-modal');if(existing)existing.remove();
   const m=document.createElement('div');
+  m.className='lanki-legacy';
   m.id='ai-edit-modal';
   m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
   m.innerHTML=`<div style="background:var(--bg);border-radius:var(--rmd);padding:24px;max-width:480px;width:100%;box-shadow:0 16px 40px rgba(0,0,0,.2)">
@@ -19313,7 +21371,7 @@ function renderCal(year,month){
   }
   const pop=document.createElement('div');
   pop.id='cal-popup';
-  pop.className='cal-popup';
+  pop.className='cal-popup lanki-legacy';
   pop.style.cssText=`position:fixed;top:${Math.min(rect.bottom+4,window.innerHeight-300)}px;left:${Math.max(4,Math.min(rect.left,window.innerWidth-240))}px;z-index:9999;background:var(--bg);border:1px solid var(--border);border-radius:var(--rmd);box-shadow:0 8px 24px rgba(0,0,0,.12);width:230px;padding:10px;`;
   pop.innerHTML=`
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
@@ -19350,6 +21408,7 @@ function showRecoveryModal(code){
   const existing=document.getElementById('recovery-modal');
   if(existing)existing.remove();
   const m=document.createElement('div');
+  m.className='lanki-legacy';
   m.id='recovery-modal';
   m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px';
   m.innerHTML=`
@@ -19568,7 +21627,7 @@ initAuth();
 </script>
 
 <!-- EDIT TRANSACTION MODAL -->
-<div class="mo" id="edit-txn-modal">
+<div class="mo lanki-legacy" id="edit-txn-modal">
   <div class="md" style="max-width:520px">
     <div class="mdtitle">Edit Transaction</div>
     <input type="hidden" id="etxn-id">
@@ -19635,7 +21694,7 @@ initAuth();
   </div>
 </div>
 <!-- ── EXPLORE LANKI OVERLAY ──────────────────────────── -->
-<div id="explore-overlay" class="explore-overlay">
+<div id="explore-overlay" class="explore-overlay lanki-legacy">
 
   <!-- Top bar -->
   <div class="explore-topbar">
