@@ -655,8 +655,15 @@ th{
 td{padding:9px 10px;border-bottom:1px solid var(--bg2);vertical-align:middle}
 tr:last-child td{border-bottom:none}
 tbody tr:hover td{background:var(--bg2)}.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
-/* Apple-grade transactions table: fixed column widths prevent shift between months */
-.tx-tbl{table-layout:fixed;width:100%;min-width:1200px}
+/* Phase A polish: dropped min-width:1200px which caused horizontal overflow
+   inside the page container (on viewports below ~1500px effective px after
+   the html{zoom:1.1} factor). The thead <th> elements set explicit column
+   widths via the `widths` map in the JS render — the table layout (fixed)
+   honors those widths and distributes any remaining space to the desc
+   column (set to auto). With min-width:0, the table now shrinks to fit
+   its container without forcing a horizontal scrollbar. The content stays
+   readable because the thead-defined widths are still respected. */
+.tx-tbl{table-layout:fixed;width:100%;min-width:0}
 .tx-tbl td,.tx-tbl th{overflow:hidden;text-overflow:ellipsis}
 .tx-tbl td>div{overflow:hidden;text-overflow:ellipsis}
 /* Phase A polish: actions cell must NOT be clipped. The universal
@@ -16725,7 +16732,11 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps, scopedAcc){
   // V8.27: when Account is dropped, donate its width to Amount so the Amount column visually fills the gap.
   // V8.27: tightened Actions column width per Mohammad — empty space in the row was visually noisy.
   // The 50px saved gets donated back to Description (the column that benefits most from extra room).
-  const widths={date:'110px',desc:'auto',cat:'230px',acc:'130px',amount:showAcc?'140px':'170px',balance:'140px',outstanding:'140px',type:'90px','':'220px'};
+  // Phase A polish: actions column bumped 220→250 to fit the new ⟳ Sub button (Edit + Categorize ▾ + ⟳ + ×).
+  // Other cols tightened slightly so total still fits common viewports without horizontal scroll:
+  // cat 230→210 (still readable for two-line "Category / Sub-Category" labels), date 110→95 (DD/MM/YY fits),
+  // type 90→80, acc 130→110, amount 140/170→130/160. Total saved ≈ 80px, donated to actions + desc breathing room.
+  const widths={date:'95px',desc:'auto',cat:'210px',acc:'110px',amount:showAcc?'130px':'160px',balance:'130px',outstanding:'130px',type:'80px','':'250px'};
 
   const bulkCol=`<th style="width:32px;padding:8px 6px">${BulkMode?'<input type="checkbox" title="Select all displayed" onclick="if(this.checked)selectAllDisplayed();else clearBulkSelection()" style="cursor:pointer;width:15px;height:15px">':''}</th>`;
   const reconTh=hasRecon?`<th style="text-align:right;white-space:nowrap;font-size:var(--fs-xxs);color:var(--warn);width:110px">Stmt Bal</th>`:'';
@@ -16818,7 +16829,7 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps, scopedAcc){
       <td><div class="tx-desc-clamp">${h(t.description)}${st}${ruleTag}${reviewTag}${matchedTag}${toleranceTag}${pendingTag}${debtTag}${billTag}${staffTag}${refundTag}${t.notes?`<span class="tx-notes">${h(t.notes)}</span>`:''}</div></td>
       <td>${ch}</td>
       ${showAcc?`<td style="font-size:var(--fs-xs)">${acc?`<span style="font-weight:500">${h(acc.name)}</span>`:'--'}</td>`:''}
-      <td style="text-align:right;font-weight:500;white-space:nowrap" class="${ac}">${(()=>{
+      <td class="${ac}" style="text-align:right;font-weight:500;white-space:nowrap">${(()=>{
         // V8.27 Decision B: cards use statement convention (charges as +, payments as -).
         // Bank/investment views keep cash-flow convention (out as -, in as +).
         if(isCards&&S.settings.cardsStatementSignConvention!==false){
