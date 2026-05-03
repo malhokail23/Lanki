@@ -3066,16 +3066,920 @@ body.privacy-on{padding-top:28px}
 .lanki-legacy .settings-row:last-child{border-bottom:none}
 .lanki-legacy .settings-row:first-of-type{border-top:initial;margin-top:initial}
 
-/* Mobile responsive — restore V9.0 mobile overrides for collision classes */
+/* ============================================================
+   PHASE A POLISH — DESIGN PACK ALIGNMENT (V9.0 → Compass DNA)
+   ============================================================
+   The Compass design pack defines a refined visual system: 12px-radius
+   cards on white backgrounds with hairline dividers, tables wrapped in
+   bordered cards with --card-inset header rows, settings as boxed
+   sections with their own heads, account cards as a 6-col grid, and
+   category cards in a flexible auto-fill grid.
+   This block layers polish over the V9.0 legacy reset, keeping JS
+   render functions untouched. Source order: Compass component CSS →
+   legacy reset → THIS BLOCK. Highest specificity here is (0,2,0),
+   matching the legacy reset, but later in source so wins on tie.
+   ============================================================ */
+
+/* ── TABLE WRAPPER ── design pack .table-wrap pattern ─────────── */
+/* Wrap every standalone table in a bordered card with rounded corners.
+   When .tbl-wrap is nested INSIDE .card or .panel, those parents provide
+   the surface so we don't double-up borders. The .tx-card pattern (mobile
+   reflow) explicitly opts out via its own override.
+   Header row gets --card-inset. Body rows get hairline dividers and
+   --card-tint hover. */
+.lanki-legacy .tbl-wrap{
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:12px;
+  overflow:hidden;
+  margin-bottom:12px;
+}
+.lanki-legacy .card .tbl-wrap,
+.lanki-legacy .panel .tbl-wrap{
+  background:transparent;
+  border:none;
+  border-radius:0;
+  margin-bottom:0;
+}
+.lanki-legacy .tx-card .tbl-wrap{
+  background:transparent;border:none;border-radius:0;overflow:visible;
+}
+.lanki-legacy .tbl-wrap > table,
+.lanki-legacy .tbl-wrap > .tx-tbl{
+  border-collapse:separate;
+  border-spacing:0;
+  width:100%;
+}
+.lanki-legacy .tbl-wrap > table thead th,
+.lanki-legacy .tbl-wrap > .tx-tbl thead th{
+  text-align:left;
+  padding:12px 14px;
+  font-size:10.5px;
+  font-weight:600;
+  color:var(--text3);
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  background:var(--card-inset);
+  border-bottom:1px solid var(--line);
+  white-space:nowrap;
+}
+.lanki-legacy .tbl-wrap > table tbody td,
+.lanki-legacy .tbl-wrap > .tx-tbl tbody td{
+  padding:11px 14px;
+  font-size:13px;
+  color:var(--ink);
+  border-bottom:1px solid var(--hairline);
+  font-variant-numeric:tabular-nums;
+  background:transparent;
+}
+.lanki-legacy .tbl-wrap > table tbody tr:last-child td,
+.lanki-legacy .tbl-wrap > .tx-tbl tbody tr:last-child td{
+  border-bottom:none;
+}
+.lanki-legacy .tbl-wrap > table tbody tr:hover td,
+.lanki-legacy .tbl-wrap > .tx-tbl tbody tr:hover td{
+  background:var(--card-tint);
+}
+/* Apply same upgrade to bare .tx-tbl that doesn't have .tbl-wrap parent
+   (shouldn't happen, but safe-guard) */
+.lanki-legacy .tx-tbl{border-collapse:separate;border-spacing:0}
+
+/* ── CARDS — refine V9.0 thick padding to design pack lighter style ── */
+.lanki-legacy .card{
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:18px 22px;
+  margin-bottom:12px;
+}
+.lanki-legacy .card-bordered{
+  border:1px solid var(--line);
+}
+
+/* ── KPI cards — refine to match design pack ── */
+.lanki-legacy .kgrid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  gap:1px;
+  background:var(--line);
+  border:1px solid var(--line);
+  border-radius:12px;
+  overflow:hidden;
+  margin-bottom:14px;
+}
+.lanki-legacy .kpi{
+  background:var(--card);
+  border:none;
+  border-radius:0;
+  padding:14px 18px;
+  margin:0;
+}
+.lanki-legacy .klbl{
+  font-size:10.5px;
+  font-weight:600;
+  color:var(--text3);
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  margin-bottom:5px;
+}
+.lanki-legacy .kval{
+  font-size:20px;
+  font-weight:600;
+  color:var(--ink);
+  font-variant-numeric:tabular-nums;
+  letter-spacing:-.012em;
+  line-height:1.1;
+}
+.lanki-legacy .ksub{
+  font-size:11px;
+  color:var(--text2);
+  margin-top:4px;
+  font-variant-numeric:tabular-nums;
+}
+@media(max-width:640px){
+  .lanki-legacy .kgrid{grid-template-columns:repeat(2,1fr)}
+}
+
+/* ── PANEL — keep functional, clean up appearance ── */
+.lanki-legacy .panel{
+  background:var(--card-inset);
+  border:1px solid var(--line);
+  border-radius:10px;
+  padding:14px 18px;
+  margin-bottom:12px;
+}
+
+/* ── CHDR / CTITLE / CSUB — refine card heads ── */
+.lanki-legacy .chdr{
+  font-size:11px;
+  font-weight:600;
+  color:var(--ink);
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  margin-bottom:12px;
+}
+.lanki-legacy .ctitle{
+  font-size:14px;
+  font-weight:600;
+  color:var(--ink);
+  letter-spacing:-.005em;
+  margin-bottom:3px;
+}
+.lanki-legacy .csub{
+  font-size:12.5px;
+  color:var(--text2);
+  margin-top:0;
+  margin-bottom:12px;
+  line-height:1.5;
+}
+
+/* ── LBL — slightly cleaner form labels ── */
+.lanki-legacy .lbl{
+  font-size:11px;
+  color:var(--text2);
+  letter-spacing:.04em;
+  text-transform:uppercase;
+  font-weight:600;
+  margin-bottom:6px;
+  display:block;
+}
+
+/* ── INPUTS — match design pack ── */
+.lanki-legacy input:not([type="checkbox"]):not([type="radio"]),
+.lanki-legacy select,
+.lanki-legacy textarea{
+  padding:8px 12px;
+  font-size:13px;
+  color:var(--ink);
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:7px;
+  font-family:inherit;
+  font-variant-numeric:tabular-nums;
+  outline:none;
+  transition:border-color .12s,box-shadow .12s;
+  min-height:36px;
+}
+.lanki-legacy input:not([type="checkbox"]):not([type="radio"]):focus,
+.lanki-legacy select:focus,
+.lanki-legacy textarea:focus{
+  border-color:var(--action);
+  box-shadow:0 0 0 3px rgba(14,64,197,.08);
+}
+.lanki-legacy textarea{min-height:80px}
+
+/* ── BUTTONS — small refinement on borders/hover ── */
+.lanki-legacy .btn{
+  border-radius:7px;
+  letter-spacing:.005em;
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  padding:8px 14px;
+  font-size:13px;
+  min-height:36px;
+}
+.lanki-legacy .btn:hover{
+  background:var(--card-tint);
+  border-color:var(--line-strong);
+}
+.lanki-legacy .btn-p{
+  background:var(--ink);
+  color:#fff;
+  border-color:var(--ink);
+}
+.lanki-legacy .btn-p:hover{
+  background:#0A2370;
+  border-color:#0A2370;
+  opacity:1;
+}
+.lanki-legacy .btn-d{
+  border-color:var(--neg-bg);
+  color:var(--neg);
+}
+.lanki-legacy .btn-d:hover{
+  background:var(--neg-bg);
+  border-color:var(--neg-bg);
+}
+.lanki-legacy .btn-sm{
+  padding:5px 9px;
+  font-size:12px;
+  min-height:28px;
+  gap:5px;
+}
+.lanki-legacy .btn-xs{
+  padding:4px 8px;
+  font-size:11px;
+  min-height:26px;
+  gap:5px;
+}
+
+/* ── SETTINGS — apply design pack box-section pattern ── */
+.lanki-legacy .settings-section{
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:12px;
+  margin-bottom:14px;
+  padding:0;
+  overflow:hidden;
+  border-bottom:1px solid var(--line);
+}
+.lanki-legacy .settings-section:last-child{border-bottom:1px solid var(--line)}
+.lanki-legacy .settings-section-head{
+  padding:16px 22px 8px;
+}
+.lanki-legacy .settings-section-head h3{
+  font-size:11px;
+  color:var(--ink);
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  font-weight:600;
+}
+.lanki-legacy .settings-section-head .ss-text{
+  font-size:12.5px;
+  color:var(--text2);
+  margin-top:4px;
+  line-height:1.5;
+}
+/* Existing render-fn class names — give them the same design pack styling */
+.lanki-legacy .settings-section-label{
+  display:block;
+  padding:16px 22px 8px;
+  font-size:11px;
+  color:var(--ink);
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  font-weight:600;
+  margin-bottom:0;
+}
+.lanki-legacy .settings-page-title{
+  font-size:18px;
+  font-weight:600;
+  color:var(--ink);
+  letter-spacing:-.012em;
+  margin-bottom:14px;
+}
+.lanki-legacy .settings-row{
+  display:grid;
+  grid-template-columns:1fr auto;
+  gap:24px;
+  align-items:center;
+  padding:14px 22px;
+  border-top:1px solid var(--hairline);
+  border-bottom:none;
+}
+.lanki-legacy .settings-row:first-of-type{
+  border-top:1px solid var(--line);
+  margin-top:0;
+}
+/* When a settings-section-label precedes the first row, use lighter top border */
+.lanki-legacy .settings-section-label + .settings-row{
+  border-top:1px solid var(--line);
+}
+.lanki-legacy .settings-row .sr-label,
+.lanki-legacy .settings-row .settings-row-title,
+.lanki-legacy .settings-row .settings-row-label .settings-row-title{
+  font-size:13.5px;
+  font-weight:500;
+  color:var(--ink);
+  letter-spacing:-.003em;
+}
+.lanki-legacy .settings-row .sr-text,
+.lanki-legacy .settings-row .settings-row-sub{
+  font-size:12px;
+  color:var(--text2);
+  margin-top:2px;
+  line-height:1.45;
+  max-width:560px;
+}
+.lanki-legacy .settings-row .sr-control,
+.lanki-legacy .settings-row .settings-row-ctrl{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  justify-self:end;
+}
 @media(max-width:768px){
-  .lanki-legacy .btn{min-height:44px;font-size:14px}
-  .lanki-legacy .btn-sm{min-height:38px}
-  .lanki-legacy .card{padding:.85rem .9rem}
   .lanki-legacy .settings-row{
-    grid-template-columns:initial;
-    /* keep V9.0 flex layout on mobile — Compass tries to convert to 1-col grid */
-    display:flex;
+    grid-template-columns:1fr;
+    gap:8px;
+    padding:14px 18px;
   }
+  .lanki-legacy .settings-row .sr-control,
+  .lanki-legacy .settings-row .settings-row-ctrl{justify-self:flex-start}
+}
+/* Settings sub-nav (top tabs) — apply Compass subnav look */
+.lanki-legacy .settings-nav-btn{
+  padding:8px 14px;
+  font-size:12.5px;
+  color:var(--text2);
+  font-weight:500;
+  background:none;
+  border:1px solid var(--line);
+  border-radius:7px;
+  cursor:pointer;
+  margin-right:6px;
+  margin-bottom:6px;
+  letter-spacing:-.003em;
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  transition:background .12s,border-color .12s,color .12s;
+}
+.lanki-legacy .settings-nav-btn:hover{
+  background:var(--card-tint);
+  color:var(--ink);
+  border-color:var(--line-strong);
+}
+.lanki-legacy .settings-nav-btn.settings-nav-active{
+  background:var(--ink);
+  color:#fff;
+  border-color:var(--ink);
+}
+.lanki-legacy .settings-nav-btn svg{
+  width:14px;
+  height:14px;
+  opacity:.65;
+}
+.lanki-legacy .settings-nav-btn.settings-nav-active svg{opacity:.95}
+
+/* ── CATEGORIES GRID — auto-fill 200px floor per design pack ── */
+.lanki-legacy .cat-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
+  gap:10px;
+}
+.lanki-legacy .cat-card{
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:10px;
+  padding:14px 16px;
+  transition:border-color .12s;
+  cursor:default;
+}
+.lanki-legacy .cat-card:hover{
+  border-color:var(--line-strong);
+}
+/* Design pack naming */
+.lanki-legacy .cat-card .cc-head{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.lanki-legacy .cat-card .cc-sw{
+  width:14px;
+  height:14px;
+  border-radius:4px;
+  flex-shrink:0;
+}
+.lanki-legacy .cat-card .cc-name{
+  font-size:13px;
+  font-weight:600;
+  color:var(--ink);
+  flex:1;
+  letter-spacing:-.005em;
+}
+.lanki-legacy .cat-card .cc-meta{
+  font-size:11.5px;
+  color:var(--text2);
+  font-variant-numeric:tabular-nums;
+}
+.lanki-legacy .cat-card .cc-text{
+  font-size:11.5px;
+  color:var(--text3);
+  line-height:1.4;
+}
+.lanki-legacy .cat-card .cc-actions{
+  display:flex;
+  gap:4px;
+  margin-top:6px;
+  border-top:1px solid var(--hairline);
+  padding-top:8px;
+}
+/* Existing render-fn naming (cat-card-row + cat-swatch + cat-info etc.) */
+.lanki-legacy .cat-card .cat-card-row{
+  display:flex;
+  align-items:flex-start;
+  gap:10px;
+}
+.lanki-legacy .cat-card .cat-swatch{
+  width:14px;
+  height:14px;
+  border-radius:4px;
+  flex-shrink:0;
+  margin-top:2px;
+}
+.lanki-legacy .cat-card .cat-info{
+  flex:1;
+  min-width:0;
+}
+.lanki-legacy .cat-card .cat-name{
+  font-size:13px;
+  font-weight:600;
+  color:var(--ink);
+  letter-spacing:-.005em;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  flex-wrap:wrap;
+}
+.lanki-legacy .cat-card .cat-lock{
+  color:var(--text3);
+  opacity:.7;
+}
+.lanki-legacy .cat-card .cat-badge-custom{
+  font-size:9px;
+  font-weight:700;
+  padding:2px 6px;
+  border-radius:4px;
+  background:var(--action-tint);
+  color:var(--action);
+  letter-spacing:.06em;
+}
+.lanki-legacy .cat-card .cat-meta{
+  font-size:11.5px;
+  color:var(--text2);
+  margin-top:3px;
+  font-variant-numeric:tabular-nums;
+}
+.lanki-legacy .cat-card .cat-reason{
+  font-size:11px;
+  color:var(--text3);
+  margin-top:4px;
+  line-height:1.4;
+  font-style:italic;
+}
+.lanki-legacy .cat-card .cat-actions{
+  display:flex;
+  gap:4px;
+  margin-top:8px;
+  padding-top:8px;
+  border-top:1px solid var(--hairline);
+}
+/* Cat-group label and sub */
+.lanki-legacy .cat-group{
+  margin-bottom:18px;
+}
+.lanki-legacy .cat-group-label{
+  font-size:11px;
+  color:var(--ink);
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  font-weight:600;
+  margin:14px 0 4px;
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+.lanki-legacy .cat-group-sub{
+  font-size:11.5px;
+  color:var(--text3);
+  margin-bottom:10px;
+  line-height:1.4;
+}
+
+/* ── ACCOUNT SECTION ROWS in tables — design pack inset background ── */
+.lanki-legacy .tbl-wrap .acc-section-row td,
+.lanki-legacy .acc-section-row td{
+  background:var(--card-inset) !important;
+  padding:10px 14px !important;
+  border-bottom:1px solid var(--line) !important;
+  border-top:1px solid var(--line) !important;
+}
+.lanki-legacy .tbl-wrap .acc-section-row:first-child td,
+.lanki-legacy .acc-section-row:first-child td{border-top:none}
+.lanki-legacy .tbl-wrap .acc-section-row:hover td,
+.lanki-legacy .acc-section-row:hover td{background:var(--card-inset) !important}
+.lanki-legacy .acc-section-label{
+  font-size:10.5px;
+  font-weight:600;
+  color:var(--text3);
+  text-transform:uppercase;
+  letter-spacing:.12em;
+}
+.lanki-legacy .acc-section-count{
+  font-family:var(--mono);
+  font-size:10px;
+  color:var(--text3);
+  opacity:.7;
+  margin-left:4px;
+  letter-spacing:0;
+  font-weight:500;
+}
+
+/* ── ACCOUNT CARDS — design pack 6-col grid pattern ── */
+.lanki-legacy .account-card{
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:12px;
+  display:grid;
+  grid-template-columns:36px 1fr 140px 140px 140px auto;
+  gap:18px;
+  align-items:center;
+  padding:14px 18px;
+  margin-bottom:8px;
+}
+.lanki-legacy .account-card:hover{
+  border-color:var(--line-strong);
+}
+.lanki-legacy .account-card .ac-sw{
+  width:10px;
+  height:36px;
+  border-radius:3px;
+  background:var(--ink);
+  justify-self:start;
+}
+.lanki-legacy .account-card .ac-name{
+  font-size:14px;
+  font-weight:600;
+  color:var(--ink);
+  letter-spacing:-.005em;
+}
+.lanki-legacy .account-card .ac-meta{
+  font-size:11.5px;
+  color:var(--text3);
+  font-variant-numeric:tabular-nums;
+  margin-top:2px;
+}
+.lanki-legacy .account-card .ac-inst{
+  font-size:13px;
+  color:var(--text2);
+  font-weight:500;
+}
+.lanki-legacy .account-card .ac-type{
+  font-size:11.5px;
+  color:var(--text3);
+}
+.lanki-legacy .account-card .ac-balance{
+  text-align:right;
+}
+.lanki-legacy .account-card .ac-balance .ac-num{
+  font-size:15px;
+  font-weight:600;
+  color:var(--ink);
+  font-variant-numeric:tabular-nums;
+  letter-spacing:-.005em;
+}
+.lanki-legacy .account-card .ac-balance .ac-sub{
+  font-size:11px;
+  color:var(--text3);
+  margin-top:2px;
+}
+.lanki-legacy .account-card .ac-actions{
+  display:flex;
+  gap:4px;
+}
+@media(max-width:768px){
+  .lanki-legacy .account-card{
+    grid-template-columns:1fr;
+    gap:8px;
+    padding:14px 16px;
+  }
+  .lanki-legacy .account-card .ac-sw{display:none}
+  .lanki-legacy .account-card .ac-balance{text-align:left}
+}
+
+/* ── SECTION HEAD — design pack uppercase mono labels ── */
+.lanki-legacy .section-head{
+  display:flex;
+  align-items:baseline;
+  gap:10px;
+  margin:6px 0 10px;
+  padding-top:8px;
+}
+.lanki-legacy .section-head h3{
+  font-size:11px;
+  color:var(--ink);
+  letter-spacing:.18em;
+  text-transform:uppercase;
+  font-weight:600;
+  margin:0;
+}
+.lanki-legacy .section-head .sh-num{
+  font-family:var(--mono);
+  font-size:10px;
+  color:var(--text3);
+  font-weight:500;
+}
+.lanki-legacy .section-head .sh-meta{
+  font-size:11.5px;
+  color:var(--text3);
+  font-weight:500;
+  margin-left:auto;
+}
+
+/* ── SLBL — older section labels keep working but match new style ── */
+.lanki-legacy .slbl{
+  font-size:11px;
+  color:var(--ink);
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  font-weight:600;
+  margin:18px 0 10px;
+}
+.lanki-legacy .shint{
+  font-size:11.5px;
+  color:var(--text3);
+  margin-bottom:10px;
+  line-height:1.5;
+}
+
+/* ── PILL — design pack pill style with semantic backgrounds ── */
+.lanki-legacy .pill{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  font-size:11px;
+  font-weight:600;
+  padding:3px 8px;
+  border-radius:5px;
+  letter-spacing:.04em;
+  line-height:1.4;
+}
+.lanki-legacy .pill.pos,.lanki-legacy .b-ok,.lanki-legacy .c-ok-bg{
+  background:var(--pos-bg);color:var(--pos);
+}
+.lanki-legacy .pill.neg,.lanki-legacy .b-bad,.lanki-legacy .c-bad-bg{
+  background:var(--neg-bg);color:var(--neg);
+}
+.lanki-legacy .pill.warn{background:var(--warn-bg);color:var(--warn)}
+.lanki-legacy .pill.info{background:var(--action-tint);color:var(--action)}
+
+/* ── EMPTY STATE — design pack centered icon + title pattern ── */
+.lanki-legacy .empty-card{
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:64px 40px;
+  text-align:center;
+  margin:8px 0;
+}
+.lanki-legacy .empty-card .empty-icon{
+  width:48px;
+  height:48px;
+  border-radius:12px;
+  background:var(--card-tint);
+  border:1px solid var(--line);
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  margin-bottom:14px;
+  color:var(--text2);
+}
+.lanki-legacy .empty-card .empty-title{
+  font-size:15px;
+  font-weight:600;
+  color:var(--ink);
+  margin-bottom:5px;
+  letter-spacing:-.005em;
+}
+.lanki-legacy .empty-card .empty-text{
+  font-size:13px;
+  color:var(--text2);
+  max-width:380px;
+  margin:0 auto;
+  line-height:1.5;
+}
+
+/* ── ALERT — design pack left-border-accent pattern ── */
+.lanki-legacy .alert{
+  display:flex;
+  align-items:flex-start;
+  gap:12px;
+  padding:14px 18px;
+  border-radius:10px;
+  margin-bottom:12px;
+  border-left:3px solid var(--text3);
+  background:var(--card-tint);
+}
+.lanki-legacy .alert.warn{border-left-color:var(--warn);background:var(--warn-bg)}
+.lanki-legacy .alert.crit{border-left-color:var(--neg);background:var(--neg-bg)}
+.lanki-legacy .alert.info{border-left-color:var(--action);background:var(--action-tint)}
+.lanki-legacy .alert.ok{border-left-color:var(--pos);background:var(--pos-bg)}
+.lanki-legacy .alert-body{flex:1}
+.lanki-legacy .alert-title{
+  font-size:13px;
+  font-weight:600;
+  color:var(--ink);
+  letter-spacing:-.005em;
+}
+.lanki-legacy .alert.warn .alert-title{color:var(--warn)}
+.lanki-legacy .alert.crit .alert-title{color:var(--neg)}
+.lanki-legacy .alert.info .alert-title{color:var(--action)}
+.lanki-legacy .alert.ok .alert-title{color:var(--pos)}
+.lanki-legacy .alert-text{
+  font-size:12.5px;
+  color:var(--text2);
+  margin-top:3px;
+  line-height:1.5;
+}
+
+/* ── CHIP / CHIP-ROW — design pack chip pattern ── */
+.lanki-legacy .chip-row{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  padding:14px 0 4px;
+  align-items:center;
+}
+.lanki-legacy .chip{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:6px 11px;
+  font-size:12px;
+  font-weight:500;
+  color:var(--text2);
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:7px;
+  cursor:pointer;
+  letter-spacing:.005em;
+  white-space:nowrap;
+  transition:border-color .12s,color .12s,background .12s;
+}
+.lanki-legacy .chip:hover{
+  border-color:var(--line-strong);
+  color:var(--ink);
+}
+.lanki-legacy .chip.active{
+  background:var(--ink);
+  color:#fff;
+  border-color:var(--ink);
+}
+.lanki-legacy .chip .chip-dot{
+  width:7px;
+  height:7px;
+  border-radius:2px;
+  background:var(--text3);
+}
+.lanki-legacy .chip.active .chip-dot{background:#fff}
+
+/* ── SUBNAV — design pack horizontal tab bar ── */
+.lanki-legacy .subnav{
+  display:flex;
+  gap:0;
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:9px;
+  padding:0;
+  margin-bottom:14px;
+  overflow:hidden;
+  width:fit-content;
+  max-width:100%;
+}
+.lanki-legacy .subnav button{
+  padding:8px 16px;
+  font-size:12.5px;
+  color:var(--text2);
+  font-weight:500;
+  border-right:1px solid var(--line);
+  letter-spacing:-.003em;
+  white-space:nowrap;
+  background:none;
+  border-top:none;
+  border-bottom:none;
+  border-left:none;
+  cursor:pointer;
+}
+.lanki-legacy .subnav button:last-child{border-right:none}
+.lanki-legacy .subnav button.active{
+  background:var(--ink);
+  color:#fff;
+}
+.lanki-legacy .subnav button:hover:not(.active){
+  color:var(--ink);
+  background:var(--card-tint);
+}
+
+/* ── PG-HEADER — page header with eyebrow + title hierarchy ── */
+.lanki-legacy .pg-header{
+  margin-bottom:22px;
+}
+.lanki-legacy .pg-header-title{
+  font-size:24px;
+  font-weight:600;
+  color:var(--ink);
+  letter-spacing:-.018em;
+  line-height:1.15;
+}
+.lanki-legacy .pg-header-sub{
+  font-size:13px;
+  color:var(--text2);
+  margin-top:6px;
+  max-width:540px;
+  line-height:1.5;
+}
+.lanki-legacy .pg-header-row{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:24px;
+  margin-bottom:22px;
+  flex-wrap:wrap;
+}
+
+/* ── FILTER BAR — design pack horizontal filter row ── */
+.lanki-legacy .filter-bar{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:14px 0;
+  flex-wrap:wrap;
+  margin-bottom:6px;
+}
+
+/* ── STAG (subscription tag) — refine pill look ── */
+.lanki-legacy .stag{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  font-size:9px;
+  font-weight:700;
+  padding:2px 7px;
+  border-radius:5px;
+  letter-spacing:.04em;
+  background:var(--action-tint);
+  color:var(--action);
+  margin-left:6px;
+  vertical-align:middle;
+}
+
+/* ── MODAL — design pack refinement (brand-tinted backdrop, refined shadow) ── */
+.lanki-legacy .mo{
+  background:rgba(2,23,81,.4);
+}
+.lanki-legacy .md{
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:14px;
+  box-shadow:0 24px 64px rgba(2,23,81,.18),0 4px 12px rgba(2,23,81,.08);
+  animation:fi .15s ease;
+}
+.lanki-legacy .mdtitle{
+  font-size:16px;
+  font-weight:600;
+  color:var(--ink);
+  letter-spacing:-.012em;
+  margin-bottom:4px;
+}
+.lanki-legacy .mddesc{
+  font-size:12.5px;
+  color:var(--text2);
+  line-height:1.5;
+  margin-bottom:1rem;
+}
+
+/* Mobile responsive — design pack polish ── */
+@media(max-width:768px){
+  .lanki-legacy .card{padding:14px 16px;margin-bottom:10px}
+  .lanki-legacy .pg-header-title{font-size:20px}
+  .lanki-legacy .tbl-wrap > table thead th,
+  .lanki-legacy .tbl-wrap > .tx-tbl thead th{padding:10px 12px;font-size:10px}
+  .lanki-legacy .tbl-wrap > table tbody td,
+  .lanki-legacy .tbl-wrap > .tx-tbl tbody td{padding:10px 12px;font-size:12.5px}
+  .lanki-legacy .settings-section-head{padding:14px 18px 6px}
+  .lanki-legacy .filter-bar{padding:10px 0}
 }
 
 </style>
