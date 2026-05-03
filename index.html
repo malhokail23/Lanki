@@ -3993,7 +3993,7 @@ function mRange(from,to){const r=[];let c=from;while(c<=to){r.push(c);c=addM(c,1
 let S={
   tab:'overview',month:addM(getYM(new Date()),-1),privacy:false,ovPeriod:'month',
   accounts:[],debts:[],goals:[],income:[],bills:[],subs:[],staff:[],
-  rules:[],dismissed:[],deletedCats:[],deletedSubs:[],customMainCats:[],customSubCats:[],catNameOverrides:{},catColorOverrides:{},subNameOverrides:{},subParentOverrides:{},billRules:[],txnCache:{},monthlyBal:{},matchedPairs:[],submitters:[],
+  rules:[],dismissed:[],dismissedDupes:[],deletedCats:[],deletedSubs:[],customMainCats:[],customSubCats:[],catNameOverrides:{},catColorOverrides:{},subNameOverrides:{},subParentOverrides:{},billRules:[],txnCache:{},monthlyBal:{},matchedPairs:[],submitters:[],
   settings:{currency:'SAR',savingsTarget:20,backupReminderMonths:2,lastBackup:null},
   version:VERSION
 };
@@ -4401,7 +4401,7 @@ function getMainP(){
   return{
     version:VERSION,
     accounts:S.accounts,debts:S.debts,goals:S.goals,income:S.income,
-    bills:S.bills,subs:S.subs,staff:S.staff,rules:S.rules,txnRules:S.txnRules,dismissed:S.dismissed,
+    bills:S.bills,subs:S.subs,staff:S.staff,rules:S.rules,txnRules:S.txnRules,dismissed:S.dismissed,dismissedDupes:S.dismissedDupes,
     deletedCats:S.deletedCats,deletedSubs:S.deletedSubs,customMainCats:S.customMainCats,customSubCats:S.customSubCats,catNameOverrides:S.catNameOverrides,catColorOverrides:S.catColorOverrides,subNameOverrides:S.subNameOverrides,subParentOverrides:S.subParentOverrides,billRules:S.billRules,familyMembers:S.familyMembers,settings:S.settings,monthlyBal:S.monthlyBal,matchedPairs:S.matchedPairs,submitters:S.submitters,
     // V8.27 CRITICAL FIX: groups and formatLibrary were silently lost on every reload from V8.20/V8.19.
     // These two fields were initialized in defaults but never persisted to vault. User-defined groups
@@ -4414,6 +4414,7 @@ function restoreS(d){
   S.income=d.income||[];S.bills=d.bills||[];S.subs=d.subs||[];
   S.staff=d.staff||[];S.rules=d.rules||d.merchantRules||[];
   S.dismissed=d.dismissed||[];
+  S.dismissedDupes=d.dismissedDupes||[];
   // Migrate: merge S.rules + S.extractionRules into unified S.txnRules
   const WEEK_MS=7*24*60*60*1000;
   const now=Date.now();
@@ -7142,9 +7143,17 @@ async function delTxn(id,ym){
   render();
 }
 async function mkSub(id,ym){
+  // Phase A polish: previously this only set t.isSub=true on the single
+  // transaction, which displayed the SUB badge but did NOT create a
+  // record on the Subscriptions page (rSubs reads from S.subs only).
+  // Now wire it to cfmSub which: (a) tags every matching transaction
+  // across all months, (b) creates a S.subs record with inferred defaults
+  // (currency, amount, monthly cycle, 'Other' category — all editable),
+  // (c) merges into existing sub if a pattern already matches.
   const ymk=ym||S.month;
-  const t=(S.txnCache[ymk]||[]).find(x=>x.id===id);if(t)t.isSub=true;
-  schedTxn(ymk);render();toast('Marked as subscription');
+  const t=(S.txnCache[ymk]||[]).find(x=>x.id===id);
+  if(!t){toast('Transaction not found',false);return;}
+  cfmSub(t.description);
 }
 // ─── AI-ASSISTED CATEGORIZATION ───
 // Opens a modal where the user describes what the transaction actually was.
@@ -10307,17 +10316,44 @@ function subStatus(sub,payments){
 
 // Monthly SAR equivalent — annual subs divided by 12.
 function subMonthlyEquivSAR(sub){
-  const baseline=subBaselineSAR(sub);
-  if(baseline==null){
-    // No explicit baseline — use recent average from payments
-    const pays=subPayments(sub);
-    if(!pays.length)return 0;
-    const recent=pays.slice(0,3);
-    const avg=recent.reduce((s,t)=>s+t.amount,0)/recent.length;
-    return sub.cycle==='annual'?avg/12:avg;
+  // Phase A polish: paid-history-based monthly equivalent.
+  // Previous behavior: returned baseline (expected amount) regardless of whether
+  // the sub was actually being paid. Result: a cancelled-then-resumed sub
+  // (e.g. Netflix paid Jan-Jun, gap Jul-Sep, paid Oct-Dec) reported as
+  // SAR 50/mo every month — overstating real cost.
+  // New behavior: sum actual payments within the last 6 calendar months
+  // (zero-fill missing months), divide by 6. Reflects actual cost on user.
+  // Falls back to baseline ONLY for brand-new subs with no payment history yet.
+  const pays=subPayments(sub);
+  if(!pays.length){
+    // No payments yet — fall back to baseline so a freshly-added sub still
+    // contributes to projections. Cancelled subs with no history report 0.
+    if(sub.status==='cancelled')return 0;
+    const baseline=subBaselineSAR(sub);
+    return baseline==null?0:(sub.cycle==='annual'?baseline/12:baseline);
   }
-  return sub.cycle==='annual'?baseline/12:baseline;
+  // Time window: last 6 calendar months (current month included, gaps zero-filled)
+  const now=new Date();
+  const windowMonths=6;
+  const earliestYM=(()=>{
+    const d=new Date(now.getFullYear(),now.getMonth()-(windowMonths-1),1);
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  })();
+  const sumInWindow=pays
+    .filter(t=>t.date&&t.date.substr(0,7)>=earliestYM)
+    .reduce((s,t)=>s+t.amount,0);
+  const avg=sumInWindow/windowMonths;
+  // Annual cycle: the sum already represents actual annual-cadence payments
+  // hitting in this window (could be 0 or 1 payment in 6 months for a yearly
+  // sub). Treating that sum/6 as the monthly equivalent is the right answer:
+  // an annual sub paid SAR 600 once a year contributes ~SAR 50/mo amortized.
+  // For monthly cycle, sum/6 equals the average monthly payment over the
+  // window, with gaps correctly counted as 0.
+  return avg;
 }
+
+// Baseline for variance comparisons — kept as-is. This is the user's expected
+// price reference, separate from actual monthly equivalent.
 
 // Variance for a single payment — reuses the bill variance pattern but converts USD baselines.
 function subPaymentVariance(sub,paidSAR,priorPayments){
@@ -10340,6 +10376,94 @@ function subPaymentVariance(sub,paidSAR,priorPayments){
 // otherwise SAR. Used only as a sensible default on Confirm; always editable afterward.
 function subInferCurrency(txn){
   if(!txn)return'SAR';
+
+// ─── DUPLICATE DETECTION + INCOMPLETE-SUB FLAGGING ───────────────────
+// `subFindDuplicateGroups` returns clusters of subs that share at least one
+// "merchant token" (alphanumeric word ≥4 chars) AND have a recent payment
+// amount within ±15% of each other. Used by the "Possible duplicates"
+// section on the Subscriptions page to suggest merges proactively.
+//
+// `subIsIncomplete` returns true if a sub is missing genuinely useful info:
+// category is "Other" (the auto-default that nobody actively chose) or
+// nativeAmount is null (no expected price set). Used to surface a "Setup
+// needed" section so subs added via the row's ⟳ button get reviewed.
+function subTokens(name){
+  // Tokenize a sub name into normalized merchant words. Drop short/common
+  // words that produce false positives (e.g. "the", "and").
+  const stop=new Set(['the','and','for','com','www','app','inc','llc','ltd','co','corp','plus','premium','sub','subscription','monthly','annual']);
+  return(name||'').toLowerCase()
+    .replace(/[^a-z0-9\s]/g,' ')
+    .split(/\s+/)
+    .filter(w=>w.length>=4&&!stop.has(w));
+}
+function subFindDuplicateGroups(subs){
+  if(!Array.isArray(subs)||subs.length<2)return[];
+  // Build token \u2192 [subId] index
+  const tokenIdx={};
+  const subInfo={};
+  subs.forEach(s=>{
+    subMigrate(s);
+    const tokens=new Set([...subTokens(s.name),...(s.patterns||[]).flatMap(subTokens)]);
+    const pays=subPayments(s);
+    const recent=pays.slice(0,3);
+    const recentAvg=recent.length?recent.reduce((sum,t)=>sum+t.amount,0)/recent.length:null;
+    subInfo[s.id]={tokens,recentAvg,sub:s};
+    tokens.forEach(t=>{(tokenIdx[t]=tokenIdx[t]||[]).push(s.id);});
+  });
+  // Pair candidates: any two subs that share a token
+  const pairs=new Set();
+  Object.values(tokenIdx).forEach(ids=>{
+    if(ids.length<2)return;
+    for(let i=0;i<ids.length;i++){
+      for(let j=i+1;j<ids.length;j++){
+        const a=ids[i],b=ids[j];
+        const key=[a,b].sort().join('|');
+        pairs.add(key);
+      }
+    }
+  });
+  // Filter: amount within \u00b115% (or both null) AND not already tracked as patterns of each other
+  const dismissedPairs=new Set(S.dismissedDupes||[]);
+  const result=[];
+  pairs.forEach(key=>{
+    if(dismissedPairs.has(key))return;
+    const[aId,bId]=key.split('|');
+    const a=subInfo[aId],b=subInfo[bId];
+    if(!a||!b)return;
+    // If both have recent average, compare; if either has none, allow (might be brand-new)
+    if(a.recentAvg!=null&&b.recentAvg!=null){
+      const lo=Math.min(a.recentAvg,b.recentAvg);
+      const hi=Math.max(a.recentAvg,b.recentAvg);
+      if(hi>lo*1.15)return; // amounts too different
+    }
+    result.push({key,a:a.sub,b:b.sub,sharedTokens:[...a.tokens].filter(t=>b.tokens.has(t))});
+  });
+  return result;
+}
+function subDismissDupePair(key){
+  if(!Array.isArray(S.dismissedDupes))S.dismissedDupes=[];
+  if(!S.dismissedDupes.includes(key))S.dismissedDupes.push(key);
+  sched();render();toast('Hidden from suggestions');
+}
+function subIsIncomplete(sub){
+  // Genuinely missing fields that block useful tracking:
+  //   - category 'Other' = system default, never user-picked, can't categorize spending
+  //   - nativeAmount null = no expected price = no variance detection, no projections
+  // Cycle 'monthly' is fine as a default (right ~95% of the time).
+  // Empty notes and missing url are optional, not flagged.
+  if(!sub)return false;
+  subMigrate(sub);
+  if(sub.status==='cancelled')return false; // don't bug user about cancelled subs
+  return(sub.category==='Other'||sub.nativeAmount==null);
+}
+function subMissingFields(sub){
+  if(!sub)return[];
+  subMigrate(sub);
+  const missing=[];
+  if(sub.category==='Other')missing.push('category');
+  if(sub.nativeAmount==null)missing.push('expected amount');
+  return missing;
+}
   const blob=((txn.notes||'')+' '+(txn.raw_description||'')).toLowerCase();
   if(blob.includes('usd')||blob.includes('×3.75')||blob.includes('x 3.75')||blob.includes('* 3.75'))return'USD';
   // If the originating account is a USD-billed charge card, default to USD
@@ -10496,9 +10620,14 @@ async function rSubs(){
       <div class="fg jb" style="flex-wrap:wrap;gap:10px;align-items:flex-start">
         <div style="flex:1;min-width:0">
           <div style="font-size:15px;font-weight:500;display:flex;align-items:center;flex-wrap:wrap;gap:6px">
-            ${statusDot}<span>${h(sub.name)}</span>${attnLabel}
+            ${statusDot}<span>${h(sub.name)}</span>${attnLabel}${(()=>{
+              // Phase A polish: red dot on incomplete subs (missing category or amount)
+              const missing=subMissingFields(sub);
+              if(!missing.length||sub.status==='cancelled')return '';
+              return`<span title="Setup needed: ${missing.join(', ')}" style="display:inline-flex;align-items:center;gap:4px;font-size:9px;font-weight:700;padding:2px 7px;border-radius:3px;background:color-mix(in srgb,var(--bad) 12%,transparent);color:var(--bad);letter-spacing:.03em;cursor:pointer" onclick="openEditSub('${sub.id}')"><span style="display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--bad)"></span>Setup needed</span>`;
+            })()}
           </div>
-          <div style="font-size:11px;color:var(--text3);margin-top:3px">${h(sub.category||'Other')} · ${sub.cycle==='annual'?'Annual':'Monthly'}${pays.length?` · ${pays.length} payment${pays.length===1?'':'s'}`:''}${first&&first!==last?` · Since ${toDD(first.date)}`:last?` · First seen ${toDD(last.date)}`:''}${last?` · Last: ${toDD(last.date)}`:''}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:3px">${h(sub.category||'Other')} \u00b7 ${sub.cycle==='annual'?'Annual':'Monthly'}${pays.length?` \u00b7 ${pays.length} payment${pays.length===1?'':'s'}`:''}${first&&first!==last?` \u00b7 Since ${toDD(first.date)}`:last?` \u00b7 First seen ${toDD(last.date)}`:''}${last?` \u00b7 Last: ${toDD(last.date)}`:''}</div>
           ${sub.notes?`<div style="font-size:var(--fs-xs);color:var(--text3);margin-top:4px">${h(sub.notes)}</div>`:''}
           ${patternsList}
         </div>
@@ -10610,8 +10739,50 @@ async function rSubs(){
     </div>`;
   })()}
   ${(()=>{
+    // Phase A polish: Setup needed section — surfaces subs missing category
+    // or expected amount. Placed at top so they're not buried.
+    const incomplete=subsWithData.filter(x=>subIsIncomplete(x.sub)).filter(subsFilterFn);
+    if(!incomplete.length)return '';
+    return sectionLabel('Setup needed',incomplete.length,'warn')+
+      `<div style="font-size:11px;color:var(--text3);margin:-4px 0 8px;line-height:1.5">These subscriptions are missing details that improve tracking. Click any card to complete its setup.</div>`+
+      incomplete.map(renderSubCard).join('');
+  })()}
+  ${(()=>{
     const filtered=attnSubs.filter(subsFilterFn);
     return filtered.length?sectionLabel('Needs attention',filtered.length,'warn')+filtered.map(renderSubCard).join(''):'';
+  })()}
+  ${(()=>{
+    // Phase A polish: Possible duplicates section — surfaces likely
+    // duplicate subs (same merchant token, similar recent payment amount).
+    // User can review and merge, or dismiss the suggestion per pair.
+    if(TF.subsAcc)return ''; // hide while account filter is active to avoid confusion
+    const dupes=subFindDuplicateGroups((subsWithData||[]).map(x=>x.sub));
+    if(!dupes.length)return '';
+    const dupeRows=dupes.slice(0,8).map(({key,a,b,sharedTokens})=>{
+      const aPays=subPayments(a);
+      const bPays=subPayments(b);
+      const aLast=aPays[0];
+      const bLast=bPays[0];
+      // Default "keep" is the one with more payments (more history)
+      const keep=(aPays.length>=bPays.length)?a:b;
+      const absorb=keep===a?b:a;
+      return`<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-bottom:1px solid var(--border)">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;color:var(--text2);line-height:1.5">
+            <strong>${h(a.name||'(unnamed)')}</strong> (${aPays.length} pay${aPays.length===1?'':'s'}${aLast?', last '+toDD(aLast.date):''}) and
+            <strong>${h(b.name||'(unnamed)')}</strong> (${bPays.length} pay${bPays.length===1?'':'s'}${bLast?', last '+toDD(bLast.date):''})
+          </div>
+          <div style="font-size:10px;color:var(--text3);margin-top:3px">Shared keyword${sharedTokens.length===1?'':'s'}: ${sharedTokens.slice(0,3).map(t=>'<code style="background:var(--bg2);padding:1px 5px;border-radius:3px;font-size:10px">'+h(t)+'</code>').join(' ')}</div>
+        </div>
+        <div class="fg" style="gap:6px;flex-shrink:0">
+          <button class="btn btn-xs btn-p" onclick="confirmMergeSub('${keep.id}','${absorb.id}')" title="Merge into the one with more payment history">Review merge</button>
+          <button class="btn btn-xs" onclick="subDismissDupePair('${key}')" title="Hide this suggestion">Not duplicates</button>
+        </div>
+      </div>`;
+    }).join('');
+    return sectionLabel('Possible duplicates',dupes.length)+
+      `<div style="font-size:11px;color:var(--text3);margin:-4px 0 8px;line-height:1.5">Subscriptions with shared merchant words and similar payment amounts. Review and merge, or hide if these are different services.</div>`+
+      `<div class="card card-bordered" style="padding:0;overflow:hidden">${dupeRows}${dupes.length>8?`<div style="padding:8px 12px;font-size:10px;color:var(--text3);text-align:center">+${dupes.length-8} more not shown</div>`:''}</div>`;
   })()}
   ${(()=>{
     const filtered=activeSubs.filter(subsFilterFn);
@@ -10771,7 +10942,16 @@ function openEditSub(id){
         <div><label class="lbl">Website / account URL</label><input type="text" id="esub-url" value="${h(sub.url||'')}" placeholder="Optional"></div>
       </div>
       <div style="margin-bottom:12px"><label class="lbl">Notes</label><input type="text" id="esub-notes" value="${h(sub.notes||'')}" placeholder="Optional"></div>
-      <div class="fg"><button class="btn btn-p f1" onclick="saveSub('${sub.id}')">Save changes</button><button class="btn" onclick="document.getElementById('esub-modal').remove()">Cancel</button></div>
+      <div class="fg" style="gap:6px;justify-content:space-between;flex-wrap:wrap">
+        <div class="fg" style="gap:6px;flex-wrap:wrap">
+          <button class="btn btn-sm" onclick="document.getElementById('esub-modal').remove();openMergeSubModal('${sub.id}')" title="Combine another subscription into this one">Merge with...</button>
+          ${(Array.isArray(sub.mergeHistory)&&sub.mergeHistory.length)?`<button class="btn btn-sm" onclick="document.getElementById('esub-modal').remove();openUnmergeSubModal('${sub.id}')" title="Restore a previously-merged subscription">Unmerge (${sub.mergeHistory.length})</button>`:''}
+        </div>
+        <div class="fg" style="gap:6px">
+          <button class="btn" onclick="document.getElementById('esub-modal').remove()">Cancel</button>
+          <button class="btn btn-p" onclick="saveSub('${sub.id}')">Save changes</button>
+        </div>
+      </div>
     </div>`;
   document.body.appendChild(mo);
   setTimeout(()=>document.getElementById('esub-name')?.focus(),50);
@@ -10790,6 +10970,262 @@ function saveSub(id){
   sub.notes=document.getElementById('esub-notes').value.trim();
   document.getElementById('esub-modal')?.remove();
   sched();render();toast('Subscription updated');
+}
+
+// ─── SUBSCRIPTION MERGE / UNMERGE ───────────────────────────────────
+// Why this exists: the same real subscription often shows up under multiple
+// descriptions in bank statements (card change, statement format change,
+// merchant rebrand). Without merge, each description becomes a separate sub,
+// fragmenting payment history and making "monthly cost" reports inaccurate.
+// Merge lets the user consolidate two subs into one, appending the merged-in
+// sub's patterns so future transactions of either description correctly
+// flow to the kept sub.
+//
+// Audit trail: every merge stores a snapshot of the absorbed sub on the kept
+// sub's mergeHistory[] array. Unmerge restores from snapshot — patterns are
+// removed from the kept sub and a new sub is created with the saved fields.
+//
+// Risks handled:
+//   - Wrong direction: explicit confirmation showing payment counts
+//   - Currency mismatch: warn but allow (kept sub's currency wins by default;
+//     user can opt to re-anchor amount from latest transaction)
+//   - Status mismatch: warn but allow (kept sub's status wins)
+//   - Category mismatch: kept sub's category wins
+//   - Stale dismissals: scrub absorbed patterns from S.dismissed on merge
+//   - False-positive duplicates: heuristic only suggests; user always confirms
+
+function openMergeSubModal(keepId){
+  const keepSub=S.subs.find(s=>s.id===keepId);
+  if(!keepSub){toast('Subscription not found',false);return;}
+  subMigrate(keepSub);
+  document.getElementById('msub-modal')?.remove();
+  // Build candidate list: every other sub, sorted by recent activity
+  const candidates=(S.subs||[]).filter(s=>s.id!==keepId).map(s=>{
+    subMigrate(s);
+    const pays=subPayments(s);
+    const last=pays[0];
+    return{sub:s,pays,last,count:pays.length};
+  }).sort((a,b)=>{
+    // Most recently paid first; then most payments; then alpha by name
+    const aLast=a.last?.date||'';
+    const bLast=b.last?.date||'';
+    if(aLast!==bLast)return bLast.localeCompare(aLast);
+    if(b.count!==a.count)return b.count-a.count;
+    return(a.sub.name||'').localeCompare(b.sub.name||'');
+  });
+  const keepPays=subPayments(keepSub);
+  const keepCount=keepPays.length;
+  const keepLast=keepPays[0];
+  const rowsHtml=candidates.length?candidates.map(({sub,last,count})=>{
+    const currencyMismatch=sub.nativeCurrency!==keepSub.nativeCurrency;
+    const statusMismatch=sub.status!==keepSub.status;
+    const cycleMismatch=sub.cycle!==keepSub.cycle;
+    const warnings=[];
+    if(currencyMismatch)warnings.push(`Currency: ${sub.nativeCurrency} \u2192 ${keepSub.nativeCurrency}`);
+    if(statusMismatch)warnings.push(`Status: ${sub.status} \u2192 ${keepSub.status}`);
+    if(cycleMismatch)warnings.push(`Cycle: ${sub.cycle} \u2192 ${keepSub.cycle}`);
+    const warnHtml=warnings.length?`<div style="font-size:10px;color:var(--warn);margin-top:3px">\u26a0 ${warnings.join(' \u00b7 ')}</div>`:'';
+    return`<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-bottom:1px solid var(--border)">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:500;color:var(--text1)">${h(sub.name||'(unnamed)')}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">${count} payment${count===1?'':'s'}${last?` \u00b7 last ${toDD(last.date)}`:' \u00b7 no payments yet'}${sub.nativeAmount?` \u00b7 ${sub.nativeCurrency} ${sub.nativeAmount.toFixed(2)}/${sub.cycle==='annual'?'yr':'mo'}`:''}</div>
+        ${warnHtml}
+      </div>
+      <button class="btn btn-xs btn-p" onclick="confirmMergeSub('${keepId}','${sub.id}')" style="flex-shrink:0">Merge into &ldquo;${h((keepSub.name||'').substr(0,20))}&rdquo;</button>
+    </div>`;
+  }).join(''):'<div class="empty" style="padding:1.5rem;text-align:center;font-size:12px;color:var(--text3)">No other subscriptions to merge with.</div>';
+  const mo=document.createElement('div');
+  mo.id='msub-modal';
+  mo.className='mo active lanki-legacy';
+  mo.innerHTML=`
+    <div class="md" style="max-width:640px;width:94%">
+      <div class="mdtitle">Merge into &ldquo;${h(keepSub.name)}&rdquo;</div>
+      <div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:1rem;line-height:1.5">
+        Pick a subscription to absorb into &ldquo;${h(keepSub.name)}&rdquo;. The absorbed sub's payment patterns will be added to this one, so future transactions of either description count toward this subscription.
+        Both past and future payments of the absorbed sub will appear here. The absorbed record will be deleted (recoverable via Unmerge).
+      </div>
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--rsm);padding:10px 12px;margin-bottom:14px">
+        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;font-weight:600">Keeping</div>
+        <div style="font-size:14px;font-weight:500;margin-top:2px">${h(keepSub.name)}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${keepCount} payment${keepCount===1?'':'s'}${keepLast?` \u00b7 last ${toDD(keepLast.date)}`:''} \u00b7 ${keepSub.nativeCurrency}${keepSub.nativeAmount?` ${keepSub.nativeAmount.toFixed(2)}`:''}/${keepSub.cycle==='annual'?'yr':'mo'} \u00b7 ${keepSub.status}</div>
+      </div>
+      <div style="border:1px solid var(--border);border-radius:var(--rsm);max-height:340px;overflow-y:auto">${rowsHtml}</div>
+      <div class="fg" style="margin-top:14px;justify-content:flex-end">
+        <button class="btn" onclick="document.getElementById('msub-modal').remove()">Close</button>
+      </div>
+    </div>`;
+  document.body.appendChild(mo);
+}
+
+function confirmMergeSub(keepId,absorbId){
+  const keepSub=S.subs.find(s=>s.id===keepId);
+  const absorbSub=S.subs.find(s=>s.id===absorbId);
+  if(!keepSub||!absorbSub){toast('Subscription not found',false);return;}
+  subMigrate(keepSub);subMigrate(absorbSub);
+  const absorbPays=subPayments(absorbSub);
+  const absorbCount=absorbPays.length;
+  const currencyMismatch=keepSub.nativeCurrency!==absorbSub.nativeCurrency;
+  const statusMismatch=keepSub.status!==absorbSub.status;
+  const consequences=[];
+  consequences.push(`\u2022 ${absorbCount} payment${absorbCount===1?'':'s'} from &ldquo;${h(absorbSub.name)}&rdquo; will count under &ldquo;${h(keepSub.name)}&rdquo;`);
+  consequences.push(`\u2022 Pattern${absorbSub.patterns.length===1?'':'s'} ${absorbSub.patterns.map(p=>'<code>'+h(p)+'</code>').join(', ')} will be added to &ldquo;${h(keepSub.name)}&rdquo;`);
+  consequences.push(`\u2022 The &ldquo;${h(absorbSub.name)}&rdquo; record will be deleted (recoverable via Unmerge)`);
+  if(currencyMismatch)consequences.push(`\u2022 <span style="color:var(--warn)">\u26a0 Currency mismatch: ${absorbSub.nativeCurrency} \u2192 ${keepSub.nativeCurrency}. Past payments in ${absorbSub.nativeCurrency} will appear as variances in history.</span>`);
+  if(statusMismatch)consequences.push(`\u2022 <span style="color:var(--warn)">\u26a0 Status mismatch: absorbed sub is ${absorbSub.status}, kept sub is ${keepSub.status}. Kept status wins.</span>`);
+  // Show option to re-anchor amount from latest transaction across both subs
+  const allPaysAcross=[...subPayments(keepSub),...absorbPays].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const latestAcross=allPaysAcross[0];
+  const reAnchorOption=latestAcross?`
+    <div style="background:var(--bg2);border-radius:var(--rsm);padding:10px 12px;margin:12px 0">
+      <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:12px;color:var(--text2);line-height:1.5">
+        <input type="checkbox" id="merge-reanchor-amt" style="margin-top:2px;flex-shrink:0">
+        <span>Re-anchor expected amount to latest transaction (${fmtP(latestAcross.amount)} on ${toDD(latestAcross.date)}). Useful if the price recently changed.</span>
+      </label>
+    </div>`:'';
+  document.getElementById('mcfm-modal')?.remove();
+  const mo=document.createElement('div');
+  mo.id='mcfm-modal';
+  mo.className='mo active lanki-legacy';
+  mo.innerHTML=`
+    <div class="md" style="max-width:560px;width:94%">
+      <div class="mdtitle">Confirm merge</div>
+      <div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:12px">Review the consequences before merging.</div>
+      <div style="font-size:12px;color:var(--text2);line-height:1.7;margin-bottom:8px">${consequences.join('<br>')}</div>
+      ${reAnchorOption}
+      <div class="fg" style="margin-top:14px;justify-content:flex-end;gap:8px">
+        <button class="btn" onclick="document.getElementById('mcfm-modal').remove()">Cancel</button>
+        <button class="btn btn-p" onclick="executeMergeSub('${keepId}','${absorbId}')">Merge</button>
+      </div>
+    </div>`;
+  document.body.appendChild(mo);
+}
+
+function executeMergeSub(keepId,absorbId){
+  const keepSub=S.subs.find(s=>s.id===keepId);
+  const absorbSub=S.subs.find(s=>s.id===absorbId);
+  if(!keepSub||!absorbSub){toast('Subscription not found',false);return;}
+  subMigrate(keepSub);subMigrate(absorbSub);
+  const reAnchor=document.getElementById('merge-reanchor-amt')?.checked||false;
+  // 1. Snapshot the absorbed sub for unmerge
+  if(!Array.isArray(keepSub.mergeHistory))keepSub.mergeHistory=[];
+  keepSub.mergeHistory.push({
+    at:new Date().toISOString(),
+    fromId:absorbSub.id,
+    fromName:absorbSub.name,
+    fromPatterns:[...(absorbSub.patterns||[])],
+    fromCurrency:absorbSub.nativeCurrency,
+    fromAmount:absorbSub.nativeAmount,
+    fromCycle:absorbSub.cycle,
+    fromCategory:absorbSub.category,
+    fromStatus:absorbSub.status,
+    fromNotes:absorbSub.notes||'',
+    fromUrl:absorbSub.url||'',
+    fromFirstSeen:absorbSub.firstSeen||null
+  });
+  // 2. Append patterns (deduped)
+  const keepPatternKeys=new Set((keepSub.patterns||[]).map(subKey));
+  (absorbSub.patterns||[]).forEach(p=>{
+    if(!keepPatternKeys.has(subKey(p))){keepSub.patterns.push(p);keepPatternKeys.add(subKey(p));}
+  });
+  // 3. Append absorbed sub's notes if non-empty
+  if(absorbSub.notes&&absorbSub.notes.trim()){
+    const note=`(merged from \u201c${absorbSub.name}\u201d: ${absorbSub.notes.trim()})`;
+    keepSub.notes=keepSub.notes?`${keepSub.notes} ${note}`:note;
+  }
+  // 4. Re-anchor amount if requested
+  if(reAnchor){
+    const allPays=subPayments(keepSub);
+    const latest=allPays[0];
+    if(latest){
+      keepSub.nativeAmount=keepSub.nativeCurrency==='SAR'?latest.amount:Math.round((latest.amount/(SUB_FX_RATE[keepSub.nativeCurrency]||1))*100)/100;
+    }
+  }
+  // 5. Scrub absorbed patterns from dismissals
+  const absorbKeySet=new Set((absorbSub.patterns||[]).map(subKey));
+  S.dismissed=(S.dismissed||[]).filter(k=>!absorbKeySet.has(subKey(k)));
+  // 6. Update firstSeen if absorbed sub's is earlier
+  if(absorbSub.firstSeen&&(!keepSub.firstSeen||absorbSub.firstSeen<keepSub.firstSeen)){
+    keepSub.firstSeen=absorbSub.firstSeen;
+  }
+  // 7. Delete the absorbed sub
+  S.subs=S.subs.filter(s=>s.id!==absorbId);
+  // 8. Cleanup modals + persist + render
+  document.getElementById('mcfm-modal')?.remove();
+  document.getElementById('msub-modal')?.remove();
+  document.getElementById('esub-modal')?.remove();
+  sched();render();
+  toast(`Merged into \u201c${keepSub.name}\u201d`);
+}
+
+function openUnmergeSubModal(subId){
+  const sub=S.subs.find(s=>s.id===subId);
+  if(!sub){toast('Subscription not found',false);return;}
+  subMigrate(sub);
+  const history=Array.isArray(sub.mergeHistory)?sub.mergeHistory:[];
+  if(!history.length){toast('No merge history for this subscription',false);return;}
+  document.getElementById('umsub-modal')?.remove();
+  const rowsHtml=history.slice().reverse().map((entry,revIdx)=>{
+    const realIdx=history.length-1-revIdx;
+    const when=entry.at?new Date(entry.at).toLocaleDateString():'unknown';
+    return`<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-bottom:1px solid var(--border)">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:500;color:var(--text1)">${h(entry.fromName||'(unnamed)')}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">Merged ${when} \u00b7 ${(entry.fromPatterns||[]).length} pattern${(entry.fromPatterns||[]).length===1?'':'s'} \u00b7 ${entry.fromCurrency||'SAR'}${entry.fromAmount?' '+entry.fromAmount.toFixed(2):''}/${entry.fromCycle==='annual'?'yr':'mo'}</div>
+      </div>
+      <button class="btn btn-xs" onclick="executeUnmergeSub('${subId}',${realIdx})" style="flex-shrink:0">Restore</button>
+    </div>`;
+  }).join('');
+  const mo=document.createElement('div');
+  mo.id='umsub-modal';
+  mo.className='mo active lanki-legacy';
+  mo.innerHTML=`
+    <div class="md" style="max-width:560px;width:94%">
+      <div class="mdtitle">Unmerge from &ldquo;${h(sub.name)}&rdquo;</div>
+      <div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:1rem;line-height:1.5">
+        Restore a previously-merged subscription as a separate record. Its patterns will be removed from this subscription, and past transactions matching those patterns will reattribute to the restored sub.
+      </div>
+      <div style="border:1px solid var(--border);border-radius:var(--rsm);max-height:340px;overflow-y:auto">${rowsHtml}</div>
+      <div class="fg" style="margin-top:14px;justify-content:flex-end">
+        <button class="btn" onclick="document.getElementById('umsub-modal').remove()">Close</button>
+      </div>
+    </div>`;
+  document.body.appendChild(mo);
+}
+
+function executeUnmergeSub(keepId,historyIdx){
+  const keepSub=S.subs.find(s=>s.id===keepId);
+  if(!keepSub||!Array.isArray(keepSub.mergeHistory)||!keepSub.mergeHistory[historyIdx]){
+    toast('Merge entry not found',false);return;
+  }
+  const entry=keepSub.mergeHistory[historyIdx];
+  // 1. Restore the absorbed sub from snapshot (assigning a new id to avoid collisions)
+  const restored={
+    id:'sub_'+Math.random().toString(36).substr(2,6),
+    name:entry.fromName,
+    patterns:[...(entry.fromPatterns||[])],
+    nativeCurrency:entry.fromCurrency||'SAR',
+    nativeAmount:entry.fromAmount||null,
+    cycle:entry.fromCycle||'monthly',
+    category:entry.fromCategory||'Other',
+    status:entry.fromStatus||'active',
+    notes:entry.fromNotes||'',
+    url:entry.fromUrl||'',
+    firstSeen:entry.fromFirstSeen||null
+  };
+  subMigrate(restored);
+  // 2. Remove the restored patterns from the kept sub
+  const restoredKeySet=new Set(restored.patterns.map(subKey));
+  keepSub.patterns=(keepSub.patterns||[]).filter(p=>!restoredKeySet.has(subKey(p)));
+  // 3. If the kept sub now has no patterns at all (edge case), seed with its own name
+  if(!keepSub.patterns.length&&keepSub.name)keepSub.patterns=[subKey(keepSub.name)];
+  // 4. Remove the merge history entry
+  keepSub.mergeHistory.splice(historyIdx,1);
+  // 5. Persist the restored sub
+  S.subs.push(restored);
+  // 6. Cleanup modals + persist + render
+  document.getElementById('umsub-modal')?.remove();
+  sched();render();
+  toast(`Restored \u201c${restored.name}\u201d`);
 }
 
 // --- INCOME ---
