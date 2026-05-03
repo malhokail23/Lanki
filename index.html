@@ -11280,6 +11280,13 @@ function subPaymentVariance(sub,paidSAR,priorPayments){
 // otherwise SAR. Used only as a sensible default on Confirm; always editable afterward.
 function subInferCurrency(txn){
   if(!txn)return'SAR';
+  const blob=((txn.notes||'')+' '+(txn.raw_description||'')).toLowerCase();
+  if(blob.includes('usd')||blob.includes('×3.75')||blob.includes('x 3.75')||blob.includes('* 3.75'))return'USD';
+  // If the originating account is a USD-billed charge card, default to USD
+  const acc=S.accounts.find(a=>a.id===txn.accountId);
+  if(acc&&(acc.billingCurrency==='USD'||acc.type==='charge_card'))return'USD';
+  return'SAR';
+}
 
 // ─── DUPLICATE DETECTION + INCOMPLETE-SUB FLAGGING ───────────────────
 // `subFindDuplicateGroups` returns clusters of subs that share at least one
@@ -11367,13 +11374,6 @@ function subMissingFields(sub){
   if(sub.category==='Other')missing.push('category');
   if(sub.nativeAmount==null)missing.push('expected amount');
   return missing;
-}
-  const blob=((txn.notes||'')+' '+(txn.raw_description||'')).toLowerCase();
-  if(blob.includes('usd')||blob.includes('×3.75')||blob.includes('x 3.75')||blob.includes('* 3.75'))return'USD';
-  // If the originating account is a USD-billed charge card, default to USD
-  const acc=S.accounts.find(a=>a.id===txn.accountId);
-  if(acc&&(acc.billingCurrency==='USD'||acc.type==='charge_card'))return'USD';
-  return'SAR';
 }
 
 
