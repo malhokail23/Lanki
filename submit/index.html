@@ -8,11 +8,14 @@
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
   :root{
-    /* Lanki Brand Tokens */
-    --midnight:#021751;--electric:#0077C1;
+    /* Lanki Brand Tokens — V9.0.2 (audit N2): aligned to brand guidelines v3.0.
+       Action Blue replaces deprecated Electric Blue for all CTAs. */
+    --midnight:#021751;
+    --action:#0E40C5;
+    --electric:#0E40C5; /* alias kept for any in-file references; resolves to Action Blue */
     --feather:#F3F1EF;--bg:#FFFFFF;--bg2:#F3F1EF;
     --border:#E4E0DC;--text:#021751;--text2:#707070;--text3:#9CA0A8;
-    --ok:#3D6B4F;--bad:#8B4040;--warn:#7A5E20;
+    --ok:#0F7A53;--bad:#B33A3F;--warn:#9C6A0E;
     --r:10px;--rsm:7px;
     --font:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Helvetica,Arial,sans-serif;
   }
@@ -51,7 +54,7 @@
     font-size:15px;font-weight:600;cursor:pointer;font-family:var(--font);
     transition:all .15s;letter-spacing:-.01em;
   }
-  .btn-primary{background:var(--electric);color:#fff} /* Electric Blue — brand action */
+  .btn-primary{background:var(--action);color:#fff} /* Action Blue — primary CTA per brand v3.0 */
   .btn-primary:hover{opacity:.9}
   .btn-primary:active{transform:scale(.98)}
   .btn-primary:disabled{opacity:.4;cursor:not-allowed}
@@ -216,7 +219,47 @@ function pinInput(el,idx){
   if(idx===3&&val)verifyPIN();
 }
 
+// V9.0.2 (audit L1): localStorage-backed rate limit. Submit page is a public
+// page so server-side rate limit isn't possible without the Auth Infrastructure
+// project. localStorage at least raises the bar from "instant brute-force in a
+// loop" to "needs to clear localStorage between attempts."
+const _SUBMIT_MAX_ATTEMPTS=5;
+const _SUBMIT_LOCKOUT_MS=15*60*1000;
+function _submitGetFailState(){
+  try{
+    const s=localStorage.getItem('_lk_sf');
+    return s?JSON.parse(s):{count:0,lockedUntil:0};
+  }catch{return{count:0,lockedUntil:0};}
+}
+function _submitSetFailState(state){
+  try{localStorage.setItem('_lk_sf',JSON.stringify(state));}catch{}
+}
+function _submitClearFailState(){
+  try{localStorage.removeItem('_lk_sf');}catch{}
+}
+function _submitIsLocked(){
+  const s=_submitGetFailState();
+  if(s.lockedUntil&&Date.now()<s.lockedUntil)return Math.ceil((s.lockedUntil-Date.now())/60000);
+  if(s.lockedUntil&&Date.now()>=s.lockedUntil){_submitClearFailState();return 0;}
+  return 0;
+}
+function _submitRecordFail(){
+  const s=_submitGetFailState();
+  if(s.lockedUntil&&Date.now()<s.lockedUntil)return s;
+  s.count=(s.count||0)+1;
+  if(s.count>=_SUBMIT_MAX_ATTEMPTS)s.lockedUntil=Date.now()+_SUBMIT_LOCKOUT_MS;
+  _submitSetFailState(s);
+  return s;
+}
+
 async function verifyPIN(){
+  // V9.0.2 (audit L1): check rate limit before any work
+  const lockMin=_submitIsLocked();
+  if(lockMin>0){
+    document.getElementById('pin-err').style.display='block';
+    document.getElementById('pin-err').textContent=`Too many failed attempts. Try again in ${lockMin} minute${lockMin>1?'s':''}.`;
+    return;
+  }
   const pin=[0,1,2,3].map(i=>document.getElementById('p'+i).value).join('');
   if(pin.length<4){document.getElementById('pin-err').style.display='block';document.getElementById('pin-err').textContent='Please enter all 4 digits.';return;}
   const btn=document.getElementById('pin-btn');
@@ -235,14 +278,22 @@ async function verifyPIN(){
   }
   btn.disabled=false;btn.innerHTML='Continue';
   if(match){
+    _submitClearFailState(); // reset on success
     _submitterName=match.name;
     document.getElementById('submitter-label').textContent=match.name;
     document.getElementById('pin-screen').style.display='none';
     document.getElementById('form-screen').style.display='block';
     document.getElementById('pin-err').style.display='none';
   }else{
+    const state=_submitRecordFail();
+    const attemptsLeft=Math.max(0,_SUBMIT_MAX_ATTEMPTS-state.count);
     document.getElementById('pin-err').style.display='block';
-    document.getElementById('pin-err').textContent='Incorrect PIN. Please try again.';
+    if(state.lockedUntil&&Date.now()<state.lockedUntil){
+      const min=Math.ceil((state.lockedUntil-Date.now())/60000);
+      document.getElementById('pin-err').textContent=`Too many failed attempts. Locked for ${min} minute${min>1?'s':''}.`;
+    }else{
+      document.getElementById('pin-err').textContent=`Incorrect PIN. ${attemptsLeft} attempt${attemptsLeft!==1?'s':''} remaining.`;
+    }
     [0,1,2,3].forEach(i=>{document.getElementById('p'+i).value='';});
     document.getElementById('p0').focus();
   }
