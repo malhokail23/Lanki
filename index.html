@@ -3252,6 +3252,23 @@ body.privacy-on{padding-top:28px}
 .lanki-legacy .settings-section-label + .settings-row{
   border-top:1px solid var(--line);
 }
+/* V9.0.3.3 (audit P1.10): inline-styled direct children of .settings-section had no
+   horizontal padding because .settings-section{padding:0} delegates padding to its
+   children. .settings-row and .settings-section-label both have their own (12px+22px,
+   16px+22px), and .settings-section-head also has its own. But custom-built grids,
+   description divs, and empty-state divs rendered directly inside the section inherit
+   zero. This rule gives them 22px to match the standard pattern.
+   
+   Affected: Household (family-member forms, descriptions, empty states), Diagnostics
+   (KPI Summary, Internal Transfers, Cash Position Bridge).
+   
+   Opt-out: wrap the child in .settings-section-body if a future render genuinely needs
+   zero horizontal padding (e.g. a full-bleed diagram or chart inside a Settings card).
+   .settings-section-body has no other styling defined — it exists as an explicit hook. */
+.lanki-legacy .settings-section > div:not(.settings-row):not(.settings-section-label):not(.settings-section-head):not(.settings-section-body){
+  padding-left:22px;
+  padding-right:22px;
+}
 .lanki-legacy .settings-row .sr-label,
 .lanki-legacy .settings-row .settings-row-title,
 .lanki-legacy .settings-row .settings-row-label .settings-row-title{
@@ -3320,11 +3337,18 @@ body.privacy-on{padding-top:28px}
 .lanki-legacy .settings-nav-btn.settings-nav-active svg{opacity:.95}
 
 /* ── CATEGORIES GRID — auto-fill 200px floor per design pack ── */
-/* V9.0.3.2 (audit P1.9): minmax 220px → 200px to match Compass .cat-grid and fit
-   the available content width inside .settings-content (180px sidebar + 32px padding). */
+/* V9.0.3.3 (audit P1.9A correction): 200px → 320px.
+   The V9.0.3.2 drop to 200px went the wrong direction. At 200px,
+   .settings-content (~968px wide) fit 4 columns at ~242px each — too narrow
+   for category card content (name + lock + Edit/Delete + meta + description)
+   which wrapped per word into unreadable narrow strips.
+   The original spillover wasn't "columns too wide," it was "too many columns."
+   320px yields 3 columns at ~322px each — wide enough for the meta line
+   "Income · 13 sub-categories · 42 transactions" to stay on a reasonable
+   line count without per-word wrap. */
 .lanki-legacy .cat-grid{
   display:grid;
-  grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
+  grid-template-columns:repeat(auto-fill,minmax(320px,1fr));
   gap:10px;
 }
 .lanki-legacy .cat-card{
@@ -4390,7 +4414,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='9.0.3.2';
+const VERSION='9.0.3.3';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
