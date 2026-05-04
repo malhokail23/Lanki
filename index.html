@@ -2927,13 +2927,11 @@ body.privacy-on{padding-top:28px}
    `body.privacy-on .priv-mask` rule (specificity 0,2,1) winning when active. */
 .lanki-legacy .priv-mask{filter:none;user-select:auto;letter-spacing:normal}
 
-/* .settings-section + .settings-row — V9.0 settings layout */
-.lanki-legacy .settings-section{
-  margin-bottom:32px;padding-bottom:32px;border-bottom:1px solid var(--border);
-  background:initial;border-top:initial;border-left:initial;border-right:initial;
-  border-radius:initial;overflow:initial;
-}
-.lanki-legacy .settings-section:last-child{border-bottom:none}
+/* V9.0.4 Phase 1: removed dead duplicate .lanki-legacy .settings-section rules
+   (former lines 2931-2936). They set 'initial' for background/border/radius/overflow,
+   only to be re-set by the polish block at line 3194 below. The :last-child rule
+   was similarly dead — overridden by line 3203 with border-bottom:1px solid var(--line).
+   Same dead-duplicate pattern as .cat-grid had pre-V9.0.3.2. */
 .lanki-legacy .settings-row{
   display:flex;align-items:center;justify-content:space-between;gap:16px;
   padding:12px 0;border-bottom:1px solid var(--bg3);
@@ -3216,6 +3214,27 @@ body.privacy-on{padding-top:28px}
   color:var(--text2);
   margin-top:4px;
   line-height:1.5;
+}
+/* V9.0.4 P2.15: optional .ss-actions slot for sections with a right-aligned action
+   (e.g. "+ Add category" on Categories, "Edit" on Identity). Head becomes a flex
+   row with title/sub on the left and actions on the right. */
+.lanki-legacy .settings-section-head.ss-with-actions{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+}
+.lanki-legacy .settings-section-head.ss-with-actions > .ss-main{
+  flex:1;
+  min-width:0;
+}
+.lanki-legacy .settings-section-head .ss-actions{
+  flex-shrink:0;
+}
+/* V9.0.4 P2.15: severity-colored title for danger-zone-style heads
+   (used by Settings → Data Danger Zone). Reuses .settings-section-head padding. */
+.lanki-legacy .settings-section-head.head-neg h3{
+  color:var(--neg);
 }
 /* Existing render-fn class names — give them the same design pack styling */
 .lanki-legacy .settings-section-label{
@@ -4479,7 +4498,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='9.0.3.5';
+const VERSION='9.0.4-rc2';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -6084,19 +6103,21 @@ async function render(){
   runMigrations();
 
   // V9.0.3.2 (audit P1.6): one-time IA reorganization announcement.
-  // Investments and Family Investments moved Household → Finances in V9.0.3.
-  // Investments was renamed to Portfolio. Without a hint, a user with muscle
-  // memory ("I always click Household → Investments") may not find the moved
-  // tab. Fires once per vault, dismisses on click. Skipped in demo mode.
+  // V9.0.4 P1.6 fix: flag set at schedule time, not in dismiss callback. Without
+  // this, multiple render() calls within the 1.2s setTimeout window all passed
+  // the gate (flag wasn't set yet), queuing duplicate toasts. The sched() in
+  // dismiss persists the flag to vault. If the user closes the tab between
+  // schedule and dismiss, next session's first render fires the toast once
+  // more — acceptable, much better than the prior multi-fire behavior.
   if(!IS_DEMO && !S.settings?._iaToastShown && typeof toastAction==='function'){
+    if(!S.settings)S.settings={};
+    S.settings._iaToastShown=true; // set immediately to gate subsequent renders
     setTimeout(()=>{
       toastAction(
         'Investments moved to Finances → Portfolio',
         'Got it',
         ()=>{
-          if(!S.settings)S.settings={};
-          S.settings._iaToastShown=true;
-          sched();
+          sched(); // persist the flag to vault on dismiss
         }
       );
     }, 1200); // delay so the toast doesn't compete with initial render flash
@@ -16142,9 +16163,9 @@ function rDebts(){
         const days=Math.round((nextFee-today)/86400000);
         if(days>60||days<0)return ''; // only flag within 60 days
         const sev=days<=30?'warn':'info';
-        const color=sev==='warn'?'var(--warn)':'var(--info)';
-        return`<div style="margin-top:10px;padding:10px 14px;background:color-mix(in srgb,${color} 8%,transparent);border-radius:var(--rsm);border-left:3px solid ${color};font-size:12px;line-height:1.5">
-          <strong style="color:${color}">Annual fee posting in ${days} day${days===1?'':'s'}</strong> &middot; <span class="fmt-money">SAR ${fmt(d.annualFee)}</span> expected on ${toDD(localISO(nextFee))}.
+        const bannerClass=sev==='warn'?'banner-warn':'banner-info';
+        return`<div class="lanki-banner ${bannerClass}" style="margin-top:10px;padding:10px 14px">
+          <div class="lanki-banner-body" style="font-size:12px;line-height:1.5"><strong class="lanki-banner-title ${bannerClass}-title" style="margin:0;font-size:12px">Annual fee posting in ${days} day${days===1?'':'s'}</strong> &middot; <span class="fmt-money">SAR ${fmt(d.annualFee)}</span> expected on ${toDD(localISO(nextFee))}.</div>
         </div>`;
       })()}
       `:`
@@ -16691,7 +16712,7 @@ function rSettings(){
   }else if(SP==='security'){
     pageContent=`<div class="settings-page-title">Security</div>
     <div class="settings-section">
-      <div class="settings-section-label">Identity</div>
+      <div class="settings-section-head"><h3>Identity</h3></div>
       <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Name</div><div class="settings-row-sub">${S.settings.displayName||'Not set'}</div></div><div class="settings-row-ctrl"><button class="btn btn-sm" onclick="toggleIdPanel()">Edit</button></div></div>
       <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Email</div><div class="settings-row-sub">${S.settings.email?S.settings.email:'Not set — passphrase only'}</div></div></div>
       <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Username</div><div class="settings-row-sub">${S.settings.username?S.settings.username:'Not set'}</div></div></div>
@@ -16706,7 +16727,7 @@ function rSettings(){
         <div style="display:flex;gap:8px"><button class="btn btn-p" onclick="saveIdentity()">Save</button><button class="btn" onclick="toggleIdPanel()">Cancel</button></div>
       </div>
       ${S.settings.recoveryCode?'':''}
-      <div class="settings-section-label" style="margin-top:12px">Passphrase</div>
+      <div class="settings-section-head" style="border-top:1px solid var(--line);margin-top:8px"><h3>Passphrase</h3></div>
       <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Change Passphrase</div><div class="settings-row-sub">Re-encrypts the entire vault with a new key.</div></div><div class="settings-row-ctrl"><button class="btn btn-sm" onclick="toggleCP()">Change</button></div></div>
       <div id="cp-panel" style="display:none;margin-top:12px;padding:14px;background:var(--bg2);border-radius:var(--rmd);border:1px solid var(--border)">
         <div style="margin-bottom:8px"><label class="lbl">Current passphrase</label><div class="pw-wrap"><input type="password" id="cp-cur" class="auth-inp" style="margin:0" placeholder="Current passphrase" autocomplete="current-password"><button class="pw-toggle" onclick="tpw('cp-cur',this)" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
@@ -16717,20 +16738,20 @@ function rSettings(){
       </div>
     </div>
     <div class="settings-section">
-      <div class="settings-section-label">Session</div>
+      <div class="settings-section-head"><h3>Session</h3></div>
       <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Auto-lock</div><div class="settings-row-sub">30 minutes of inactivity</div></div><div class="settings-row-ctrl"><span class="badge b-tr">Active</span></div></div>
       <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Failed attempt lockout</div><div class="settings-row-sub">5 attempts → 15-minute lockout</div></div><div class="settings-row-ctrl"><span class="badge b-tr">Active</span></div></div>
     </div>`;
   }else if(SP==='data'){
     pageContent=`<div class="settings-page-title">Data</div>
     <div class="settings-section">
-      <div class="settings-section-label">Backup &amp; Restore</div>
+      <div class="settings-section-head"><h3>Backup &amp; Restore</h3></div>
       <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Export reference file</div><div class="settings-row-sub">Downloads a .txt file with your accounts, debts, and categories — use this when starting an extraction session</div></div><div class="settings-row-ctrl"><button class="btn btn-sm" onclick="doRefExport()">Export</button></div></div>
       <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Export backup</div><div class="settings-row-sub">Downloads an AES-256 encrypted backup. You'll choose a passphrase — keep it safe; the file is unreadable without it.</div></div><div class="settings-row-ctrl"><button class="btn btn-sm btn-p" onclick="doExport()">Export</button></div></div>
       <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Import backup</div><div class="settings-row-sub">Restore from a Lanki backup file. You'll be prompted for the passphrase used to create it.</div></div><div class="settings-row-ctrl"><button class="btn btn-sm" onclick="document.getElementById('imp-backup-file')?.click()">Import</button><input type="file" id="imp-backup-file" accept=".json" style="display:none" onchange="doImportBackup(this)"></div></div>
     </div>
     <div class="settings-section">
-      <div class="settings-section-label" style="color:var(--neg)">Danger Zone</div>
+      <div class="settings-section-head head-neg"><h3>Danger Zone</h3></div>
       <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Remove duplicate transactions</div><div class="settings-row-sub">Scans all months and removes exact duplicates (same date, amount, description). Run this if you imported the same statement twice.</div></div><div class="settings-row-ctrl"><button class="btn btn-sm" onclick="deduplicateTxns()">Remove duplicates</button></div></div>
       <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Clear all transactions</div><div class="settings-row-sub">Removes imported data. Vault and settings preserved.</div></div><div class="settings-row-ctrl"><button class="btn btn-sm btn-d" onclick="doReset('txns')">Clear transactions</button></div></div>
       <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Reset everything</div><div class="settings-row-sub">Deletes all data and the vault. Cannot be undone.</div></div><div class="settings-row-ctrl"><button class="btn btn-sm btn-d" onclick="doReset('all')">Reset vault</button></div></div>
@@ -17058,7 +17079,7 @@ function rDiagnostics(){
             <div style="font-size:14px;font-weight:600;color:${c.total>0?'var(--neg)':'var(--pos)'}" class="fmt-money">${fmtP(c.total)}</div>
           </div>
           <div style="font-size:11px;color:var(--text3);margin-bottom:8px">${cfg.join(' &middot; ')||'No advanced terms configured'}</div>
-          ${futureAsOf?`<div style="font-size:11px;color:var(--neg);margin-bottom:8px;padding:6px 8px;background:color-mix(in srgb,var(--neg) 8%,transparent);border-left:3px solid var(--neg);border-radius:3px">&#9888; Balance-as-of date is in the future (${toDD(d.balanceAsOf)}). Calculated balance is frozen at opening; post-${toDD(d.balanceAsOf)} transactions are excluded. Edit this card and correct the date.</div>`:''}
+          ${futureAsOf?`<div class="lanki-banner banner-neg" style="margin-bottom:8px;padding:8px 12px"><div class="lanki-banner-body" style="color:var(--neg);font-size:11px">&#9888; Balance-as-of date is in the future (${toDD(d.balanceAsOf)}). Calculated balance is frozen at opening; post-${toDD(d.balanceAsOf)} transactions are excluded. Edit this card and correct the date.</div></div>`:''}
           ${missing.length>0?`<div style="font-size:10px;color:var(--warn);margin-bottom:8px">&#9888; Missing config: ${missing.join(', ')}</div>`:''}
           <div style="font-size:11px;line-height:1.7">
             ${c.annualFees>0?`<div>Annual fees: <strong>${fmtP(c.annualFees)}</strong></div>`:''}
@@ -17430,12 +17451,14 @@ function rCategoriesSettings(){
 
   return`<div class="settings-page-title">Categories</div>
   <div class="settings-section">
-    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px">
-      <div>
-        <div class="settings-section-label" style="margin-bottom:4px">Main Categories</div>
-        <div style="font-size:var(--fs-xs);color:var(--text3);line-height:1.5">Rename, change colors, or add your own. Core categories power essential system features and cannot be deleted.</div>
+    <div class="settings-section-head ss-with-actions">
+      <div class="ss-main">
+        <h3>Main Categories</h3>
+        <div class="ss-text">Rename, change colors, or add your own. Core categories power essential system features and cannot be deleted.</div>
       </div>
-      <button class="btn btn-sm btn-p" onclick="openAddMainCatModal()">+ Add category</button>
+      <div class="ss-actions">
+        <button class="btn btn-sm btn-p" onclick="openAddMainCatModal()">+ Add category</button>
+      </div>
     </div>
 
     ${tierC.length?`
@@ -17459,12 +17482,14 @@ function rCategoriesSettings(){
   </div>
 
   <div class="settings-section">
-    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px">
-      <div>
-        <div class="settings-section-label" style="margin-bottom:4px">Sub-Categories</div>
-        <div style="font-size:var(--fs-xs);color:var(--text3);line-height:1.5">Grouped by parent category. Locked sub-categories are required by specific features.</div>
+    <div class="settings-section-head ss-with-actions">
+      <div class="ss-main">
+        <h3>Sub-Categories</h3>
+        <div class="ss-text">Grouped by parent category. Locked sub-categories are required by specific features.</div>
       </div>
-      <button class="btn btn-sm btn-p" onclick="openAddSubCatModal()">+ Add sub-category</button>
+      <div class="ss-actions">
+        <button class="btn btn-sm btn-p" onclick="openAddSubCatModal()">+ Add sub-category</button>
+      </div>
     </div>
     ${MAIN_CATS.map(m=>{
       const subs=subsByMain[m.id]||[];
