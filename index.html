@@ -51,7 +51,7 @@ html{zoom:1.1}
   --action:#0E40C5;
   --action-tint:#E8EDFB;
   --action-tint-2:#D4DEF7;
-  --page:#F2F4F9;
+  --page:#F3F1EF; /* V9.0.3.2 (audit P1.7): drift from #F2F4F9 → #F3F1EF Feather White per brand spec */
   --card:#FFFFFF;
   --card-inset:#FAFBFD;
   --card-tint:#F6F8FC;
@@ -514,10 +514,16 @@ th{
   text-transform:uppercase;letter-spacing:.06em;
   white-space:nowrap;background:var(--bg2);
 }
-/* V9.0.3 (audit §6.3): sticky table header. Combined with the sticky toolbar above,
-   gives users a column reference even on long transaction lists.
-   Top offset matches .tx-sticky-toolbar height + page padding. */
-.tx-tbl thead th{position:sticky;top:54px;z-index:10}
+/* V9.0.3.2 (audit P1.8): sticky thead top changed from 54px to 0.
+   The previous 54px tried to offset below the page-level .tx-sticky-toolbar,
+   but .tbl-wrap has overflow-x:auto which creates its own scroll context —
+   `top:54px` resolves relative to .tbl-wrap, not the page. Result: 54px of
+   empty space above the thead, with the first body row appearing ABOVE the
+   header on pages without a toolbar (Review Queue most visible).
+   With top:0 the thead sticks to the top of .tbl-wrap correctly. On pages
+   with a sticky toolbar, the thead tucks under the toolbar when sticking;
+   the toolbar's higher z-index keeps it visible. */
+.tx-tbl thead th{position:sticky;top:0;z-index:10}
 td{padding:9px 10px;border-bottom:1px solid var(--bg2);vertical-align:middle}
 tr:last-child td{border-bottom:none}
 tbody tr:hover td{background:var(--bg2)}
@@ -2890,8 +2896,10 @@ body.privacy-on{padding-top:28px}
   border-radius:var(--r);padding:1.25rem 1.4rem;margin-bottom:1.5rem;
 }
 
-/* .cat-grid + .cat-card — Categories page; V9.0's auto-fill 260px floor (Compass uses 200px floor) */
-.lanki-legacy .cat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+/* V9.0.3.2 cleanup (audit P1.9 prep): removed dead duplicate .lanki-legacy .cat-grid
+   rule. The polish block at line ~3321 won by source order; this 260px rule was dead.
+   Surviving polish rule is updated to 200px below to match Compass spec and fix
+   the Categories grid spillover on Settings → Categories. */
 .lanki-legacy .cat-card{
   background:var(--surface-elevated,#fff);
   border:1px solid var(--border);
@@ -3312,9 +3320,11 @@ body.privacy-on{padding-top:28px}
 .lanki-legacy .settings-nav-btn.settings-nav-active svg{opacity:.95}
 
 /* ── CATEGORIES GRID — auto-fill 200px floor per design pack ── */
+/* V9.0.3.2 (audit P1.9): minmax 220px → 200px to match Compass .cat-grid and fit
+   the available content width inside .settings-content (180px sidebar + 32px padding). */
 .lanki-legacy .cat-grid{
   display:grid;
-  grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
+  grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
   gap:10px;
 }
 .lanki-legacy .cat-card{
@@ -4380,7 +4390,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='9.0.3.1';
+const VERSION='9.0.3.2';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -5983,6 +5993,25 @@ async function render(){
   // ─────────────────────────────────────────────────────────────────────────
   if(!S._migrations)S._migrations={};
   runMigrations();
+
+  // V9.0.3.2 (audit P1.6): one-time IA reorganization announcement.
+  // Investments and Family Investments moved Household → Finances in V9.0.3.
+  // Investments was renamed to Portfolio. Without a hint, a user with muscle
+  // memory ("I always click Household → Investments") may not find the moved
+  // tab. Fires once per vault, dismisses on click. Skipped in demo mode.
+  if(!IS_DEMO && !S.settings?._iaToastShown && typeof toastAction==='function'){
+    setTimeout(()=>{
+      toastAction(
+        'Investments moved to Finances → Portfolio',
+        'Got it',
+        ()=>{
+          if(!S.settings)S.settings={};
+          S.settings._iaToastShown=true;
+          sched();
+        }
+      );
+    }, 1200); // delay so the toast doesn't compete with initial render flash
+  }
   // ─────────────────────────────────────────────────────────────────────────
 
   // V8.23: apply user's persistent period default. Once on first render after vault unlock —
