@@ -3252,22 +3252,72 @@ body.privacy-on{padding-top:28px}
 .lanki-legacy .settings-section-label + .settings-row{
   border-top:1px solid var(--line);
 }
-/* V9.0.3.3 (audit P1.10): inline-styled direct children of .settings-section had no
-   horizontal padding because .settings-section{padding:0} delegates padding to its
-   children. .settings-row and .settings-section-label both have their own (12px+22px,
-   16px+22px), and .settings-section-head also has its own. But custom-built grids,
-   description divs, and empty-state divs rendered directly inside the section inherit
-   zero. This rule gives them 22px to match the standard pattern.
-   
-   Affected: Household (family-member forms, descriptions, empty states), Diagnostics
-   (KPI Summary, Internal Transfers, Cash Position Bridge).
-   
-   Opt-out: wrap the child in .settings-section-body if a future render genuinely needs
-   zero horizontal padding (e.g. a full-bleed diagram or chart inside a Settings card).
-   .settings-section-body has no other styling defined — it exists as an explicit hook. */
-.lanki-legacy .settings-section > div:not(.settings-row):not(.settings-section-label):not(.settings-section-head):not(.settings-section-body){
-  padding-left:22px;
-  padding-right:22px;
+/* V9.0.3.4 (audit P1.10 revision): replaced the V9.0.3.3 catch-all with a proper
+   .settings-section-body wrapper class. The catch-all was too broad — sub-categories
+   double-padded, Household had no bottom margin, Diagnostics CC flow rows
+   double-indented. Wrapper class is opt-in: callers wrap explicitly when they need
+   the container padding, no surprises for unwrapped descendants.
+
+   Standard pattern:
+     <div class="settings-section">
+       <div class="settings-section-head">...</div>
+       <div class="settings-section-body">...</div>  ← wrap inline-styled content here
+     </div>
+
+   When section-body follows a head/label (which already pads below), reduce its
+   top-padding so the gap between block boundaries doesn't double up. */
+.lanki-legacy .settings-section-body{
+  padding:14px 22px 18px;
+}
+.lanki-legacy .settings-section-head + .settings-section-body,
+.lanki-legacy .settings-section-label + .settings-section-body{
+  padding-top:8px;
+}
+.lanki-legacy .settings-section > .settings-section-body:first-child{
+  padding-top:18px;
+}
+
+/* V9.0.3.4 (audit P2.15 advance): .lanki-banner — unified banner shape for verdicts,
+   danger-zones, alerts, info strips. Pulled into V9.0.3.4 (one phase early) to avoid
+   inline-styling the verdict banner now and refactoring it again next phase.
+   Four severity variants share the same geometry. Use directly OR wrap in a
+   .settings-section for full column alignment with sibling cards. */
+.lanki-legacy .lanki-banner{
+  padding:14px 22px;
+  border-radius:12px;
+  border:1px solid var(--line);
+  border-left-width:3px;
+  margin-bottom:14px;
+}
+.lanki-legacy .lanki-banner.banner-pos{
+  background:color-mix(in srgb,var(--pos) 8%,transparent);
+  border-left-color:var(--pos);
+}
+.lanki-legacy .lanki-banner.banner-warn{
+  background:color-mix(in srgb,var(--warn) 8%,transparent);
+  border-left-color:var(--warn);
+}
+.lanki-legacy .lanki-banner.banner-neg{
+  background:color-mix(in srgb,var(--neg) 8%,transparent);
+  border-left-color:var(--neg);
+}
+.lanki-legacy .lanki-banner.banner-info{
+  background:color-mix(in srgb,var(--action) 6%,transparent);
+  border-left-color:var(--action);
+}
+.lanki-legacy .lanki-banner-title{
+  font-weight:600;
+  font-size:13px;
+  margin-bottom:4px;
+}
+.lanki-legacy .lanki-banner-title.banner-pos-title{color:var(--pos)}
+.lanki-legacy .lanki-banner-title.banner-warn-title{color:var(--warn)}
+.lanki-legacy .lanki-banner-title.banner-neg-title{color:var(--neg)}
+.lanki-legacy .lanki-banner-title.banner-info-title{color:var(--action)}
+.lanki-legacy .lanki-banner-body{
+  font-size:12px;
+  color:var(--text2);
+  line-height:1.5;
 }
 .lanki-legacy .settings-row .sr-label,
 .lanki-legacy .settings-row .settings-row-title,
@@ -4414,7 +4464,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='9.0.3.3';
+const VERSION='9.0.3.4';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -16605,19 +16655,23 @@ function rSettings(){
     pageContent=`<div class="settings-page-title">Household</div>
     <div class="settings-section">
       <div class="settings-section-label">Family Members</div>
-      <div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:12px">Used to tag investment transactions and track capital per member.</div>
-      ${fmRows||'<div style="font-size:var(--fs-xs);color:var(--text3);padding:8px 0">No family members yet.</div>'}
-      <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;margin-top:12px">
-        <div><label class="lbl">Name</label><input type="text" id="fm-name-s" placeholder="e.g. Turki"></div>
-        <div><label class="lbl">Relationship</label><input type="text" id="fm-rel-s" placeholder="e.g. Son"></div>
-        <button class="btn btn-p" onclick="addFamilyMemberSettings()">Add</button>
+      <div class="settings-section-body">
+        <div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:12px">Used to tag investment transactions and track capital per member.</div>
+        ${fmRows||'<div style="font-size:var(--fs-xs);color:var(--text3);padding:8px 0">No family members yet.</div>'}
+        <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;margin-top:12px">
+          <div><label class="lbl">Name</label><input type="text" id="fm-name-s" placeholder="e.g. Turki"></div>
+          <div><label class="lbl">Relationship</label><input type="text" id="fm-rel-s" placeholder="e.g. Son"></div>
+          <button class="btn btn-p" onclick="addFamilyMemberSettings()">Add</button>
+        </div>
       </div>
     </div>
     <div class="settings-section">
       <div class="settings-section-label">Reimbursement Submitters</div>
-      <div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:12px">Each person gets a 4-digit PIN to submit expenses via lanki.app/submit/.</div>
-      ${subRows||'<div style="font-size:var(--fs-xs);color:var(--text3);padding:8px 0">No submitters yet.</div>'}
-      <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;margin-top:12px"><div><label class="lbl">Name</label><input type="text" id="sub-name" placeholder="e.g. Noura"></div><div><label class="lbl">PIN (4 digits)</label><input type="text" id="sub-pin" placeholder="1234" maxlength="4"></div><button class="btn btn-p" onclick="addSubmitter()">Add</button></div>
+      <div class="settings-section-body">
+        <div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:12px">Each person gets a 4-digit PIN to submit expenses via lanki.app/submit/.</div>
+        ${subRows||'<div style="font-size:var(--fs-xs);color:var(--text3);padding:8px 0">No submitters yet.</div>'}
+        <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;margin-top:12px"><div><label class="lbl">Name</label><input type="text" id="sub-name" placeholder="e.g. Noura"></div><div><label class="lbl">PIN (4 digits)</label><input type="text" id="sub-pin" placeholder="1234" maxlength="4"></div><button class="btn btn-p" onclick="addSubmitter()">Add</button></div>
+      </div>
     </div>`;
   }else if(SP==='security'){
     pageContent=`<div class="settings-page-title">Security</div>
@@ -16784,14 +16838,14 @@ function rDiagnostics(){
     if(Math.abs(tImbalanceResidual)>=1)issues.push(`SAR ${Math.abs(tImbalanceResidual).toFixed(2)} transfer imbalance`);
     if(unexplained!=null&&Math.abs(unexplained)>=1)issues.push(`SAR ${Math.abs(unexplained).toFixed(2)} unexplained gap`);
     if(issues.length===0){
-      return`<div style="padding:14px 16px;background:color-mix(in srgb,var(--pos) 10%,transparent);border-left:3px solid var(--pos);border-radius:var(--rsm);margin-bottom:1rem">
-        <div style="font-weight:600;color:var(--pos);font-size:13px;margin-bottom:4px">&#10003; ${fmtYM(auditMonth)} reconciles cleanly</div>
-        <div style="font-size:12px;color:var(--text2);line-height:1.5">All transactions match the math. Net Flow and Cash Position differ only by credit card payment timing, which is expected.</div>
+      return`<div class="lanki-banner banner-pos">
+        <div class="lanki-banner-title banner-pos-title">&#10003; ${fmtYM(auditMonth)} reconciles cleanly</div>
+        <div class="lanki-banner-body">All transactions match the math. Net Flow and Cash Position differ only by credit card payment timing, which is expected.</div>
       </div>`;
     }
-    return`<div style="padding:14px 16px;background:color-mix(in srgb,var(--warn) 10%,transparent);border-left:3px solid var(--warn);border-radius:var(--rsm);margin-bottom:1rem">
-      <div style="font-weight:600;color:var(--warn);font-size:13px;margin-bottom:4px">&#9888; ${issues.length} issue${issues.length===1?'':'s'} detected</div>
-      <div style="font-size:12px;color:var(--text2);line-height:1.5">${issues.join(' &middot; ')}</div>
+    return`<div class="lanki-banner banner-warn">
+      <div class="lanki-banner-title banner-warn-title">&#9888; ${issues.length} issue${issues.length===1?'':'s'} detected</div>
+      <div class="lanki-banner-body">${issues.join(' &middot; ')}</div>
     </div>`;
   };
 
@@ -16814,54 +16868,62 @@ function rDiagnostics(){
 
   <div class="settings-section">
     <div class="settings-section-label">KPI summary</div>
-    <div style="display:grid;grid-template-columns:1fr auto;gap:6px 14px;font-size:13px;padding:10px 0;line-height:1.5">
-      <div style="color:var(--text2)">Income</div><div style="font-weight:500;text-align:right;font-variant-numeric:tabular-nums" class="fmt-money">${fmt(inc)}</div>
-      <div style="color:var(--text2)">Expense (core)</div><div style="font-weight:500;text-align:right;font-variant-numeric:tabular-nums" class="fmt-money">${fmt(expCore)}</div>
-      <div style="color:var(--text2)">External transfers</div><div style="font-weight:500;text-align:right;font-variant-numeric:tabular-nums" class="fmt-money">${fmt(ext)}</div>
-      <div style="color:var(--text2)">Expense (total, as on Overview)</div><div style="font-weight:600;text-align:right;font-variant-numeric:tabular-nums" class="fmt-money">${fmt(expTotal)}</div>
-      <div style="color:var(--text2)">Investments</div><div style="font-weight:500;text-align:right;font-variant-numeric:tabular-nums" class="fmt-money">${fmt(inv)}</div>
-      <div style="border-top:1px solid var(--border);padding-top:6px;color:var(--text1);font-weight:500">Net Flow</div><div style="border-top:1px solid var(--border);padding-top:6px;font-weight:600;text-align:right;font-variant-numeric:tabular-nums;color:${netFlow>=0?'var(--pos)':'var(--neg)'}" class="fmt-money">${fmtS(netFlow,true)}</div>
+    <div class="settings-section-body">
+      <div style="display:grid;grid-template-columns:1fr auto;gap:6px 14px;font-size:13px;line-height:1.5">
+        <div style="color:var(--text2)">Income</div><div style="font-weight:500;text-align:right;font-variant-numeric:tabular-nums" class="fmt-money">${fmt(inc)}</div>
+        <div style="color:var(--text2)">Expense (core)</div><div style="font-weight:500;text-align:right;font-variant-numeric:tabular-nums" class="fmt-money">${fmt(expCore)}</div>
+        <div style="color:var(--text2)">External transfers</div><div style="font-weight:500;text-align:right;font-variant-numeric:tabular-nums" class="fmt-money">${fmt(ext)}</div>
+        <div style="color:var(--text2)">Expense (total, as on Overview)</div><div style="font-weight:600;text-align:right;font-variant-numeric:tabular-nums" class="fmt-money">${fmt(expTotal)}</div>
+        <div style="color:var(--text2)">Investments</div><div style="font-weight:500;text-align:right;font-variant-numeric:tabular-nums" class="fmt-money">${fmt(inv)}</div>
+        <div style="border-top:1px solid var(--border);padding-top:6px;color:var(--text1);font-weight:500">Net Flow</div><div style="border-top:1px solid var(--border);padding-top:6px;font-weight:600;text-align:right;font-variant-numeric:tabular-nums;color:${netFlow>=0?'var(--pos)':'var(--neg)'}" class="fmt-money">${fmtS(netFlow,true)}</div>
+      </div>
     </div>
   </div>
 
   <div class="settings-section">
     <div class="settings-section-label">Internal transfers (should net to zero)</div>
-    <div style="display:grid;grid-template-columns:1fr auto;gap:6px 14px;font-size:13px;padding:10px 0;line-height:1.5">
-      <div style="color:var(--text2)">Transfers IN</div><div style="font-weight:500;text-align:right;font-variant-numeric:tabular-nums" class="fmt-money">${fmt(tIn)}</div>
-      <div style="color:var(--text2)">Transfers OUT</div><div style="font-weight:500;text-align:right;font-variant-numeric:tabular-nums" class="fmt-money">${fmt(tOut)}</div>
-      <div style="border-top:1px solid var(--border);padding-top:6px;color:var(--text1)">Imbalance (raw)</div>
-      <div style="border-top:1px solid var(--border);padding-top:6px;font-weight:500;text-align:right;font-variant-numeric:tabular-nums;color:var(--text2)" class="fmt-money">${fmtS(tImbalance,true)}</div>
-      ${fxTxns.length>0?`<div style="color:var(--text2)" title="Sum of FX variance transactions auto-created when matched transfers had mismatched amounts (e.g. SAR funding USD CC)">Explained by FX variance <span style="color:var(--text3);font-size:11px">(${fxTxns.length} txn${fxTxns.length===1?'':'s'})</span></div><div style="font-weight:500;text-align:right;font-variant-numeric:tabular-nums;color:var(--text2)" class="fmt-money">${fmtS(fxExplained,true)}</div>`:''}
-      <div style="border-top:1px solid var(--border);padding-top:6px;color:var(--text1);font-weight:500">Residual ${Math.abs(tImbalanceResidual)<0.5?'&#10003;':'&#9888;'}</div>
-      <div style="border-top:1px solid var(--border);padding-top:6px;font-weight:600;text-align:right;font-variant-numeric:tabular-nums;color:${Math.abs(tImbalanceResidual)<0.5?'var(--pos)':'var(--warn)'}" class="fmt-money">${fmtS(tImbalanceResidual,true)}</div>
+    <div class="settings-section-body">
+      <div style="display:grid;grid-template-columns:1fr auto;gap:6px 14px;font-size:13px;line-height:1.5">
+        <div style="color:var(--text2)">Transfers IN</div><div style="font-weight:500;text-align:right;font-variant-numeric:tabular-nums" class="fmt-money">${fmt(tIn)}</div>
+        <div style="color:var(--text2)">Transfers OUT</div><div style="font-weight:500;text-align:right;font-variant-numeric:tabular-nums" class="fmt-money">${fmt(tOut)}</div>
+        <div style="border-top:1px solid var(--border);padding-top:6px;color:var(--text1)">Imbalance (raw)</div>
+        <div style="border-top:1px solid var(--border);padding-top:6px;font-weight:500;text-align:right;font-variant-numeric:tabular-nums;color:var(--text2)" class="fmt-money">${fmtS(tImbalance,true)}</div>
+        ${fxTxns.length>0?`<div style="color:var(--text2)" title="Sum of FX variance transactions auto-created when matched transfers had mismatched amounts (e.g. SAR funding USD CC)">Explained by FX variance <span style="color:var(--text3);font-size:11px">(${fxTxns.length} txn${fxTxns.length===1?'':'s'})</span></div><div style="font-weight:500;text-align:right;font-variant-numeric:tabular-nums;color:var(--text2)" class="fmt-money">${fmtS(fxExplained,true)}</div>`:''}
+        <div style="border-top:1px solid var(--border);padding-top:6px;color:var(--text1);font-weight:500">Residual ${Math.abs(tImbalanceResidual)<0.5?'&#10003;':'&#9888;'}</div>
+        <div style="border-top:1px solid var(--border);padding-top:6px;font-weight:600;text-align:right;font-variant-numeric:tabular-nums;color:${Math.abs(tImbalanceResidual)<0.5?'var(--pos)':'var(--warn)'}" class="fmt-money">${fmtS(tImbalanceResidual,true)}</div>
+      </div>
     </div>
   </div>
 
   ${hasOpenings?`
   <div class="settings-section">
     <div class="settings-section-label">Cash Position bridge</div>
-    <div style="display:grid;grid-template-columns:1fr auto;gap:6px 14px;font-size:13px;padding:10px 0;line-height:1.5">
-      <div style="color:var(--text2)">Opening (sum of cash accounts)</div><div style="font-weight:500;text-align:right;font-variant-numeric:tabular-nums" class="fmt-money">${fmt(aggOpening)}</div>
-      <div style="color:var(--text2)">Closing (sum of cash accounts)</div><div style="font-weight:500;text-align:right;font-variant-numeric:tabular-nums" class="fmt-money">${fmt(aggClosing)}</div>
-      <div style="border-top:1px solid var(--border);padding-top:6px;color:var(--text1);font-weight:500">Cash change</div><div style="border-top:1px solid var(--border);padding-top:6px;font-weight:600;text-align:right;font-variant-numeric:tabular-nums" class="fmt-money">${fmtS(cashChangeFromBalances,true)}</div>
-    </div>
-    <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
-      <div style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Reconciliation bridge</div>
+    <div class="settings-section-body">
       <div style="display:grid;grid-template-columns:1fr auto;gap:6px 14px;font-size:13px;line-height:1.5">
-        <div style="color:var(--text2)">Net Flow</div><div style="font-weight:500;text-align:right;font-variant-numeric:tabular-nums" class="fmt-money">${fmtS(netFlow,true)}</div>
-        ${ccPaymentsOutTotal>0?`<div style="color:var(--text2)">CC payments from cash (settling prior CC spending)</div><div style="font-weight:500;text-align:right;font-variant-numeric:tabular-nums" class="fmt-money">${fmtS(ccPaymentExplains,true)}</div>`:''}
-        ${orphans.length>0?`<div style="color:var(--text2)">Unmatched transfers (${orphans.length})</div><div style="font-weight:500;text-align:right;font-variant-numeric:tabular-nums" class="fmt-money">${fmtS(orphanExplains,true)}</div>`:''}
-        <div style="border-top:1px solid var(--border);padding-top:6px;color:var(--text1);font-weight:500">Expected cash change</div><div style="border-top:1px solid var(--border);padding-top:6px;font-weight:600;text-align:right;font-variant-numeric:tabular-nums" class="fmt-money">${fmtS(netFlow+explained,true)}</div>
-        <div style="color:var(--text2)">Actual cash change</div><div style="font-weight:500;text-align:right;font-variant-numeric:tabular-nums" class="fmt-money">${fmtS(cashChangeFromBalances,true)}</div>
-        <div style="border-top:1px solid var(--border);padding-top:6px;color:var(--text1);font-weight:600">Unexplained ${unexplained!=null&&Math.abs(unexplained)<0.5?'&#10003;':'&#9888;'}</div>
-        <div style="border-top:1px solid var(--border);padding-top:6px;font-weight:600;text-align:right;font-variant-numeric:tabular-nums;color:${unexplained!=null&&Math.abs(unexplained)<0.5?'var(--pos)':'var(--warn)'}" class="fmt-money">${unexplained!=null?fmtS(unexplained,true):'--'}</div>
+        <div style="color:var(--text2)">Opening (sum of cash accounts)</div><div style="font-weight:500;text-align:right;font-variant-numeric:tabular-nums" class="fmt-money">${fmt(aggOpening)}</div>
+        <div style="color:var(--text2)">Closing (sum of cash accounts)</div><div style="font-weight:500;text-align:right;font-variant-numeric:tabular-nums" class="fmt-money">${fmt(aggClosing)}</div>
+        <div style="border-top:1px solid var(--border);padding-top:6px;color:var(--text1);font-weight:500">Cash change</div><div style="border-top:1px solid var(--border);padding-top:6px;font-weight:600;text-align:right;font-variant-numeric:tabular-nums" class="fmt-money">${fmtS(cashChangeFromBalances,true)}</div>
+      </div>
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+        <div style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Reconciliation bridge</div>
+        <div style="display:grid;grid-template-columns:1fr auto;gap:6px 14px;font-size:13px;line-height:1.5">
+          <div style="color:var(--text2)">Net Flow</div><div style="font-weight:500;text-align:right;font-variant-numeric:tabular-nums" class="fmt-money">${fmtS(netFlow,true)}</div>
+          ${ccPaymentsOutTotal>0?`<div style="color:var(--text2)">CC payments from cash (settling prior CC spending)</div><div style="font-weight:500;text-align:right;font-variant-numeric:tabular-nums" class="fmt-money">${fmtS(ccPaymentExplains,true)}</div>`:''}
+          ${orphans.length>0?`<div style="color:var(--text2)">Unmatched transfers (${orphans.length})</div><div style="font-weight:500;text-align:right;font-variant-numeric:tabular-nums" class="fmt-money">${fmtS(orphanExplains,true)}</div>`:''}
+          <div style="border-top:1px solid var(--border);padding-top:6px;color:var(--text1);font-weight:500">Expected cash change</div><div style="border-top:1px solid var(--border);padding-top:6px;font-weight:600;text-align:right;font-variant-numeric:tabular-nums" class="fmt-money">${fmtS(netFlow+explained,true)}</div>
+          <div style="color:var(--text2)">Actual cash change</div><div style="font-weight:500;text-align:right;font-variant-numeric:tabular-nums" class="fmt-money">${fmtS(cashChangeFromBalances,true)}</div>
+          <div style="border-top:1px solid var(--border);padding-top:6px;color:var(--text1);font-weight:600">Unexplained ${unexplained!=null&&Math.abs(unexplained)<0.5?'&#10003;':'&#9888;'}</div>
+          <div style="border-top:1px solid var(--border);padding-top:6px;font-weight:600;text-align:right;font-variant-numeric:tabular-nums;color:${unexplained!=null&&Math.abs(unexplained)<0.5?'var(--pos)':'var(--warn)'}" class="fmt-money">${unexplained!=null?fmtS(unexplained,true):'--'}</div>
+        </div>
       </div>
     </div>
   </div>
   `:`
   <div class="settings-section">
     <div class="settings-section-label">Cash Position bridge</div>
-    <div style="font-size:12px;color:var(--text3);padding:14px 0">Set opening balances on cash accounts to enable Cash Position reconciliation.</div>
+    <div class="settings-section-body">
+      <div style="font-size:12px;color:var(--text3)">Set opening balances on cash accounts to enable Cash Position reconciliation.</div>
+    </div>
   </div>
   `}
 
@@ -16883,15 +16945,17 @@ function rDiagnostics(){
 
   <div class="settings-section">
     <div class="settings-section-label">Credit card payment flows</div>
-    ${ccPaymentsOut.length===0&&ccPaymentsIn.length===0?`<div style="font-size:12px;color:var(--text3);padding:14px 0">No CC payment activity in ${fmtYM(auditMonth)}.</div>`:`
-    <div style="font-size:12px;line-height:1.5;padding:8px 0">
-      <div style="margin-bottom:10px"><strong>Bank → CC payments out:</strong> SAR ${fmt(ccPaymentsOutTotal)} (${ccPaymentsOut.length} txn${ccPaymentsOut.length===1?'':'s'})</div>
-      ${ccPaymentsOut.map(t=>{const acc=S.accounts.find(a=>a.id===t.accountId);return`<div style="padding:4px 0;color:var(--text2);padding-left:14px">&middot; ${t.date} &middot; ${h((t.description||'').substr(0,40))} &middot; <span class="fmt-money">${fmt(t.amount)}</span> from ${h(acc?.name||'?')}</div>`;}).join('')}
-      <div style="margin:14px 0 10px"><strong>CC inflows received:</strong> SAR ${fmt(ccPaymentsInTotal)} (${ccPaymentsIn.length} txn${ccPaymentsIn.length===1?'':'s'})</div>
-      ${ccPaymentsIn.map(t=>{const acc=S.accounts.find(a=>a.id===t.accountId);return`<div style="padding:4px 0;color:var(--text2);padding-left:14px">&middot; ${t.date} &middot; ${h((t.description||'').substr(0,40))} &middot; <span class="fmt-money">${fmt(t.amount)}</span> on ${h(acc?.name||'?')}</div>`;}).join('')}
-      ${Math.abs(ccPaymentsOutTotal-ccPaymentsInTotal)>=0.5?`<div style="margin-top:14px;padding:10px;background:color-mix(in srgb,var(--warn) 10%,transparent);border-radius:var(--rsm);font-size:11px;color:var(--warn)">&#9888; CC outflows from bank (${fmt(ccPaymentsOutTotal)}) and inflows to CC (${fmt(ccPaymentsInTotal)}) differ by SAR ${fmt(Math.abs(ccPaymentsOutTotal-ccPaymentsInTotal))}. Likely an unmatched CC payment or cross-month settlement.</div>`:''}
+    <div class="settings-section-body">
+      ${ccPaymentsOut.length===0&&ccPaymentsIn.length===0?`<div style="font-size:12px;color:var(--text3)">No CC payment activity in ${fmtYM(auditMonth)}.</div>`:`
+      <div style="font-size:12px;line-height:1.5">
+        <div style="margin-bottom:10px"><strong>Bank → CC payments out:</strong> SAR ${fmt(ccPaymentsOutTotal)} (${ccPaymentsOut.length} txn${ccPaymentsOut.length===1?'':'s'})</div>
+        ${ccPaymentsOut.map(t=>{const acc=S.accounts.find(a=>a.id===t.accountId);return`<div style="padding:4px 0;color:var(--text2);margin-left:14px">&middot; ${t.date} &middot; ${h((t.description||'').substr(0,40))} &middot; <span class="fmt-money">${fmt(t.amount)}</span> from ${h(acc?.name||'?')}</div>`;}).join('')}
+        <div style="margin:14px 0 10px"><strong>CC inflows received:</strong> SAR ${fmt(ccPaymentsInTotal)} (${ccPaymentsIn.length} txn${ccPaymentsIn.length===1?'':'s'})</div>
+        ${ccPaymentsIn.map(t=>{const acc=S.accounts.find(a=>a.id===t.accountId);return`<div style="padding:4px 0;color:var(--text2);margin-left:14px">&middot; ${t.date} &middot; ${h((t.description||'').substr(0,40))} &middot; <span class="fmt-money">${fmt(t.amount)}</span> on ${h(acc?.name||'?')}</div>`;}).join('')}
+        ${Math.abs(ccPaymentsOutTotal-ccPaymentsInTotal)>=0.5?`<div style="margin-top:14px;padding:10px;background:color-mix(in srgb,var(--warn) 10%,transparent);border-radius:var(--rsm);font-size:11px;color:var(--warn)">&#9888; CC outflows from bank (${fmt(ccPaymentsOutTotal)}) and inflows to CC (${fmt(ccPaymentsInTotal)}) differ by SAR ${fmt(Math.abs(ccPaymentsOutTotal-ccPaymentsInTotal))}. Likely an unmatched CC payment or cross-month settlement.</div>`:''}
+      </div>
+      `}
     </div>
-    `}
   </div>
 
   ${orphans.length>0?`
