@@ -122,7 +122,12 @@ html{zoom:1.1}
   --line:#E4E0DC;           /* V9.0 lanki line (Compass: #DDE2ED) */
 
   /* V9.0.3: orphan token aliases — only the surviving ones with live consumers.
-     Removed: --surface-elevated, --ink-electric, --rlg, --cat-5 (audit §10.10) */
+     Removed: --surface-elevated, --ink-electric, --rlg, --cat-5 (audit §10.10).
+     V9.0.4 P2.16: dead-token fallback references in inline styles
+     (var(--ink-electric,#0077C1), var(--surface-elevated,#fff), var(--rlg,10px))
+     migrated to var(--action), var(--card), var(--r) respectively. The composition
+     bar in Overview was the highest-impact site — was rendering Electric Blue
+     (#0077C1, V8) instead of Compass Action Blue (#0E40C5). */
   --text1:var(--ink);
   --paper:var(--page);
   --rmd:10px;
@@ -563,6 +568,13 @@ tbody tr:hover td{background:var(--bg2)}
    Now a sibling that renders below the clamp unconditionally. */
 .tx-notes{display:block;font-size:10px;color:var(--text3);margin-top:2px}
 
+/* V9.0.4 P2.16: generic muted sub-text utility — same visual as .tx-notes but
+   used in non-transaction contexts (debt cards, section descriptions, row meta,
+   AI failure logs, etc.). Defined adjacent so the relationship is obvious.
+   V9.0.5 candidate for consolidation with .tx-notes once broader semantic
+   naming pass happens. */
+.sub-meta{font-size:10px;color:var(--text3);margin-top:2px}
+
 /* C1 + H2: Mobile card layout for transactions table.
    Below 768px the table reflows into stacked cards: each row becomes a card
    with description+amount as the prominent line, metadata below, and
@@ -784,7 +796,7 @@ tbody tr:hover td{background:var(--bg2)}
 .cat-group-label{display:flex;align-items:center;gap:6px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px}
 .cat-group-sub{font-size:var(--fs-xxs);color:var(--text3);margin-bottom:10px;line-height:1.5}
 .cat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
-.cat-card{background:var(--surface-elevated,#fff);border:1px solid var(--border);border-radius:var(--rlg,10px);padding:12px 14px;transition:border-color .15s}
+.cat-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;transition:border-color .15s}
 .cat-card:hover{border-color:color-mix(in srgb,var(--action) 30%,var(--border))}
 .cat-card-row{display:flex;align-items:flex-start;gap:10px}
 .cat-swatch{width:28px;height:28px;border-radius:6px;flex-shrink:0;margin-top:2px}
@@ -799,7 +811,7 @@ tbody tr:hover td{background:var(--bg2)}
 .cat-subs-group{margin-top:14px;padding:10px 12px;background:var(--bg2);border-radius:var(--rsm)}
 .cat-subs-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
 .cat-subs-list{display:flex;flex-direction:column;gap:4px}
-.cat-sub-row{display:flex;align-items:center;gap:10px;padding:6px 8px;background:var(--surface-elevated,#fff);border-radius:var(--rsm);font-size:var(--fs-xs)}
+.cat-sub-row{display:flex;align-items:center;gap:10px;padding:6px 8px;background:var(--card);border-radius:var(--rsm);font-size:var(--fs-xs)}
 .cat-sub-name{flex:1;display:flex;align-items:center;gap:4px;min-width:0}
 .cat-sub-meta{font-size:10px;color:var(--text3);flex-shrink:0}
 .cat-sub-actions{display:flex;gap:4px;flex-shrink:0}
@@ -808,7 +820,7 @@ tbody tr:hover td{background:var(--bg2)}
 .cat-swatches{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;margin-top:6px}
 .cat-swatch-btn{width:100%;aspect-ratio:1;border-radius:6px;border:2px solid transparent;cursor:pointer;transition:transform .1s,border-color .1s;padding:0}
 .cat-swatch-btn:hover{transform:scale(1.08)}
-.cat-swatch-btn.active{border-color:var(--text1);box-shadow:0 0 0 2px var(--surface-elevated,#fff) inset}
+.cat-swatch-btn.active{border-color:var(--text1);box-shadow:0 0 0 2px var(--card) inset}
 .cat-swatch-preview{width:28px;height:28px;border-radius:6px;border:1px solid var(--border);flex-shrink:0}
 /* Reimbursement settlement cards: accordion pattern */
 .reimb-settlement{border-bottom:1px solid var(--border)}
@@ -2901,9 +2913,9 @@ body.privacy-on{padding-top:28px}
    Surviving polish rule is updated to 200px below to match Compass spec and fix
    the Categories grid spillover on Settings → Categories. */
 .lanki-legacy .cat-card{
-  background:var(--surface-elevated,#fff);
+  background:var(--card);
   border:1px solid var(--border);
-  border-radius:var(--rlg,10px);
+  border-radius:var(--r);
   padding:12px 14px;
   transition:border-color .15s;
   display:block;flex-direction:initial;gap:initial;cursor:auto;
@@ -2969,7 +2981,8 @@ body.privacy-on{padding-top:28px}
   margin-bottom:12px;
 }
 .lanki-legacy .card .tbl-wrap,
-.lanki-legacy .panel .tbl-wrap{
+.lanki-legacy .panel .tbl-wrap,
+.lanki-legacy .settings-section .tbl-wrap{
   background:transparent;
   border:none;
   border-radius:0;
@@ -4498,7 +4511,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='9.0.4-rc2';
+const VERSION='9.0.4.1';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -5276,7 +5289,7 @@ function openOrphanModal(){
                 <div style="flex-shrink:0;min-width:76px;font-size:11px;color:var(--text3)">${toDD(t.date)}</div>
                 <div style="flex:1;min-width:0">
                   <div style="font-size:var(--fs-sm);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(t.description||'--')}</div>
-                  <div style="font-size:10px;color:var(--text3);margin-top:2px">${fmtS(txDir(t)==='in'?t.amount:-t.amount)} &middot; ${fmtYM(ym)}</div>
+                  <div class="sub-meta">${fmtS(txDir(t)==='in'?t.amount:-t.amount)} &middot; ${fmtYM(ym)}</div>
                 </div>
                 <div style="flex-shrink:0;display:flex;gap:6px;align-items:center">
                   <select onchange="assignOrphan('${t.id}','${ym}',this.value)" style="font-size:11px;padding:4px 6px;min-width:150px;max-width:180px">
@@ -5935,30 +5948,30 @@ async function rCatDrill(){
   </div>
 
   <div class="card card-bordered" style="padding:0;overflow:hidden">
-    <div style="overflow-x:auto">
-    <table class="txtab" style="width:100%;border-collapse:collapse;min-width:700px">
+    <div class="tbl-wrap">
+    <table class="tx-tbl" style="min-width:700px">
       <thead>
-        <tr style="background:var(--bg2);border-bottom:1px solid var(--border)">
-          <th style="padding:10px 12px;text-align:left;font-size:var(--fs-xxs);text-transform:uppercase;letter-spacing:.06em;color:var(--text3);cursor:pointer" onclick="sortCatDrill('date')">Date${arr('date')}</th>
-          <th style="padding:10px 12px;text-align:left;font-size:var(--fs-xxs);text-transform:uppercase;letter-spacing:.06em;color:var(--text3);cursor:pointer" onclick="sortCatDrill('desc')">Description${arr('desc')}</th>
-          <th style="padding:10px 12px;text-align:left;font-size:var(--fs-xxs);text-transform:uppercase;letter-spacing:.06em;color:var(--text3);cursor:pointer" onclick="sortCatDrill('sub')">Sub-category${arr('sub')}</th>
-          <th style="padding:10px 12px;text-align:left;font-size:var(--fs-xxs);text-transform:uppercase;letter-spacing:.06em;color:var(--text3);cursor:pointer" onclick="sortCatDrill('acc')">Account${arr('acc')}</th>
-          <th style="padding:10px 12px;text-align:right;font-size:var(--fs-xxs);text-transform:uppercase;letter-spacing:.06em;color:var(--text3);cursor:pointer" onclick="sortCatDrill('amount')">Amount${arr('amount')}</th>
+        <tr>
+          <th style="cursor:pointer" onclick="sortCatDrill('date')">Date${arr('date')}</th>
+          <th style="cursor:pointer" onclick="sortCatDrill('desc')">Description${arr('desc')}</th>
+          <th style="cursor:pointer" onclick="sortCatDrill('sub')">Sub-category${arr('sub')}</th>
+          <th style="cursor:pointer" onclick="sortCatDrill('acc')">Account${arr('acc')}</th>
+          <th style="text-align:right;cursor:pointer" onclick="sortCatDrill('amount')">Amount${arr('amount')}</th>
         </tr>
       </thead>
       <tbody>
-        ${rows.length?rows.map(t=>`<tr style="border-bottom:1px solid var(--bg3)">
-          <td style="padding:10px 12px;font-size:var(--fs-xs);color:var(--text3);white-space:nowrap">${toDD(t.date)}</td>
-          <td style="padding:10px 12px;font-size:var(--fs-xs)">${h(t.description||'')}</td>
-          <td style="padding:10px 12px;font-size:var(--fs-xxs);color:var(--text2)">${h(getSC(t.subCatId)?.name||'—')}</td>
-          <td style="padding:10px 12px;font-size:var(--fs-xxs);color:var(--text2)">${h(accName(t.accountId))}</td>
-          <td style="padding:10px 12px;font-size:var(--fs-xs);font-weight:500;text-align:right;white-space:nowrap" class="c-bad">−${fmtP(t.amount)}</td>
-        </tr>`).join(''):'<tr><td colspan="5" style="padding:2rem;text-align:center;color:var(--text3);font-size:var(--fs-xs)">No transactions match the filter</td></tr>'}
+        ${rows.length?rows.map(t=>`<tr>
+          <td style="color:var(--text3);white-space:nowrap">${toDD(t.date)}</td>
+          <td>${h(t.description||'')}</td>
+          <td style="color:var(--text2)">${h(getSC(t.subCatId)?.name||'—')}</td>
+          <td style="color:var(--text2)">${h(accName(t.accountId))}</td>
+          <td style="font-weight:500;text-align:right;white-space:nowrap" class="c-bad">−${fmtP(t.amount)}</td>
+        </tr>`).join(''):'<tr><td colspan="5" style="padding:2rem;text-align:center;color:var(--text3)">No transactions match the filter</td></tr>'}
       </tbody>
       ${rows.length?`<tfoot>
-        <tr style="background:var(--bg2);border-top:2px solid var(--border)">
-          <td colspan="4" style="padding:10px 12px;font-size:var(--fs-xs);font-weight:500">Total</td>
-          <td style="padding:10px 12px;font-size:var(--fs-xs);font-weight:600;text-align:right" class="c-bad">−${fmtP(total)}</td>
+        <tr style="background:var(--card-inset);border-top:2px solid var(--line)">
+          <td colspan="4" style="font-weight:500">Total</td>
+          <td style="font-weight:600;text-align:right" class="c-bad">−${fmtP(total)}</td>
         </tr>
       </tfoot>`:''}
     </table>
@@ -6455,7 +6468,7 @@ async function rOv(){
       <div class="fg jb" style="flex-wrap:wrap;gap:4px"><div style="font-size:var(--fs-xs);font-weight:500">${h(d.name)}</div><span class="pill pdue">Active</span></div>
       <div style="font-size:11px;color:var(--text3);margin-bottom:3px">${h(d.lender||'')}${d.profitRate?' · '+d.profitRate+'%':''}${d.endDate?' · ends '+toDD(d.endDate):' · proj. free: '+projDate}</div>
       <div class="pb" style="height:6px"><div class="pf pfd" style="width:${p}%"></div></div>
-      <div class="fg jb" style="font-size:10px;color:var(--text3);margin-top:2px"><span>Paid: ${fmtP(paid)}</span><span>Remaining: ${fmtP(d.remaining)}</span></div>
+      <div class="fg jb sub-meta"><span>Paid: ${fmtP(paid)}</span><span>Remaining: ${fmtP(d.remaining)}</span></div>
     </div>`;}).join('')||'<div class="empty" style="padding:1rem">No active debts</div>';
 
   // Bills matching for overview
@@ -6781,7 +6794,7 @@ async function rOv(){
         <div style="font-size:10px;color:var(--text3);margin-bottom:10px;text-transform:uppercase;letter-spacing:.04em">Position composition</div>
         <div class="fg" style="gap:8px;align-items:center">
           <div style="flex:${grossPositive>0?grossPositive:0.01};display:flex;height:24px;border-radius:4px;overflow:hidden;background:var(--bg3)">
-            ${cashPct>0?`<div class="priv-mask" style="width:${(totalLiquidCash/Math.max(grossPositive,0.01))*100}%;background:var(--ink-electric,#0077C1);transition:width .3s;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#fff;font-size:10px;font-weight:600;text-shadow:0 1px 2px rgba(0,0,0,.4);font-variant-numeric:tabular-nums" title="Cash ${fmt(totalLiquidCash)}">${(totalLiquidCash/Math.max(grossPositive,0.01))>=0.18?fmt(totalLiquidCash):''}</div>`:''}
+            ${cashPct>0?`<div class="priv-mask" style="width:${(totalLiquidCash/Math.max(grossPositive,0.01))*100}%;background:var(--action);transition:width .3s;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#fff;font-size:10px;font-weight:600;text-shadow:0 1px 2px rgba(0,0,0,.4);font-variant-numeric:tabular-nums" title="Cash ${fmt(totalLiquidCash)}">${(totalLiquidCash/Math.max(grossPositive,0.01))>=0.18?fmt(totalLiquidCash):''}</div>`:''}
             ${invPct>0?`<div class="priv-mask" style="width:${(totalInvestments/Math.max(grossPositive,0.01))*100}%;background:var(--pos);transition:width .3s;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#fff;font-size:10px;font-weight:600;text-shadow:0 1px 2px rgba(0,0,0,.4);font-variant-numeric:tabular-nums" title="Investments ${fmt(totalInvestments)}">${(totalInvestments/Math.max(grossPositive,0.01))>=0.18?fmt(totalInvestments):''}</div>`:''}
           </div>
           ${totalCC>0?`<div style="flex:${totalCC};display:flex;height:24px;border-radius:4px;overflow:hidden;background:var(--bg3);justify-content:flex-end">
@@ -6791,7 +6804,7 @@ async function rOv(){
         <!-- Breakdown legend below the bars with comfortable spacing -->
         <div class="fg jb" style="font-size:10px;color:var(--text3);margin-top:8px;flex-wrap:wrap;gap:12px">
           <div class="fg" style="gap:14px;flex-wrap:wrap">
-            <span style="display:flex;align-items:center;gap:5px"><span style="display:inline-block;width:10px;height:10px;background:var(--ink-electric,#0077C1);border-radius:2px"></span>Cash <strong class="priv-mask" style="color:var(--text2);font-weight:500;font-variant-numeric:tabular-nums;margin-left:2px">${fmtP(totalLiquidCash)}</strong></span>
+            <span style="display:flex;align-items:center;gap:5px"><span style="display:inline-block;width:10px;height:10px;background:var(--action);border-radius:2px"></span>Cash <strong class="priv-mask" style="color:var(--text2);font-weight:500;font-variant-numeric:tabular-nums;margin-left:2px">${fmtP(totalLiquidCash)}</strong></span>
             ${invPct>0?`<span style="display:flex;align-items:center;gap:5px"><span style="display:inline-block;width:10px;height:10px;background:var(--pos);border-radius:2px"></span>Investments <strong class="priv-mask" style="color:var(--text2);font-weight:500;font-variant-numeric:tabular-nums;margin-left:2px">${fmtP(totalInvestments)}</strong></span>`:''}
           </div>
           ${totalCC>0?`<span style="display:flex;align-items:center;gap:5px"><span style="display:inline-block;width:10px;height:10px;background:var(--neg);border-radius:2px"></span>CC Debt <strong class="priv-mask" style="color:var(--text2);font-weight:500;font-variant-numeric:tabular-nums;margin-left:2px">${fmtP(totalCC)}</strong></span>`:''}
@@ -7052,7 +7065,7 @@ async function rOv(){
       <div class="fg jb" style="align-items:flex-start;flex-wrap:wrap;gap:14px">
         <div>
           <div style="font-size:13px;font-weight:600;color:var(--text1)">Recurring vs Discretionary</div>
-          <div style="font-size:10px;color:var(--text3);margin-top:2px">How much of your spending is locked in obligations vs flexible. Helps you see what can be cut.</div>
+          <div class="sub-meta">How much of your spending is locked in obligations vs flexible. Helps you see what can be cut.</div>
         </div>
         <div style="text-align:right">
           <div style="font-size:11px;font-weight:500;color:${flexCol}">${flexLabel}</div>
@@ -7062,19 +7075,19 @@ async function rOv(){
            Labels show inside each segment (white text with shadow for contrast on dark blue
            and dusty plum); only rendered when segment is wide enough (>=15%) to fit them. -->
       <div style="margin-top:14px;height:24px;display:flex;border-radius:4px;overflow:hidden;background:var(--bg3)">
-        <div class="priv-mask" style="width:${recPct}%;background:var(--ink-electric,#0077C1);transition:width .3s;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#fff;font-size:11px;font-weight:600;text-shadow:0 1px 2px rgba(0,0,0,.4);font-variant-numeric:tabular-nums" title="Recurring ${fmt(recurring)} (${recPct}%)">${recPct>=15?recPct+'%':''}</div>
+        <div class="priv-mask" style="width:${recPct}%;background:var(--action);transition:width .3s;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#fff;font-size:11px;font-weight:600;text-shadow:0 1px 2px rgba(0,0,0,.4);font-variant-numeric:tabular-nums" title="Recurring ${fmt(recurring)} (${recPct}%)">${recPct>=15?recPct+'%':''}</div>
         <div class="priv-mask" style="width:${disPct}%;background:var(--cat-5,#A690A4);transition:width .3s;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#fff;font-size:11px;font-weight:600;text-shadow:0 1px 2px rgba(0,0,0,.4);font-variant-numeric:tabular-nums" title="Discretionary ${fmt(discretionary)} (${disPct}%)">${disPct>=15?disPct+'%':''}</div>
       </div>
       <div class="fg jb" style="margin-top:10px;flex-wrap:wrap;gap:14px">
         <div style="flex:1;min-width:140px">
-          <div class="fg" style="gap:6px;align-items:center"><span style="display:inline-block;width:10px;height:10px;background:var(--ink-electric,#0077C1);border-radius:2px"></span><span style="font-size:11px;font-weight:500;color:var(--text2);text-transform:uppercase;letter-spacing:.04em">Recurring · ${recPct}%</span></div>
+          <div class="fg" style="gap:6px;align-items:center"><span style="display:inline-block;width:10px;height:10px;background:var(--action);border-radius:2px"></span><span style="font-size:11px;font-weight:500;color:var(--text2);text-transform:uppercase;letter-spacing:.04em">Recurring · ${recPct}%</span></div>
           <div class="priv-mask" style="font-size:18px;font-weight:600;color:var(--text1);font-variant-numeric:tabular-nums;margin-top:4px">${fmtP(recurring)}</div>
-          <div style="font-size:10px;color:var(--text3);margin-top:2px">Bills, subs, staff, debt, transfers</div>
+          <div class="sub-meta">Bills, subs, staff, debt, transfers</div>
         </div>
         <div style="flex:1;min-width:140px">
           <div class="fg" style="gap:6px;align-items:center"><span style="display:inline-block;width:10px;height:10px;background:var(--cat-5,#A690A4);border-radius:2px"></span><span style="font-size:11px;font-weight:500;color:var(--text2);text-transform:uppercase;letter-spacing:.04em">Discretionary · ${disPct}%</span></div>
           <div class="priv-mask" style="font-size:18px;font-weight:600;color:var(--text1);font-variant-numeric:tabular-nums;margin-top:4px">${fmtP(discretionary)}</div>
-          <div style="font-size:10px;color:var(--text3);margin-top:2px">Variable day-to-day spend</div>
+          <div class="sub-meta">Variable day-to-day spend</div>
         </div>
       </div>
     </div>`;
@@ -7086,7 +7099,7 @@ async function rOv(){
     <div class="fg jb" style="align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
       <div>
         <div style="font-size:13px;font-weight:600;color:var(--text1)">Spending Intelligence</div>
-        <div style="font-size:10px;color:var(--text3);margin-top:2px">Top categories with sub-category breakdown · click any row to drill into transactions</div>
+        <div class="sub-meta">Top categories with sub-category breakdown · click any row to drill into transactions</div>
       </div>
       <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text3);cursor:pointer;font-weight:400;margin:0;white-space:nowrap">
         <input type="checkbox" id="ov-exclude-debt" ${S.ovExcludeDebt!==false?'checked':''} onchange="S.ovExcludeDebt=this.checked;sched();render()" style="margin:0">
@@ -7240,7 +7253,7 @@ async function rOv(){
       <div class="fg jb" style="align-items:flex-start;margin-bottom:10px">
         <div>
           <div style="font-size:13px;font-weight:600;color:var(--text1)">Top Recipients</div>
-          <div style="font-size:10px;color:var(--text3);margin-top:2px">Largest merchants and payees in this period &middot; click any row to see all transactions</div>
+          <div class="sub-meta">Largest merchants and payees in this period &middot; click any row to see all transactions</div>
         </div>
         <div class="priv-mask" style="font-size:11px;color:var(--text3);font-variant-numeric:tabular-nums">${fmtP(totalTop)} across top 5</div>
       </div>
@@ -7251,11 +7264,11 @@ async function rOv(){
         return`<div class="fg jb" style="padding:8px 0;border-bottom:1px solid var(--bg3);cursor:pointer;align-items:center;gap:10px" onclick="TF.q='${r.display.replace(/'/g,'').substring(0,30)}';sw('txbank')" title="View transactions matching '${h(r.display.substring(0,40))}'">
           <div style="flex:1;min-width:0">
             <div style="font-size:13px;font-weight:500;color:var(--text1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h(r.display.length>50?r.display.substring(0,48)+'...':r.display)}</div>
-            <div style="font-size:10px;color:var(--text3);margin-top:2px">${catLabel} &middot; ${r.count} transaction${r.count!==1?'s':''}</div>
+            <div class="sub-meta">${catLabel} &middot; ${r.count} transaction${r.count!==1?'s':''}</div>
           </div>
           <div style="text-align:right;flex-shrink:0">
             <div class="priv-mask" style="font-size:14px;font-weight:600;color:var(--text1);font-variant-numeric:tabular-nums">${fmtP(r.total)}</div>
-            <div style="font-size:10px;color:var(--text3);margin-top:2px">${pct}% of top 5</div>
+            <div class="sub-meta">${pct}% of top 5</div>
           </div>
         </div>`;
       }).join('')}
@@ -7269,7 +7282,7 @@ async function rOv(){
     <div class="fg jb" style="margin-bottom:10px;align-items:center;flex-wrap:wrap;gap:8px">
       <div>
         <div style="font-size:13px;font-weight:600;color:var(--text1)">Forward Look &mdash; Next 30 Days</div>
-        <div style="font-size:10px;color:var(--text3);margin-top:2px">Recurring inflows and outflows · variable spend modeled separately</div>
+        <div class="sub-meta">Recurring inflows and outflows · variable spend modeled separately</div>
       </div>
       <button onclick="sw('projections')" style="background:none;border:none;cursor:pointer;color:var(--action);font-size:11px;font-weight:500;padding:0">View 12-month projections &rarr;</button>
     </div>
@@ -7295,7 +7308,7 @@ async function rOv(){
       <div class="fg jb" style="align-items:center;flex-wrap:wrap;gap:8px">
         <div>
           <div style="font-size:11px;font-weight:600;color:var(--text2)">Including variable spending (matches Projections)</div>
-          <div style="font-size:10px;color:var(--text3);margin-top:2px">Variable baseline ${fmtP(fcVarMonthly)}/mo (${fcVarMonths.length}-month avg) → projected net</div>
+          <div class="sub-meta">Variable baseline ${fmtP(fcVarMonthly)}/mo (${fcVarMonths.length}-month avg) → projected net</div>
         </div>
         <div class="priv-mask" style="font-size:18px;font-weight:600;color:${fcNetWithVar>=0?'var(--pos)':'var(--neg)'};font-variant-numeric:tabular-nums">${fmtSP(fcNetWithVar,true)}</div>
       </div>
@@ -7472,7 +7485,7 @@ async function rOv(){
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
         <div>
           <div style="font-size:13px;font-weight:600;color:var(--text1)">AI Analysis</div>
-          <div style="font-size:10px;color:var(--text3);margin-top:2px">Powered by Claude · aggregated data only, no transaction details</div>
+          <div class="sub-meta">Powered by Claude · aggregated data only, no transaction details</div>
         </div>
         <button class="btn btn-p btn-sm" id="ai-gen-btn" onclick="generateAIInsights()">Generate Insights</button>
       </div>
@@ -7489,13 +7502,13 @@ async function rOv(){
     const infoItems=alerts.filter(a=>a.level==='info');
     const renderGroup=(items,label,color,icon)=>{
       if(!items.length)return '';
-      return`<div style="margin-top:10px"><div style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:${color};margin-bottom:4px">${icon} ${label} (${items.length})</div>${items.map(a=>`<div class="fg" style="gap:10px;padding:6px 8px;align-items:flex-start;border-left:2px solid ${color};margin-bottom:4px">${a.action?`<a href="#" onclick="${a.action};return false" style="text-decoration:none;color:inherit;display:flex;gap:10px;flex:1">`:`<div style="flex:1">`}<div style="flex:1;min-width:0"><div style="font-size:12px;color:var(--text1);font-weight:500">${a.text}</div>${a.sub?`<div style="font-size:10px;color:var(--text3);margin-top:2px">${a.sub}</div>`:''}</div>${a.action?'</a>':'</div>'}</div>`).join('')}</div>`;
+      return`<div style="margin-top:10px"><div style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:${color};margin-bottom:4px">${icon} ${label} (${items.length})</div>${items.map(a=>`<div class="fg" style="gap:10px;padding:6px 8px;align-items:flex-start;border-left:2px solid ${color};margin-bottom:4px">${a.action?`<a href="#" onclick="${a.action};return false" style="text-decoration:none;color:inherit;display:flex;gap:10px;flex:1">`:`<div style="flex:1">`}<div style="flex:1;min-width:0"><div style="font-size:12px;color:var(--text1);font-weight:500">${a.text}</div>${a.sub?`<div class="sub-meta">${a.sub}</div>`:''}</div>${a.action?'</a>':'</div>'}</div>`).join('')}</div>`;
     };
     return`<div class="card card-bordered" style="margin-bottom:1rem;border-left:3px solid ${critItems.length?'var(--neg)':warnItems.length?'var(--warn)':'var(--text3)'}">
       <div class="fg jb" style="align-items:center;cursor:pointer" onclick="S.settings.ovNeedsAttentionCollapsed=${!collapsed};sched();render()">
         <div>
           <div style="font-size:13px;font-weight:600;color:var(--text1)">Needs Attention <span style="font-size:11px;font-weight:400;color:var(--text3);margin-left:6px">${alerts.length} item${alerts.length!==1?'s':''}${critItems.length?` · <span style="color:var(--neg);font-weight:500">${critItems.length} critical</span>`:''}</span></div>
-          ${collapsed?`<div style="font-size:10px;color:var(--text3);margin-top:2px">Tap to expand</div>`:''}
+          ${collapsed?`<div class="sub-meta">Tap to expand</div>`:''}
         </div>
         <span style="font-size:14px;color:var(--text3)">${collapsed?'&#9656;':'&#9662;'}</span>
       </div>
@@ -7865,7 +7878,7 @@ function rProjectionsQuality(proj){
     <div class="fg jb" style="align-items:center;margin-bottom:8px">
       <div>
         <div style="font-size:13px;font-weight:600;color:var(--text1)">Projection Quality</div>
-        <div style="font-size:10px;color:var(--text3);margin-top:2px">Inputs that drive this forecast — incomplete data means incomplete projection</div>
+        <div class="sub-meta">Inputs that drive this forecast — incomplete data means incomplete projection</div>
       </div>
     </div>
     ${oks.length?`<div style="margin-bottom:${issues.length?'10px':'0'}">${oks.map(o=>`<div style="font-size:11px;color:var(--pos);padding:3px 0">&#10003; ${h(o)}</div>`).join('')}</div>`:''}
@@ -7913,7 +7926,7 @@ function rProjectionsTable(proj){
       <div class="fg jb" style="align-items:center;flex-wrap:wrap;gap:8px">
         <div>
           <div style="font-size:13px;font-weight:600;color:var(--text1)">Monthly Projection</div>
-          <div style="font-size:10px;color:var(--text3);margin-top:2px">Starting from ${fmtP(proj.startingCash)} liquid cash · ${proj.horizon} months forward</div>
+          <div class="sub-meta">Starting from ${fmtP(proj.startingCash)} liquid cash · ${proj.horizon} months forward</div>
         </div>
         <div style="font-size:10px;color:var(--text3);display:flex;gap:12px;flex-wrap:wrap">
           <span><span style="display:inline-block;width:10px;height:10px;background:color-mix(in srgb,var(--pos) 12%,transparent);border-radius:2px;vertical-align:middle"></span> Comfortable</span>
@@ -8015,7 +8028,7 @@ function rProjectionsScenarios(proj){
       <div class="fg jb" style="align-items:center">
         <div>
           <div style="font-size:13px;font-weight:600;color:var(--text1)">Scenario Adjustments</div>
-          <div style="font-size:10px;color:var(--text3);margin-top:2px">${hasAnyAdj?'<span style="color:var(--action);font-weight:500">Adjustments active</span> · ':''}Test "what if" scenarios — income changes, spending cuts, one-time events</div>
+          <div class="sub-meta">${hasAnyAdj?'<span style="color:var(--action);font-weight:500">Adjustments active</span> · ':''}Test "what if" scenarios — income changes, spending cuts, one-time events</div>
         </div>
         <button class="btn btn-sm" onclick="S._projShowScenarios=true;render()">${hasAnyAdj?'Edit':'Open'} →</button>
       </div>
@@ -8041,7 +8054,7 @@ function rProjectionsScenarios(proj){
     <div class="fg jb" style="align-items:center;margin-bottom:14px">
       <div>
         <div style="font-size:13px;font-weight:600;color:var(--text1)">Scenario Adjustments</div>
-        <div style="font-size:10px;color:var(--text3);margin-top:2px">Changes here affect the table and chart above. Reset returns to baseline. Adjustments are session-only.</div>
+        <div class="sub-meta">Changes here affect the table and chart above. Reset returns to baseline. Adjustments are session-only.</div>
       </div>
       <div class="fg" style="gap:6px">
         ${hasAnyAdj?`<button class="btn btn-sm btn-d" onclick="_projResetScenarios()">Reset</button>`:''}
@@ -8053,12 +8066,12 @@ function rProjectionsScenarios(proj){
       <div>
         <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Income adjustment: <span class="priv-mask" style="color:${_projScenario.incomeAdj>0?'var(--pos)':_projScenario.incomeAdj<0?'var(--neg)':'var(--text2)'}">${_projScenario.incomeAdj>0?'+':''}${_projScenario.incomeAdj}%</span></label>
         <input type="range" min="-50" max="50" step="5" value="${_projScenario.incomeAdj||0}" oninput="_projScenario.incomeAdj=parseInt(this.value);clearTimeout(window._projDeb);window._projDeb=setTimeout(render,200)" style="width:100%">
-        <div style="font-size:10px;color:var(--text3);margin-top:2px">Base recurring income: ${fmtP(proj.baseIncome)}/mo → adjusted: ${fmtP(proj.adjustedIncome)}/mo</div>
+        <div class="sub-meta">Base recurring income: ${fmtP(proj.baseIncome)}/mo → adjusted: ${fmtP(proj.adjustedIncome)}/mo</div>
       </div>
       <div>
         <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Variable spend adjustment: <span class="priv-mask" style="color:${_projScenario.variableAdj<0?'var(--pos)':_projScenario.variableAdj>0?'var(--neg)':'var(--text2)'}">${_projScenario.variableAdj>0?'+':''}${_projScenario.variableAdj}%</span></label>
         <input type="range" min="-50" max="50" step="5" value="${_projScenario.variableAdj||0}" oninput="_projScenario.variableAdj=parseInt(this.value);clearTimeout(window._projDeb);window._projDeb=setTimeout(render,200)" style="width:100%">
-        <div style="font-size:10px;color:var(--text3);margin-top:2px">Base variable spend: ${fmtP(proj.baseVariable)}/mo → adjusted: ${fmtP(proj.adjustedVariable)}/mo</div>
+        <div class="sub-meta">Base variable spend: ${fmtP(proj.baseVariable)}/mo → adjusted: ${fmtP(proj.adjustedVariable)}/mo</div>
       </div>
     </div>
 
@@ -9517,7 +9530,7 @@ function rTransferMatching(){
       <td><div style="font-size:var(--fs-xs);font-weight:500">${h(t.description)}</div></td>
       <td style="font-size:var(--fs-xs)">${acc?.name||'--'}</td>
       <td class="${dir==='out'?'c-bad':'c-ok'}" style="text-align:right;font-weight:500;white-space:nowrap">${dir==='out'?'-':'+'}${fmtP(t.amount)}</td>
-      <td><span class="badge" style="background:#FEF3C7;color:#92400E">Pending</span><div style="font-size:10px;color:var(--text3);margin-top:2px">Other account not yet imported</div></td>
+      <td><span class="badge" style="background:#FEF3C7;color:#92400E">Pending</span><div class="sub-meta">Other account not yet imported</div></td>
       <td style="white-space:nowrap">
         <button class="btn btn-xs" onclick="showMatchPicker('${t.id}')">Match manually</button>
         <button class="btn btn-xs" onclick="openEditTxn('${t.id}','${ym}')">Edit</button>
@@ -9532,7 +9545,7 @@ function rTransferMatching(){
       <td style="color:var(--text3);font-size:var(--fs-xs);white-space:nowrap">${toDD(p.date)}</td>
       <td style="font-size:var(--fs-xs)">${outAcc?.name||'--'} <span style="color:var(--text3)">&#8594;</span> ${inAcc?.name||'--'}</td>
       <td style="font-weight:500;white-space:nowrap">${fmtP(p.amount)}</td>
-      <td><span class="badge b-tr">${p.confirmedBy==='tolerance'?'Tolerance match':p.confirmedBy==='auto'?'Auto-matched':'Manually matched'}</span>${p.toleranceNote?`<div style="font-size:10px;color:var(--text3);margin-top:2px">${h(p.toleranceNote)}</div>`:''}</td>
+      <td><span class="badge b-tr">${p.confirmedBy==='tolerance'?'Tolerance match':p.confirmedBy==='auto'?'Auto-matched':'Manually matched'}</span>${p.toleranceNote?`<div class="sub-meta">${h(p.toleranceNote)}</div>`:''}</td>
       <td><button class="btn btn-xs btn-d" onclick="unmatch('${p.id}')">Unmatch</button></td>
     </tr>`;}).join(''):`<tr><td colspan="5" class="empty">No matched pairs yet</td></tr>`;
 
@@ -12114,7 +12127,7 @@ function openMergeSubModal(keepId){
     return`<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-bottom:1px solid var(--border)">
       <div style="flex:1;min-width:0">
         <div style="font-size:13px;font-weight:500;color:var(--text1)">${h(sub.name||'(unnamed)')}</div>
-        <div style="font-size:10px;color:var(--text3);margin-top:2px">${count} payment${count===1?'':'s'}${last?` \u00b7 last ${toDD(last.date)}`:' \u00b7 no payments yet'}${sub.nativeAmount?` \u00b7 ${sub.nativeCurrency} ${sub.nativeAmount.toFixed(2)}/${sub.cycle==='annual'?'yr':'mo'}`:''}</div>
+        <div class="sub-meta">${count} payment${count===1?'':'s'}${last?` \u00b7 last ${toDD(last.date)}`:' \u00b7 no payments yet'}${sub.nativeAmount?` \u00b7 ${sub.nativeCurrency} ${sub.nativeAmount.toFixed(2)}/${sub.cycle==='annual'?'yr':'mo'}`:''}</div>
         ${warnHtml}
       </div>
       <button class="btn btn-xs btn-p" onclick="confirmMergeSub('${keepId}','${sub.id}')" style="flex-shrink:0">Merge into &ldquo;${h((keepSub.name||'').substr(0,20))}&rdquo;</button>
@@ -12256,7 +12269,7 @@ function openUnmergeSubModal(subId){
     return`<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-bottom:1px solid var(--border)">
       <div style="flex:1;min-width:0">
         <div style="font-size:13px;font-weight:500;color:var(--text1)">${h(entry.fromName||'(unnamed)')}</div>
-        <div style="font-size:10px;color:var(--text3);margin-top:2px">Merged ${when} \u00b7 ${(entry.fromPatterns||[]).length} pattern${(entry.fromPatterns||[]).length===1?'':'s'} \u00b7 ${entry.fromCurrency||'SAR'}${entry.fromAmount?' '+entry.fromAmount.toFixed(2):''}/${entry.fromCycle==='annual'?'yr':'mo'}</div>
+        <div class="sub-meta">Merged ${when} \u00b7 ${(entry.fromPatterns||[]).length} pattern${(entry.fromPatterns||[]).length===1?'':'s'} \u00b7 ${entry.fromCurrency||'SAR'}${entry.fromAmount?' '+entry.fromAmount.toFixed(2):''}/${entry.fromCycle==='annual'?'yr':'mo'}</div>
       </div>
       <button class="btn btn-xs" onclick="executeUnmergeSub('${subId}',${realIdx})" style="flex-shrink:0">Restore</button>
     </div>`;
@@ -14828,7 +14841,7 @@ function rAcc(){
           <div style="width:14px;height:14px;border-radius:3px;background:${g.color||'#9CA0A8'};flex-shrink:0;border:1px solid color-mix(in srgb,${g.color||'#9CA0A8'} 60%,transparent)"></div>
           <div style="flex:1;min-width:0">
             <div style="font-weight:500;color:var(--text1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(g.name)}</div>
-            <div style="font-size:10px;color:var(--text3);margin-top:2px">${memberCount} account${memberCount===1?'':'s'}${g.description?' · '+h(g.description):''}</div>
+            <div class="sub-meta">${memberCount} account${memberCount===1?'':'s'}${g.description?' · '+h(g.description):''}</div>
           </div>
         </div>
         <div class="fg" style="gap:4px;flex-shrink:0">
@@ -15906,7 +15919,7 @@ function debtFormHtml(){
           </div>
           <div class="fr" style="margin-bottom:8px">
             <div><label class="lbl">Late payment fee (SAR)</label><input type="number" inputmode="decimal" id="db-late-fee" min="0" step="0.01" placeholder="e.g. 100 (Saudi standard)"></div>
-            <div><label class="lbl">FX markup on foreign txns (%)</label><input type="number" inputmode="decimal" id="db-fx-markup" min="0" max="20" step="0.01" placeholder="e.g. 2.75"><div style="font-size:10px;color:var(--text3);margin-top:2px">Reserved — markup cost computation requires per-transaction currency tagging (planned).</div></div>
+            <div><label class="lbl">FX markup on foreign txns (%)</label><input type="number" inputmode="decimal" id="db-fx-markup" min="0" max="20" step="0.01" placeholder="e.g. 2.75"><div class="sub-meta">Reserved — markup cost computation requires per-transaction currency tagging (planned).</div></div>
           </div>
           <div style="font-size:11px;color:var(--text3);line-height:1.6;padding:8px 10px;background:var(--bg);border-radius:var(--rsm);border:1px dashed var(--border)">
             <strong>Saudi defaults reference:</strong> APR 18&ndash;30% &middot; Annual fee SAR 0&ndash;575 &middot; Late fee SAR 100 &middot; FX markup 2.5&ndash;3% &middot; Statement cycle 30 days, due 21&ndash;25 days after close. Find your exact terms on the cardholder agreement or call your bank.
@@ -16019,10 +16032,10 @@ function rDebts(){
       <div style="margin-top:14px;padding:14px;background:color-mix(in srgb,var(--pos) 6%,var(--bg2));border-radius:var(--rmd);border:1px solid color-mix(in srgb,var(--pos) 20%,transparent)">
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:12px">Early Settlement Analysis${stlDate}</div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:12px">
-          <div><div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:4px">Pay Today</div><div style="font-size:18px;font-weight:600;letter-spacing:-.03em;font-variant-numeric:tabular-nums">${fmtP(stlAmt)}</div>${stlFees>0?`<div style="font-size:10px;color:var(--text3);margin-top:2px">incl. ${fmtP(stlFees)} fees</div>`:''}</div>
-          <div><div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:4px">Remaining Principal</div><div style="font-size:18px;font-weight:600;letter-spacing:-.03em;font-variant-numeric:tabular-nums">${fmtP(remainingPrincipal)}</div><div style="font-size:10px;color:var(--text3);margin-top:2px">what you actually owe</div></div>
-          <div><div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--pos);margin-bottom:4px">Estimated Savings</div><div style="font-size:18px;font-weight:600;letter-spacing:-.03em;font-variant-numeric:tabular-nums;color:var(--pos)">${fmtP(savings)}</div><div style="font-size:10px;color:var(--text3);margin-top:2px">future profit waived</div></div>
-          <div><div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:4px">Remaining vs. Pay Now</div><div style="font-size:18px;font-weight:600;letter-spacing:-.03em;font-variant-numeric:tabular-nums;color:var(--warn)">${fmtP(liveBalance-stlAmt)}</div><div style="font-size:10px;color:var(--text3);margin-top:2px">premium for keeping loan</div></div>
+          <div><div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:4px">Pay Today</div><div style="font-size:18px;font-weight:600;letter-spacing:-.03em;font-variant-numeric:tabular-nums">${fmtP(stlAmt)}</div>${stlFees>0?`<div class="sub-meta">incl. ${fmtP(stlFees)} fees</div>`:''}</div>
+          <div><div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:4px">Remaining Principal</div><div style="font-size:18px;font-weight:600;letter-spacing:-.03em;font-variant-numeric:tabular-nums">${fmtP(remainingPrincipal)}</div><div class="sub-meta">what you actually owe</div></div>
+          <div><div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--pos);margin-bottom:4px">Estimated Savings</div><div style="font-size:18px;font-weight:600;letter-spacing:-.03em;font-variant-numeric:tabular-nums;color:var(--pos)">${fmtP(savings)}</div><div class="sub-meta">future profit waived</div></div>
+          <div><div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:4px">Remaining vs. Pay Now</div><div style="font-size:18px;font-weight:600;letter-spacing:-.03em;font-variant-numeric:tabular-nums;color:var(--warn)">${fmtP(liveBalance-stlAmt)}</div><div class="sub-meta">premium for keeping loan</div></div>
         </div>
         <div style="font-size:11px;color:var(--text3);line-height:1.7;padding:8px 10px;background:var(--bg);border-radius:var(--rsm)">Settling today saves ${fmtP(savings)} in bank profit. The remaining balance in Lanki (${fmtP(liveBalance)}) includes all future scheduled profit — paying ${fmtP(stlAmt)} today closes the loan entirely.</div>
       </div>`;
@@ -16100,12 +16113,12 @@ function rDebts(){
             <div style="padding:10px 12px;background:var(--bg2);border-radius:var(--rsm)">
               <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--text3);margin-bottom:3px">Statement closes</div>
               <div style="font-size:16px;font-weight:600;letter-spacing:-.02em">${cyc.daysToClose===0?'Today':cyc.daysToClose<0?Math.abs(cyc.daysToClose)+'d ago':'in '+cyc.daysToClose+'d'}</div>
-              <div style="font-size:10px;color:var(--text3);margin-top:2px">${toDD(localISO(cyc.closeDate))}</div>
+              <div class="sub-meta">${toDD(localISO(cyc.closeDate))}</div>
             </div>
             <div style="padding:10px 12px;background:var(--bg2);border-radius:var(--rsm)">
               <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--text3);margin-bottom:3px">Payment due</div>
               <div style="font-size:16px;font-weight:600;letter-spacing:-.02em;color:${cyc.daysToDue<0?'var(--neg)':cyc.daysToDue<=3?'var(--warn)':'var(--text1)'}">${cyc.daysToDue===0?'Today':cyc.daysToDue<0?Math.abs(cyc.daysToDue)+'d overdue':'in '+cyc.daysToDue+'d'}</div>
-              <div style="font-size:10px;color:var(--text3);margin-top:2px">${toDD(localISO(cyc.dueDate))}</div>
+              <div class="sub-meta">${toDD(localISO(cyc.dueDate))}</div>
             </div>
           `:''}
           ${stat?`
@@ -16170,9 +16183,9 @@ function rDebts(){
       })()}
       `:`
       <div class="g3" style="margin-bottom:12px">
-        <div><div class="klbl">Loan Value</div><div style="font-size:20px;font-weight:600;letter-spacing:-.03em">${fmtP(d.original||0)}</div>${d.borrowedAmount?`<div style="font-size:10px;color:var(--text3);margin-top:2px">Borrowed: ${fmtP(d.borrowedAmount)}${origProfit?` · Profit: ${fmtP(origProfit)}`:''}</div>`:''}</div>
-        <div><div class="klbl">Paid Since Tracking</div><div style="font-size:20px;font-weight:600;letter-spacing:-.03em" class="c-ok">${fmtP(totalPaid)}</div><div style="font-size:10px;color:var(--text3);margin-top:2px">${(d.payments||[]).length} payment${(d.payments||[]).length!==1?'s':''}</div></div>
-        <div><div class="klbl">Remaining</div><div style="font-size:20px;font-weight:600;letter-spacing:-.03em" class="c-warn">${fmtP(liveBalance)}</div>${d.installment?`<div style="font-size:10px;color:var(--text3);margin-top:2px">${fmtP(d.installment)}/mo</div>`:''}</div>
+        <div><div class="klbl">Loan Value</div><div style="font-size:20px;font-weight:600;letter-spacing:-.03em">${fmtP(d.original||0)}</div>${d.borrowedAmount?`<div class="sub-meta">Borrowed: ${fmtP(d.borrowedAmount)}${origProfit?` · Profit: ${fmtP(origProfit)}`:''}</div>`:''}</div>
+        <div><div class="klbl">Paid Since Tracking</div><div style="font-size:20px;font-weight:600;letter-spacing:-.03em" class="c-ok">${fmtP(totalPaid)}</div><div class="sub-meta">${(d.payments||[]).length} payment${(d.payments||[]).length!==1?'s':''}</div></div>
+        <div><div class="klbl">Remaining</div><div style="font-size:20px;font-weight:600;letter-spacing:-.03em" class="c-warn">${fmtP(liveBalance)}</div>${d.installment?`<div class="sub-meta">${fmtP(d.installment)}/mo</div>`:''}</div>
         <div><div class="klbl">Projected Payoff</div><div style="font-size:14px;font-weight:500;margin-top:4px">${projDate}</div></div>
       </div>
       <div style="font-size:var(--fs-xxs);color:var(--text3);margin-bottom:5px;display:flex;justify-content:space-between"><span>${p}% repaid of loan value</span><span style="color:var(--action)">${paidFromTxns>0?'⬡ '+fmtP(paidFromTxns)+' from '+((d.payments||[]).filter(pp=>pp.source==='import').length)+' linked transactions':''}</span></div>
@@ -16652,7 +16665,7 @@ function rSettings(){
       <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Backup Reminder</div><div class="settings-row-sub">${S.settings.lastBackup?'Last backup: '+toDD(S.settings.lastBackup.substr(0,10)):'No backup taken yet'}</div></div><div class="settings-row-ctrl"><select onchange="S.settings.backupReminderMonths=parseInt(this.value);sched();toast('Backup reminder updated')"><option value="1" ${(S.settings.backupReminderMonths||2)===1?'selected':''}>Every month</option><option value="2" ${(S.settings.backupReminderMonths||2)===2?'selected':''}>Every 2 months</option><option value="3" ${(S.settings.backupReminderMonths||2)===3?'selected':''}>Every 3 months</option></select></div></div>
     </div>
     <div class="settings-section">
-      <div class="settings-section-label">Statement Parser</div>
+      <div class="settings-section-head"><h3>Statement Parser</h3></div>
       <div class="settings-row" style="align-items:flex-start"><div class="settings-row-label"><div class="settings-row-title">Auto-apply Rules</div><div class="settings-row-sub">When enabled, Lanki re-runs your learned rules across all transactions in the background whenever a rule is created or upgraded. It only touches uncategorized transactions or ones previously auto-assigned by rules — manual categorizations are never overwritten. Turn off if you prefer to apply rules only at statement import or via the Apply Rules button.</div></div><div class="settings-row-ctrl"><input type="checkbox" ${S.settings.autoRuleSweep!==false?'checked':''} onchange="S.settings.autoRuleSweep=this.checked;sched();toast(this.checked?'Auto-apply Rules enabled':'Auto-apply Rules disabled')" style="cursor:pointer;width:18px;height:18px"></div></div>
       <div class="settings-row" style="align-items:flex-start"><div class="settings-row-label"><div class="settings-row-title">Edge Function URL</div><div class="settings-row-sub">Your Supabase Edge Function endpoint for AI extraction. See deployment guide.</div></div><div class="settings-row-ctrl" style="min-width:240px"><input type="text" placeholder="https://xxx.supabase.co/functions/v1/extract" value="${S.settings.edgeFnUrl||''}" onchange="S.settings.edgeFnUrl=this.value.trim();sched()" style="width:100%;font-size:11px;font-family:monospace"></div></div>
       <div class="settings-row" style="align-items:flex-start"><div class="settings-row-label"><div class="settings-row-title">Edge Function Secret</div><div class="settings-row-sub">V8.17 — shared secret used to authenticate dashboard calls to extract-statement and ai-proxy. Set the matching value as <code>LANKI_SECRET</code> in Supabase Edge Function env vars. If empty, AI extraction and AI categorization will be rejected by the edge functions.</div></div><div class="settings-row-ctrl" style="min-width:240px"><input type="password" placeholder="Paste secret value" value="${S.settings.lankiSecret||''}" onchange="S.settings.lankiSecret=this.value.trim();sched();toast('Edge Function secret saved')" style="width:100%;font-size:11px;font-family:monospace"></div></div>
@@ -16690,7 +16703,7 @@ function rSettings(){
     const subRows=(S.submitters||[]).map((sub,si)=>`<div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">${h(sub.name)}</div><div class="settings-row-sub">PIN: ••••</div></div><div class="settings-row-ctrl"><button class="btn btn-xs btn-d" onclick="delSubmitter(${si})">Remove</button></div></div>`).join('');
     pageContent=`<div class="settings-page-title">Household</div>
     <div class="settings-section">
-      <div class="settings-section-label">Family Members</div>
+      <div class="settings-section-head"><h3>Family Members</h3></div>
       <div class="settings-section-body">
         <div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:12px">Used to tag investment transactions and track capital per member.</div>
         ${fmRows||'<div style="font-size:var(--fs-xs);color:var(--text3);padding:8px 0">No family members yet.</div>'}
@@ -16702,7 +16715,7 @@ function rSettings(){
       </div>
     </div>
     <div class="settings-section">
-      <div class="settings-section-label">Reimbursement Submitters</div>
+      <div class="settings-section-head"><h3>Reimbursement Submitters</h3></div>
       <div class="settings-section-body">
         <div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:12px">Each person gets a 4-digit PIN to submit expenses via lanki.app/submit/.</div>
         ${subRows||'<div style="font-size:var(--fs-xs);color:var(--text3);padding:8px 0">No submitters yet.</div>'}
@@ -16903,7 +16916,7 @@ function rDiagnostics(){
   ${verdict()}
 
   <div class="settings-section">
-    <div class="settings-section-label">KPI summary</div>
+    <div class="settings-section-head"><h3>KPI summary</h3></div>
     <div class="settings-section-body">
       <div style="display:grid;grid-template-columns:1fr auto;gap:6px 14px;font-size:13px;line-height:1.5">
         <div style="color:var(--text2)">Income</div><div style="font-weight:500;text-align:right;font-variant-numeric:tabular-nums" class="fmt-money">${fmt(inc)}</div>
@@ -16917,7 +16930,7 @@ function rDiagnostics(){
   </div>
 
   <div class="settings-section">
-    <div class="settings-section-label">Internal transfers (should net to zero)</div>
+    <div class="settings-section-head"><h3>Internal transfers (should net to zero)</h3></div>
     <div class="settings-section-body">
       <div style="display:grid;grid-template-columns:1fr auto;gap:6px 14px;font-size:13px;line-height:1.5">
         <div style="color:var(--text2)">Transfers IN</div><div style="font-weight:500;text-align:right;font-variant-numeric:tabular-nums" class="fmt-money">${fmt(tIn)}</div>
@@ -16933,7 +16946,7 @@ function rDiagnostics(){
 
   ${hasOpenings?`
   <div class="settings-section">
-    <div class="settings-section-label">Cash Position bridge</div>
+    <div class="settings-section-head"><h3>Cash Position bridge</h3></div>
     <div class="settings-section-body">
       <div style="display:grid;grid-template-columns:1fr auto;gap:6px 14px;font-size:13px;line-height:1.5">
         <div style="color:var(--text2)">Opening (sum of cash accounts)</div><div style="font-weight:500;text-align:right;font-variant-numeric:tabular-nums" class="fmt-money">${fmt(aggOpening)}</div>
@@ -16956,7 +16969,7 @@ function rDiagnostics(){
   </div>
   `:`
   <div class="settings-section">
-    <div class="settings-section-label">Cash Position bridge</div>
+    <div class="settings-section-head"><h3>Cash Position bridge</h3></div>
     <div class="settings-section-body">
       <div style="font-size:12px;color:var(--text3)">Set opening balances on cash accounts to enable Cash Position reconciliation.</div>
     </div>
@@ -16964,14 +16977,14 @@ function rDiagnostics(){
   `}
 
   <div class="settings-section">
-    <div class="settings-section-label">Per-account movement (${fmtYM(auditMonth)})</div>
-    <div style="overflow-x:auto"><table style="width:100%;font-size:12px;border-collapse:collapse">
-      <thead><tr style="border-bottom:1px solid var(--border)"><th style="text-align:left;padding:8px;font-weight:500;color:var(--text2)">Account</th><th style="text-align:left;padding:8px;font-weight:500;color:var(--text2)">Type</th><th style="text-align:right;padding:8px;font-weight:500;color:var(--text2)">Movement</th><th style="text-align:right;padding:8px;font-weight:500;color:var(--text2)">Txns</th></tr></thead>
-      <tbody>${accMovement.map(r=>`<tr style="border-bottom:1px solid var(--border)">
-        <td style="padding:8px">${h(r.acc.name||'?')}</td>
-        <td style="padding:8px;color:var(--text3);font-size:11px">${r.acc.type||'?'}</td>
-        <td style="padding:8px;text-align:right;font-variant-numeric:tabular-nums;color:${r.delta>=0?'var(--pos)':'var(--neg)'}" class="fmt-money">${fmtS(r.delta,true)}</td>
-        <td style="padding:8px;text-align:right;color:var(--text3)">${r.count}</td>
+    <div class="settings-section-head"><h3>Per-account movement (${fmtYM(auditMonth)})</h3></div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Account</th><th>Type</th><th style="text-align:right">Movement</th><th style="text-align:right">Txns</th></tr></thead>
+      <tbody>${accMovement.map(r=>`<tr>
+        <td>${h(r.acc.name||'?')}</td>
+        <td style="color:var(--text3);font-size:11px">${r.acc.type||'?'}</td>
+        <td style="text-align:right;color:${r.delta>=0?'var(--pos)':'var(--neg)'}" class="fmt-money">${fmtS(r.delta,true)}</td>
+        <td style="text-align:right;color:var(--text3)">${r.count}</td>
       </tr>`).join('')}</tbody>
     </table></div>
     <div style="font-size:11px;color:var(--text3);padding:8px 0 0;line-height:1.5">
@@ -16980,7 +16993,7 @@ function rDiagnostics(){
   </div>
 
   <div class="settings-section">
-    <div class="settings-section-label">Credit card payment flows</div>
+    <div class="settings-section-head"><h3>Credit card payment flows</h3></div>
     <div class="settings-section-body">
       ${ccPaymentsOut.length===0&&ccPaymentsIn.length===0?`<div style="font-size:12px;color:var(--text3)">No CC payment activity in ${fmtYM(auditMonth)}.</div>`:`
       <div style="font-size:12px;line-height:1.5">
@@ -16996,18 +17009,18 @@ function rDiagnostics(){
 
   ${orphans.length>0?`
   <div class="settings-section">
-    <div class="settings-section-label">Orphan transfers (${orphans.length})</div>
+    <div class="settings-section-head"><h3>Orphan transfers (${orphans.length})</h3></div>
     <div style="font-size:12px;color:var(--text2);line-height:1.5;padding:8px 0">
       Transfers without a matched counterpart in another account. Each one should either match (counterpart imported) or be re-classified to its actual type (income/expense/external).
     </div>
-    <div style="overflow-x:auto"><table style="width:100%;font-size:12px;border-collapse:collapse">
-      <thead><tr style="border-bottom:1px solid var(--border)"><th style="text-align:left;padding:8px;font-weight:500;color:var(--text2)">Date</th><th style="text-align:left;padding:8px;font-weight:500;color:var(--text2)">Description</th><th style="text-align:left;padding:8px;font-weight:500;color:var(--text2)">Account</th><th style="text-align:right;padding:8px;font-weight:500;color:var(--text2)">Amount</th><th style="text-align:left;padding:8px;font-weight:500;color:var(--text2)">Dir</th></tr></thead>
-      <tbody>${orphans.map(t=>{const acc=S.accounts.find(a=>a.id===t.accountId);return`<tr style="border-bottom:1px solid var(--border)">
-        <td style="padding:8px;color:var(--text3);white-space:nowrap">${toDD(t.date)}</td>
-        <td style="padding:8px">${h((t.description||'').substr(0,50))}</td>
-        <td style="padding:8px;color:var(--text3);font-size:11px">${h(acc?.name||'?')}</td>
-        <td style="padding:8px;text-align:right;font-variant-numeric:tabular-nums" class="fmt-money">${fmt(t.amount)}</td>
-        <td style="padding:8px;color:${dir(t)==='in'?'var(--pos)':'var(--neg)'}">${dir(t)}</td>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Date</th><th>Description</th><th>Account</th><th style="text-align:right">Amount</th><th>Dir</th></tr></thead>
+      <tbody>${orphans.map(t=>{const acc=S.accounts.find(a=>a.id===t.accountId);return`<tr>
+        <td style="color:var(--text3);white-space:nowrap">${toDD(t.date)}</td>
+        <td>${h((t.description||'').substr(0,50))}</td>
+        <td style="color:var(--text3);font-size:11px">${h(acc?.name||'?')}</td>
+        <td style="text-align:right" class="fmt-money">${fmt(t.amount)}</td>
+        <td style="color:${dir(t)==='in'?'var(--pos)':'var(--neg)'}">${dir(t)}</td>
       </tr>`;}).join('')}</tbody>
     </table></div>
   </div>
@@ -17015,17 +17028,17 @@ function rDiagnostics(){
 
   ${fxTxns.length>0?`
   <div class="settings-section">
-    <div class="settings-section-label">FX variance transactions (${fxTxns.length})</div>
+    <div class="settings-section-head"><h3>FX variance transactions (${fxTxns.length})</h3></div>
     <div style="font-size:12px;color:var(--text2);line-height:1.5;padding:8px 0">
       Auto-created by Lanki on matched pairs where amounts differed (typically AmEx USD payments). All should land on the receiving (CC) account.
     </div>
-    <div style="overflow-x:auto"><table style="width:100%;font-size:12px;border-collapse:collapse">
-      <thead><tr style="border-bottom:1px solid var(--border)"><th style="text-align:left;padding:8px;font-weight:500;color:var(--text2)">Date</th><th style="text-align:left;padding:8px;font-weight:500;color:var(--text2)">Account</th><th style="text-align:right;padding:8px;font-weight:500;color:var(--text2)">Amount</th><th style="text-align:left;padding:8px;font-weight:500;color:var(--text2)">Type</th></tr></thead>
-      <tbody>${fxTxns.map(t=>{const acc=S.accounts.find(a=>a.id===t.accountId);return`<tr style="border-bottom:1px solid var(--border)">
-        <td style="padding:8px;color:var(--text3);white-space:nowrap">${toDD(t.date)}</td>
-        <td style="padding:8px;font-size:11px">${h(acc?.name||'?')}</td>
-        <td style="padding:8px;text-align:right;font-variant-numeric:tabular-nums" class="fmt-money">${fmt(t.amount)}</td>
-        <td style="padding:8px;color:${t.type==='expense'?'var(--neg)':'var(--pos)'}">${t.type}</td>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Date</th><th>Account</th><th style="text-align:right">Amount</th><th>Type</th></tr></thead>
+      <tbody>${fxTxns.map(t=>{const acc=S.accounts.find(a=>a.id===t.accountId);return`<tr>
+        <td style="color:var(--text3);white-space:nowrap">${toDD(t.date)}</td>
+        <td style="font-size:11px">${h(acc?.name||'?')}</td>
+        <td style="text-align:right" class="fmt-money">${fmt(t.amount)}</td>
+        <td style="color:${t.type==='expense'?'var(--neg)':'var(--pos)'}">${t.type}</td>
       </tr>`;}).join('')}</tbody>
     </table></div>
   </div>
@@ -17033,7 +17046,7 @@ function rDiagnostics(){
 
   ${drifted.length>0?`
   <div class="settings-section">
-    <div class="settings-section-label">Type / category drift (${drifted.length})</div>
+    <div class="settings-section-head"><h3>Type / category drift (${drifted.length})</h3></div>
     <div style="font-size:12px;color:var(--text2);line-height:1.5;padding:8px 0">
       Transactions whose type does not match their category. Run Auto-fix in Sanity Check to resolve.
     </div>
@@ -17042,7 +17055,7 @@ function rDiagnostics(){
   `:''}
 
   <div class="settings-section">
-    <div class="settings-section-label">Credit card cost analysis (V8.15)</div>
+    <div class="settings-section-head"><h3>Credit card cost analysis (V8.15)</h3></div>
     ${(()=>{
       const ccs=S.debts.filter(d=>d.type==='credit_card'&&d.status==='active');
       if(ccs.length===0)return `<div style="font-size:12px;color:var(--text3);padding:14px 0">No active credit cards configured.</div>`;
@@ -17105,7 +17118,7 @@ function rDiagnostics(){
   </div>
 
   <div class="settings-section">
-    <div class="settings-section-label">Migration registry</div>
+    <div class="settings-section-head"><h3>Migration registry</h3></div>
     <div style="font-size:12px;color:var(--text2);line-height:1.5;padding:8px 0">
       Migrations run once at boot to retrofit historical data. ${migrationsRun} of ${MIGRATIONS.length} migration${MIGRATIONS.length===1?' has':'s have'} run on this vault.
     </div>
@@ -17119,16 +17132,16 @@ function rDiagnostics(){
   </div>
 
   <div class="settings-section">
-    <div class="settings-section-label">All months — health snapshot</div>
-    <div style="overflow-x:auto"><table style="width:100%;font-size:12px;border-collapse:collapse">
-      <thead><tr style="border-bottom:1px solid var(--border)"><th style="text-align:left;padding:8px;font-weight:500;color:var(--text2)">Month</th><th style="text-align:right;padding:8px;font-weight:500;color:var(--text2)">Txns</th><th style="text-align:right;padding:8px;font-weight:500;color:var(--text2)">Orphans</th><th style="text-align:right;padding:8px;font-weight:500;color:var(--text2)">FX</th><th style="text-align:right;padding:8px;font-weight:500;color:var(--text2)">Drift</th><th style="text-align:center;padding:8px;font-weight:500;color:var(--text2)">Status</th></tr></thead>
-      <tbody>${monthStatus.map(s=>{const clean=s.orphans===0&&s.drift===0;return`<tr style="border-bottom:1px solid var(--border);${s.month===auditMonth?'background:color-mix(in srgb,var(--action) 6%,transparent)':''}">
-        <td style="padding:8px"><a href="#" onclick="DG.month='${s.month}';render();return false" style="color:var(--action);text-decoration:none">${fmtYM(s.month)}</a></td>
-        <td style="padding:8px;text-align:right;color:var(--text3)">${s.txns}</td>
-        <td style="padding:8px;text-align:right;color:${s.orphans>0?'var(--warn)':'var(--text3)'}">${s.orphans}</td>
-        <td style="padding:8px;text-align:right;color:var(--text3)">${s.fx}</td>
-        <td style="padding:8px;text-align:right;color:${s.drift>0?'var(--warn)':'var(--text3)'}">${s.drift}</td>
-        <td style="padding:8px;text-align:center">${clean?'<span style="color:var(--pos)">&#10003;</span>':'<span style="color:var(--warn)">&#9888;</span>'}</td>
+    <div class="settings-section-head"><h3>All months — health snapshot</h3></div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Month</th><th style="text-align:right">Txns</th><th style="text-align:right">Orphans</th><th style="text-align:right">FX</th><th style="text-align:right">Drift</th><th style="text-align:center">Status</th></tr></thead>
+      <tbody>${monthStatus.map(s=>{const clean=s.orphans===0&&s.drift===0;return`<tr${s.month===auditMonth?' style="background:color-mix(in srgb,var(--action) 6%,transparent)"':''}>
+        <td><a href="#" onclick="DG.month='${s.month}';render();return false" style="color:var(--action);text-decoration:none">${fmtYM(s.month)}</a></td>
+        <td style="text-align:right;color:var(--text3)">${s.txns}</td>
+        <td style="text-align:right;color:${s.orphans>0?'var(--warn)':'var(--text3)'}">${s.orphans}</td>
+        <td style="text-align:right;color:var(--text3)">${s.fx}</td>
+        <td style="text-align:right;color:${s.drift>0?'var(--warn)':'var(--text3)'}">${s.drift}</td>
+        <td style="text-align:center">${clean?'<span style="color:var(--pos)">&#10003;</span>':'<span style="color:var(--warn)">&#9888;</span>'}</td>
       </tr>`;}).join('')}</tbody>
     </table></div>
   </div>
@@ -18472,11 +18485,11 @@ function buildTxHeader(fl, scopedAcc, accountPills, tabLabel, groupPillRow){
   const net=inc-out;
   // Orphan count for banner
   const orphanCount=listOrphans().length;
-  const orphanBanner=orphanCount>0?`<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#FEF3C7;border:1px solid #F59E0B;border-radius:var(--r);margin-bottom:1rem">
+  const orphanBanner=orphanCount>0?`<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--warn-bg);border:1px solid var(--warn);border-radius:var(--r);margin-bottom:1rem">
     <div style="font-size:16px;flex-shrink:0">⚠️</div>
     <div style="flex:1">
-      <div style="font-size:var(--fs-xs);font-weight:600;color:#92400E">${orphanCount} transaction${orphanCount===1?'':'s'} have no account linked</div>
-      <div style="font-size:var(--fs-xxs);color:#78350F;margin-top:2px;line-height:1.5">These are hidden from Bank Accounts and Cards views. Assign them to an account or delete them.</div>
+      <div style="font-size:var(--fs-xs);font-weight:600;color:var(--warn)">${orphanCount} transaction${orphanCount===1?'':'s'} have no account linked</div>
+      <div style="font-size:var(--fs-xxs);color:var(--warn);margin-top:2px;line-height:1.5">These are hidden from Bank Accounts and Cards views. Assign them to an account or delete them.</div>
     </div>
     <button class="btn btn-sm" onclick="openOrphanModal()" style="flex-shrink:0">Review</button>
   </div>`:'';
@@ -18520,11 +18533,11 @@ function buildTxHeader(fl, scopedAcc, accountPills, tabLabel, groupPillRow){
   ${(()=>{
     // Show decrypt error warning if any month failed to load
     const loadErrMonths=Object.keys(S._txnLoadErrors||{}).filter(ym=>ym===S.month);
-    const loadErrBanner=loadErrMonths.length?`<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;background:#FEF3C7;border:1px solid #F59E0B;border-radius:var(--r);margin-bottom:.75rem">
+    const loadErrBanner=loadErrMonths.length?`<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;background:var(--warn-bg);border:1px solid var(--warn);border-radius:var(--r);margin-bottom:.75rem">
       <div style="font-size:16px;flex-shrink:0">⚠️</div>
       <div style="flex:1">
-        <div style="font-size:var(--fs-xs);font-weight:600;color:#92400E">Transactions failed to load — ${fmtYM(S.month)}</div>
-        <div style="font-size:var(--fs-xxs);color:#78350F;margin-top:2px;line-height:1.6">
+        <div style="font-size:var(--fs-xs);font-weight:600;color:var(--warn)">Transactions failed to load — ${fmtYM(S.month)}</div>
+        <div style="font-size:var(--fs-xxs);color:var(--warn);margin-top:2px;line-height:1.6">
           Data for this month exists in the database but could not be decrypted. This may indicate a vault key mismatch. Try locking and unlocking with your PIN, then refresh.<br>
           Error: ${h(Object.values(S._txnLoadErrors||{}).join(', '))}
         </div>
@@ -18671,7 +18684,7 @@ async function rTxBank(){
     const renderPill=a=>{
       const mk=a.id+'_'+S.month;
       const hasFail=S.monthlyBal[mk]?.guardFail;
-      return`<button class="opill ${TF.txnAcc===a.id?'active':''}" onclick="setTxnAcc('${a.id}')">${h(a.name)}${hasFail?` <span style="color:#DC2626;font-size:11px" title="Balance discrepancy">⚠</span>`:''}</button>`;
+      return`<button class="opill ${TF.txnAcc===a.id?'active':''}" onclick="setTxnAcc('${a.id}')">${h(a.name)}${hasFail?` <span style="color:var(--neg);font-size:11px" title="Balance discrepancy">⚠</span>`:''}</button>`;
     };
     const mainPills=mainAccs.map(renderPill).join('');
     const subPills=subAccs.map(renderPill).join('');
@@ -18825,7 +18838,7 @@ async function rTxCards(){
       <div class="fg jb" style="align-items:flex-start;flex-wrap:wrap;gap:14px">
         <div>
           <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">All Cards Summary</div>
-          <div style="font-size:10px;color:var(--text3);margin-top:2px">${activeCount} active card${activeCount!==1?'s':''} aggregated</div>
+          <div class="sub-meta">${activeCount} active card${activeCount!==1?'s':''} aggregated</div>
         </div>
         <div class="fg" style="gap:24px;flex-wrap:wrap;justify-content:flex-end">
           <div style="text-align:right">
@@ -18851,7 +18864,7 @@ async function rTxCards(){
   const accountPills=cardAccs.map(a=>{
     const mk=a.id+'_'+S.month;
     const hasFail=S.monthlyBal[mk]?.guardFail;
-    return`<button class="opill ${TF.txnAcc===a.id?'active':''}" onclick="setTxnAcc('${a.id}')">${h(a.name)} <span style="font-size:10px;opacity:.7">${ATL[a.type]||a.type}</span>${hasFail?` <span style="color:#DC2626;font-size:11px" title="Balance discrepancy">⚠</span>`:''}</button>`;
+    return`<button class="opill ${TF.txnAcc===a.id?'active':''}" onclick="setTxnAcc('${a.id}')">${h(a.name)} <span style="font-size:10px;opacity:.7">${ATL[a.type]||a.type}</span>${hasFail?` <span style="color:var(--neg);font-size:11px" title="Balance discrepancy">⚠</span>`:''}</button>`;
   }).join('');
   const noCards=cardAccs.length===0;
   // V8.20: group pill row for cards tab
@@ -19457,12 +19470,12 @@ function rReviewQueue(){
     const ac=dir==='in'?'c-ok':(t.type==='external_transfer'?'c-ext':(t.type==='investment'?'c-inv':'c-bad'));
     const reasonLabel=t.reviewReason==='low_confidence_rule'?'<span style="font-size:10px;background:color-mix(in srgb,var(--warn) 24%,transparent);color:var(--warn);border-radius:3px;padding:1px 6px;margin-left:6px;font-weight:500" title="Auto-flagged: applied rule has low confidence">low confidence</span>':'<span style="font-size:10px;color:var(--text3);margin-left:6px">manual</span>';
     return`<tr class="tx-row" data-tx-id="${t.id}">
-      <td style="font-size:var(--fs-xs);color:var(--text3);white-space:nowrap;padding:8px 8px">${toDD(t.date)}</td>
-      <td style="padding:8px 8px"><div class="tx-desc-clamp" style="font-size:var(--fs-xs)">${h(t.description||'')}${reasonLabel}</div>${t.notes?`<div style="font-size:10px;color:var(--text3);margin-top:2px">${h(t.notes)}</div>`:''}</td>
-      <td style="font-size:var(--fs-xs);padding:8px 8px"><div>${h(mc?.name||'<span style="color:var(--text3);font-style:italic">uncategorized</span>')}</div>${sc?`<div style="font-size:10px;color:var(--text3);margin-top:2px">${h(sc.name)}</div>`:''}</td>
-      <td style="font-size:var(--fs-xs);padding:8px 8px;color:var(--text2)">${acc?h(acc.name):'—'}</td>
-      <td style="text-align:right;font-weight:500;white-space:nowrap;padding:8px 8px;font-variant-numeric:tabular-nums" class="${ac} priv-mask">${dir==='in'?'+':'-'}${fmtP(t.amount)}</td>
-      <td class="tx-actions-cell" style="white-space:nowrap;padding:8px 8px">
+      <td style="color:var(--text3);white-space:nowrap">${toDD(t.date)}</td>
+      <td><div class="tx-desc-clamp">${h(t.description||'')}${reasonLabel}</div>${t.notes?`<div class="sub-meta">${h(t.notes)}</div>`:''}</td>
+      <td><div>${h(mc?.name||'<span style="color:var(--text3);font-style:italic">uncategorized</span>')}</div>${sc?`<div class="sub-meta">${h(sc.name)}</div>`:''}</td>
+      <td style="color:var(--text2)">${acc?h(acc.name):'—'}</td>
+      <td style="text-align:right;font-weight:500;white-space:nowrap" class="${ac} priv-mask">${dir==='in'?'+':'-'}${fmtP(t.amount)}</td>
+      <td class="tx-actions-cell" style="white-space:nowrap">
         <button class="btn btn-xs btn-p" onclick="openEditTxn('${t.id}','${ym}')" title="Edit and recategorize. Saving with a category change auto-clears the flag.">Review</button>
         <button class="btn btn-xs" onclick="clearReviewFlag('${t.id}','${ym}')" title="Mark reviewed without changing the transaction">&#10003; Reviewed</button>
       </td>
@@ -21790,15 +21803,15 @@ function rAIUpload(){
       const mc=getMC(t.mainCatId),sc=getSC(t.subCatId);
       const isDupRow=willSkip.has(i)&&!forceAll;
       const dupBadge=isDupRow?`<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:#FEF3C7;color:#92400E;margin-left:4px">WILL SKIP — already exists</span>`:'';
-      return`<tr style="border-bottom:1px solid var(--bg3);${isDupRow?'opacity:0.45;':''}">
-        <td style="padding:8px 10px;font-size:var(--fs-xxs);white-space:nowrap">${toDD(t.date)}</td>
-        <td style="padding:8px 10px;font-size:var(--fs-xs)">${h(t.description)}${dupBadge}</td>
-        <td style="padding:8px 10px;font-size:var(--fs-xs);font-weight:500;text-align:right;white-space:nowrap;${t.direction==='in'?'color:var(--pos)':'color:var(--neg)'}">${t.direction==='in'?'+':'-'}${fmtP(t.amount)}</td>
-        <td style="padding:8px 10px;font-size:var(--fs-xxs)">${ctag(t.mainCatId,t.subCatId)}</td>
-        <td style="padding:8px 10px">
+      return`<tr${isDupRow?' style="opacity:0.45"':''}>
+        <td style="white-space:nowrap">${toDD(t.date)}</td>
+        <td>${h(t.description)}${dupBadge}</td>
+        <td style="font-weight:500;text-align:right;white-space:nowrap;${t.direction==='in'?'color:var(--pos)':'color:var(--neg)'}">${t.direction==='in'?'+':'-'}${fmtP(t.amount)}</td>
+        <td>${ctag(t.mainCatId,t.subCatId)}</td>
+        <td>
           <button class="btn btn-xs" onclick="openAITxnEdit(${i})">Edit</button>
         </td>
-        <td style="padding:8px 6px">
+        <td>
           <button class="btn btn-xs btn-d" title="Remove from list" onclick="_aiState.extracted.splice(${i},1);render()">✕</button>
         </td>
       </tr>`;
@@ -21816,9 +21829,9 @@ function rAIUpload(){
       <div style="font-size:var(--fs-xs);color:var(--text3)">${_aiState.extracted.length} transactions ${_aiState._isExcel?'parsed from Excel':'extracted from AI'} · ${h(_aiState.fileName)} · Edit any before importing${!_aiState._isExcel&&_aiState.usage?` · <span style="color:var(--text3)">~$${((_aiState.usage.input_tokens*3+_aiState.usage.output_tokens*15)/1e6).toFixed(4)} API cost</span>`:_aiState._isExcel?' · <span style="color:var(--pos)">No API cost</span>':''}</div>
     </div>
 
-    ${skipCount>0&&!forceAll?`<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#FEF3C7;border:1px solid #F59E0B;border-radius:var(--rsm);margin-bottom:10px">
+    ${skipCount>0&&!forceAll?`<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--warn-bg);border:1px solid var(--warn);border-radius:var(--rsm);margin-bottom:10px">
       <div style="font-size:13px">⚠</div>
-      <div style="flex:1;font-size:var(--fs-xs);color:#92400E">
+      <div style="flex:1;font-size:var(--fs-xs);color:var(--warn)">
         <strong>${skipCount} transaction${skipCount!==1?'s':''} already exist</strong> in this month and will be skipped (shown dimmed below).
         If a previous import was incomplete or wrong, use <strong>Clear month & reimport</strong> to start fresh.
       </div>
@@ -21847,14 +21860,14 @@ function rAIUpload(){
     </div>
 
     <div class="card card-bordered" style="padding:0;overflow:hidden;margin-bottom:12px">
-      <div style="overflow-x:auto">
-        <table style="width:100%;border-collapse:collapse;min-width:600px">
-          <thead><tr style="background:var(--bg2);border-bottom:1px solid var(--border)">
-            <th style="padding:8px 10px;text-align:left;font-size:var(--fs-xxs);text-transform:uppercase;letter-spacing:.06em;color:var(--text3)">Date</th>
-            <th style="padding:8px 10px;text-align:left;font-size:var(--fs-xxs);text-transform:uppercase;letter-spacing:.06em;color:var(--text3)">Description</th>
-            <th style="padding:8px 10px;text-align:right;font-size:var(--fs-xxs);text-transform:uppercase;letter-spacing:.06em;color:var(--text3)">Amount</th>
-            <th style="padding:8px 10px;text-align:left;font-size:var(--fs-xxs);text-transform:uppercase;letter-spacing:.06em;color:var(--text3)">Category</th>
-            <th style="padding:8px 10px"></th>
+      <div class="tbl-wrap">
+        <table class="tx-tbl" style="min-width:600px">
+          <thead><tr>
+            <th>Date</th>
+            <th>Description</th>
+            <th style="text-align:right">Amount</th>
+            <th>Category</th>
+            <th></th>
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>
