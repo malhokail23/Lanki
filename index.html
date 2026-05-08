@@ -4874,7 +4874,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='10.1.9';
+const VERSION='10.1.10';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -22591,10 +22591,10 @@ function rAIUpload(){
         <td style="font-weight:500;text-align:right;white-space:nowrap;${t.direction==='in'?'color:var(--pos)':'color:var(--neg)'}">${t.direction==='in'?'+':'-'}${fmtP(t.amount)}</td>
         <td>${ctag(t.mainCatId,t.subCatId)}</td>
         <td>
-          <button class="btn btn-xs" onclick="openAITxnEdit(${i})">Edit</button>
-        </td>
-        <td>
-          <button class="btn btn-xs btn-d" title="Remove from list" onclick="_aiState.extracted.splice(${i},1);render()">✕</button>
+          <div style="display:flex;gap:6px;justify-content:flex-end;align-items:center">
+            <button class="btn btn-xs" onclick="openAITxnEdit(${i})">Edit</button>
+            <button class="btn btn-xs btn-d" title="Remove from list" onclick="_aiState.extracted.splice(${i},1);render()">✕</button>
+          </div>
         </td>
       </tr>`;
     }).join('');
@@ -22602,6 +22602,14 @@ function rAIUpload(){
     const totalInc=_aiState.extracted.filter(t=>t.direction==='in').reduce((s,t)=>s+t.amount,0);
     const totalExp=_aiState.extracted.filter(t=>t.direction==='out').reduce((s,t)=>s+t.amount,0);
     const willImport=_aiState.extracted.length-(forceAll?0:skipCount);
+    // V10.1.10: display the user-entered (scanned) opening/closing balances in the strip.
+    // Calculated closing is the diagnostic — the balance check banner above already
+    // surfaces any mismatch. Showing the scanned ending here keeps the strip a faithful
+    // mirror of the source statement; calculated value belongs to the diagnostic banner.
+    const opNum=parseFloat(_aiState.openingBal);
+    const clNum=parseFloat(_aiState.closingBal);
+    const openingDisp=(!isNaN(opNum)&&isFinite(opNum))?fmtP(opNum):'—';
+    const closingDisp=(!isNaN(clNum)&&isFinite(clNum))?fmtP(clNum):'—';
 
     return`<div style="margin-bottom:1rem">
       <div class="fg" style="gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:4px">
@@ -22649,12 +22657,30 @@ function rAIUpload(){
           </div>
         </div>`;
     })()}
-    <div class="card card-bordered" style="margin-bottom:12px;padding:10px 16px">
-      <div class="fg" style="gap:24px;flex-wrap:wrap">
-        <div><div class="klbl">Income</div><div style="font-size:16px;font-weight:500" class="c-ok">${fmtP(totalInc)}</div></div>
-        <div><div class="klbl">Expenses</div><div style="font-size:16px;font-weight:500" class="c-bad">${fmtP(totalExp)}</div></div>
-        <div><div class="klbl">Account</div><div style="font-size:14px;font-weight:500">${h(S.accounts.find(a=>a.id===_aiState.accountId)?.name||'—')}</div></div>
-        <div><div class="klbl">Period</div><div style="font-size:14px;font-weight:500">${fmtYM(_aiState.month)}</div></div>
+    <div class="kpi-strip">
+      <div class="kpi-cell">
+        <div class="kpi-cell-label">Account</div>
+        <div class="kpi-cell-value-sm">${h(S.accounts.find(a=>a.id===_aiState.accountId)?.name||'—')}</div>
+      </div>
+      <div class="kpi-cell">
+        <div class="kpi-cell-label">Period</div>
+        <div class="kpi-cell-value-sm">${fmtYM(_aiState.month)}</div>
+      </div>
+      <div class="kpi-cell">
+        <div class="kpi-cell-label">Beginning Balance</div>
+        <div class="kpi-cell-value">${openingDisp}</div>
+      </div>
+      <div class="kpi-cell">
+        <div class="kpi-cell-label">Income</div>
+        <div class="kpi-cell-value c-ok">+${fmtP(totalInc)}</div>
+      </div>
+      <div class="kpi-cell">
+        <div class="kpi-cell-label">Expenses</div>
+        <div class="kpi-cell-value c-bad">-${fmtP(totalExp)}</div>
+      </div>
+      <div class="kpi-cell">
+        <div class="kpi-cell-label">Ending Balance</div>
+        <div class="kpi-cell-value">${closingDisp}</div>
       </div>
     </div>
 
