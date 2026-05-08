@@ -1726,8 +1726,6 @@ body.privacy-on{padding-top:28px}
 
 .compass .index-chapter{display:flex;align-items:baseline;gap:8px;padding:0 22px 8px;font-size:9.5px;color:var(--text3);text-transform:uppercase;letter-spacing:.14em;font-weight:600}
 
-.compass .index-chapter .ch-num{font-family:var(--mono);font-size:9px;color:var(--text3);opacity:.7;letter-spacing:0}
-
 .compass .index-item{display:flex;align-items:center;gap:9px;padding:5px 22px;font-size:12.5px;color:var(--text);font-weight:450;cursor:pointer;border-left:2px solid transparent;line-height:1.3;letter-spacing:.005em}
 
 /* V9.0.3 (audit §9.2): on touch devices, give nav items 11px vertical padding
@@ -4686,13 +4684,13 @@ body.privacy-on{padding-top:28px}
     <nav class="index" id="compass-index" aria-label="Primary navigation">
 
       <div class="index-section" id="ix-pulse">
-        <div class="index-chapter"><span class="ch-num">I</span><span>Pulse</span></div>
+        <div class="index-chapter"><span>Pulse</span></div>
         <button class="index-item" data-tab="overview" onclick="sw('overview')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Overview</button>
         <button class="index-item" data-tab="projections" onclick="sw('projections')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="14 7 21 7 21 14"/></svg>Projections</button>
       </div>
 
       <div class="index-section" id="ix-activity">
-        <div class="index-chapter"><span class="ch-num">II</span><span>Activity</span></div>
+        <div class="index-chapter"><span>Activity</span></div>
 
         <button class="index-item nav-group" data-group="transactions" onclick="toggleGroup('transactions')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/></svg>Transactions<span class="ix-arrow nav-arrow" id="arr-transactions">&#8250;</span></button>
         <div class="index-sub" id="nav-dd-transactions">
@@ -4726,7 +4724,7 @@ body.privacy-on{padding-top:28px}
       </div>
 
       <div class="index-section" id="ix-finances">
-        <div class="index-chapter"><span class="ch-num">III</span><span>Finances</span></div>
+        <div class="index-chapter"><span>Finances</span></div>
         <button class="index-item" data-tab="accounts" onclick="sw('accounts')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>Accounts &amp; Cards</button>
         <button class="index-item" data-tab="debts" onclick="sw('debts')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Debts</button>
         <button class="index-item" data-tab="investments" onclick="sw('investments')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>Portfolio</button>
@@ -4735,7 +4733,7 @@ body.privacy-on{padding-top:28px}
       </div>
 
       <div class="index-section" id="ix-household">
-        <div class="index-chapter"><span class="ch-num">IV</span><span>Household</span></div>
+        <div class="index-chapter"><span>Household</span></div>
         <button class="index-item" data-tab="staff" onclick="sw('staff')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>Staff</button>
       </div>
 
@@ -4876,7 +4874,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='10.1.7';
+const VERSION='10.1.8';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -7350,7 +7348,7 @@ async function rOv(){
   <!-- V8.23: PAGE HEADER — period selector + month nav -->
   <div class="pg-header-row">
     <div>
-      <div class="pg-eyebrow">§01 PULSE</div>
+      <div class="pg-eyebrow">01 PULSE</div>
       <div class="pg-header-title">Overview</div>
       <div class="pg-header-sub">${n} month${n!==1?'s':''} of data · Cash Flow Engine</div>
     </div>
@@ -8793,7 +8791,7 @@ function rProjections(){
   return`
   <div class="pg-header-row">
     <div>
-      <div class="pg-eyebrow eyebrow-pulse">§01.2 PULSE</div>
+      <div class="pg-eyebrow eyebrow-pulse">01.2 PULSE</div>
       <div class="pg-header-title">Cash Position Projections</div>
       <div class="pg-header-sub">Forward-looking ${proj.horizon}-month projection · Cash Flow Engine · ${proj.includeInv?'incl. ':'excl. '}investment commitments</div>
     </div>
@@ -11854,7 +11852,7 @@ function rPendingMatches(){
   const manualMatched=pairs.length-autoMatched;
   return`
   <div class="pg-header">
-    <div class="pg-eyebrow">§02.3 INBOX</div>
+    <div class="pg-eyebrow">02.3 INBOX</div>
     <div class="pg-header-title">Pending Transfer Matches</div>
     <div class="pg-header-sub">Internal transfers between your accounts. Match them to avoid double-counting in reports.</div>
   </div>
@@ -11963,7 +11961,7 @@ async function rUncat(){
     </tr>`;}).join(''):'';
   return`
   <div class="pg-header">
-    <div class="pg-eyebrow">§02.3 INBOX</div>
+    <div class="pg-eyebrow">02.3 INBOX</div>
     <div class="pg-header-title">Uncategorized &amp; Flagged</div>
     <div class="pg-header-sub">Assign categories to build the merchant learning engine for future imports.</div>
   </div>
@@ -12433,7 +12431,7 @@ async function rSubs(){
   return`
   <div class="pg-header-row">
     <div>
-      <div class="pg-eyebrow">§02.2 RECURRING</div>
+      <div class="pg-eyebrow">02.2 RECURRING</div>
       <div class="pg-header-title">Subscriptions</div>
       <div class="pg-header-sub">Track what you pay for. Confirm auto-detected subscriptions to surface trends, variance, and renewals.</div>
     </div>
@@ -13006,7 +13004,7 @@ function rInc(){
   return`
   <div class="pg-header-row">
     <div>
-      <div class="pg-eyebrow">§02.2 RECURRING</div>
+      <div class="pg-eyebrow">02.2 RECURRING</div>
       <div class="pg-header-title">Expected Income Sources</div>
       <div class="pg-header-sub">Income you receive on a recurring schedule. Confirm sources to feed forward-looking projections and surface variance.</div>
     </div>
@@ -13172,7 +13170,7 @@ function rBills(){
   return`
   <div class="pg-header-row">
     <div>
-      <div class="pg-eyebrow">§02.2 RECURRING</div>
+      <div class="pg-eyebrow">02.2 RECURRING</div>
       <div class="pg-header-title">Household Bills</div>
       <div class="pg-header-sub">Bills you pay on a recurring schedule. Match expected amounts to actuals to surface variance and overdue charges.</div>
     </div>
@@ -13847,7 +13845,7 @@ function rStaff(){
   return`
   <div class="pg-header-row">
     <div>
-      <div class="pg-eyebrow">§04 HOUSEHOLD</div>
+      <div class="pg-eyebrow">04 HOUSEHOLD</div>
       <div class="pg-header-title">Household Staff</div>
       <div class="pg-header-sub">Salary obligations and advance tracking. Each staff member has their own ledger.</div>
     </div>
@@ -15521,7 +15519,7 @@ function rAcc(){
   return`
   <div class="pg-header-row">
     <div>
-      <div class="pg-eyebrow">§03 FINANCES</div>
+      <div class="pg-eyebrow">03 FINANCES</div>
       <div class="pg-header-title">Accounts &amp; Cards</div>
       <div class="pg-header-sub">All your bank accounts and credit cards. Group accounts, set sort order, and manage opening balances.</div>
     </div>
@@ -16150,7 +16148,7 @@ function rInvestments(){
   if(invAccs.length===0){
     return`<div class="pg-header-row">
       <div>
-        <div class="pg-eyebrow">§03 FINANCES</div>
+        <div class="pg-eyebrow">03 FINANCES</div>
         <div class="pg-header-title">Portfolio</div>
         <div class="pg-header-sub">Investment accounts with current valuations and deployed capital. Stale values are flagged for refresh.</div>
       </div>
@@ -16295,7 +16293,7 @@ function rInvestments(){
 
   return`<div class="pg-header-row">
     <div>
-      <div class="pg-eyebrow">§03 FINANCES</div>
+      <div class="pg-eyebrow">03 FINANCES</div>
       <div class="pg-header-title">Portfolio</div>
       <div class="pg-header-sub">Investment accounts with current valuations and deployed capital. Stale values are flagged for refresh.</div>
     </div>
@@ -16557,7 +16555,7 @@ function rFamilyInv(){
   </div>`:'';
 
   return`<div class="pg-header">
-    <div class="pg-eyebrow">§03 FINANCES</div>
+    <div class="pg-eyebrow">03 FINANCES</div>
     <div class="pg-header-title">Family Investments</div>
     <div class="pg-header-sub">Capital deployed per family member — all time</div>
   </div>
@@ -17045,7 +17043,7 @@ function rDebts(){
   return`
   <div class="pg-header-row">
     <div>
-      <div class="pg-eyebrow">§03 FINANCES</div>
+      <div class="pg-eyebrow">03 FINANCES</div>
       <div class="pg-header-title">Debt Tracker</div>
       <div class="pg-header-sub">Active debts including credit cards, loans, and other obligations. Tracks payoff progress and outstanding balances.</div>
     </div>
@@ -17359,7 +17357,7 @@ function rGoals(){
   return`
   <div class="pg-header-row">
     <div>
-      <div class="pg-eyebrow">§03 FINANCES</div>
+      <div class="pg-eyebrow">03 FINANCES</div>
       <div class="pg-header-title">Financial Goals</div>
       <div class="pg-header-sub">Goals you're saving toward. Each goal tracks progress against its target and deadline.</div>
     </div>
@@ -17399,7 +17397,7 @@ function rSettings(){
   const subNav=SETTINGS_PAGES.map(p=>`<button onclick="SP='${p.id}';render()" class="settings-nav-btn ${SP===p.id?'settings-nav-active':''}">${p.icon} ${p.label}</button>`).join('');
   let pageContent='';
   if(SP==='preferences'){
-    pageContent=`<div class="pg-eyebrow">§05 SETTINGS · PREFERENCES</div><div class="settings-page-title">Preferences</div>
+    pageContent=`<div class="pg-eyebrow">05 SETTINGS · PREFERENCES</div><div class="settings-page-title">Preferences</div>
     <div class="settings-section">
       <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Savings &amp; Investment Target</div><div class="settings-row-sub">Monthly target as a percentage of income</div></div><div class="settings-row-ctrl"><div style="display:flex;align-items:center;gap:6px"><input type="number" inputmode="decimal" id="pref-tgt" value="${S.settings.savingsTarget||20}" min="0.01" max="100" step="0.01" style="width:80px" onchange="S.settings.savingsTarget=Math.round((parseFloat(this.value)||20)*100)/100;sched();toast('Savings target updated')"><span style="font-size:var(--fs-xs);color:var(--text3)">%</span></div></div></div>
       <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Display Currency</div><div class="settings-row-sub">Primary currency for all figures</div></div><div class="settings-row-ctrl"><select onchange="S.settings.currency=this.value;sched();toast('Currency updated')"><option value="SAR" ${!S.settings.currency||S.settings.currency==='SAR'?'selected':''}>SAR</option><option value="USD" ${S.settings.currency==='USD'?'selected':''}>USD</option><option value="EUR" ${S.settings.currency==='EUR'?'selected':''}>EUR</option></select></div></div>
@@ -17442,7 +17440,7 @@ function rSettings(){
   }else if(SP==='household'){
     const fmRows=(S.familyMembers||[]).map(m=>`<div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">${h(m.name)}</div><div class="settings-row-sub">${m.relationship||'—'}</div></div><div class="settings-row-ctrl"><button class="btn btn-xs btn-d" onclick="delFamilyMember('${m.id}')">Remove</button></div></div>`).join('');
     const subRows=(S.submitters||[]).map((sub,si)=>`<div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">${h(sub.name)}</div><div class="settings-row-sub">PIN: ••••</div></div><div class="settings-row-ctrl"><button class="btn btn-xs btn-d" onclick="delSubmitter(${si})">Remove</button></div></div>`).join('');
-    pageContent=`<div class="pg-eyebrow">§05 SETTINGS · HOUSEHOLD</div><div class="settings-page-title">Household</div>
+    pageContent=`<div class="pg-eyebrow">05 SETTINGS · HOUSEHOLD</div><div class="settings-page-title">Household</div>
     <div class="settings-section">
       <div class="settings-section-head"><h3>Family Members</h3></div>
       <div class="settings-section-body">
@@ -17464,7 +17462,7 @@ function rSettings(){
       </div>
     </div>`;
   }else if(SP==='security'){
-    pageContent=`<div class="pg-eyebrow">§05 SETTINGS · SECURITY</div><div class="settings-page-title">Security</div>
+    pageContent=`<div class="pg-eyebrow">05 SETTINGS · SECURITY</div><div class="settings-page-title">Security</div>
     <div class="settings-section">
       <div class="settings-section-head"><h3>Identity</h3></div>
       <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Name</div><div class="settings-row-sub">${S.settings.displayName||'Not set'}</div></div><div class="settings-row-ctrl"><button class="btn btn-sm" onclick="toggleIdPanel()">Edit</button></div></div>
@@ -17497,7 +17495,7 @@ function rSettings(){
       <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Failed attempt lockout</div><div class="settings-row-sub">5 attempts → 15-minute lockout</div></div><div class="settings-row-ctrl"><span class="status-pill status-info">Active</span></div></div>
     </div>`;
   }else if(SP==='data'){
-    pageContent=`<div class="pg-eyebrow">§05 SETTINGS · DATA</div><div class="settings-page-title">Data</div>
+    pageContent=`<div class="pg-eyebrow">05 SETTINGS · DATA</div><div class="settings-page-title">Data</div>
     <div class="settings-section">
       <div class="settings-section-head"><h3>Backup &amp; Restore</h3></div>
       <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Export reference file</div><div class="settings-row-sub">Downloads a .txt file with your accounts, debts, and categories — use this when starting an extraction session</div></div><div class="settings-row-ctrl"><button class="btn btn-sm" onclick="doRefExport()">Export</button></div></div>
@@ -17513,7 +17511,7 @@ function rSettings(){
   }else if(SP==='diagnostics'){
     pageContent=rDiagnostics();
   }else{
-    pageContent=`<div class="pg-eyebrow">§05 SETTINGS · ABOUT</div><div class="settings-page-title">About</div>
+    pageContent=`<div class="pg-eyebrow">05 SETTINGS · ABOUT</div><div class="settings-page-title">About</div>
     <div class="settings-section">
       <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Platform</div></div><div class="settings-row-ctrl" style="font-size:var(--fs-xs)">Lanki Capital OS</div></div>
       <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Version</div></div><div class="settings-row-ctrl" style="font-size:var(--fs-xs);font-family:monospace">${VERSION}</div></div>
@@ -17534,7 +17532,7 @@ function rDiagnostics(){
   const auditMonth=DG.month||S.month;
   const allMonths=Object.keys(S.txnCache||{}).filter(m=>(S.txnCache[m]||[]).length>0).sort();
   if(allMonths.length===0){
-    return`<div class="pg-eyebrow">§05 SETTINGS · DIAGNOSTICS</div><div class="settings-page-title">Diagnostics</div>
+    return`<div class="pg-eyebrow">05 SETTINGS · DIAGNOSTICS</div><div class="settings-page-title">Diagnostics</div>
     <div class="card" style="padding:1.5rem;text-align:center;color:var(--text3)">No transaction data yet. Import statements first.</div>`;
   }
   const monthsForSelect=allMonths.includes(auditMonth)?allMonths:[auditMonth,...allMonths];
@@ -17642,7 +17640,7 @@ function rDiagnostics(){
   // ─── Render ──────────────────────────────────────────────────────────────
   const monthOptions=monthsForSelect.map(m=>`<option value="${m}" ${m===auditMonth?'selected':''}>${fmtYM(m)}</option>`).join('');
 
-  return`<div class="pg-eyebrow">§05 SETTINGS · DIAGNOSTICS</div><div class="settings-page-title" style="margin-bottom:5px">Diagnostics</div>
+  return`<div class="pg-eyebrow">05 SETTINGS · DIAGNOSTICS</div><div class="settings-page-title" style="margin-bottom:5px">Diagnostics</div>
   <div class="pg-header-sub" style="margin-bottom:1.25rem">
     Audit tool to verify Overview numbers match underlying transaction data. Use this when investigating discrepancies. This page can be removed when you are confident the platform is reliable.
   </div>
@@ -18217,7 +18215,7 @@ function rCategoriesSettings(){
     </div>`;
   };
 
-  return`<div class="pg-eyebrow">§05 SETTINGS · CATEGORIES</div><div class="settings-page-title">Categories</div>
+  return`<div class="pg-eyebrow">05 SETTINGS · CATEGORIES</div><div class="settings-page-title">Categories</div>
   <div class="settings-section">
     <div class="settings-section-head ss-with-actions">
       <div class="ss-main">
@@ -19284,7 +19282,7 @@ function buildTxHeader(fl, scopedAcc, accountPills, tabLabel, groupPillRow){
   return`
   <div class="pg-header-row">
     <div>
-      <div class="pg-eyebrow">§02.1 TRANSACTIONS</div>
+      <div class="pg-eyebrow">02.1 TRANSACTIONS</div>
       <div class="pg-header-title">${displayTitle}</div>
       ${tabBody?`<div class="pg-header-sub">${tabBody}</div>`:''}
     </div>
@@ -20049,7 +20047,7 @@ function rMerchantRules(){
 
   if(!rules.length){
     return`<div class="pg-header">
-      <div class="pg-eyebrow">§02.4 SYSTEM</div>
+      <div class="pg-eyebrow">02.4 SYSTEM</div>
       <div class="pg-header-title">Transaction Rules</div>
       <div class="pg-header-sub">Built automatically as you categorize transactions — from the statement review screen or the transaction list.</div>
     </div>
@@ -20148,7 +20146,7 @@ function rMerchantRules(){
   const html=`
   <div class="pg-header-row">
     <div>
-      <div class="pg-eyebrow">§02.4 SYSTEM</div>
+      <div class="pg-eyebrow">02.4 SYSTEM</div>
       <div class="pg-header-title">Transaction Rules</div>
       <div class="pg-header-sub">Built automatically as you categorize transactions — from the statement review screen or the transaction list.</div>
     </div>
@@ -20242,7 +20240,7 @@ function rReviewQueue(){
   const total=flagged.length;
   if(total===0){
     return`<div class="pg-header">
-        <div class="pg-eyebrow">§02.3 INBOX</div>
+        <div class="pg-eyebrow">02.3 INBOX</div>
         <div class="pg-header-title">Review Queue</div>
         <div class="pg-header-sub">Transactions you've flagged for later review.</div>
       </div>
@@ -20275,7 +20273,7 @@ function rReviewQueue(){
   }).join('');
 
   return`<div class="pg-header">
-      <div class="pg-eyebrow">§02.3 INBOX</div>
+      <div class="pg-eyebrow">02.3 INBOX</div>
       <div class="pg-header-title">Review Queue</div>
       <div class="pg-header-sub">${total} transaction${total!==1?'s':''} flagged for review across all months. Recategorize or dismiss each one.</div>
     </div>
@@ -20488,7 +20486,7 @@ function rSanityCheck(){
   return`
   <div class="pg-header-row">
     <div>
-      <div class="pg-eyebrow">§02.4 SYSTEM</div>
+      <div class="pg-eyebrow">02.4 SYSTEM</div>
       <div class="pg-header-title">Sanity Check</div>
       <div class="pg-header-sub">Cross-system audit — inconsistencies, conflicts, and things worth reviewing. Nothing is auto-fixed. You decide.</div>
     </div>
@@ -20505,7 +20503,7 @@ function rUsageInsights(){
   const all=allTxns().filter(t=>t.type==='expense'||t.type==='income');
   if(!all.length){
     return`<div class="pg-header">
-      <div class="pg-eyebrow">§02.4 SYSTEM</div>
+      <div class="pg-eyebrow">02.4 SYSTEM</div>
       <div class="pg-header-title">Usage Insights</div>
       <div class="pg-header-sub">Category usage across all imported transactions.</div>
     </div>
@@ -20576,7 +20574,7 @@ function rUsageInsights(){
 
   return`
   <div class="pg-header">
-    <div class="pg-eyebrow">§02.4 SYSTEM</div>
+    <div class="pg-eyebrow">02.4 SYSTEM</div>
     <div class="pg-header-title">Usage Insights</div>
     <div class="pg-header-sub">Based on ${all.length} transactions across all imported months. Use this to optimize your category list.</div>
   </div>
@@ -22349,7 +22347,7 @@ async function rReimbursements(){
   return`
   <div class="pg-header-row">
     <div>
-      <div class="pg-eyebrow">§02.3 INBOX</div>
+      <div class="pg-eyebrow">02.3 INBOX</div>
       <div class="pg-header-title">Reimbursements</div>
       <div class="pg-header-sub">Submitted via the Lanki Reimbursement page. Approve items, then mark as paid to record itemized expenses.</div>
     </div>
@@ -22693,7 +22691,7 @@ function rAIUpload(){
 
   // Step 1: upload form
   return`<div class="pg-header">
-    <div class="pg-eyebrow">§02.1 TRANSACTIONS</div>
+    <div class="pg-eyebrow">02.1 TRANSACTIONS</div>
     <div class="pg-header-title">Statement Parser</div>
     <div class="pg-header-sub">Upload a PDF, image, or Excel statement. PDF and images use AI extraction; Excel parses instantly.</div>
   </div>
