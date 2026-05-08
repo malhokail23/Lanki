@@ -712,8 +712,11 @@ tbody tr:hover td{background:var(--bg2)}
 /* Transactions card: white elevated surface on Feather White page */
 .tx-card{padding:0;overflow:hidden}
 .tx-card .tbl-wrap{padding:0}
-.tx-card .tx-tbl th{background:transparent;padding:14px 16px;border-bottom:1px solid var(--border)}
-.tx-card .tx-tbl td{padding:14px 16px;border-bottom:1px solid var(--border)}
+/* V10.1 — tx-card row padding bumped 14→18px vertical so header text sits with
+   visible breathing room below the card's 10px border-radius. Matches Compass
+   "header beautifully inside the rounded card" treatment. Horizontal unchanged. */
+.tx-card .tx-tbl th{background:transparent;padding:18px 16px;border-bottom:1px solid var(--border)}
+.tx-card .tx-tbl td{padding:18px 16px;border-bottom:1px solid var(--border)}
 .tx-card .tx-tbl tbody tr:last-child td{border-bottom:none}
 .tx-card .tx-tbl tbody tr:hover td{background:var(--bg2)}
 /* Apple-grade row selection: cursor + tinted state, smooth transitions */
