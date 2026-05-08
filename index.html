@@ -3354,22 +3354,29 @@ body.privacy-on{padding-top:28px}
   padding:18px 22px;
   margin-bottom:12px;
 }
-/* V10.1.2 → V10.1.3 — kill the white frame around any card that intends to host
-   an edge-to-edge table.
+/* V10.1.2 → V10.1.3 → V10.1.4 — kill the white frame around any card that
+   intends to host an edge-to-edge table, and clip the inner gray header strip
+   to the card's rounded corners.
    .lanki-legacy .card{padding:18px 22px} (specificity 20) was shadowing
    .tx-card{padding:0}, .acc-card{padding:0}, and .tbl-clean{padding:0} (all
-   specificity 10), leaving a gap between the rounded card edge and the inner
-   gray header strip. Chaining .card.<host-class> raises specificity to 30,
-   winning across desktop and the mobile @media override. The gray header strip
-   now fills to the rounded corners; each host's overflow:hidden clips them
-   cleanly. Matches Compass "first row is part of the inside area" treatment.
+   specificity 10). Chaining .card.<host-class> raises specificity to 30 and
+   wins across desktop and the mobile @media override.
+   V10.1.4 adds two things: (a) explicit overflow:hidden on the rule itself,
+   so .tbl-clean and any future .card-flush user gets the corner-clipping
+   behavior that .tx-card/.acc-card had baked in via their own class rules;
+   (b) a new .card-flush opt-in class so renders that previously used inline
+   style="padding:0" can switch to a clean class. Matches Compass "first row
+   is part of the inside area" treatment everywhere it is intended.
    Surfaces covered:
-     .tx-card    — Bank Accounts, Cards (V10.1)
-     .acc-card   — Accounts & Cards (V10.1.3)
-     .tbl-clean  — Inbox: Uncategorized / Missing Sub / Flagged for Review (V10.1.3) */
+     .tx-card     — Bank Accounts, Cards (V10.1)
+     .acc-card    — Accounts & Cards (V10.1.3)
+     .tbl-clean   — Inbox: Uncategorized / Missing Sub / Flagged (V10.1.3)
+     .card-flush  — Pending Matches (×2), Usage Insights (×3),
+                    Transaction Rules, Review Queue (V10.1.4) */
 .lanki-legacy .card.tx-card,
 .lanki-legacy .card.acc-card,
-.lanki-legacy .card.tbl-clean{padding:0}
+.lanki-legacy .card.tbl-clean,
+.lanki-legacy .card.card-flush{padding:0;overflow:hidden}
 .lanki-legacy .card-bordered{
   border:1px solid var(--line);
 }
@@ -4865,7 +4872,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='10.1.3';
+const VERSION='10.1.4';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -10168,7 +10175,7 @@ function rTransferMatching(){
     <div class="slbl" style="margin:0">Pending Matches (${pending.length})</div>
     <button class="btn btn-sm" onclick="rescanAllTransfers()">↻ Auto-match all</button>
   </div>
-  <div class="card"><div class="tbl-wrap"><table>
+  <div class="card card-flush"><div class="tbl-wrap"><table>
     <thead><tr>
       ${thSortable('date','Date')}
       ${thSortable('desc','Description')}
@@ -10184,7 +10191,7 @@ function rTransferMatching(){
     <div class="slbl" style="margin:0">Confirmed Matches (${pairs.length})</div>
     <button class="btn btn-sm" onclick="validateMatches()" title="Check all confirmed matches and remove any where a transaction no longer exists">⚑ Validate matches</button>
   </div>
-  <div class="card"><div class="tbl-wrap"><table>
+  <div class="card card-flush"><div class="tbl-wrap"><table>
     <thead><tr><th>Date</th><th>From &#8594; To</th><th>Amount</th><th>How matched</th><th></th></tr></thead>
     <tbody>${pairRows}</tbody>
   </table></div></div>
@@ -20180,7 +20187,7 @@ function rMerchantRules(){
       <span style="font-size:11px;color:var(--text3);padding-bottom:6px">${filtered.length} of ${rules.length}</span>
     </div>
   </div>
-  <div class="card" style="padding:0"><div class="tbl-wrap"><table>
+  <div class="card card-flush"><div class="tbl-wrap"><table>
     <thead><tr>
       ${sortableTh('pattern','Pattern (contains)')}
       ${sortableTh('category','Category')}
@@ -20277,7 +20284,7 @@ function rReviewQueue(){
       <div class="slbl" style="margin:0">Flagged Transactions</div>
       <button class="btn btn-sm" onclick="if(confirm('Mark all ${total} as reviewed without changes? This cannot be undone.')){clearReviewFlagBulk(${JSON.stringify(allFlaggedIds).replace(/"/g,'&quot;')})}">&#10003; Mark all reviewed</button>
     </div>
-    <div class="card card-bordered" style="padding:0">
+    <div class="card card-bordered card-flush">
       <div class="tbl-wrap"><table class="tx-tbl" style="width:100%">
         <colgroup>
           <col style="width:90px"><col><col style="width:200px">
@@ -20583,19 +20590,19 @@ function rUsageInsights(){
   </div>
 
   <div class="slbl">Category Usage (${Object.keys(mcCount).length} used of ${MAIN_CATS.length} total)</div>
-  <div class="card"><div class="tbl-wrap"><table>
+  <div class="card card-flush"><div class="tbl-wrap"><table>
     <thead><tr><th>Category</th><th style="text-align:right">Transactions</th><th style="text-align:right">% of total</th><th style="text-align:right">Total amount</th></tr></thead>
     <tbody>${mcRows}</tbody>
   </table></div></div>
 
   <div class="slbl" style="margin-top:1.25rem">Sub-Category Usage (${Object.keys(scCount).length} used of ${SUB_CATS.length} total)</div>
-  <div class="card"><div class="tbl-wrap"><table>
+  <div class="card card-flush"><div class="tbl-wrap"><table>
     <thead><tr><th>Sub-Category</th><th style="font-size:10px;color:var(--text3)">ID</th><th style="text-align:right">Transactions</th><th style="text-align:right">%</th><th style="text-align:right">Total amount</th></tr></thead>
     <tbody>${scRows}</tbody>
   </table></div></div>
 
   <div class="slbl" style="margin-top:1.25rem">Category + Sub-Category Pairs (${Object.keys(pairCount).length} combinations used)</div>
-  <div class="card"><div class="tbl-wrap"><table>
+  <div class="card card-flush"><div class="tbl-wrap"><table>
     <thead><tr><th>Combination</th><th style="text-align:right">Transactions</th><th style="text-align:right">Total amount</th></tr></thead>
     <tbody>${pairRows}</tbody>
   </table></div></div>`;
