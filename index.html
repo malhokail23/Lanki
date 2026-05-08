@@ -2426,9 +2426,12 @@ body.privacy-on{padding-top:28px}
    KPI STRIP
    ============================================================ */
 
-.compass .kpi-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:14px}
-
-.compass .kpi-strip.k3{grid-template-columns:repeat(3,1fr)}
+/* V10.1.6: auto-fit columns so the strip adapts to actual card count.
+   Earlier hardcoded repeat(4,1fr) left empty slots when a page rendered
+   2 or 3 cards (Review Queue, Family Investments, Pending Matches, etc.).
+   The unused .k3 modifier rule has been removed — never referenced in any
+   render's markup; auto-fit handles all column counts naturally. */
+.compass .kpi-strip{display:grid;grid-template-columns:repeat(auto-fit, minmax(160px, 1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:14px}
 
 .compass .kpi-cell{background:var(--card);padding:14px 18px}
 
@@ -2446,9 +2449,7 @@ body.privacy-on{padding-top:28px}
 
 @media (max-width:768px){
   
-.compass .kpi-strip{grid-template-columns:repeat(2,1fr)}
-  
-.compass .kpi-strip.k3{grid-template-columns:1fr}
+.compass .kpi-strip{grid-template-columns:repeat(auto-fit, minmax(140px, 1fr))}
   
 .compass .kpi-cell{padding:14px 16px}
 }
@@ -4876,7 +4877,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='10.1.5';
+const VERSION='10.1.6';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
