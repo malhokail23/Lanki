@@ -3364,6 +3364,15 @@ body.privacy-on{padding-top:28px}
   padding:18px 22px;
   margin-bottom:12px;
 }
+/* V10.1.2 — kill the white frame around tx-card.
+   .lanki-legacy .card{padding:18px 22px} (specificity 20) was shadowing
+   .tx-card{padding:0} from line 713 (specificity 10), leaving a gap between
+   the rounded card edge and the inner gray header strip. Chaining
+   .card.tx-card raises specificity to 30, winning across desktop and the
+   mobile @media override. The gray header strip now fills to the rounded
+   corners; .tx-card's overflow:hidden clips them cleanly. Matches Compass
+   "first row is part of the inside area" treatment. */
+.lanki-legacy .card.tx-card{padding:0}
 .lanki-legacy .card-bordered{
   border:1px solid var(--line);
 }
@@ -4859,7 +4868,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='10.1.1';
+const VERSION='10.1.2';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
