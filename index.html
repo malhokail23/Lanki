@@ -4874,7 +4874,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='10.1.10';
+const VERSION='10.1.11';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -16204,7 +16204,7 @@ function rInvestments(){
         </div>
         <div class="fg" style="gap:4px;flex-shrink:0">
           <button class="btn btn-sm ${cv===null||stale?'btn-p':''}" onclick="triggerUpdateForAccount('${a.id}')" ${_invFetchingId===a.id?'disabled':''}>${cv===null?'Record value':'Update value'}</button>
-          <button class="btn btn-sm" onclick="openEditAcc('${a.id}');sw('accounts')" title="Edit account">&#9998;</button>
+          <button class="btn btn-sm" onclick="sw('accounts');openEditAcc('${a.id}')" title="Edit account">&#9998;</button>
         </div>
       </div>
 
