@@ -506,9 +506,8 @@ textarea{resize:vertical;min-height:80px}
 .b-ext{background:color-mix(in srgb,var(--c5) 22%,var(--page));color:var(--c5)}
 .b-grey{background:var(--bg3);color:var(--text2)}
 /* V9.0.3 cleanup: removed .b-sub orphan (audit §10.5) */
-/* V8.18: status badges for accounts/cards — also tokenized in V9.0.3 */
-.b-cl{background:var(--bg3);color:var(--text2)}     /* CLOSED — neutral */
-.b-ar{background:var(--bg2);color:var(--text3)}      /* ARCHIVED — lighter neutral */
+/* V9.0.5.6 (Session 7, C9.1): removed .b-cl and .b-ar — Session 6 closed the only consumers
+   (CLOSED/ARCHIVED account badges in rAcc → status-pill). No live references. */
 .b-fz{background:var(--action-tint);color:var(--action)} /* FROZEN — action tint */
 .pill{font-size:10px;padding:2px 8px;border-radius:100px;font-weight:500}
 .ppaid{background:var(--pos-bg);color:var(--pos)}
@@ -4671,7 +4670,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='9.0.5.5';
+const VERSION='9.0.5.6';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -19608,8 +19607,8 @@ function rMerchantRules(){
     const conflicts=getConflicts(r.pattern);
     const conflictTags=conflicts.map(c=>`<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:${c.color}22;color:${c.color};border:1px solid ${c.color}44">⚠ ${c.label}</span>`).join(' ');
     const sourceBadge=r.source==='manual'
-      ?`<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:color-mix(in srgb,var(--action) 12%,transparent);color:var(--action)">Manual</span>`
-      :`<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:var(--bg2);color:var(--text3)">AI</span>`;
+      ?`<span class="status-pill status-info">Manual</span>`
+      :`<span class="status-pill">AI</span>`;
     let scopeHtml;
     if(r.accountId){
       const acc=S.accounts.find(a=>a.id===r.accountId);
@@ -19647,9 +19646,14 @@ function rMerchantRules(){
     <div>
       <div class="pg-eyebrow">§02.4 SYSTEM</div>
       <div class="pg-header-title">Transaction Rules</div>
-      <div class="pg-header-sub">${rules.length} rule${rules.length!==1?'s':''} · ${totalAcctSpecific} account-specific · max ${TXN_RULES_MAX} · least-used evicted first${conflictCount>0?` · <span style="color:var(--warn)">${conflictCount} conflict${conflictCount!==1?'s':''} need review</span>`:''}</div>
+      <div class="pg-header-sub">Built automatically as you categorize transactions — from the statement review screen or the transaction list.</div>
     </div>
     ${rules.length?`<button class="btn btn-d btn-sm" onclick="if(confirm('Clear all transaction rules?')){S.txnRules=[];sched();render();}">Clear all</button>`:''}
+  </div>
+  <div class="kpi-strip">
+    <div class="kpi-cell"><div class="kpi-cell-label">Total Rules</div><div class="kpi-cell-value">${rules.length}</div><div class="kpi-cell-sub">Of ${TXN_RULES_MAX} max &middot; least-used evicted first</div></div>
+    <div class="kpi-cell"><div class="kpi-cell-label">Account-Specific</div><div class="kpi-cell-value">${totalAcctSpecific}</div><div class="kpi-cell-sub">${rules.length-totalAcctSpecific} global &middot; ${totalAcctSpecific} scoped</div></div>
+    <div class="kpi-cell"><div class="kpi-cell-label">Conflicts</div><div class="kpi-cell-value ${conflictCount>0?'c-warn':'c-ok'}">${conflictCount}</div><div class="kpi-cell-sub">${conflictCount===0?'No conflicts detected':'Match names defined elsewhere'}</div></div>
   </div>
   ${conflictCount>0?`<div style="padding:10px 14px;background:color-mix(in srgb,var(--warn) 8%,var(--bg));border:1px solid color-mix(in srgb,var(--warn) 30%,transparent);border-radius:var(--rsm);margin-bottom:12px;font-size:var(--fs-xs);color:var(--text)">
     <strong>${conflictCount} rule${conflictCount!==1?'s':''}</strong> match names already defined in Bills, Staff, Debts, Income, or Subscriptions. Highlighted in amber below.
