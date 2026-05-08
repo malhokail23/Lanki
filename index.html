@@ -1007,6 +1007,19 @@ tbody tr:hover td{background:var(--bg2)}
   letter-spacing:-.012em;line-height:1.15;
   font-variant-numeric:tabular-nums;
 }
+/* V9.0.6: size variants — eliminates inline font-size overrides scattered through Sessions 5-6.
+   -lg for hero values (Reimbursements Total Pending Payment), -sm for compact values
+   (Pending Matches Match Source bipartite label). */
+.kpi-cell-value-lg{
+  font-size:28px;font-weight:600;color:var(--text);
+  letter-spacing:-.018em;line-height:1.1;
+  font-variant-numeric:tabular-nums;
+}
+.kpi-cell-value-sm{
+  font-size:14px;font-weight:500;color:var(--text);
+  letter-spacing:-.005em;line-height:1.4;
+  font-variant-numeric:tabular-nums;
+}
 .kpi-cell-sub{
   font-size:11.5px;color:var(--text3);
   line-height:1.4;
@@ -1309,7 +1322,7 @@ tbody tr:hover td{background:var(--bg2)}
   font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
   padding:3px 8px;border-radius:100px;flex-shrink:0;
 }
-.ebadge-active{background:rgba(181,203,183,.18);color:#B5CBB7}
+.ebadge-active{background:color-mix(in srgb,var(--pos) 14%,transparent);color:var(--pos)}
 .ebadge-planned{background:rgba(163,188,215,.1);color:rgba(163,188,215,.6)}
 .explore-engine-desc{
   font-size:12px;color:rgba(243,241,239,.45);line-height:1.7;
@@ -4247,7 +4260,7 @@ body.privacy-on{padding-top:28px}
       <!-- Cash Flow Engine — Active -->
       <div class="mod-card active-mod" onclick="enterEngine('spending')">
         <div class="mod-icon" style="background:rgba(163,188,215,.15)">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0077C1" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0E40C5" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>
           </svg>
         </div>
@@ -4262,7 +4275,7 @@ body.privacy-on{padding-top:28px}
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
         </div>
         <div class="mod-icon" style="background:rgba(163,188,215,.1)">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#A3BCD7" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4A6FB5" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>
           </svg>
         </div>
@@ -4277,7 +4290,7 @@ body.privacy-on{padding-top:28px}
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
         </div>
         <div class="mod-icon" style="background:rgba(163,188,215,.1)">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#A3BCD7" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4A6FB5" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
           </svg>
         </div>
@@ -4358,17 +4371,17 @@ body.privacy-on{padding-top:28px}
     </div>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
       <div class="mod-card active-mod" onclick="closeEngOverlay()" style="padding:.9rem;cursor:pointer">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0077C1" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:6px"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0E40C5" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:6px"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
         <div style="font-size:12px;font-weight:600">Cash Flow</div>
         <div style="font-size:10px;color:var(--pos);margin-top:3px">&#10003; Active</div>
       </div>
       <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:.9rem;opacity:.5">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#A3BCD7" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:6px"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4A6FB5" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:6px"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
         <div style="font-size:12px;font-weight:600">Portfolio</div>
         <div style="font-size:10px;color:var(--text3);margin-top:3px">Coming Soon</div>
       </div>
       <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:.9rem;opacity:.5">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#A3BCD7" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:6px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4A6FB5" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:6px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
         <div style="font-size:12px;font-weight:600">Capital Intelligence</div>
         <div style="font-size:10px;color:var(--text3);margin-top:3px">Coming Soon</div>
       </div>
@@ -4670,7 +4683,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='9.0.5.6';
+const VERSION='9.0.6';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -9573,8 +9586,8 @@ function showMatchPopover(pairId,txnId,anchorEl){
   const outName=outAcc?.name||'Unknown';
   const inName=inAcc?.name||'Unknown';
   const matchTypeLbl=pair.confirmedBy==='tolerance'?'Tolerance match (USD conversion)':pair.confirmedBy==='manual'?'Manually matched':'Auto-matched';
-  const matchTypeColor=pair.confirmedBy==='tolerance'?'#854D0E':pair.confirmedBy==='manual'?'#174FA0':'#174FA0';
-  const matchTypeBg=pair.confirmedBy==='tolerance'?'#FEF9C3':'#EEF4FF';
+  const matchTypeColor=pair.confirmedBy==='tolerance'?'var(--warn)':'var(--action)';
+  const matchTypeBg=pair.confirmedBy==='tolerance'?'var(--warn-bg)':'var(--action-tint)';
   // Amount display — show both if they differ (tolerance case)
   const sameAmt=Math.abs(outT.amount-inT.amount)<0.01;
   const amtLine=sameAmt
@@ -9611,7 +9624,7 @@ function showMatchPopover(pairId,txnId,anchorEl){
       </div>
       ${!sameAmt?`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
         <span style="font-size:11px;color:var(--text3)">Difference</span>
-        <span style="font-size:11px;font-weight:500;color:#854D0E">SAR ${Math.abs(outT.amount-inT.amount).toFixed(2)}</span>
+        <span style="font-size:11px;font-weight:500;color:var(--warn)">SAR ${Math.abs(outT.amount-inT.amount).toFixed(2)}</span>
       </div>`:''}
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
         <span style="font-size:11px;color:var(--text3)">Match type</span>
@@ -11406,7 +11419,7 @@ function rPendingMatches(){
   <div class="kpi-strip">
     <div class="kpi-cell"><div class="kpi-cell-label">Awaiting Match</div><div class="kpi-cell-value ${pending.length>0?'c-warn':'c-ok'}">${pending.length}</div><div class="kpi-cell-sub">${pending.length===0?'Nothing pending':'Internal transfers awaiting match'}</div></div>
     <div class="kpi-cell"><div class="kpi-cell-label">Confirmed Matches</div><div class="kpi-cell-value">${pairs.length}</div><div class="kpi-cell-sub">Lifetime matched pairs</div></div>
-    <div class="kpi-cell"><div class="kpi-cell-label">Match Source</div><div class="kpi-cell-value" style="font-size:14px;font-weight:500;line-height:1.4">${autoMatched} auto &middot; ${manualMatched} manual</div><div class="kpi-cell-sub">${pairs.length>0?Math.round(autoMatched/pairs.length*100):0}% auto-resolved</div></div>
+    <div class="kpi-cell"><div class="kpi-cell-label">Match Source</div><div class="kpi-cell-value-sm">${autoMatched} auto &middot; ${manualMatched} manual</div><div class="kpi-cell-sub">${pairs.length>0?Math.round(autoMatched/pairs.length*100):0}% auto-resolved</div></div>
   </div>
   <div class="card card-bordered" style="margin-bottom:16px">
     <div style="font-size:var(--fs-xs);font-weight:600;margin-bottom:6px">Find transaction by amount — all months &amp; accounts</div>
@@ -14977,7 +14990,7 @@ function rAcc(){
         ${a.accountNumber?`<div style="font-size:var(--fs-xxs);font-family:monospace;color:var(--text3);margin-top:2px">${h(a.accountNumber)}</div>`:''}
       </td>
       <td style="color:var(--text3)">${h(a.institution||'')}</td>
-      <td><span class="badge b-tr" style="font-size:10px">${ATL[a.type]||a.type}</span></td>
+      <td><span class="status-pill status-info">${ATL[a.type]||a.type}</span></td>
       ${balTd}
       <td style="font-size:var(--fs-xs)">${a.openingBalance!=null?`<span style="font-weight:500">${fmtP(a.openingBalance)}</span><br><span style="font-size:10px;color:var(--text3)">as of ${toDD(a.balanceAsOf)||'--'}</span>`:'<span style="color:var(--text3)">--</span>'}</td>
       ${S.settings.showTechnicalIds?`<td style="font-size:11px;font-family:monospace;color:var(--text3)">${a.id}</td>`:''}
@@ -16336,7 +16349,7 @@ function rDebts(){
               <button class="btn btn-xs" onclick="moveDebt('${d.id}',1)" ${idx===peers.length-1?'disabled':''} title="Move down" aria-label="Move ${h(d.name)} down">&darr;</button>
             </div>`;
           })():''}
-          ${isCC?'<span class="badge b-tr">Auto-tracked</span>':''}
+          ${isCC?'<span class="status-pill status-info">Auto-tracked</span>':''}
           <span class="badge ${d.status==='active'?'b-dbt':d.status==='frozen'?'b-fz':'b-grey'}">${d.status}</span>
         </div>
       </div>
@@ -17012,8 +17025,8 @@ function rSettings(){
     </div>
     <div class="settings-section">
       <div class="settings-section-head"><h3>Session</h3></div>
-      <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Auto-lock</div><div class="settings-row-sub">30 minutes of inactivity</div></div><div class="settings-row-ctrl"><span class="badge b-tr">Active</span></div></div>
-      <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Failed attempt lockout</div><div class="settings-row-sub">5 attempts → 15-minute lockout</div></div><div class="settings-row-ctrl"><span class="badge b-tr">Active</span></div></div>
+      <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Auto-lock</div><div class="settings-row-sub">30 minutes of inactivity</div></div><div class="settings-row-ctrl"><span class="status-pill status-info">Active</span></div></div>
+      <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Failed attempt lockout</div><div class="settings-row-sub">5 attempts → 15-minute lockout</div></div><div class="settings-row-ctrl"><span class="status-pill status-info">Active</span></div></div>
     </div>`;
   }else if(SP==='data'){
     pageContent=`<div class="pg-eyebrow">§05 SETTINGS · DATA</div><div class="settings-page-title">Data</div>
@@ -18651,20 +18664,20 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps, scopedAcc){
     const pendingTag=(!isMatchedTxn&&t.type==='transfer'&&!t.transferDismissed)?'<span class="status-pill status-warn" style="margin-left:4px">Pending match</span>':'';
     const ch=(t.mainCatId&&getMC(t.mainCatId))?ctag(t.mainCatId,t.subCatId):'<span style="color:var(--warn);font-size:11px">&#9888; Uncategorized</span>';
     const st=t.isSub?`<span class="stag">SUB <button onclick="event.stopPropagation();removeSub('${t.id}','${t.date.substr(0,7)}')" style="background:none;border:none;cursor:pointer;color:inherit;padding:0;margin-left:2px;font-size:9px;line-height:1;vertical-align:middle" title="Remove subscription tag">&#10005;</button></span>`:'';
-    const ruleTag=t.ruleApplied?'<span style="font-size:9px;background:#EDE9FE;color:#5B21B6;border-radius:3px;padding:1px 5px;margin-left:4px" title="Category set by merchant learning rule">rule</span>':''
+    const ruleTag=t.ruleApplied?'<span class="status-pill" style="margin-left:4px" title="Category set by merchant learning rule">rule</span>':''
     // V8.27: needsReview chip — visible amber dot, clickable to mark resolved without changing categorization
     const reviewTag=t.needsReview?`<button onclick="event.stopPropagation();clearReviewFlag('${t.id}','${ym}')" class="status-pill status-warn" style="margin-left:4px;border:none;cursor:pointer" title="Flagged for review${t.reviewReason==='low_confidence_rule'?' (auto-flagged: low-confidence rule)':''} · click to mark reviewed">⚠ review</button>`:''
     const rb=showBalance&&t.accountId&&rbMaps[t.accountId]?rbMaps[t.accountId].get(t.id):null;
     const debtTag=debt?`<span class="status-pill status-warn" style="margin-left:4px">${h(debt.name)}</span>`:'';
     const linkedBill=t.billId?(S.bills||[]).find(b=>b.id===t.billId):null;
-    const billTag=linkedBill?`<span style="font-size:10px;background:#E5EDF5;color:#1E3A6F;border-radius:3px;padding:1px 5px;margin-left:4px;font-weight:500" title="Linked to bill: ${h(linkedBill.name)}">↳ ${h(linkedBill.name)}</span>`:'';
+    const billTag=linkedBill?`<span class="status-pill status-info" style="margin-left:4px" title="Linked to bill: ${h(linkedBill.name)}">↳ ${h(linkedBill.name)}</span>`:'';
     // Staff first-name tag when a transaction is linked to a household staff member
     let staffTag='';
     if(t.staffId){
       const stm=(S.staff||[]).find(s=>s.id===t.staffId);
       if(stm){
         const firstName=(stm.name||'').trim().split(/\s+/)[0]||'Staff';
-        staffTag=`<span style="font-size:10px;background:color-mix(in srgb,var(--midnight) 10%,transparent);color:var(--midnight);border-radius:3px;padding:1px 5px;margin-left:4px;font-weight:500" title="Household staff: ${h(stm.name)}">👤 ${h(firstName)}</span>`;
+        staffTag=`<span class="status-pill" style="margin-left:4px;background:color-mix(in srgb,var(--ink) 10%,transparent);color:var(--ink)" title="Household staff: ${h(stm.name)}">👤 ${h(firstName)}</span>`;
       }
     }
     // Refund/Reimbursement link tag: badge on both sides of a linked pair
@@ -18672,10 +18685,10 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps, scopedAcc){
     if(t.refundedTxnId){
       // This transaction is the inflow pointing at the original expense
       const lbl=t.subCatId==='sub_reimbursement'?'Reimbursement linked':'Refund linked';
-      refundTag=`<span style="font-size:10px;background:color-mix(in srgb, var(--pos) 14%, transparent);color:var(--pos);border-radius:3px;padding:1px 5px;margin-left:4px;font-weight:500;cursor:pointer" title="${lbl} — click to unlink" onclick="event.stopPropagation();unlinkRefund('${t.id}','${ym}')">↔ ${lbl}</span>`;
+      refundTag=`<span class="status-pill status-pos" style="margin-left:4px;cursor:pointer" title="${lbl} — click to unlink" onclick="event.stopPropagation();unlinkRefund('${t.id}','${ym}')">↔ ${lbl}</span>`;
     } else if(t.refundedBy){
       // This transaction is the original expense that got refunded/reimbursed
-      refundTag=`<span style="font-size:10px;background:color-mix(in srgb, var(--pos) 14%, transparent);color:var(--pos);border-radius:3px;padding:1px 5px;margin-left:4px;font-weight:500;cursor:pointer" title="Offset by refund/reimbursement — click to unlink" onclick="event.stopPropagation();unlinkRefund('${t.id}','${ym}')">↔ Offset</span>`;
+      refundTag=`<span class="status-pill status-pos" style="margin-left:4px;cursor:pointer" title="Offset by refund/reimbursement — click to unlink" onclick="event.stopPropagation();unlinkRefund('${t.id}','${ym}')">↔ Offset</span>`;
     }
     const selCb=`<td style="padding:8px 6px;width:32px">${BulkMode?`<input type="checkbox" id="cb-${t.id}" class="tx-sel-cb" data-id="${t.id}" ${BulkSelected.has(t.id)?'checked':''} onclick="event.stopPropagation();toggleTxSel('${t.id}')" style="cursor:pointer;width:15px;height:15px">`:''}</td>`;
 
@@ -19535,11 +19548,11 @@ function rMerchantRules(){
     // over-matching short patterns (e.g. "pos" matching every keyword containing "pos").
     const pPrefix=p.length>=6?p.substr(0,20):null;
     const matches=k=>k&&(p.includes(k)||(pPrefix&&k.includes(pPrefix)));
-    if([...billKeywords].some(matches))tags.push({label:'Bills',color:'#0077C1'});
-    if([...staffKeywords].some(matches))tags.push({label:'Staff',color:'#5F5E5A'});
-    if([...debtKeywords].some(matches))tags.push({label:'Debts',color:'#D85A30'});
-    if([...incomeKeywords].some(matches))tags.push({label:'Income',color:'#1D9E75'});
-    if([...subKeywords].some(matches))tags.push({label:'Subscriptions',color:'#E91E8C'});
+    if([...billKeywords].some(matches))tags.push({label:'Bills',color:'var(--c2)'});
+    if([...staffKeywords].some(matches))tags.push({label:'Staff',color:'var(--charcoal)'});
+    if([...debtKeywords].some(matches))tags.push({label:'Debts',color:'var(--warn)'});
+    if([...incomeKeywords].some(matches))tags.push({label:'Income',color:'var(--pos)'});
+    if([...subKeywords].some(matches))tags.push({label:'Subscriptions',color:'var(--c3)'});
     return tags;
   }
 
@@ -19605,7 +19618,7 @@ function rMerchantRules(){
   const rows=filtered.map(r=>{
     const mc=getMC(r.mainCatId);
     const conflicts=getConflicts(r.pattern);
-    const conflictTags=conflicts.map(c=>`<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:${c.color}22;color:${c.color};border:1px solid ${c.color}44">⚠ ${c.label}</span>`).join(' ');
+    const conflictTags=conflicts.map(c=>`<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:color-mix(in srgb,${c.color} 13%,transparent);color:${c.color};border:1px solid color-mix(in srgb,${c.color} 27%,transparent)">⚠ ${c.label}</span>`).join(' ');
     const sourceBadge=r.source==='manual'
       ?`<span class="status-pill status-info">Manual</span>`
       :`<span class="status-pill">AI</span>`;
@@ -21848,7 +21861,7 @@ async function rReimbursements(){
   </div>
   ${grandTotal>0?`
   <div class="kpi-strip">
-    <div class="kpi-cell" style="grid-column:span 2"><div class="kpi-cell-label">Total Pending Payment</div><div class="kpi-cell-value c-warn" style="font-size:28px">${fmtP(grandTotal)}</div><div class="kpi-cell-sub">${approvedEntries.length} ${approvedEntries.length===1?'person':'people'} &middot; Mark as paid on each card when settled</div></div>
+    <div class="kpi-cell" style="grid-column:span 2"><div class="kpi-cell-label">Total Pending Payment</div><div class="kpi-cell-value-lg c-warn">${fmtP(grandTotal)}</div><div class="kpi-cell-sub">${approvedEntries.length} ${approvedEntries.length===1?'person':'people'} &middot; Mark as paid on each card when settled</div></div>
     <div class="kpi-cell" style="padding:14px 16px"><div class="kpi-cell-label" style="margin-bottom:6px">By Person</div>${approvedEntries.map(([n,{total:t}])=>`<div class="fg jb" style="gap:14px;padding:3px 0;border-bottom:1px solid var(--hairline);font-size:11px;align-items:baseline"><span style="font-weight:500;color:var(--text2)">${h(n)}</span><span style="font-weight:600;color:var(--warn);font-variant-numeric:tabular-nums">${fmtP(t)}</span></div>`).join('')}</div>
   </div>`:''}
   ${pending.length?`<div class="slbl" style="margin-top:0">Pending Review (${pending.length})</div>
@@ -23672,7 +23685,7 @@ initAuth();
     <!-- Capital OS -->
     <div class="explore-domain">
       <div class="explore-domain-header">
-        <div class="explore-domain-accent" style="background:#A3BCD7"></div>
+        <div class="explore-domain-accent" style="background:#4A6FB5"></div>
         <div class="explore-domain-name">Capital OS</div>
       </div>
       <div class="explore-domain-title">Financial intelligence.</div>
