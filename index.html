@@ -361,7 +361,7 @@ textarea:focus-visible,[role="button"]:focus-visible,[tabindex]:focus-visible{
 /* ── PAGE HEADER — standard title + subtitle block ─── */
 .pg-header{margin-bottom:2.25rem}
 .pg-header-title{font-size:20px;font-weight:500;color:var(--text);letter-spacing:-.02em;line-height:1.2}
-.pg-header-sub{font-size:var(--fs-xs);color:var(--text3);margin-top:5px;line-height:1.5}
+.pg-header-sub{font-size:var(--fs-xs);color:var(--text2);margin-top:5px;line-height:1.5}
 /* V9.0.5 A1: Compass v3.0 page eyebrow — section-context label above page title.
    Per brand v3.0 spec: 10.5px, weight 600, uppercase, .16em tracking, charcoal text. */
 .pg-eyebrow{font-size:10.5px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.16em;margin-bottom:6px;line-height:1.2;font-variant-numeric:tabular-nums}
@@ -480,7 +480,7 @@ textarea{resize:vertical;min-height:80px}
 
 /* ── SEMANTIC COLORS ──────────────────────────────────── */
 .c-ok{color:var(--pos)}.c-bad{color:var(--neg)}.c-ok-bg{background:var(--pos-bg);color:var(--pos)}.c-bad-bg{background:var(--neg-bg);color:var(--neg)}
-.c-inv{color:var(--c3)}.c-ext{color:var(--c5)}
+.c-inv{color:var(--c3)}.c-ext{color:var(--text3)}
 .c-warn{color:var(--warn)}.c-mut{color:var(--text3)}
 
 /* ── BADGES ───────────────────────────────────────────── */
@@ -5314,6 +5314,154 @@ function stalenessPill(lastUpdateMs,thresholdDays){
   if(d<thresholdDays)return `<span class="status-pill status-fresh">Fresh</span>`;
   return `<span class="status-pill status-stale">Stale ${d}d</span>`;
 }
+
+/* V10.0.5 — Family member drilldown wiring (Decision 63 lock to slide-in panel).
+   Opens full member context with deployed capital, returns, and full transaction history. */
+function openFamilyMemberDrilldown(mid){
+  const isSelf=!mid;
+  const m=isSelf?null:(S.familyMembers||[]).find(x=>x.id===mid);
+  const allInvTxns=Object.values(S.txnCache).flat().filter(t=>t.type==='investment'&&txDir(t)==='out');
+  const allIncomeTxns=Object.values(S.txnCache).flat().filter(t=>t.type==='income');
+  const INV_INCOME_SUBS=new Set(['sub_investment_return','sub_dividends']);
+  const invTxns=isSelf?allInvTxns.filter(t=>!t.beneficiaryId):allInvTxns.filter(t=>t.beneficiaryId===mid);
+  const retTxns=isSelf?allIncomeTxns.filter(t=>!t.beneficiaryId&&INV_INCOME_SUBS.has(t.subCatId)):allIncomeTxns.filter(t=>t.beneficiaryId===mid);
+  const deployed=invTxns.reduce((s,t)=>s+t.amount,0);
+  const returns=retTxns.reduce((s,t)=>s+t.amount,0);
+  const net=returns-deployed;
+  const firstName=(S.settings.displayName||'').split(' ')[0]||'Self';
+  const name=isSelf?firstName:(m?.name||'?');
+  const rel=isSelf?'Self':(m?.relationship||'—');
+  const allTx=[...invTxns,...retTxns].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const histRows=allTx.length?allTx.map(t=>`<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);font-size:12px">
+    <div style="color:var(--text3);min-width:64px;flex-shrink:0">${toDD(t.date)}</div>
+    <div style="flex:1;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${h(t.description||'')}">${h(t.description||'—')}</div>
+    <div style="font-weight:500;font-variant-numeric:tabular-nums;${t.type==='income'?'color:var(--pos)':'color:var(--neg)'}">${t.type==='income'?'+':'−'}${fmtP(t.amount)}</div>
+  </div>`).join(''):'<div style="font-size:12px;color:var(--text3);padding:12px 0">No transactions yet.</div>';
+  const body=`
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:18px">
+      <div style="padding:12px;background:var(--bg2);border-radius:var(--rsm)">
+        <div class="section-eyebrow" style="margin:0 0 4px;font-size:9.5px">Capital Deployed</div>
+        <div style="font-size:18px;font-weight:600;color:var(--neg);font-variant-numeric:tabular-nums">${fmtP(deployed)}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${invTxns.length} transfer${invTxns.length===1?'':'s'}</div>
+      </div>
+      <div style="padding:12px;background:var(--bg2);border-radius:var(--rsm)">
+        <div class="section-eyebrow" style="margin:0 0 4px;font-size:9.5px">Returns</div>
+        <div style="font-size:18px;font-weight:600;color:var(--pos);font-variant-numeric:tabular-nums">${fmtP(returns)}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${retTxns.length} transaction${retTxns.length===1?'':'s'}</div>
+      </div>
+      <div style="padding:12px;background:var(--bg2);border-radius:var(--rsm)">
+        <div class="section-eyebrow" style="margin:0 0 4px;font-size:9.5px">Net Position</div>
+        <div style="font-size:18px;font-weight:600;color:${net>=0?'var(--pos)':'var(--neg)'};font-variant-numeric:tabular-nums">${net>=0?'+':''}${fmtP(net)}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">Returns vs cost</div>
+      </div>
+    </div>
+    <div class="section-eyebrow" style="margin-top:0">Transaction History (${allTx.length})</div>
+    <div>${histRows}</div>`;
+  openDrilldown({
+    eyebrow:'§03 FINANCES · FAMILY INVESTMENTS',
+    title:h(name),
+    subtitle:h(rel),
+    body,
+    actions:isSelf?'':`<button class="btn btn-sm btn-d" onclick="if(confirm('Remove member ${h(name)}? Their transactions stay but lose the beneficiary tag.')){closeDrilldown();delFamilyMember('${mid}');}">Remove member</button><button class="btn btn-sm btn-p" onclick="closeDrilldown()">Close</button>`
+  });
+}
+
+/* V10.0.5 — Portfolio account recent transactions drilldown */
+function openPortfolioAcctDrilldown(accId){
+  const a=S.accounts.find(x=>x.id===accId);
+  if(!a){toast('Account not found',false);return;}
+  const all=Object.values(S.txnCache).flat();
+  const linked=all.filter(t=>t.accountId===accId).sort((x,y)=>(y.date||'').localeCompare(x.date||''));
+  const totals={inflow:0,outflow:0,net:0};
+  linked.forEach(t=>{const dir=txDir(t);if(dir==='in')totals.inflow+=t.amount;else if(dir==='out')totals.outflow+=t.amount;});
+  totals.net=totals.inflow-totals.outflow;
+  const histRows=linked.length?linked.map(t=>{
+    const dir=txDir(t);
+    return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);font-size:12px">
+      <div style="color:var(--text3);min-width:64px;flex-shrink:0">${toDD(t.date)}</div>
+      <div style="flex:1;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${h(t.description||'')}">${h(t.description||'—')}</div>
+      <div style="font-weight:500;font-variant-numeric:tabular-nums;${dir==='in'?'color:var(--pos)':'color:var(--neg)'}">${dir==='in'?'+':'−'}${fmtP(t.amount)}</div>
+    </div>`;
+  }).join(''):'<div style="font-size:12px;color:var(--text3);padding:12px 0">No linked transactions.</div>';
+  const body=`
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px">
+      <div style="padding:10px 12px;background:var(--bg2);border-radius:var(--rsm)">
+        <div class="section-eyebrow" style="margin:0 0 4px;font-size:9.5px">Inflows</div>
+        <div style="font-size:16px;font-weight:600;color:var(--pos);font-variant-numeric:tabular-nums">${fmtP(totals.inflow)}</div>
+      </div>
+      <div style="padding:10px 12px;background:var(--bg2);border-radius:var(--rsm)">
+        <div class="section-eyebrow" style="margin:0 0 4px;font-size:9.5px">Outflows</div>
+        <div style="font-size:16px;font-weight:600;color:var(--neg);font-variant-numeric:tabular-nums">${fmtP(totals.outflow)}</div>
+      </div>
+      <div style="padding:10px 12px;background:var(--bg2);border-radius:var(--rsm)">
+        <div class="section-eyebrow" style="margin:0 0 4px;font-size:9.5px">Net Position</div>
+        <div style="font-size:16px;font-weight:600;color:${totals.net>=0?'var(--pos)':'var(--neg)'};font-variant-numeric:tabular-nums">${totals.net>=0?'+':''}${fmtP(totals.net)}</div>
+      </div>
+    </div>
+    <div class="section-eyebrow" style="margin-top:0">Linked Transactions (${linked.length})</div>
+    <div>${histRows}</div>`;
+  openDrilldown({
+    eyebrow:'§03 FINANCES · PORTFOLIO',
+    title:h(a.name),
+    subtitle:h(a.type)+' · '+h(a.institution||'—'),
+    body,
+    actions:`<button class="btn btn-sm btn-p" onclick="closeDrilldown()">Close</button>`
+  });
+}
+
+/* V10.0.5 — Reimbursement submission drilldown */
+function openSubmissionDrilldown(sid){
+  const all=(window._reimbState&&window._reimbState.all)||[];
+  const s=all.find(x=>x.id===sid);
+  if(!s){
+    // Fall back: try Supabase-cached data via _reimbState lazy hydrate
+    const cached=(window._reimbState||{}).pending||[];
+    const s2=cached.find(x=>x.id===sid);
+    if(!s2){toast('Submission not found',false);return;}
+    return openSubmissionDrilldownFromObject(s2);
+  }
+  return openSubmissionDrilldownFromObject(s);
+}
+function openSubmissionDrilldownFromObject(s){
+  const catLabel=(typeof REIMB_CATS!=='undefined'?REIMB_CATS.find(r=>r.hint===s.category_hint):null)?.label||s.category_hint||'—';
+  const submittedAt=s.submitted_at?s.submitted_at.substr(0,10):'—';
+  const statusPill=s.status==='pending'?'<span class="status-pill status-pending">Pending review</span>':
+                   s.status==='approved'?'<span class="status-pill status-warn">Approved · awaiting payment</span>':
+                   s.status==='paid'?'<span class="status-pill status-pos">Paid</span>':
+                   `<span class="status-pill status-stale">${h(s.status||'—')}</span>`;
+  const body=`
+    <div style="margin-bottom:14px">${statusPill}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px">
+      <div style="padding:10px 12px;background:var(--bg2);border-radius:var(--rsm)">
+        <div class="section-eyebrow" style="margin:0 0 4px;font-size:9.5px">Submitter</div>
+        <div style="font-size:14px;font-weight:600">${h(s.submitter_name||'—')}</div>
+      </div>
+      <div style="padding:10px 12px;background:var(--bg2);border-radius:var(--rsm)">
+        <div class="section-eyebrow" style="margin:0 0 4px;font-size:9.5px">Submitted</div>
+        <div style="font-size:14px;font-weight:600">${h(submittedAt)}</div>
+      </div>
+      <div style="padding:10px 12px;background:var(--bg2);border-radius:var(--rsm)">
+        <div class="section-eyebrow" style="margin:0 0 4px;font-size:9.5px">Amount</div>
+        <div style="font-size:18px;font-weight:600;color:var(--warn);font-variant-numeric:tabular-nums">${fmtP(s.amount||0)}</div>
+      </div>
+      <div style="padding:10px 12px;background:var(--bg2);border-radius:var(--rsm)">
+        <div class="section-eyebrow" style="margin:0 0 4px;font-size:9.5px">Category</div>
+        <div style="font-size:14px;font-weight:600">${h(catLabel)}</div>
+      </div>
+    </div>
+    <div class="section-eyebrow" style="margin-top:0">Description</div>
+    <div style="font-size:13px;color:var(--text);line-height:1.5;margin-bottom:14px">${h(s.description||'—')}</div>
+    ${s.notes?`<div class="section-eyebrow" style="margin-top:0">Notes</div>
+    <div style="font-size:13px;color:var(--text2);line-height:1.5">${h(s.notes)}</div>`:''}`;
+  const actions=s.status==='pending'?`<button class="btn btn-sm btn-d" onclick="closeDrilldown();dismissSubmission('${s.id}')">Dismiss</button><button class="btn btn-sm btn-p" onclick="closeDrilldown();approveSubmission('${s.id}')">Approve</button>`:`<button class="btn btn-sm" onclick="closeDrilldown()">Close</button>`;
+  openDrilldown({
+    eyebrow:'§02.3 INBOX · REIMBURSEMENTS',
+    title:'Submission detail',
+    subtitle:fmtP(s.amount||0)+' · '+h(s.submitter_name||'—'),
+    body,
+    actions
+  });
+}
 // V8.16: compute the actual last day of a month (1-31) for safe day arithmetic
 function lastDayOfMonth(y,m){return new Date(y,m+1,0).getDate();}
 function fmtYM(ym){if(!ym)return'';const[y,m]=ym.split('-');const mn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return mn[parseInt(m)-1]+' '+y;}
@@ -7628,18 +7776,18 @@ async function rOv(){
       }).join('');
 
       // Anomalies callout
-      const anomalyAlert=anomalies.length?`<div style="margin-top:10px;padding:10px 12px;background:color-mix(in srgb,var(--warn) 10%,transparent);border-left:3px solid var(--warn);border-radius:var(--rsm)">
-        <div class="fg jb" style="align-items:center;margin-bottom:4px">
-          <div style="font-size:11px;font-weight:600;color:var(--text1)">Spending anomalies</div>
-          <div style="font-size:10px;color:var(--text3)">Click &times; to dismiss for this month</div>
+      const anomalyAlert=anomalies.length?`<div class="lanki-banner banner-warn" style="margin-top:10px">
+        <div class="lanki-banner-icon">&#9888;</div>
+        <div class="lanki-banner-content">
+          <div class="lanki-banner-title banner-warn-title">Spending anomalies</div>
+          <div class="lanki-banner-body">${anomalies.map(a=>{
+            const col=a.severity==='extreme'?'var(--neg)':a.severity==='high'?'color-mix(in srgb,var(--warn) 80%,var(--neg))':'var(--warn)';
+            return`<div class="fg jb" style="margin-top:2px;align-items:center;gap:8px">
+              <span style="flex:1"><span style="font-weight:500">${h(a.label)}</span> is <span style="color:${col};font-weight:600">${a.ratio}×</span> your 6-month median</span>
+              <button onclick="dismissAnomaly('${anchorYm}','${a.catId}')" style="background:none;border:none;color:var(--text3);cursor:pointer;padding:2px 6px;font-size:13px;line-height:1;border-radius:3px" title="Dismiss this anomaly for ${anchorYm}">&times;</button>
+            </div>`;
+          }).join('')}</div>
         </div>
-        ${anomalies.map(a=>{
-          const col=a.severity==='extreme'?'var(--neg)':a.severity==='high'?'color-mix(in srgb,var(--warn) 80%,var(--neg))':'var(--warn)';
-          return`<div class="fg jb" style="font-size:11px;color:var(--text2);margin-top:2px;align-items:center;gap:8px">
-            <span style="flex:1">&#9888; <span style="font-weight:500">${h(a.label)}</span> is <span style="color:${col};font-weight:600">${a.ratio}×</span> your 6-month median</span>
-            <button onclick="dismissAnomaly('${anchorYm}','${a.catId}')" style="background:none;border:none;color:var(--text3);cursor:pointer;padding:2px 6px;font-size:13px;line-height:1;border-radius:3px" title="Dismiss this anomaly for ${anchorYm}">&times;</button>
-          </div>`;
-        }).join('')}
       </div>`:'';
 
       return rows+anomalyAlert;
@@ -8829,7 +8977,7 @@ Return the JSON object with type, mainCatId, subCatId, confidence, reasoning.`;
 
     renderAiSuggestion(result,mainCat,subCat);
   }catch(err){
-    if(sugEl)sugEl.innerHTML=`<div style="padding:12px;background:color-mix(in srgb,var(--neg) 8%,transparent);border-radius:var(--rsm);font-size:var(--fs-xs);color:var(--neg)">Analysis failed: ${h(err.message||String(err))}</div>`;
+    if(sugEl)sugEl.innerHTML=`<div class="lanki-banner banner-neg"><div class="lanki-banner-icon">&#9888;</div><div class="lanki-banner-content"><div class="lanki-banner-body">Analysis failed: ${h(err.message||String(err))}</div></div></div>`;
   }finally{
     if(btn){btn.disabled=false;btn.textContent='Re-analyze';}
   }
@@ -9848,7 +9996,7 @@ function showMatchPopover(pairId,txnId,anchorEl){
   pop.style.cssText='z-index:8000;width:300px;background:var(--bg);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.14);padding:0;overflow:hidden';
   pop.innerHTML=`
     <div style="background:var(--bg2);padding:12px 14px 10px;border-bottom:1px solid var(--line)">
-      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:8px">Match Detail</div>
+      <div class="section-eyebrow" style="margin-bottom:8px;margin-top:0">Match Detail</div>
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
         <div style="flex:1;min-width:80px;background:var(--bg);border-radius:6px;padding:6px 8px;border:1px solid var(--line)">
           <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">Debit</div>
@@ -10942,8 +11090,8 @@ function openEditRuleModal(id){
             <span style="vertical-align:middle">Specific account only</span>
           </label>
           <select id="er-acc" style="display:block;width:100%;padding:8px 10px;font-size:13px;margin-top:6px" ${isGlobal?'disabled':''}>${accOptions}</select>
-          <div id="er-scope-note" style="font-size:11px;color:var(--warn);background:color-mix(in srgb,var(--warn) 12%,transparent);padding:8px 10px;border-radius:var(--rsm);margin-top:8px;display:${isGlobal?'none':'block'}">
-            Choosing a specific account leaves future imports of this description on other accounts as Uncategorized — they will not be auto-flagged.
+          <div id="er-scope-note" class="lanki-banner banner-warn" style="margin-top:8px;display:${isGlobal?'none':'block'}">
+            <div class="lanki-banner-body">Choosing a specific account leaves future imports of this description on other accounts as Uncategorized — they will not be auto-flagged.</div>
           </div>
         </div>
         ${foundInPanel}
@@ -11187,7 +11335,7 @@ function _renderSweepModal(scope,scoped,scopeLabel){
   mo.id='rule-sweep-modal';mo.className='mo active lanki-legacy';
 
   // V8.28: scope chip and toggle row
-  const scopeChip=scopeLabel?`<span style="display:inline-flex;align-items:center;gap:4px;background:color-mix(in srgb,var(--action) 12%,transparent);color:var(--action);padding:3px 10px;border-radius:99px;font-size:11px;font-weight:500">📍 ${h(scopeLabel)}</span>`:'';
+  const scopeChip=scopeLabel?`<span class="status-pill status-info" style="padding:3px 10px;border-radius:99px;font-size:11px">📍 ${h(scopeLabel)}</span>`:'';
   const toggleRow=!scoped?`<div style="display:flex;flex-wrap:wrap;gap:14px;align-items:center;padding:10px 1.3rem;background:var(--bg2);border-bottom:1px solid var(--border)">
     <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer">
       <input type="checkbox" id="sweep-scope-cb" ${_sweepOpts.scopeToView?'checked':''} onchange="_sweepToggleScope(this.checked)" style="width:auto;padding:0;margin:0;border:none">
@@ -11232,7 +11380,7 @@ function _renderSweepModal(scope,scoped,scopeLabel){
             <td style="padding:6px 8px;font-size:10px;color:var(--text3);white-space:nowrap">${toDD(c.t.date)}</td>
             <td style="padding:6px 8px;font-size:var(--fs-xs)">${h((c.t.description||'').substr(0,44))}${(c.t.description||'').length>44?'…':''}</td>
             <td style="padding:6px 8px;font-size:10px;color:var(--text3)">${oldM}${oldS}</td>
-            <td style="padding:6px 8px;font-size:10px;color:var(--pos);font-weight:500">${h(newM)}${h(newS)}${lowConfidence?` <span style="font-size:9px;background:color-mix(in srgb,var(--warn) 24%,transparent);color:var(--warn);border-radius:3px;padding:1px 4px;margin-left:3px" title="Low-confidence rule">low conf</span>`:''}</td>
+            <td style="padding:6px 8px;font-size:10px;color:var(--pos);font-weight:500">${h(newM)}${h(newS)}${lowConfidence?` <span class="status-pill status-warn" style="margin-left:3px" title="Low-confidence rule">low conf</span>`:''}</td>
             <td style="padding:6px 8px;text-align:right;font-variant-numeric:tabular-nums;font-size:var(--fs-xs)">${fmtP(c.t.amount)}</td>
             <td style="padding:6px 6px;text-align:center"><input type="checkbox" class="sweep-defer-cb" data-idx="${i}" ${lowConfidence?'checked title="Auto-suggested: low-confidence rule"':'title="Apply rule but flag for later review"'} style="width:auto;padding:0;margin:0;border:none;cursor:pointer"></td>
           </tr>`;
@@ -12121,15 +12269,13 @@ async function rSubs(){
     if(needsAttn){
       if(status==='overdue'){
         const daysSince=last?Math.floor((today-new Date(last.date))/(1000*60*60*24)):null;
-        attnLabel=`<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:3px;background:color-mix(in srgb,var(--warn) 18%,transparent);color:color-mix(in srgb,var(--warn) 70%,var(--midnight));letter-spacing:.03em">Overdue${daysSince?` · ${daysSince}d since last`:''}</span>`;
+        attnLabel=`<span class="status-pill status-warn">Overdue${daysSince?` · ${daysSince}d since last`:''}</span>`;
       }else if(last){
         const priors=pays.slice(1);
         const v=subPaymentVariance(sub,last.amount,priors);
         if(v.tag){
           const isHigher=v.tag==='higher';
-          const color=isHigher?'color-mix(in srgb,var(--warn) 18%,transparent)':'color-mix(in srgb,var(--pos) 15%,transparent)';
-          const text=isHigher?'color-mix(in srgb,var(--warn) 70%,var(--midnight))':'var(--pos)';
-          attnLabel=`<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:3px;background:${color};color:${text};letter-spacing:.03em">${isHigher?'Price up':'Price down'} · ${fmtP(Math.abs(v.variance))}</span>`;
+          attnLabel=`<span class="status-pill ${isHigher?'status-priceup':'status-pos'}">${isHigher?'Price up':'Price down'} · ${fmtP(Math.abs(v.variance))}</span>`;
         }
       }
     }
@@ -12143,11 +12289,10 @@ async function rSubs(){
         const v=subPaymentVariance(sub,t.amount,priors);
         const varTag=v.tag?(()=>{
           const isHigher=v.tag==='higher';
-          const color=isHigher?'color-mix(in srgb,var(--warn) 18%,transparent)':'color-mix(in srgb,var(--pos) 15%,transparent)';
-          const text=isHigher?'color-mix(in srgb,var(--warn) 70%,var(--midnight))':'var(--pos)';
+          const variant=isHigher?'status-priceup':'status-pos';
           const label=isHigher?'Higher':'Lower';
           const avgSuffix=v.baselineSource==='avg'?' vs 6-mo avg':'';
-          return`<span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;background:${color};color:${text};letter-spacing:.03em">${label} by ${fmtP(Math.abs(v.variance))}${avgSuffix}</span>`;
+          return`<span class="status-pill ${variant}">${label} by ${fmtP(Math.abs(v.variance))}${avgSuffix}</span>`;
         })():(v.baselineSource==='avg'?`<span style="font-size:9px;color:var(--text3)">vs 6-mo avg</span>`:'');
         return`<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;${i<shown.length-1?'border-bottom:1px solid var(--border);':''}">
           <div style="flex-shrink:0;min-width:80px;font-size:11px;color:var(--text3)">${toDD(t.date)}</div>
@@ -12167,7 +12312,7 @@ async function rSubs(){
               // Phase A polish: red dot on incomplete subs (missing category or amount)
               const missing=subMissingFields(sub);
               if(!missing.length||sub.status==='cancelled')return '';
-              return`<span title="Setup needed: ${missing.join(', ')}" style="display:inline-flex;align-items:center;gap:4px;font-size:9px;font-weight:700;padding:2px 7px;border-radius:3px;background:color-mix(in srgb,var(--neg) 12%,transparent);color:var(--neg);letter-spacing:.03em;cursor:pointer" onclick="openEditSub('${sub.id}')"><span style="display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--neg)"></span>Setup needed</span>`;
+              return`<span class="status-pill status-neg" title="Setup needed: ${missing.join(', ')}" style="cursor:pointer" onclick="openEditSub('${sub.id}')">Setup needed</span>`;
             })()}
           </div>
           <div style="font-size:11px;color:var(--text3);margin-top:3px">${h(sub.category||'Other')} \u00b7 ${sub.cycle==='annual'?'Annual':'Monthly'}${pays.length?` \u00b7 ${pays.length} payment${pays.length===1?'':'s'}`:''}${first&&first!==last?` \u00b7 Since ${toDD(first.date)}`:last?` \u00b7 First seen ${toDD(last.date)}`:''}${last?` \u00b7 Last: ${toDD(last.date)}`:''}</div>
@@ -12178,10 +12323,16 @@ async function rSubs(){
           <div style="font-size:17px;font-weight:500;font-variant-numeric:tabular-nums">${mainAmount}<span style="font-size:11px;font-weight:400;color:var(--text3)">/${sub.cycle==='annual'?'yr':'mo'}</span></div>
           ${nativeStr}
           ${sub.cycle==='annual'?`<div style="font-size:10px;color:var(--text3)">≈ ${fmtP(monthlyEquiv)}/mo</div>`:''}
-          <div class="fg" style="gap:6px;margin-top:8px;justify-content:flex-end">
+          <div class="fg" style="gap:6px;margin-top:8px;justify-content:flex-end;align-items:center">
             <button class="btn btn-xs" onclick="openEditSub('${sub.id}')">Edit</button>
-            <button class="btn btn-xs" onclick="toggleSubStatus('${sub.id}','${status==='cancelled'?'active':'cancelled'}')">${status==='cancelled'?'Reactivate':'Cancel'}</button>
-            <button class="btn btn-xs btn-d" onclick="deleteSub('${sub.id}')">&#10005;</button>
+            <div class="row-overflow">
+              <button class="row-overflow-btn" onclick="toggleRowOverflow(event,this)" title="More actions" aria-label="More actions">⋯</button>
+              <div class="row-overflow-menu">
+                <button class="row-overflow-item" onclick="toggleSubStatus('${sub.id}','${status==='cancelled'?'active':'cancelled'}')">${status==='cancelled'?'Reactivate':'Cancel subscription'}</button>
+                <div class="row-overflow-divider"></div>
+                <button class="row-overflow-item row-overflow-danger" onclick="deleteSub('${sub.id}')">Delete</button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -12200,15 +12351,15 @@ async function rSubs(){
   };
   const inferredAccountBySub=new Map();
   subsWithData.forEach(({sub})=>inferredAccountBySub.set(sub.id,subBillingAccount(sub)));
-  // Build dropdown options grouped by account type
+  // Build filter pills grouped by account type (V10.0: dropdown → pills per #59)
   const cashAccs=S.accounts.filter(a=>a.type==='current'||a.type==='savings').sort(accSortFn);
   const cardAccsForFilter=S.accounts.filter(a=>CARD_ACC_TYPES.has(a.type)).sort(accSortFn);
-  const subsAccFilter=`<select onchange="TF.subsAcc=this.value;render()" style="font-size:12px;padding:6px 10px;border:1px solid var(--border);border-radius:var(--rsm);background:var(--bg);color:var(--text1);min-width:180px">
-    <option value="">All accounts</option>
-    ${cashAccs.length?`<optgroup label="── Bank Accounts ──">${cashAccs.map(a=>`<option value="${a.id}" ${TF.subsAcc===a.id?'selected':''}>${h(a.name)}</option>`).join('')}</optgroup>`:''}
-    ${cardAccsForFilter.length?`<optgroup label="── Cards ──">${cardAccsForFilter.map(a=>`<option value="${a.id}" ${TF.subsAcc===a.id?'selected':''}>${h(a.name)}</option>`).join('')}</optgroup>`:''}
-    <option value="__none__" ${TF.subsAcc==='__none__'?'selected':''}>(no recent payments)</option>
-  </select>`;
+  const subsAccFilter=`<div class="filter-pills" role="tablist" aria-label="Filter by account">
+    <button class="filter-pill ${!TF.subsAcc?'active':''}" onclick="TF.subsAcc='';render()">All accounts</button>
+    ${cashAccs.map(a=>`<button class="filter-pill ${TF.subsAcc===a.id?'active':''}" onclick="TF.subsAcc='${a.id}';render()" title="Bank account">${h(a.name)}</button>`).join('')}
+    ${cardAccsForFilter.map(a=>`<button class="filter-pill ${TF.subsAcc===a.id?'active':''}" onclick="TF.subsAcc='${a.id}';render()" title="Card">${h(a.name)}</button>`).join('')}
+    <button class="filter-pill ${TF.subsAcc==='__none__'?'active':''}" onclick="TF.subsAcc='__none__';render()" title="Subscriptions with no recent payments">No payments</button>
+  </div>`;
   // Apply filter to the rendered subs
   const subsFilterFn=(item)=>{
     if(!TF.subsAcc)return true;
@@ -12217,7 +12368,7 @@ async function rSubs(){
     return inferred===TF.subsAcc;
   };
 
-  const sectionLabel=(title,count,tone)=>`<div style="display:flex;align-items:center;gap:8px;margin:1.25rem 0 .5rem"><div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">${title}${count?` (${count})`:''}</div>${tone==='warn'?'<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--warn)"></span>':tone==='ok'?'<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--pos)"></span>':''}</div>`;
+  const sectionLabel=(title,count,tone)=>`<div class="section-eyebrow" style="margin-top:1.25rem;display:flex;align-items:center;gap:8px">${title}${count?` (${count})`:''}${tone==='warn'?'<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--warn)"></span>':tone==='ok'?'<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--pos)"></span>':''}</div>`;
 
   const activeCount=subsWithData.filter(x=>x.status!=='cancelled').length;
   // V9.0.5.3 (Session 4, C2.3): Convert custom totalsBar to kpi-strip semantic for parity
@@ -12947,7 +13098,7 @@ function rBills(){
       </div>
       <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
         <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px">
-          <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Payments${allPayments.length?` (${allPayments.length})`:''}</div>
+          <div class="section-eyebrow" style="margin-top:0;margin-bottom:0;font-size:10px;letter-spacing:.06em">Payments${allPayments.length?` (${allPayments.length})`:''}</div>
           ${allPayments.length?`<div style="font-size:11px;color:var(--text3)">Total: <span style="font-weight:600;color:var(--text1)">${fmtP(totalPaid)}</span>${last?` · Last: ${toDD(last.date)}`:''}</div>`:''}
         </div>
         ${paymentsHtml}
@@ -13492,12 +13643,12 @@ function rStaff(){
       // Schedule (forward projection) — shows every month from start to completion
       const plan=advPlan(a);
       const schedStatusBadge={
-        deducted:'<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:color-mix(in srgb,var(--pos) 15%,transparent);color:var(--pos)">DEDUCTED</span>',
-        settled:'<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:color-mix(in srgb,var(--action) 12%,transparent);color:var(--action)">SETTLED</span>',
-        deferred:'<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:color-mix(in srgb,var(--warn) 15%,transparent);color:color-mix(in srgb,var(--warn) 70%,var(--midnight))">DEFERRED</span>',
-        forgiven:'<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:color-mix(in srgb,var(--text3) 15%,transparent);color:var(--text3)">FORGIVEN</span>',
-        planned:'<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:color-mix(in srgb,var(--text3) 10%,transparent);color:var(--text3)">PLANNED</span>',
-        unexpected:'<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:color-mix(in srgb,var(--neg) 14%,transparent);color:var(--neg)" title="This ledger entry is dated before the advance was supposed to start deducting — likely an orphan from a legacy bug. Click Undo to remove it.">UNEXPECTED</span>'
+        deducted:'<span class="status-pill status-pos">DEDUCTED</span>',
+        settled:'<span class="status-pill status-info">SETTLED</span>',
+        deferred:'<span class="status-pill status-warn">DEFERRED</span>',
+        forgiven:'<span class="status-pill status-stale">FORGIVEN</span>',
+        planned:'<span class="status-pill status-stale">PLANNED</span>',
+        unexpected:'<span class="status-pill status-neg" title="This ledger entry is dated before the advance was supposed to start deducting — likely an orphan from a legacy bug. Click Undo to remove it.">UNEXPECTED</span>'
       };
       const scheduleHtml=plan.length?plan.map(p=>{
         const rowActions=p.status==='planned'
@@ -13590,7 +13741,7 @@ function rStaff(){
     const paymentsHtml=payments.length?`
       <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
         <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px">
-          <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Payments (${payments.length})</div>
+          <div class="section-eyebrow" style="margin-top:0;margin-bottom:0;font-size:10px;letter-spacing:.06em">Payments (${payments.length})</div>
           <div style="font-size:11px;color:var(--text3)">Total paid: <span style="font-weight:600;color:var(--text1)">${fmtP(totalPaid)}</span>${lastPayment?` · Last: ${toDD(lastPayment.date)}`:''}</div>
         </div>
         <div style="border:1px solid var(--border);border-radius:var(--rsm);overflow:hidden">
@@ -13599,13 +13750,12 @@ function rStaff(){
             let tagHtml='';
             if(v.isAdvance){
               // Advance payment — show a neutral informational tag instead of variance
-              tagHtml=`<span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;background:color-mix(in srgb,var(--action) 12%,transparent);color:var(--action);letter-spacing:.03em">Advance payment</span>`;
+              tagHtml=`<span class="status-pill status-info">Advance payment</span>`;
             }else if(v.tag){
               const isHigher=v.tag==='higher';
-              const color=isHigher?'color-mix(in srgb,var(--warn) 18%,transparent)':'color-mix(in srgb,var(--pos) 15%,transparent)';
-              const text=isHigher?'color-mix(in srgb,var(--warn) 70%,var(--midnight))':'var(--pos)';
+              const variant=isHigher?'status-warn':'status-pos';
               const label=isHigher?'Higher':'Lower';
-              tagHtml=`<span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;background:${color};color:${text};letter-spacing:.03em">${label} by ${fmtP(Math.abs(v.variance))}</span>`;
+              tagHtml=`<span class="status-pill ${variant}">${label} by ${fmtP(Math.abs(v.variance))}</span>`;
             }
             return`<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;${i<paymentsToShow.length-1?'border-bottom:1px solid var(--border);':''}">
               <div style="flex-shrink:0;min-width:80px;font-size:11px;color:var(--text3)">${toDD(t.date)}</div>
@@ -13618,7 +13768,7 @@ function rStaff(){
         </div>
       </div>`:`
       <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
-        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Payments</div>
+        <div class="section-eyebrow" style="margin-top:0;margin-bottom:6px;font-size:10px;letter-spacing:.06em">Payments</div>
         <div style="font-size:11px;color:var(--text3);line-height:1.6">No transactions tagged to ${h(st.name.split(' ')[0])} yet. On the Transactions page, categorize a payment under <strong>Household Staff</strong> and select ${h(st.name.split(' ')[0])} to link it here.</div>
       </div>`;
 
@@ -14409,7 +14559,7 @@ function advBackfillBanner(){
   return`<div class="card" style="background:color-mix(in srgb,var(--warn) 6%,white);border:1px solid color-mix(in srgb,var(--warn) 20%,transparent);margin-bottom:1rem;padding:14px 16px">
     <div class="fg jb" style="flex-wrap:wrap;gap:12px;align-items:flex-start">
       <div style="min-width:0;flex:1">
-        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Advances need a transaction</div>
+        <div class="section-eyebrow" style="margin-top:0;margin-bottom:4px;font-size:10px;letter-spacing:.06em">Advances need a transaction</div>
         <div style="font-size:var(--fs-sm);color:var(--text1);line-height:1.5">${pending.length} advance${pending.length===1?'':'s'} totaling <strong>${fmtP(total)}</strong> ${pending.length===1?'has':'have'} no expense transaction recorded. Link ${pending.length===1?'it':'them'} to an existing bank transaction or create a new one so your cash flow is accurate.</div>
       </div>
       <button class="btn btn-sm btn-p" onclick="openBackfillModal()">Review ${pending.length}</button>
@@ -15459,7 +15609,7 @@ function rAcc(){
   </div>
   ${closedAccs.length?`
   <div style="margin-top:1.75rem">
-    <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Closed (${closedAccs.length})</div>
+    <div class="section-eyebrow" style="margin-top:0;margin-bottom:10px;font-size:10px;letter-spacing:.06em">Closed (${closedAccs.length})</div>
     <div class="card acc-card">
       <div class="acc-card-intro">These accounts are closed at the bank. Read-only — they cannot receive new transactions or be selected as import targets. Historical data is preserved. Click Reopen if the account becomes active again.</div>
       <div class="tbl-wrap"><table class="acc-tbl">
@@ -15470,7 +15620,7 @@ function rAcc(){
   </div>`:''}
   ${archivedAccs.length?`
   <div style="margin-top:1.75rem">
-    <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Archived (${archivedAccs.length})</div>
+    <div class="section-eyebrow" style="margin-top:0;margin-bottom:10px;font-size:10px;letter-spacing:.06em">Archived (${archivedAccs.length})</div>
     <div class="card acc-card">
       <div class="acc-card-intro">Hidden from active views. Still included in Overview, Debts, and Reports. Unarchive to restore visibility.</div>
       <div class="tbl-wrap"><table class="acc-tbl">
@@ -16088,7 +16238,10 @@ function rInvestments(){
       </div>
 
       <div style="margin-top:10px">
-        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Recent transactions</div>
+        <div class="fg jb" style="margin-bottom:6px;align-items:center">
+          <div class="section-eyebrow" style="margin-top:0;margin-bottom:0">Recent transactions</div>
+          ${txnList&&txnList.indexOf('No linked')===-1?`<button class="btn btn-xs" onclick="openPortfolioAcctDrilldown('${a.id}')">View all</button>`:''}
+        </div>
         ${txnList}
       </div>
     </div>`;
@@ -16101,7 +16254,7 @@ function rInvestments(){
       <div class="pg-header-sub">Investment accounts with current valuations and deployed capital. Stale values are flagged for refresh.</div>
     </div>
     <div class="fg" style="gap:6px;flex-wrap:wrap">
-      ${staleCount>0?`<span style="font-size:11px;color:var(--warn);align-self:center" title="${staleCount} account${staleCount===1?'':'s'} have values older than 30 days">${staleCount} stale</span>`:''}
+      ${staleCount>0?`<span class="status-pill status-warn" style="align-self:center" title="${staleCount} account${staleCount===1?'':'s'} have values older than 30 days">${staleCount} stale</span>`:''}
       ${(()=>{
         // V8.21.5: Update Values bulk button — only when at least one ai_public_price account exists
         const hasAi=invAccs.some(a=>a.updateSource==='ai_public_price'&&Array.isArray(a.holdings)&&a.holdings.length>0);
@@ -16301,7 +16454,7 @@ function rFamilyInv(){
           ${m?.relationship?`<div style="font-size:11px;color:var(--text3);margin-top:1px">${h(m.relationship)}</div>`:''}
           ${isUnassigned&&!m?.id?'<div style="font-size:11px;color:var(--text3);margin-top:1px">Your own investment transactions</div>':''}
         </div>
-        ${!isUnassigned?`<button class="btn btn-xs btn-d" onclick="delFamilyMember('${mid}')">Remove</button>`:''}
+        ${!isUnassigned?`<div class="fg" style="gap:6px;align-items:center"><button class="btn btn-xs" onclick="openFamilyMemberDrilldown('${mid}')" title="View full member detail">View detail</button><button class="btn btn-xs btn-d" onclick="delFamilyMember('${mid}')">Remove</button></div>`:`<button class="btn btn-xs" onclick="openFamilyMemberDrilldown('')" title="View Self detail">View detail</button>`}
       </div>
 
       <!-- Metrics row -->
@@ -16466,7 +16619,7 @@ function debtFormHtml(){
         <div><label class="lbl">Payment mode</label><select id="db-mode"><option value="auto">Auto (from statement)</option><option value="manual">Manual</option></select></div>
       </div>
       <div style="margin-bottom:8px;padding:12px;background:color-mix(in srgb,var(--pos) 6%,var(--bg2));border-radius:var(--rmd);border:1px solid color-mix(in srgb,var(--pos) 15%,transparent)">
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:10px">Early Settlement (from your bank)</div>
+        <div class="section-eyebrow" style="margin-bottom:10px;margin-top:0">Early Settlement (from your bank)</div>
         <div class="fr3" style="margin-bottom:6px">
           <div><label class="lbl">Amount to pay today (SAR)</label><input type="number" inputmode="decimal" id="db-stl-amt" min="0" step="0.01" placeholder="Total from bank app"></div>
           <div><label class="lbl">Management fees (SAR)</label><input type="number" inputmode="decimal" id="db-stl-fees" min="0" step="0.01" placeholder="Optional"></div>
@@ -16543,7 +16696,7 @@ function rDebts(){
       const stlDate=d.earlySettlementDate?` · as of ${toDD(d.earlySettlementDate)}`:'';
       settlementHtml=`
       <div style="margin-top:14px;padding:14px;background:color-mix(in srgb,var(--pos) 6%,var(--bg2));border-radius:var(--rmd);border:1px solid color-mix(in srgb,var(--pos) 20%,transparent)">
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:12px">Early Settlement Analysis${stlDate}</div>
+        <div class="section-eyebrow" style="margin-bottom:12px;margin-top:0">Early Settlement Analysis${stlDate}</div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:12px">
           <div><div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:4px">Pay Today</div><div style="font-size:18px;font-weight:600;letter-spacing:-.03em;font-variant-numeric:tabular-nums">${fmtP(stlAmt)}</div>${stlFees>0?`<div class="sub-meta">incl. ${fmtP(stlFees)} fees</div>`:''}</div>
           <div><div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:4px">Remaining Principal</div><div style="font-size:18px;font-weight:600;letter-spacing:-.03em;font-variant-numeric:tabular-nums">${fmtP(remainingPrincipal)}</div><div class="sub-meta">what you actually owe</div></div>
@@ -16647,7 +16800,7 @@ function rDebts(){
         const proj=projectMinPaymentCost(d);
         if(!proj)return '';
         return`<div style="margin-top:12px;padding:14px;background:color-mix(in srgb,var(--warn) 6%,var(--bg2));border-radius:var(--rmd);border:1px solid color-mix(in srgb,var(--warn) 20%,transparent)">
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:10px">Min-payment cost projection</div>
+          <div class="section-eyebrow" style="margin-bottom:10px;margin-top:0">Min-payment cost projection</div>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:10px">
             <div><div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:4px">If you pay only</div><div style="font-size:18px;font-weight:600;letter-spacing:-.03em;font-variant-numeric:tabular-nums">${fmtP(proj.minPay)}</div></div>
             <div><div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:4px">Carrying balance</div><div style="font-size:18px;font-weight:600;letter-spacing:-.03em;font-variant-numeric:tabular-nums">${fmtP(proj.remaining)}</div></div>
@@ -16673,7 +16826,7 @@ function rDebts(){
         if(items.length===0)return `<div style="margin-top:12px;padding:10px 14px;background:color-mix(in srgb,var(--pos) 5%,var(--bg2));border-radius:var(--rsm);border:1px solid color-mix(in srgb,var(--pos) 15%,transparent);font-size:11px;color:var(--text2);line-height:1.5">&#10003; No fees or charges detected on this card in ${yr}. Operating cost: SAR 0.</div>`;
         return`<div style="margin-top:12px;padding:14px;background:var(--bg2);border-radius:var(--rmd);border:1px solid var(--border)">
           <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
-            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3)">${yr} operating cost</div>
+            <div class="section-eyebrow" style="margin-top:0">${yr} operating cost</div>
             <div style="font-size:18px;font-weight:600;letter-spacing:-.03em;font-variant-numeric:tabular-nums;color:var(--neg)">${fmtP(costs.total)}</div>
           </div>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px">
@@ -16717,22 +16870,34 @@ function rDebts(){
         </div>
       </div>
       <div class="plog">${pl}</div>
-      ${d.status==='active'?`<div class="fg" style="margin-top:12px;flex-wrap:wrap;gap:6px">
+      ${d.status==='active'?`<div class="fg" style="margin-top:12px;flex-wrap:wrap;gap:6px;align-items:center">
         ${isCC?'':`<input type="number" inputmode="decimal" id="dp-${d.id}" placeholder="Amount" style="width:120px;flex-shrink:0" min="0" step="0.01">
         <div class="date-inp-wrap"><input type="text" id="dd-${d.id}" class="date-inp" placeholder="DD/MM/YYYY" maxlength="10" style="min-width:110px"><button type="button" class="cal-btn" onclick="openCal('dd-${d.id}')" title="Pick date">📅</button></div>
         <button class="btn btn-sm btn-p" onclick="recDP('${d.id}')">Record Payment</button>`}
         <button class="btn btn-sm" onclick="openEditDebt('${d.id}')">Edit</button>
-        ${isCC?`<button class="btn btn-sm" onclick="freezeCard('${d.id}')" title="Pause this card — hide from active dropdowns and aggregate metrics. Cycle alerts continue.">Freeze</button>`:''}
-        <button class="btn btn-sm" onclick="togDebt('${d.id}')">Mark Settled</button>
-        <button class="btn btn-sm btn-d" onclick="delDebt('${d.id}')">Remove</button>
+        <div class="row-overflow">
+          <button class="row-overflow-btn" onclick="toggleRowOverflow(event,this)" title="More actions" aria-label="More actions">⋯</button>
+          <div class="row-overflow-menu">
+            ${isCC?`<button class="row-overflow-item" onclick="freezeCard('${d.id}')" title="Pause this card — hide from active dropdowns and aggregate metrics.">Freeze card</button><div class="row-overflow-divider"></div>`:''}
+            <button class="row-overflow-item" onclick="togDebt('${d.id}')">Mark settled</button>
+            <div class="row-overflow-divider"></div>
+            <button class="row-overflow-item row-overflow-danger" onclick="delDebt('${d.id}')">Remove debt</button>
+          </div>
+        </div>
         ${isCC?`<div style="font-size:var(--fs-xxs);color:var(--info);margin-top:4px;width:100%">Balance calculated automatically from imported card transactions.</div>`:''}
-      </div>`:d.status==='frozen'?`<div class="fg" style="margin-top:10px;gap:6px;flex-wrap:wrap">
+      </div>`:d.status==='frozen'?`<div class="fg" style="margin-top:10px;gap:6px;flex-wrap:wrap;align-items:center">
         <button class="btn btn-sm btn-p" onclick="unfreezeCard('${d.id}')" title="Restore this card to active">Unfreeze</button>
         <button class="btn btn-sm" onclick="openEditDebt('${d.id}')">Edit</button>
-        <button class="btn btn-sm" onclick="togDebt('${d.id}')">Mark Settled</button>
-        <button class="btn btn-sm btn-d" onclick="delDebt('${d.id}')">Remove</button>
+        <div class="row-overflow">
+          <button class="row-overflow-btn" onclick="toggleRowOverflow(event,this)" title="More actions" aria-label="More actions">⋯</button>
+          <div class="row-overflow-menu">
+            <button class="row-overflow-item" onclick="togDebt('${d.id}')">Mark settled</button>
+            <div class="row-overflow-divider"></div>
+            <button class="row-overflow-item row-overflow-danger" onclick="delDebt('${d.id}')">Remove debt</button>
+          </div>
+        </div>
         <div style="font-size:var(--fs-xxs);color:var(--text3);margin-top:4px;width:100%">Frozen — excluded from active dropdowns and Card Intelligence aggregate. Cycle alerts continue.</div>
-      </div>`:`<div class="fg" style="margin-top:10px;gap:6px"><button class="btn btn-sm" onclick="togDebt('${d.id}')">Reactivate</button><button class="btn btn-sm btn-d" onclick="delDebt('${d.id}')">Remove</button></div>`}
+      </div>`:`<div class="fg" style="margin-top:10px;gap:6px;align-items:center"><button class="btn btn-sm" onclick="togDebt('${d.id}')">Reactivate</button><div class="row-overflow"><button class="row-overflow-btn" onclick="toggleRowOverflow(event,this)" title="More actions" aria-label="More actions">⋯</button><div class="row-overflow-menu"><button class="row-overflow-item row-overflow-danger" onclick="delDebt('${d.id}')">Remove debt</button></div></div></div>`}
     </div>
     <!-- Inline edit slot — populated by openEditDebt() -->
     <div class="debt-edit-slot" id="debt-edit-slot-${d.id}" style="display:none;margin-bottom:1.5rem"></div>`;
@@ -16799,7 +16964,7 @@ function rDebts(){
     return`<div class="card" style="margin-bottom:1.5rem;padding:1.25rem">
       <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px;flex-wrap:wrap;gap:8px">
         <div>
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:2px">Card intelligence</div>
+          <div class="section-eyebrow" style="margin-bottom:2px;margin-top:0">Card intelligence</div>
           <div style="font-size:18px;font-weight:600;letter-spacing:-.02em">${yr} cost of credit</div>
         </div>
         <div style="text-align:right">
@@ -16813,7 +16978,7 @@ function rDebts(){
       </div>`:`<div style="padding:12px 14px;background:color-mix(in srgb,var(--pos) 5%,var(--bg2));border-radius:var(--rsm);border:1px solid color-mix(in srgb,var(--pos) 20%,transparent);font-size:12px;color:var(--text2);line-height:1.5;margin-bottom:14px">&#10003; No fees, profit charges, or FX variance detected on any card YTD. Operating cost is zero.</div>`}
       ${upcoming.length>0?`
       <div style="margin-bottom:${annualFeesUpcoming.length?'14px':'0'};padding:12px 14px;background:var(--bg2);border-radius:var(--rsm);border:1px solid var(--border)">
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:8px">Upcoming payments</div>
+        <div class="section-eyebrow" style="margin-bottom:8px;margin-top:0">Upcoming payments</div>
         ${upcoming.map(u=>{
           const sevColor=u.cycle.daysToDue<0?'var(--neg)':u.cycle.daysToDue<=3?'var(--warn)':'var(--text1)';
           const dueText=u.cycle.daysToDue<0?Math.abs(u.cycle.daysToDue)+'d overdue':u.cycle.daysToDue===0?'Due today':u.cycle.daysToDue+'d';
@@ -16821,9 +16986,12 @@ function rDebts(){
         }).join('')}
       </div>`:''}
       ${annualFeesUpcoming.length>0?`
-      <div style="padding:12px 14px;background:color-mix(in srgb,var(--warn) 6%,var(--bg2));border-radius:var(--rsm);border:1px solid color-mix(in srgb,var(--warn) 20%,transparent)">
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:8px">Upcoming annual fees (next 90 days)</div>
-        ${annualFeesUpcoming.map(a=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid var(--border);font-size:12px"><span><strong>${h(a.card.name)}</strong> &middot; <span style="color:var(--text3)">${toDD(localISO(a.date))}</span></span><span style="font-weight:600;color:var(--warn)" class="fmt-money">${fmtP(a.amount)} in ${a.days}d</span></div>`).join('')}
+      <div class="lanki-banner banner-warn">
+        <div class="lanki-banner-icon">&#9888;</div>
+        <div class="lanki-banner-content">
+          <div class="lanki-banner-title banner-warn-title">Upcoming annual fees (next 90 days)</div>
+          <div class="lanki-banner-body">${annualFeesUpcoming.map(a=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-top:1px solid var(--line);font-size:12px"><span><strong>${h(a.card.name)}</strong> &middot; <span style="color:var(--text3)">${toDD(localISO(a.date))}</span></span><span style="font-weight:600;color:var(--warn)" class="fmt-money">${fmtP(a.amount)} in ${a.days}d</span></div>`).join('')}</div>
+        </div>
       </div>`:''}
     </div>`;
   })();
@@ -17117,7 +17285,7 @@ function rGoals(){
     return`<div class="card" style="${g.status!=='active'?'opacity:.6':''}">
       <div class="fg jb" style="flex-wrap:wrap;gap:8px">
         <div><div style="font-size:16px;font-weight:500">${h(g.name)}</div><div style="font-size:var(--fs-xs);color:var(--text2)">${GTL[g.type]||g.type}</div></div>
-        <span class="badge b-grey">${g.status}</span>
+        <span class="status-pill ${g.status==='active'?'status-info':g.status==='complete'?'status-pos':'status-stale'}">${g.status}</span>
       </div>
       <div class="div" style="margin:10px 0"></div>
       <div class="dmeta">
@@ -17129,11 +17297,17 @@ function rGoals(){
       <div class="pb" style="height:6px"><div class="pf priv-mask" style="width:${p}%"></div></div>
       <div style="font-size:var(--fs-xxs);color:var(--text3);margin-top:4px"><span class="fmt-money">${p}%</span> funded</div>
       ${g.notes?`<div style="font-size:var(--fs-xs);color:var(--text3);margin-top:6px">${h(g.notes)}</div>`:''}
-      <div class="fg" style="margin-top:12px;flex-wrap:wrap;gap:6px">
+      <div class="fg" style="margin-top:12px;flex-wrap:wrap;gap:6px;align-items:center">
         <input type="number" inputmode="decimal" id="ga-${g.id}" placeholder="Add amount (SAR)" style="width:160px;flex-shrink:0" min="0" step="0.01">
         <button class="btn btn-sm btn-p" onclick="addToGoal('${g.id}')">+ Add funds</button>
-        <button class="btn btn-sm" onclick="togGoal('${g.id}')">${g.status==='active'?'Mark complete':'Reactivate'}</button>
-        <button class="btn btn-sm btn-d" onclick="delGoal('${g.id}')">Remove</button>
+        <div class="row-overflow">
+          <button class="row-overflow-btn" onclick="toggleRowOverflow(event,this)" title="More actions" aria-label="More actions">⋯</button>
+          <div class="row-overflow-menu">
+            <button class="row-overflow-item" onclick="togGoal('${g.id}')">${g.status==='active'?'Mark complete':'Reactivate'}</button>
+            <div class="row-overflow-divider"></div>
+            <button class="row-overflow-item row-overflow-danger" onclick="delGoal('${g.id}')">Remove goal</button>
+          </div>
+        </div>
       </div>
     </div>`;}).join('')||'<div class="empty">No goals yet.</div>';
   return`
@@ -17524,7 +17698,7 @@ function rDiagnostics(){
         ${ccPaymentsOut.map(t=>{const acc=S.accounts.find(a=>a.id===t.accountId);return`<div style="padding:4px 0;color:var(--text2);margin-left:14px">&middot; ${t.date} &middot; ${h((t.description||'').substr(0,40))} &middot; <span class="fmt-money">${fmt(t.amount)}</span> from ${h(acc?.name||'?')}</div>`;}).join('')}
         <div style="margin:14px 0 10px"><strong>CC inflows received:</strong> SAR ${fmt(ccPaymentsInTotal)} (${ccPaymentsIn.length} txn${ccPaymentsIn.length===1?'':'s'})</div>
         ${ccPaymentsIn.map(t=>{const acc=S.accounts.find(a=>a.id===t.accountId);return`<div style="padding:4px 0;color:var(--text2);margin-left:14px">&middot; ${t.date} &middot; ${h((t.description||'').substr(0,40))} &middot; <span class="fmt-money">${fmt(t.amount)}</span> on ${h(acc?.name||'?')}</div>`;}).join('')}
-        ${Math.abs(ccPaymentsOutTotal-ccPaymentsInTotal)>=0.5?`<div style="margin-top:14px;padding:10px;background:color-mix(in srgb,var(--warn) 10%,transparent);border-radius:var(--rsm);font-size:11px;color:var(--warn)">&#9888; CC outflows from bank (${fmt(ccPaymentsOutTotal)}) and inflows to CC (${fmt(ccPaymentsInTotal)}) differ by SAR ${fmt(Math.abs(ccPaymentsOutTotal-ccPaymentsInTotal))}. Likely an unmatched CC payment or cross-month settlement.</div>`:''}
+        ${Math.abs(ccPaymentsOutTotal-ccPaymentsInTotal)>=0.5?`<div class="lanki-banner banner-warn" style="margin-top:14px"><div class="lanki-banner-icon">&#9888;</div><div class="lanki-banner-content"><div class="lanki-banner-body">CC outflows from bank (${fmt(ccPaymentsOutTotal)}) and inflows to CC (${fmt(ccPaymentsInTotal)}) differ by SAR ${fmt(Math.abs(ccPaymentsOutTotal-ccPaymentsInTotal))}. Likely an unmatched CC payment or cross-month settlement.</div></div></div>`:''}
       </div>
       `}
     </div>
@@ -19073,7 +19247,7 @@ function buildTxHeader(fl, scopedAcc, accountPills, tabLabel, groupPillRow){
   ${orphanBanner}
   <div style="margin-bottom:1.5rem">
     ${groupPillRow||''}
-    <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Account</div>
+    <div class="section-eyebrow" style="margin-top:0;margin-bottom:10px;font-size:10px;letter-spacing:.06em">Account</div>
     <div class="fg" style="gap:6px;flex-wrap:wrap">
       <button class="opill ${!scopedAcc?'active':''}" onclick="setTxnAcc('')">All ${tabLabel}</button>
       ${accountPills}
@@ -19930,8 +20104,11 @@ function rMerchantRules(){
     <div class="kpi-cell"><div class="kpi-cell-label">Account-Specific</div><div class="kpi-cell-value">${totalAcctSpecific}</div><div class="kpi-cell-sub">${rules.length-totalAcctSpecific} global &middot; ${totalAcctSpecific} scoped</div></div>
     <div class="kpi-cell"><div class="kpi-cell-label">Conflicts</div><div class="kpi-cell-value ${conflictCount>0?'c-warn':'c-ok'}">${conflictCount}</div><div class="kpi-cell-sub">${conflictCount===0?'No conflicts detected':'Match names defined elsewhere'}</div></div>
   </div>
-  ${conflictCount>0?`<div style="padding:10px 14px;background:color-mix(in srgb,var(--warn) 8%,var(--bg));border:1px solid color-mix(in srgb,var(--warn) 30%,transparent);border-radius:var(--rsm);margin-bottom:12px;font-size:var(--fs-xs);color:var(--text)">
-    <strong>${conflictCount} rule${conflictCount!==1?'s':''}</strong> match names already defined in Bills, Staff, Debts, Income, or Subscriptions. Highlighted in amber below.
+  ${conflictCount>0?`<div class="lanki-banner banner-warn">
+    <div class="lanki-banner-icon">&#9888;</div>
+    <div class="lanki-banner-content">
+      <div class="lanki-banner-body"><strong>${conflictCount} rule${conflictCount!==1?'s':''}</strong> match names already defined in Bills, Staff, Debts, Income, or Subscriptions. Highlighted in amber below.</div>
+    </div>
   </div>`:''}
   <div class="card" style="padding:10px 12px;margin-bottom:10px">
     <div class="fg" style="gap:12px;flex-wrap:wrap;align-items:flex-end">
@@ -20239,20 +20416,19 @@ function rSanityCheck(){
   // Badge is set by updateBadge() — do not set it here to avoid divergence
 
   const severityIcon={error:'🔴',warn:'🟡',info:'🔵'};
-  const severityBg={error:'var(--neg-bg)',warn:'color-mix(in srgb,var(--warn) 8%,var(--bg))',info:'color-mix(in srgb,var(--action) 5%,var(--bg))'};
-  const severityBorder={error:'color-mix(in srgb,var(--neg) 30%,var(--page))',warn:'color-mix(in srgb,var(--warn) 25%,transparent)',info:'color-mix(in srgb,var(--action) 20%,transparent)'};
+  const severityVariant={error:'banner-neg',warn:'banner-warn',info:'banner-info'};
 
   const issueRows=sorted.length?sorted.map(issue=>`
-    <div style="display:flex;align-items:flex-start;gap:12px;padding:12px 14px;background:${severityBg[issue.severity]};border:1px solid ${severityBorder[issue.severity]};border-radius:var(--rsm);margin-bottom:8px">
-      <div style="font-size:14px;flex-shrink:0;margin-top:1px">${severityIcon[issue.severity]}</div>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:3px">${h(issue.section)}</div>
+    <div class="lanki-banner ${severityVariant[issue.severity]||'banner-info'}">
+      <div class="lanki-banner-icon">${severityIcon[issue.severity]||'•'}</div>
+      <div class="lanki-banner-content">
+        <div class="section-eyebrow" style="margin:0 0 3px">${h(issue.section)}</div>
         <div style="font-size:var(--fs-xs);font-weight:500;margin-bottom:3px">${issue.message}</div>
         <div style="font-size:11px;color:var(--text3);line-height:1.5">${issue.hint}</div>
       </div>
-      <div style="flex-shrink:0">${issue.action||''}</div>
+      <div class="lanki-banner-actions">${issue.action||''}</div>
     </div>`).join('')
-  :`<div class="card"><div class="empty" style="padding:2rem">✓ No issues found. Everything looks consistent.</div></div>`;
+  :`<div class="lanki-banner banner-pos"><div class="lanki-banner-icon">&#10003;</div><div class="lanki-banner-content"><div class="lanki-banner-title banner-pos-title">All checks pass</div><div class="lanki-banner-body">Everything looks consistent. No issues found across your data.</div></div></div>`;
 
   return`
   <div class="pg-header-row">
@@ -21851,7 +22027,7 @@ function openSettlementModal(name){
           <input type="text" id="st-notes" placeholder="e.g. SARIE transfer" maxlength="120">
         </div>
         <div style="background:var(--bg2);border-radius:var(--rsm);padding:12px 14px">
-          <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Category breakdown preview</div>
+          <div class="section-eyebrow" style="margin-top:0;margin-bottom:8px;font-size:10px;letter-spacing:.06em">Category breakdown preview</div>
           ${breakdownHtml}
           <div class="fg jb" style="padding:8px 0 0;border-top:1px solid var(--border);margin-top:6px;font-size:var(--fs-sm)"><span style="font-weight:600">Total</span><span style="font-weight:700;font-variant-numeric:tabular-nums">${fmtP(total)}</span></div>
           <div style="font-size:var(--fs-xxs);color:var(--text3);margin-top:8px;line-height:1.5">To change a category, close this modal and click the item on the approved card to edit it.</div>
@@ -21990,6 +22166,8 @@ async function rReimbursements(){
   const pending=all.filter(s=>s.status==='pending');
   const approved=all.filter(s=>s.status==='approved');
   const paid=_submissions.filter(s=>s.status==='paid');
+  // V10.0.5: expose state for drilldown lookups
+  window._reimbState={all:_submissions||[],pending,approved,paid};
 
   // --- APPROVED GROUPED BY PERSON ---
   const approvedByName={};
@@ -22026,6 +22204,7 @@ async function rReimbursements(){
       <td style="font-size:11px;color:var(--text3)">${h(s.notes||'--')}</td>
       <td style="text-align:right;font-weight:500;white-space:nowrap">${fmtP(s.amount)}</td>
       <td style="white-space:nowrap">
+        <button class="btn btn-xs" onclick="openSubmissionDrilldown('${s.id}')">View</button>
         <button class="btn btn-xs btn-p" onclick="approveSubmission('${s.id}')">Approve</button>
         <button class="btn btn-xs btn-d" onclick="dismissSubmission('${s.id}')">Dismiss</button>
       </td>
