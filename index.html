@@ -1081,6 +1081,158 @@ tbody tr:hover td{background:var(--bg2)}
 .lanki-banner-icon{font-size:15px;flex-shrink:0;line-height:1.2}
 .lanki-banner-content{flex:1;min-width:0}
 .lanki-banner-actions{flex-shrink:0;display:flex;gap:6px;align-items:center}
+
+/* ============================================================
+   V10.0 architectural components
+   ============================================================ */
+
+/* Item #63 — Slide-in drilldown panel (Decision 63 lock: Option A everywhere).
+   Used by: Family Investments member detail (#31), Reimbursements line items (#38),
+   Portfolio recent transactions (#26), Family Inv per-row drilldown (#30). */
+.lanki-drilldown-overlay{
+  position:fixed;inset:0;z-index:1900;
+  background:rgba(2,23,81,.32);
+  opacity:0;pointer-events:none;
+  transition:opacity .18s ease-out;
+}
+.lanki-drilldown-overlay.open{opacity:1;pointer-events:auto}
+.lanki-drilldown{
+  position:fixed;top:0;right:0;bottom:0;z-index:1901;
+  width:480px;max-width:100vw;
+  background:var(--bg);border-left:1px solid var(--line);
+  box-shadow:-4px 0 24px rgba(2,23,81,.10);
+  transform:translateX(100%);
+  transition:transform .22s cubic-bezier(.32,.72,0,1);
+  display:flex;flex-direction:column;
+  overflow:hidden;
+}
+.lanki-drilldown.open{transform:translateX(0)}
+.lanki-drilldown-head{
+  flex:0 0 auto;padding:18px 20px 14px;
+  border-bottom:1px solid var(--line);
+  display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
+}
+.lanki-drilldown-eyebrow{
+  font-size:10.5px;font-weight:600;color:var(--text3);
+  text-transform:uppercase;letter-spacing:.16em;
+  margin-bottom:4px;line-height:1.2;font-variant-numeric:tabular-nums;
+}
+.lanki-drilldown-title{font-size:18px;font-weight:600;color:var(--text);letter-spacing:-.01em;line-height:1.3}
+.lanki-drilldown-sub{font-size:12px;color:var(--text2);margin-top:4px;line-height:1.4}
+.lanki-drilldown-close{
+  flex-shrink:0;width:30px;height:30px;border-radius:6px;
+  background:transparent;border:1px solid var(--line);
+  color:var(--text2);font-size:18px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+}
+.lanki-drilldown-close:hover{background:var(--bg2);color:var(--text)}
+.lanki-drilldown-body{
+  flex:1 1 auto;overflow-y:auto;padding:18px 20px;
+}
+.lanki-drilldown-foot{
+  flex:0 0 auto;padding:14px 20px;
+  border-top:1px solid var(--line);
+  display:flex;justify-content:flex-end;gap:8px;
+  background:var(--bg2);
+}
+@media (max-width:600px){
+  .lanki-drilldown{width:100vw;border-left:none}
+}
+
+/* Item #64 — Sidebar sub-nav count badges. Honors V9.0.5 Decision 60 lock to
+   left-nav-only (no in-page sub-tabs). Closes #10/#14/#36/#38/#40/#64. */
+.nav-count-badge{
+  display:inline-flex;align-items:center;justify-content:center;
+  margin-left:auto;
+  min-width:18px;height:16px;padding:0 5px;
+  font-size:10px;font-weight:700;line-height:1;
+  letter-spacing:.02em;font-variant-numeric:tabular-nums;
+  border-radius:8px;
+  background:var(--bg2);color:var(--text3);
+  transition:background .12s,color .12s;
+}
+.nav-count-badge.count-warn{background:var(--warn-bg);color:var(--warn)}
+.nav-count-badge.count-neg{background:var(--neg-bg);color:var(--neg)}
+.nav-count-badge.count-info{background:var(--action-tint);color:var(--action)}
+.nav-count-badge.count-zero{display:none}
+
+/* Item #59 — Filter pill component. Replaces dropdowns + ad-hoc pill rows
+   on Tx, Accounts, Categories, Subs, Inbox sub-pages, Bills. */
+.filter-pills{
+  display:flex;flex-wrap:wrap;gap:6px;
+  padding:0;margin:0 0 12px;
+  align-items:center;
+}
+.filter-pill{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:5px 11px;border-radius:100px;
+  font-size:11.5px;font-weight:500;
+  background:var(--bg);border:1px solid var(--line);
+  color:var(--text2);cursor:pointer;
+  transition:background .12s,color .12s,border-color .12s;
+  white-space:nowrap;
+  font-variant-numeric:tabular-nums;
+}
+.filter-pill:hover{background:var(--bg2);color:var(--text)}
+.filter-pill.active{background:var(--royal-midnight);border-color:var(--royal-midnight);color:#fff}
+.filter-pill.active:hover{background:var(--royal-midnight);color:#fff}
+.filter-pill .fp-count{
+  font-size:10px;font-weight:600;
+  padding:1px 5px;border-radius:8px;
+  background:var(--bg2);color:var(--text3);
+  min-width:14px;text-align:center;
+}
+.filter-pill.active .fp-count{background:rgba(255,255,255,.2);color:#fff}
+
+/* Item #55 expansion — additional status-pill modifiers for variants beyond
+   the four base ones. Pos/neg/warn/info already exist at line 1041-1044. */
+.status-pill.status-stale{background:var(--bg2);color:var(--text3);font-style:italic}
+.status-pill.status-fresh{background:var(--pos-bg);color:var(--pos)}
+.status-pill.status-pending{background:var(--action-tint);color:var(--action)}
+.status-pill.status-cancelled{background:var(--bg2);color:var(--text3);text-decoration:line-through}
+.status-pill.status-priceup{background:var(--warn-bg);color:var(--warn)}
+
+/* Item #41 KPI strip eyebrow variant — for §01.2 PULSE eyebrow on Projections */
+.pg-eyebrow.eyebrow-pulse{color:var(--action)}
+
+/* Item #44 — chart palette tokens (replaces hardcoded chart colors per #61) */
+:root{
+  --chart-line-1:var(--royal-midnight);
+  --chart-line-2:var(--electric-blue);
+  --chart-line-3:var(--dusty-mint);
+  --chart-fill-pos:color-mix(in srgb,var(--pos) 12%,transparent);
+  --chart-fill-neg:color-mix(in srgb,var(--neg) 12%,transparent);
+  --chart-grid:var(--line);
+}
+
+/* Item #62 — Per-row overflow menu (max 2 actions in row + ⋯ for the rest).
+   Used on Tx rows, Subs rows, Goals rows, Debts rows, Recurring rows. */
+.row-overflow{position:relative;display:inline-block}
+.row-overflow-btn{
+  width:26px;height:26px;border-radius:6px;
+  background:transparent;border:1px solid var(--line);
+  color:var(--text2);font-size:14px;cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;
+}
+.row-overflow-btn:hover{background:var(--bg2);color:var(--text)}
+.row-overflow-menu{
+  position:absolute;right:0;top:calc(100% + 4px);
+  min-width:160px;padding:4px;
+  background:var(--bg);border:1px solid var(--line);
+  border-radius:var(--rsm);box-shadow:0 4px 16px rgba(2,23,81,.08);
+  z-index:50;display:none;
+}
+.row-overflow.open .row-overflow-menu{display:block}
+.row-overflow-item{
+  display:flex;align-items:center;gap:8px;width:100%;
+  padding:7px 10px;border-radius:4px;
+  font-size:12px;color:var(--text);background:transparent;border:none;
+  cursor:pointer;text-align:left;
+}
+.row-overflow-item:hover{background:var(--bg2)}
+.row-overflow-item.row-overflow-danger{color:var(--neg)}
+.row-overflow-item.row-overflow-danger:hover{background:var(--neg-bg)}
+.row-overflow-divider{height:1px;background:var(--line);margin:4px 2px}
 .shint{font-size:var(--fs-xxs);color:var(--text3);margin-bottom:14px;line-height:1.6}
 /* V9.0.3 cleanup: removed .fbar orphan (audit §10.5) */
 /* V9.0.3 cleanup: removed .fsel orphan (audit §10.5) */
@@ -4683,7 +4835,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='9.0.6';
+const VERSION='10.0';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -5069,6 +5221,99 @@ function getYM(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'
 // Grep guard: any occurrence of `.toISOString().slice(0,10)` or `.toISOString().substr(0,10)`
 // on a Date object is a regression. Use localISO(date) instead.
 function localISO(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+
+/* ============================================================
+   V10.0 architectural helpers
+   ============================================================ */
+
+/* Drilldown panel (Decision 63) — single global slot.
+   Usage: openDrilldown({eyebrow:'§02.3 INBOX',title:'Submission detail',subtitle:'2 line items',
+                         body:'<div>...</div>', actions:'<button>Approve</button>'}); */
+function openDrilldown(opts){
+  let host=document.getElementById('lanki-drilldown-host');
+  if(!host){
+    host=document.createElement('div');
+    host.id='lanki-drilldown-host';
+    host.innerHTML=`
+      <div class="lanki-drilldown-overlay" id="lanki-drilldown-overlay" onclick="closeDrilldown()"></div>
+      <aside class="lanki-drilldown" id="lanki-drilldown" role="dialog" aria-modal="true" aria-labelledby="lanki-drilldown-title-el">
+        <header class="lanki-drilldown-head">
+          <div style="flex:1;min-width:0">
+            <div class="lanki-drilldown-eyebrow" id="lanki-drilldown-eyebrow"></div>
+            <div class="lanki-drilldown-title" id="lanki-drilldown-title-el"></div>
+            <div class="lanki-drilldown-sub" id="lanki-drilldown-sub"></div>
+          </div>
+          <button class="lanki-drilldown-close" onclick="closeDrilldown()" aria-label="Close">&times;</button>
+        </header>
+        <div class="lanki-drilldown-body" id="lanki-drilldown-body"></div>
+        <footer class="lanki-drilldown-foot" id="lanki-drilldown-foot" style="display:none"></footer>
+      </aside>`;
+    document.body.appendChild(host);
+    // Esc to close
+    document.addEventListener('keydown',function(e){
+      if(e.key==='Escape'){
+        const dd=document.getElementById('lanki-drilldown');
+        if(dd&&dd.classList.contains('open'))closeDrilldown();
+      }
+    });
+  }
+  document.getElementById('lanki-drilldown-eyebrow').innerHTML=opts.eyebrow||'';
+  document.getElementById('lanki-drilldown-title-el').innerHTML=opts.title||'';
+  const sub=document.getElementById('lanki-drilldown-sub');
+  sub.innerHTML=opts.subtitle||'';
+  sub.style.display=opts.subtitle?'':'none';
+  document.getElementById('lanki-drilldown-body').innerHTML=opts.body||'';
+  const foot=document.getElementById('lanki-drilldown-foot');
+  if(opts.actions){foot.innerHTML=opts.actions;foot.style.display='';}else{foot.style.display='none';foot.innerHTML='';}
+  // animation tick
+  requestAnimationFrame(()=>{
+    document.getElementById('lanki-drilldown-overlay').classList.add('open');
+    document.getElementById('lanki-drilldown').classList.add('open');
+    // focus the first focusable element in the panel
+    const dd=document.getElementById('lanki-drilldown');
+    const focusable=dd.querySelector('button,a,input,select,textarea,[tabindex]:not([tabindex="-1"])');
+    if(focusable)focusable.focus();
+  });
+}
+function closeDrilldown(){
+  const ov=document.getElementById('lanki-drilldown-overlay');
+  const dd=document.getElementById('lanki-drilldown');
+  if(ov)ov.classList.remove('open');
+  if(dd)dd.classList.remove('open');
+}
+
+/* Per-row overflow menu (Item #62) — single open at a time.
+   Usage: <div class="row-overflow"><button class="row-overflow-btn" onclick="toggleRowOverflow(event,this)">⋯</button>
+            <div class="row-overflow-menu">...items...</div></div> */
+function toggleRowOverflow(e,btn){
+  e.stopPropagation();
+  const wrap=btn.closest('.row-overflow');
+  if(!wrap)return;
+  // close all others
+  document.querySelectorAll('.row-overflow.open').forEach(el=>{if(el!==wrap)el.classList.remove('open');});
+  wrap.classList.toggle('open');
+}
+document.addEventListener('click',function(e){
+  if(!e.target.closest('.row-overflow')){
+    document.querySelectorAll('.row-overflow.open').forEach(el=>el.classList.remove('open'));
+  }
+});
+
+/* Staleness helper (Item #27) — returns days-since-last-update for portfolio
+   accounts, family inv members, etc. Returns -1 if no timestamp. */
+function staleness(lastUpdateMs){
+  if(!lastUpdateMs)return -1;
+  const ts=typeof lastUpdateMs==='number'?lastUpdateMs:new Date(lastUpdateMs).getTime();
+  if(isNaN(ts))return -1;
+  return Math.floor((Date.now()-ts)/(86400000));
+}
+function stalenessPill(lastUpdateMs,thresholdDays){
+  thresholdDays=thresholdDays||30;
+  const d=staleness(lastUpdateMs);
+  if(d<0)return `<span class="status-pill status-stale">no value</span>`;
+  if(d<thresholdDays)return `<span class="status-pill status-fresh">Fresh</span>`;
+  return `<span class="status-pill status-stale">Stale ${d}d</span>`;
+}
 // V8.16: compute the actual last day of a month (1-31) for safe day arithmetic
 function lastDayOfMonth(y,m){return new Date(y,m+1,0).getDate();}
 function fmtYM(ym){if(!ym)return'';const[y,m]=ym.split('-');const mn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return mn[parseInt(m)-1]+' '+y;}
@@ -6367,15 +6612,18 @@ async function render(){
     const newSub=c.newSubCatId?getSC(c.newSubCatId):null;
     const oldLabel=(oldCat?.name||'?')+(oldSub?' / '+oldSub.name:'');
     const newLabel=(newCat?.name||'?')+(newSub?' / '+newSub.name:'');
-    const hintHtml=`<div id="rule-conflict-hint" style="background:color-mix(in srgb,var(--action) 8%,var(--bg));border:1px solid color-mix(in srgb,var(--action) 40%,transparent);border-radius:var(--rsm);padding:14px 16px;margin-bottom:14px;font-size:var(--fs-xs);position:relative">
-      <button onclick="dismissRuleConflict()" style="position:absolute;top:8px;right:10px;background:none;border:none;cursor:pointer;color:var(--text3);font-size:16px;line-height:1;padding:2px 6px" title="Dismiss and don't ask again for this combination">&times;</button>
-      <div style="font-weight:600;color:var(--text1);margin-bottom:6px">💡 Rule conflict for "${h(c.pattern)}"</div>
-      <div style="color:var(--text2);line-height:1.6;margin-bottom:10px">You categorized this as <strong>${h(newLabel)}</strong> on <strong>${h(c.accountName)}</strong>, but a global rule for "${h(c.pattern)}" exists categorizing it as <strong>${h(oldLabel)}</strong>.</div>
-      <div class="fg" style="gap:6px;flex-wrap:wrap">
-        <button class="btn btn-p btn-sm" onclick="resolveRuleConflict('account_specific')" title="Add an account-specific rule. Global rule stays unchanged.">Make account-specific</button>
-        <button class="btn btn-sm" onclick="resolveRuleConflict('override_global')" title="Update the global rule for all accounts.">Override global rule</button>
-        <button class="btn btn-sm" onclick="resolveRuleConflict('just_this')" title="Apply to this transaction only. No rule change.">Just this transaction</button>
+    const hintHtml=`<div id="rule-conflict-hint" class="lanki-banner banner-info" style="position:relative">
+      <div class="lanki-banner-icon">&#128161;</div>
+      <div class="lanki-banner-content">
+        <div class="lanki-banner-title banner-info-title">Rule conflict for "${h(c.pattern)}"</div>
+        <div class="lanki-banner-body" style="margin-bottom:10px">You categorized this as <strong>${h(newLabel)}</strong> on <strong>${h(c.accountName)}</strong>, but a global rule for "${h(c.pattern)}" exists categorizing it as <strong>${h(oldLabel)}</strong>.</div>
+        <div class="fg" style="gap:6px;flex-wrap:wrap">
+          <button class="btn btn-p btn-sm" onclick="resolveRuleConflict('account_specific')" title="Add an account-specific rule. Global rule stays unchanged.">Make account-specific</button>
+          <button class="btn btn-sm" onclick="resolveRuleConflict('override_global')" title="Update the global rule for all accounts.">Override global rule</button>
+          <button class="btn btn-sm" onclick="resolveRuleConflict('just_this')" title="Apply to this transaction only. No rule change.">Just this transaction</button>
+        </div>
       </div>
+      <button onclick="dismissRuleConflict()" style="position:absolute;top:8px;right:10px;background:none;border:none;cursor:pointer;color:var(--text3);font-size:16px;line-height:1;padding:2px 6px" title="Dismiss and don't ask again for this combination">&times;</button>
     </div>`;
     el.innerHTML=hintHtml+el.innerHTML;
   }
@@ -8164,7 +8412,7 @@ function buildProjectionsChart(){
     data:{
       labels,
       datasets:[
-        {label:'Projected Closing',data,borderColor:C_ACTION,backgroundColor:'rgba(14,64,197,.06)',fill:true,tension:0.25,pointRadius:5,pointBackgroundColor:pointColors,pointBorderColor:pointColors,borderWidth:2},
+        {label:'Projected Closing',data,borderColor:C_ACTION,backgroundColor:'rgba(14,64,197,.06)',fill:true,tension:0.25,pointRadius:0,pointHoverRadius:5,pointBackgroundColor:pointColors,pointBorderColor:pointColors,borderWidth:2.5},
         {label:'Comfortable buffer',data:Array(proj.months.length).fill(comfort),borderColor:'rgba(15,122,83,.4)',borderDash:[4,4],pointRadius:0,fill:false,borderWidth:1},
         {label:'Tight buffer',data:Array(proj.months.length).fill(tight),borderColor:'rgba(156,106,14,.4)',borderDash:[4,4],pointRadius:0,fill:false,borderWidth:1},
         {label:'Zero',data:Array(proj.months.length).fill(0),borderColor:'rgba(179,58,63,.5)',borderDash:[2,2],pointRadius:0,fill:false,borderWidth:1}
@@ -8351,7 +8599,7 @@ function rProjections(){
   return`
   <div class="pg-header-row">
     <div>
-      <div class="pg-eyebrow">§01 PULSE</div>
+      <div class="pg-eyebrow eyebrow-pulse">§01.2 PULSE</div>
       <div class="pg-header-title">Cash Position Projections</div>
       <div class="pg-header-sub">Forward-looking ${proj.horizon}-month projection · Cash Flow Engine · ${proj.includeInv?'incl. ':'excl. '}investment commitments</div>
     </div>
@@ -10140,8 +10388,8 @@ async function doImport(directPayload){
     if(!ai&&t.account_number){const an=(t.account_number||'').replace(/\s/g,'');const f=S.accounts.find(a=>a.accountNumber&&a.accountNumber.replace(/\s/g,'')===an);if(f)ai=f.id;}
     let mid=t.main_category_id||t.mainCatId||(t.category_id&&(t.category_id.startsWith('cat_main_')||t.category_id.startsWith('cat_main'))?t.category_id:lcMap(t.category_id))||null;
     let sid=t.sub_category_id||t.subCatId||null;
-    const rawDesc=t.description||'';
-    const cleanDesc=rawDesc.trim();
+    const cleanDesc=(t.description||'').trim();
+    const rawDesc=(t.raw_description||t.description||'').trim();
     const matchedBill=S.bills.find(b=>{
       if(!b.mainCatId)return false;
       const bName=(b.name||'').toLowerCase();
@@ -13229,7 +13477,7 @@ function rStaff(){
       const thisEntry=(a.ledger||[]).find(l=>l.month===now);
       const isRecorded=!!thisEntry;
       const statusColors={active:'var(--bg2)',pending:'color-mix(in srgb,var(--action) 8%,var(--bg))',settled:'color-mix(in srgb,var(--pos) 8%,var(--bg))',forgiven:'color-mix(in srgb,var(--text3) 8%,var(--bg))'};
-      const statusBadge={active:'<span style="font-size:9px;font-weight:700;letter-spacing:.05em;padding:2px 6px;border-radius:4px;background:color-mix(in srgb,var(--warn) 15%,transparent);color:color-mix(in srgb,var(--warn) 80%,var(--midnight))">ACTIVE</span>',pending:'<span style="font-size:9px;font-weight:700;letter-spacing:.05em;padding:2px 6px;border-radius:4px;background:color-mix(in srgb,var(--action) 12%,transparent);color:var(--action)">PENDING</span>',settled:'<span style="font-size:9px;font-weight:700;letter-spacing:.05em;padding:2px 6px;border-radius:4px;background:color-mix(in srgb,var(--pos) 15%,transparent);color:var(--pos)">SETTLED</span>',forgiven:'<span style="font-size:9px;font-weight:700;letter-spacing:.05em;padding:2px 6px;border-radius:4px;background:color-mix(in srgb,var(--text3) 15%,transparent);color:var(--text3)">FORGIVEN</span>'};
+      const statusBadge={active:'<span class="status-pill status-warn">ACTIVE</span>',pending:'<span class="status-pill status-info">PENDING</span>',settled:'<span class="status-pill status-pos">SETTLED</span>',forgiven:'<span class="status-pill status-stale">FORGIVEN</span>'};
       const pct=a.amount>0?Math.min(100,Math.round((a.amount-remaining)/a.amount*100)):100;
 
       // This-month status indicator
@@ -17251,6 +17499,7 @@ function rDiagnostics(){
 
   <div class="settings-section">
     <div class="settings-section-head"><h3>Per-account movement (${fmtYM(auditMonth)})</h3></div>
+    <div class="settings-section-body">
     <div class="tbl-wrap"><table>
       <thead><tr><th>Account</th><th>Type</th><th style="text-align:right">Movement</th><th style="text-align:right">Txns</th></tr></thead>
       <tbody>${accMovement.map(r=>`<tr>
@@ -17262,6 +17511,7 @@ function rDiagnostics(){
     </table></div>
     <div style="font-size:11px;color:var(--text3);padding:8px 0 0;line-height:1.5">
       <strong>Reading this:</strong> Cash accounts: positive = money in, negative = money out. Credit cards: positive = debt reduced (you paid AmEx), negative = debt increased (you spent on the card).
+    </div>
     </div>
   </div>
 
@@ -17283,6 +17533,7 @@ function rDiagnostics(){
   ${orphans.length>0?`
   <div class="settings-section">
     <div class="settings-section-head"><h3>Orphan transfers (${orphans.length})</h3></div>
+    <div class="settings-section-body">
     <div style="font-size:12px;color:var(--text2);line-height:1.5;padding:8px 0">
       Transfers without a matched counterpart in another account. Each one should either match (counterpart imported) or be re-classified to its actual type (income/expense/external).
     </div>
@@ -17296,12 +17547,14 @@ function rDiagnostics(){
         <td style="color:${dir(t)==='in'?'var(--pos)':'var(--neg)'}">${dir(t)}</td>
       </tr>`;}).join('')}</tbody>
     </table></div>
+    </div>
   </div>
   `:''}
 
   ${fxTxns.length>0?`
   <div class="settings-section">
     <div class="settings-section-head"><h3>FX variance transactions (${fxTxns.length})</h3></div>
+    <div class="settings-section-body">
     <div style="font-size:12px;color:var(--text2);line-height:1.5;padding:8px 0">
       Auto-created by Lanki on matched pairs where amounts differed (typically AmEx USD payments). All should land on the receiving (CC) account.
     </div>
@@ -17314,21 +17567,25 @@ function rDiagnostics(){
         <td style="color:${t.type==='expense'?'var(--neg)':'var(--pos)'}">${t.type}</td>
       </tr>`;}).join('')}</tbody>
     </table></div>
+    </div>
   </div>
   `:''}
 
   ${drifted.length>0?`
   <div class="settings-section">
     <div class="settings-section-head"><h3>Type / category drift (${drifted.length})</h3></div>
+    <div class="settings-section-body">
     <div style="font-size:12px;color:var(--text2);line-height:1.5;padding:8px 0">
       Transactions whose type does not match their category. Run Auto-fix in Sanity Check to resolve.
     </div>
     <button class="btn btn-sm btn-p" onclick="autoFixTypeCategoryDrift()">Auto-fix all (${drifted.length})</button>
+    </div>
   </div>
   `:''}
 
   <div class="settings-section">
     <div class="settings-section-head"><h3>Credit card cost analysis (V8.15)</h3></div>
+    <div class="settings-section-body">
     ${(()=>{
       const ccs=S.debts.filter(d=>d.type==='credit_card'&&d.status==='active');
       if(ccs.length===0)return `<div style="font-size:12px;color:var(--text3);padding:14px 0">No active credit cards configured.</div>`;
@@ -17388,10 +17645,12 @@ function rDiagnostics(){
         </div>
         ${rows}`;
     })()}
+    </div>
   </div>
 
   <div class="settings-section">
     <div class="settings-section-head"><h3>Migration registry</h3></div>
+    <div class="settings-section-body">
     <div style="font-size:12px;color:var(--text2);line-height:1.5;padding:8px 0">
       Migrations run once at boot to retrofit historical data. ${migrationsRun} of ${MIGRATIONS.length} migration${MIGRATIONS.length===1?' has':'s have'} run on this vault.
     </div>
@@ -17402,10 +17661,12 @@ function rDiagnostics(){
         return `${symbol} ${m.id} <span style="opacity:.6">— ${h(m.description||'')}</span>${m.removeAfter?` <span style="opacity:.5">(remove after ${m.removeAfter})</span>`:''}`;
       }).join('<br>')}
     </div>
+    </div>
   </div>
 
   <div class="settings-section">
     <div class="settings-section-head"><h3>All months — health snapshot</h3></div>
+    <div class="settings-section-body">
     <div class="tbl-wrap"><table>
       <thead><tr><th>Month</th><th style="text-align:right">Txns</th><th style="text-align:right">Orphans</th><th style="text-align:right">FX</th><th style="text-align:right">Drift</th><th style="text-align:center">Status</th></tr></thead>
       <tbody>${monthStatus.map(s=>{const clean=s.orphans===0&&s.drift===0;return`<tr${s.month===auditMonth?' style="background:color-mix(in srgb,var(--action) 6%,transparent)"':''}>
@@ -17417,6 +17678,7 @@ function rDiagnostics(){
         <td style="text-align:center">${clean?'<span style="color:var(--pos)">&#10003;</span>':'<span style="color:var(--warn)">&#9888;</span>'}</td>
       </tr>`;}).join('')}</tbody>
     </table></div>
+    </div>
   </div>
 
   <div style="font-size:11px;color:var(--text3);text-align:center;padding:1.5rem 0;line-height:1.5">
@@ -23010,7 +23272,29 @@ async function runAIExtract(){
         flagged:true
       }))
     ];
-    _aiState.extracted=allExtracted.map(t=>({
+    // V10.0 Phase 0 (V9.0.4.2 fix): dedup the merged list. AI sometimes puts the same transaction
+    // in both "transactions" and "flagged" arrays. Prefer the categorized copy.
+    // Defensive dedup — runs even when the prompt-side mutual-exclusivity rule works perfectly.
+    const dedupedExtracted=[];
+    const seenKeys=new Map(); // key -> index in dedupedExtracted
+    for(const t of allExtracted){
+      const key=`${t.date}|${Math.abs(parseFloat(t.amount)||0).toFixed(2)}|${(t.direction||'out').toLowerCase()}`;
+      const existingIdx=seenKeys.get(key);
+      if(existingIdx===undefined){
+        seenKeys.set(key,dedupedExtracted.length);
+        dedupedExtracted.push(t);
+      }else{
+        // Already have one. Keep the categorized version; replace if current is categorized and existing isn't.
+        const existing=dedupedExtracted[existingIdx];
+        const existingHasCat=!!existing.mainCatId;
+        const currentHasCat=!!t.mainCatId;
+        if(currentHasCat && !existingHasCat){
+          dedupedExtracted[existingIdx]=t;
+        }
+        // else keep existing
+      }
+    }
+    _aiState.extracted=dedupedExtracted.map(t=>({
       ...t,
       id:'ai_'+Date.now()+'_'+Math.random().toString(36).substr(2,5),
       accountId:_aiState.accountId,
