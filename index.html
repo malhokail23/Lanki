@@ -60,7 +60,11 @@ html{zoom:1.1}
   --hairline:#EBEEF5;
   --text:#021751;
   --text2:#4A5774;
-  --text3:#7E89A3;
+  /* V9.0.5.2 (Session 3, B5a): --text3 darkened from #7E89A3 to #6A7693 to
+     improve contrast on tertiary metadata, form labels, eyebrows, captions.
+     Token migration; ~600 site ripple. Verified across 15+ representative
+     pages per the Risk 9 in-flight build-state coherence gate. */
+  --text3:#6A7693;
   --pos:#0F7A53;
   --pos-bg:#E0F2EA;
   --neg:#B33A3F;
@@ -142,7 +146,8 @@ html{zoom:1.1}
 .spread.compass,
 .lanki-legacy .compass{
   --text2:#4A5774;
-  --text3:#7E89A3;
+  /* V9.0.5.2 (Session 3, B5a): parallel darken with :root --text3 above. */
+  --text3:#6A7693;
   --warn:#9C6A0E;
   --warn-bg:#FBEFD7;
   --font:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","Segoe UI","Helvetica Neue",Helvetica,Arial,sans-serif;
@@ -4666,7 +4671,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='9.0.5.1';
+const VERSION='9.0.5.2';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
