@@ -4671,7 +4671,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='9.0.5.3';
+const VERSION='9.0.5.4';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -9716,7 +9716,7 @@ function rTransferMatching(){
       <td style="color:var(--text3);font-size:var(--fs-xs);white-space:nowrap">${toDD(p.date)}</td>
       <td style="font-size:var(--fs-xs)">${outAcc?.name||'--'} <span style="color:var(--text3)">&#8594;</span> ${inAcc?.name||'--'}</td>
       <td style="font-weight:500;white-space:nowrap">${fmtP(p.amount)}</td>
-      <td><span class="badge b-tr">${p.confirmedBy==='tolerance'?'Tolerance match':p.confirmedBy==='auto'?'Auto-matched':'Manually matched'}</span>${p.toleranceNote?`<div class="sub-meta">${h(p.toleranceNote)}</div>`:''}</td>
+      <td><span class="status-pill status-info">${p.confirmedBy==='tolerance'?'Tolerance match':p.confirmedBy==='auto'?'Auto-matched':'Manually matched'}</span>${p.toleranceNote?`<div class="sub-meta">${h(p.toleranceNote)}</div>`:''}</td>
       <td><button class="btn btn-xs btn-d" onclick="unmatch('${p.id}')">Unmatch</button></td>
     </tr>`;}).join(''):`<tr><td colspan="5" class="empty">No matched pairs yet</td></tr>`;
 
@@ -11392,11 +11392,22 @@ function rescanAllTransfers(){
 }
 
 function rPendingMatches(){
+  // V9.0.5.4 (Session 5, C3.1): KPI strip showing pending vs matched health.
+  const pending=getPendingTransfers();
+  const pairs=S.matchedPairs||[];
+  // Auto-matched pairs (confirmed by auto or tolerance — system-derived) vs manual
+  const autoMatched=pairs.filter(p=>p.confirmedBy==='auto'||p.confirmedBy==='tolerance').length;
+  const manualMatched=pairs.length-autoMatched;
   return`
   <div class="pg-header">
     <div class="pg-eyebrow">§02.3 INBOX</div>
     <div class="pg-header-title">Pending Transfer Matches</div>
     <div class="pg-header-sub">Internal transfers between your accounts. Match them to avoid double-counting in reports.</div>
+  </div>
+  <div class="kpi-strip">
+    <div class="kpi-cell"><div class="kpi-cell-label">Awaiting Match</div><div class="kpi-cell-value ${pending.length>0?'c-warn':'c-ok'}">${pending.length}</div><div class="kpi-cell-sub">${pending.length===0?'Nothing pending':'Internal transfers awaiting match'}</div></div>
+    <div class="kpi-cell"><div class="kpi-cell-label">Confirmed Matches</div><div class="kpi-cell-value">${pairs.length}</div><div class="kpi-cell-sub">Lifetime matched pairs</div></div>
+    <div class="kpi-cell"><div class="kpi-cell-label">Match Source</div><div class="kpi-cell-value" style="font-size:14px;font-weight:500;line-height:1.4">${autoMatched} auto &middot; ${manualMatched} manual</div><div class="kpi-cell-sub">${pairs.length>0?Math.round(autoMatched/pairs.length*100):0}% auto-resolved</div></div>
   </div>
   <div class="card card-bordered" style="margin-bottom:16px">
     <div style="font-size:var(--fs-xs);font-weight:600;margin-bottom:6px">Find transaction by amount — all months &amp; accounts</div>
@@ -11431,7 +11442,7 @@ function renderTxnSearch(){
       <td style="font-size:var(--fs-xs)">${acc?h(acc.name):'<span style="color:var(--warn)">Unknown account</span>'}</td>
       <td style="font-size:var(--fs-xs);color:var(--text3)">${ym}</td>
       <td style="text-align:right;font-size:var(--fs-xs);font-weight:500" class="${dir==='in'?'c-ok':'c-bad'}">${dir==='in'?'+':'−'}${fmtP(t.amount)}${diff>0.01?`<div style="font-size:9px;color:var(--text3)">diff: ${diff.toFixed(2)}</div>`:''}</td>
-      <td><span class="badge ${matched?'b-tr':'b-grey'}" style="font-size:9px">${matched?'⇄ Matched':'Unmatched'}</span></td>
+      <td><span class="status-pill ${matched?'status-info':''}">${matched?'⇄ Matched':'Unmatched'}</span></td>
       <td><button class="btn btn-xs btn-d" onclick="searchDelTxn('${t.id}','${ym}')">Delete</button></td>
     </tr>`;
   }).join('');
@@ -18627,14 +18638,14 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps, scopedAcc){
     const ac=dir==='in'?'c-ok':(t.type==='external_transfer'?'c-ext':(t.type==='investment'?'c-inv':'c-bad'));
     const isMatchedTxn=isMatched(t.id);
     const matchedPair=isMatchedTxn?S.matchedPairs.find(p=>p.outId===t.id||p.inId===t.id):null;
-    const matchedTag=isMatchedTxn&&matchedPair?`<button onclick="event.stopPropagation();showMatchPopover('${matchedPair.id}','${t.id}',this)" class="badge b-tr" style="font-size:10px;margin-left:4px;cursor:pointer;border:none;padding:2px 6px">\u21c6 Matched</button>`:'';
-    const toleranceTag=matchedPair?.toleranceNote?`<span class="badge" style="background:#FEF9C3;color:#854D0E;font-size:9px;margin-left:4px" title="${h(matchedPair.toleranceNote)}">~USD</span>`:'';
+    const matchedTag=isMatchedTxn&&matchedPair?`<button onclick="event.stopPropagation();showMatchPopover('${matchedPair.id}','${t.id}',this)" class="status-pill status-info" style="margin-left:4px;cursor:pointer;border:none">⇆ Matched</button>`:'';
+    const toleranceTag=matchedPair?.toleranceNote?`<span class="status-pill status-warn" style="margin-left:4px" title="${h(matchedPair.toleranceNote)}">~USD</span>`:'';
     const pendingTag=(!isMatchedTxn&&t.type==='transfer'&&!t.transferDismissed)?'<span class="status-pill status-warn" style="margin-left:4px">Pending match</span>':'';
     const ch=(t.mainCatId&&getMC(t.mainCatId))?ctag(t.mainCatId,t.subCatId):'<span style="color:var(--warn);font-size:11px">&#9888; Uncategorized</span>';
     const st=t.isSub?`<span class="stag">SUB <button onclick="event.stopPropagation();removeSub('${t.id}','${t.date.substr(0,7)}')" style="background:none;border:none;cursor:pointer;color:inherit;padding:0;margin-left:2px;font-size:9px;line-height:1;vertical-align:middle" title="Remove subscription tag">&#10005;</button></span>`:'';
     const ruleTag=t.ruleApplied?'<span style="font-size:9px;background:#EDE9FE;color:#5B21B6;border-radius:3px;padding:1px 5px;margin-left:4px" title="Category set by merchant learning rule">rule</span>':''
     // V8.27: needsReview chip — visible amber dot, clickable to mark resolved without changing categorization
-    const reviewTag=t.needsReview?`<button onclick="event.stopPropagation();clearReviewFlag('${t.id}','${ym}')" class="badge" style="background:color-mix(in srgb,var(--warn) 28%,transparent);color:var(--warn);font-size:9px;margin-left:4px;border:none;padding:1px 6px;cursor:pointer;font-weight:600" title="Flagged for review${t.reviewReason==='low_confidence_rule'?' (auto-flagged: low-confidence rule)':''} · click to mark reviewed">&#9888; review</button>`:''
+    const reviewTag=t.needsReview?`<button onclick="event.stopPropagation();clearReviewFlag('${t.id}','${ym}')" class="status-pill status-warn" style="margin-left:4px;border:none;cursor:pointer" title="Flagged for review${t.reviewReason==='low_confidence_rule'?' (auto-flagged: low-confidence rule)':''} · click to mark reviewed">⚠ review</button>`:''
     const rb=showBalance&&t.accountId&&rbMaps[t.accountId]?rbMaps[t.accountId].get(t.id):null;
     const debtTag=debt?`<span class="status-pill status-warn" style="margin-left:4px">${h(debt.name)}</span>`:'';
     const linkedBill=t.billId?(S.bills||[]).find(b=>b.id===t.billId):null;
@@ -19729,7 +19740,7 @@ function rReviewQueue(){
     const mc=getMC(t.mainCatId),sc=getSC(t.subCatId);
     const dir=txDir(t);
     const ac=dir==='in'?'c-ok':(t.type==='external_transfer'?'c-ext':(t.type==='investment'?'c-inv':'c-bad'));
-    const reasonLabel=t.reviewReason==='low_confidence_rule'?'<span style="font-size:10px;background:color-mix(in srgb,var(--warn) 24%,transparent);color:var(--warn);border-radius:3px;padding:1px 6px;margin-left:6px;font-weight:500" title="Auto-flagged: applied rule has low confidence">low confidence</span>':'<span style="font-size:10px;color:var(--text3);margin-left:6px">manual</span>';
+    const reasonLabel=t.reviewReason==='low_confidence_rule'?'<span class="status-pill status-warn" style="margin-left:6px" title="Auto-flagged: applied rule has low confidence">low confidence</span>':'<span style="font-size:10px;color:var(--text3);margin-left:6px">manual</span>';
     return`<tr class="tx-row" data-tx-id="${t.id}">
       <td style="color:var(--text3);white-space:nowrap">${toDD(t.date)}</td>
       <td><div class="tx-desc-clamp">${h(t.description||'')}${reasonLabel}</div>${t.notes?`<div class="sub-meta">${h(t.notes)}</div>`:''}</td>
@@ -19748,17 +19759,14 @@ function rReviewQueue(){
       <div class="pg-header-title">Review Queue</div>
       <div class="pg-header-sub">${total} transaction${total!==1?'s':''} flagged for review across all months. Recategorize or dismiss each one.</div>
     </div>
-    <div class="card card-bordered" style="margin-bottom:1rem">
-      <div class="fg jb" style="align-items:center;flex-wrap:wrap;gap:10px">
-        <div class="fg" style="gap:18px;flex-wrap:wrap">
-          <div><span style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Total</span><div style="font-size:18px;font-weight:600;color:var(--text1);font-variant-numeric:tabular-nums">${total}</div></div>
-          ${reasonCounts.low_confidence_rule>0?`<div><span style="font-size:11px;color:var(--warn);text-transform:uppercase;letter-spacing:.04em">Low confidence</span><div style="font-size:18px;font-weight:600;color:var(--warn);font-variant-numeric:tabular-nums">${reasonCounts.low_confidence_rule}</div></div>`:''}
-          ${reasonCounts.manual>0?`<div><span style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Manual flag</span><div style="font-size:18px;font-weight:600;color:var(--text1);font-variant-numeric:tabular-nums">${reasonCounts.manual}</div></div>`:''}
-        </div>
-        <div class="fg" style="gap:8px">
-          <button class="btn btn-sm" onclick="if(confirm('Mark all ${total} as reviewed without changes? This cannot be undone.')){clearReviewFlagBulk(${JSON.stringify(allFlaggedIds).replace(/"/g,'&quot;')})}">&#10003; Mark all reviewed</button>
-        </div>
-      </div>
+    <div class="kpi-strip">
+      <div class="kpi-cell"><div class="kpi-cell-label">Total Flagged</div><div class="kpi-cell-value">${total}</div><div class="kpi-cell-sub">Across all months</div></div>
+      ${reasonCounts.low_confidence_rule>0?`<div class="kpi-cell"><div class="kpi-cell-label">Low Confidence</div><div class="kpi-cell-value c-warn">${reasonCounts.low_confidence_rule}</div><div class="kpi-cell-sub">Auto-flagged by rules</div></div>`:''}
+      ${reasonCounts.manual>0?`<div class="kpi-cell"><div class="kpi-cell-label">Manual Flag</div><div class="kpi-cell-value">${reasonCounts.manual}</div><div class="kpi-cell-sub">Marked for review</div></div>`:''}
+    </div>
+    <div class="fg jb" style="align-items:center;margin-bottom:12px">
+      <div class="slbl" style="margin:0">Flagged Transactions</div>
+      <button class="btn btn-sm" onclick="if(confirm('Mark all ${total} as reviewed without changes? This cannot be undone.')){clearReviewFlagBulk(${JSON.stringify(allFlaggedIds).replace(/"/g,'&quot;')})}">&#10003; Mark all reviewed</button>
     </div>
     <div class="card card-bordered" style="padding:0">
       <div class="tbl-wrap"><table class="tx-tbl" style="width:100%">
@@ -21826,21 +21834,9 @@ async function rReimbursements(){
     <a href="submit/" target="_blank" class="btn btn-sm">Open Submit Page ↗</a>
   </div>
   ${grandTotal>0?`
-  <div class="card" style="background:color-mix(in srgb,var(--warn) 6%,white);border:1px solid color-mix(in srgb,var(--warn) 20%,transparent);margin-bottom:1.25rem">
-    <div class="fg jb" style="flex-wrap:wrap;gap:12px">
-      <div>
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text3);margin-bottom:4px">Total Pending Payment</div>
-        <div style="font-size:28px;font-weight:700;color:var(--warn);letter-spacing:-.03em;font-variant-numeric:tabular-nums">${fmtP(grandTotal)}</div>
-        <div style="font-size:var(--fs-xs);color:var(--text3)">${approvedEntries.length} person${approvedEntries.length!==1?'':''} · Mark as paid on each card when you've settled</div>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:8px;min-width:180px">
-        ${approvedEntries.map(([n,{total:t}])=>`
-        <div class="fg jb" style="gap:20px">
-          <span style="font-size:var(--fs-xs);font-weight:500">${h(n)}</span>
-          <span style="font-size:var(--fs-sm);font-weight:700;color:var(--warn);font-variant-numeric:tabular-nums">${fmtP(t)}</span>
-        </div>`).join('')}
-      </div>
-    </div>
+  <div class="kpi-strip">
+    <div class="kpi-cell" style="grid-column:span 2"><div class="kpi-cell-label">Total Pending Payment</div><div class="kpi-cell-value c-warn" style="font-size:28px">${fmtP(grandTotal)}</div><div class="kpi-cell-sub">${approvedEntries.length} ${approvedEntries.length===1?'person':'people'} &middot; Mark as paid on each card when settled</div></div>
+    <div class="kpi-cell" style="padding:14px 16px"><div class="kpi-cell-label" style="margin-bottom:6px">By Person</div>${approvedEntries.map(([n,{total:t}])=>`<div class="fg jb" style="gap:14px;padding:3px 0;border-bottom:1px solid var(--hairline);font-size:11px;align-items:baseline"><span style="font-weight:500;color:var(--text2)">${h(n)}</span><span style="font-weight:600;color:var(--warn);font-variant-numeric:tabular-nums">${fmtP(t)}</span></div>`).join('')}</div>
   </div>`:''}
   ${pending.length?`<div class="slbl" style="margin-top:0">Pending Review (${pending.length})</div>
   <div class="card"><div class="tbl-wrap"><table>
