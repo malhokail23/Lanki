@@ -4874,7 +4874,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='10.1.8';
+const VERSION='10.1.9';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -23504,29 +23504,18 @@ async function runAIExtract(){
         flagged:true
       }))
     ];
-    // V10.0 Phase 0 (V9.0.4.2 fix): dedup the merged list. AI sometimes puts the same transaction
-    // in both "transactions" and "flagged" arrays. Prefer the categorized copy.
-    // Defensive dedup — runs even when the prompt-side mutual-exclusivity rule works perfectly.
-    const dedupedExtracted=[];
-    const seenKeys=new Map(); // key -> index in dedupedExtracted
-    for(const t of allExtracted){
-      const key=`${t.date}|${Math.abs(parseFloat(t.amount)||0).toFixed(2)}|${(t.direction||'out').toLowerCase()}`;
-      const existingIdx=seenKeys.get(key);
-      if(existingIdx===undefined){
-        seenKeys.set(key,dedupedExtracted.length);
-        dedupedExtracted.push(t);
-      }else{
-        // Already have one. Keep the categorized version; replace if current is categorized and existing isn't.
-        const existing=dedupedExtracted[existingIdx];
-        const existingHasCat=!!existing.mainCatId;
-        const currentHasCat=!!t.mainCatId;
-        if(currentHasCat && !existingHasCat){
-          dedupedExtracted[existingIdx]=t;
-        }
-        // else keep existing
-      }
-    }
-    _aiState.extracted=dedupedExtracted.map(t=>({
+    // V10.1.9: removed Phase 0 dedup that previously keyed on date|amount|direction.
+    // The original intent was defensive — the AI was occasionally putting the same
+    // transaction in both "transactions" and "flagged" arrays. But the prompt-side
+    // mutual-exclusivity rule ("EXACTLY ONE of transactions or flagged") in
+    // extract-statement.ts already prevents that, and the lossy three-key signature
+    // was collapsing legitimate same-day same-amount distinct transactions
+    // (two coffee charges, two grocery runs, etc.) without any user-visible signal
+    // or recovery path. Official bank statements do not contain true duplicate rows;
+    // any apparent duplication in the preview is the user's call to make. The
+    // import-side dedup at line 10633 still protects against re-uploads of the same
+    // statement (it keys on raw_description, which carries reference numbers).
+    _aiState.extracted=allExtracted.map(t=>({
       ...t,
       id:'ai_'+Date.now()+'_'+Math.random().toString(36).substr(2,5),
       accountId:_aiState.accountId,
