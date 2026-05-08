@@ -4671,7 +4671,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='9.0.5.2';
+const VERSION='9.0.5.3';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -11949,23 +11949,18 @@ async function rSubs(){
   const sectionLabel=(title,count,tone)=>`<div style="display:flex;align-items:center;gap:8px;margin:1.25rem 0 .5rem"><div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">${title}${count?` (${count})`:''}</div>${tone==='warn'?'<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--warn)"></span>':tone==='ok'?'<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--pos)"></span>':''}</div>`;
 
   const activeCount=subsWithData.filter(x=>x.status!=='cancelled').length;
-  const totalsBar=activeCount?`<div class="card" style="padding:1rem 1.25rem;margin-bottom:1rem">
-    <div style="display:flex;gap:2rem;flex-wrap:wrap;align-items:baseline">
-      <div>
-        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Monthly equivalent</div>
-        <div style="font-size:24px;font-weight:500;font-variant-numeric:tabular-nums;margin-top:2px">${fmtP(totalMonthly)}</div>
-      </div>
-      <div>
-        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Annual projection</div>
-        <div style="font-size:24px;font-weight:500;font-variant-numeric:tabular-nums;margin-top:2px">${fmtP(totalAnnual)}</div>
-      </div>
-      <div style="flex:1"></div>
-      <div style="font-size:11px;color:var(--text3)">${activeCount} active subscription${activeCount===1?'':'s'}</div>
+  // V9.0.5.3 (Session 4, C2.3): Convert custom totalsBar to kpi-strip semantic for parity
+  // with Income (rInc) and Bills (rBills). Preserves category breakdown row underneath.
+  const totalsBar=activeCount?`<div class="kpi-strip">
+    <div class="kpi-cell"><div class="kpi-cell-label">Monthly Equivalent</div><div class="kpi-cell-value">${fmtP(totalMonthly)}</div><div class="kpi-cell-sub">Normalized across billing cycles</div></div>
+    <div class="kpi-cell"><div class="kpi-cell-label">Annual Projection</div><div class="kpi-cell-value">${fmtP(totalAnnual)}</div><div class="kpi-cell-sub">Estimated annual cost</div></div>
+    <div class="kpi-cell"><div class="kpi-cell-label">Active Subscriptions</div><div class="kpi-cell-value">${activeCount}</div><div class="kpi-cell-sub">${activeCount===1?'service tracked':'services tracked'}</div></div>
+  </div>
+  ${catRows.length?`<div class="card" style="padding:12px 16px;margin-bottom:1.25rem">
+    <div style="display:flex;flex-wrap:wrap;gap:.75rem 1.5rem">
+      ${catRows.map(([cat,{count,monthly}])=>`<div style="font-size:11px"><span style="color:var(--text3)">${h(cat)}</span> &middot; <span style="font-weight:600;font-variant-numeric:tabular-nums">${fmtP(monthly)}</span> <span style="color:var(--text3)">(${count})</span></div>`).join('')}
     </div>
-    ${catRows.length?`<div style="margin-top:.9rem;padding-top:.75rem;border-top:1px solid var(--border);display:flex;flex-wrap:wrap;gap:1rem 1.5rem">
-      ${catRows.map(([cat,{count,monthly}])=>`<div style="font-size:11px"><span style="color:var(--text3)">${h(cat)}</span> · <span style="font-weight:600;font-variant-numeric:tabular-nums">${fmtP(monthly)}</span> <span style="color:var(--text3)">(${count})</span></div>`).join('')}
-    </div>`:''}
-  </div>`:'';
+  </div>`:''}`:'';
 
   return`
   <div class="pg-header-row">
@@ -12503,6 +12498,26 @@ function executeUnmergeSub(keepId,historyIdx){
 
 // --- INCOME ---
 function rInc(){
+  // V9.0.5.3 (Session 4, C2.1): KPI strip parity with Subscriptions/Bills.
+  // Monthly equivalent normalizes across all frequencies. One-time excluded from monthly view.
+  const activeInc=S.income.filter(i=>i.status!=='cancelled');
+  const monthlyEquiv=(i)=>{
+    const a=parseFloat(i.amount)||0;
+    if(i.frequency==='Monthly')return a;
+    if(i.frequency==='Quarterly')return a/3;
+    if(i.frequency==='Annual')return a/12;
+    return 0; // One-time excluded from monthly equivalent
+  };
+  const totalMonthly=activeInc.reduce((s,i)=>s+monthlyEquiv(i),0);
+  const totalAnnual=totalMonthly*12;
+  const recurringCount=activeInc.filter(i=>i.frequency!=='One-time').length;
+  const oneTimeCount=activeInc.filter(i=>i.frequency==='One-time').length;
+  const kpiStrip=activeInc.length?`<div class="kpi-strip">
+    <div class="kpi-cell"><div class="kpi-cell-label">Monthly Equivalent</div><div class="kpi-cell-value c-ok">${fmtP(totalMonthly)}</div><div class="kpi-cell-sub">Normalized across all frequencies</div></div>
+    <div class="kpi-cell"><div class="kpi-cell-label">Annual Projection</div><div class="kpi-cell-value">${fmtP(totalAnnual)}</div><div class="kpi-cell-sub">Recurring sources only</div></div>
+    <div class="kpi-cell"><div class="kpi-cell-label">Active Sources</div><div class="kpi-cell-value">${recurringCount}</div><div class="kpi-cell-sub">${recurringCount===1?'recurring source':'recurring sources'}${oneTimeCount?` &middot; ${oneTimeCount} one-time`:''}</div></div>
+  </div>`:'';
+
   const cards=S.income.map(i=>{
     const ot=i.frequency==='One-time';
     return`<div class="card">
@@ -12529,6 +12544,7 @@ function rInc(){
     </div>
     <button class="btn btn-p btn-sm" onclick="editIncId=null;document.getElementById('ii-ptitle').textContent='Add income source';document.getElementById('ii-sbtn').textContent='Add';tp('addinc-panel')">+ Add income source</button>
   </div>
+  ${kpiStrip}
   <div id="addinc-panel" class="panel">
     <div class="chdr" id="ii-ptitle">Add income source</div>
     <div class="fr">
@@ -12621,11 +12637,10 @@ function rBills(){
         const v=billVariance(b,t.amount,priorHistory);
         const varTag=v.tag?(()=>{
           const isHigher=v.tag==='higher';
-          const color=isHigher?'color-mix(in srgb,var(--warn) 18%,transparent)':'color-mix(in srgb,var(--pos) 15%,transparent)';
-          const text=isHigher?'color-mix(in srgb,var(--warn) 70%,var(--midnight))':'var(--pos)';
+          const variant=isHigher?'status-warn':'status-pos';
           const label=isHigher?'Higher':'Lower';
           const avgSuffix=v.baselineSource==='avg'?' vs 6-mo avg':'';
-          return`<span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;background:${color};color:${text};letter-spacing:.03em">${label} by ${fmtP(Math.abs(v.variance))}${avgSuffix}</span>`;
+          return`<span class="status-pill ${variant}">${label} by ${fmtP(Math.abs(v.variance))}${avgSuffix}</span>`;
         })():(v.baselineSource==='avg'?`<span style="font-size:9px;color:var(--text3)">vs 6-mo avg</span>`:'');
         return`<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;${i<shown.length-1?'border-bottom:1px solid var(--border);':''}">
           <div style="flex-shrink:0;min-width:80px;font-size:11px;color:var(--text3)">${toDD(t.date)}</div>
@@ -12668,6 +12683,24 @@ function rBills(){
       </div>
     </div>`;
   }).join('')||'<div class="empty">No bills defined yet.</div>';
+  // V9.0.5.3 (Session 4, C2.2): KPI strip parity with Income/Subscriptions.
+  // Monthly equivalent: fixed amount or expected amount, normalized by billing cycle.
+  const monthlyEquiv=(b)=>{
+    const a=b.paymentType==='Fixed'?(parseFloat(b.fixedAmount)||0):(parseFloat(b.expectedAmount)||0);
+    if(b.billingCycle==='Monthly')return a;
+    if(b.billingCycle==='Quarterly')return a/3;
+    if(b.billingCycle==='Annual')return a/12;
+    return a; // unknown cycle: treat as monthly
+  };
+  const totalMonthly=S.bills.reduce((s,b)=>s+monthlyEquiv(b),0);
+  const totalAnnual=totalMonthly*12;
+  const variableCount=S.bills.filter(b=>b.paymentType==='Variable').length;
+  const fixedCount=S.bills.filter(b=>b.paymentType==='Fixed').length;
+  const billsKpi=S.bills.length?`<div class="kpi-strip">
+    <div class="kpi-cell"><div class="kpi-cell-label">Monthly Equivalent</div><div class="kpi-cell-value">${fmtP(totalMonthly)}</div><div class="kpi-cell-sub">Estimated obligation across cycles</div></div>
+    <div class="kpi-cell"><div class="kpi-cell-label">Annual Projection</div><div class="kpi-cell-value">${fmtP(totalAnnual)}</div><div class="kpi-cell-sub">Estimated annual cost</div></div>
+    <div class="kpi-cell"><div class="kpi-cell-label">Tracked Bills</div><div class="kpi-cell-value">${S.bills.length}</div><div class="kpi-cell-sub">${fixedCount} fixed${variableCount?` &middot; ${variableCount} variable`:''}</div></div>
+  </div>`:'';
   return`
   <div class="pg-header-row">
     <div>
@@ -12681,6 +12714,7 @@ function rBills(){
       <button class="btn btn-p btn-sm" onclick="openAddBill()">+ Add bill</button>
     </div>
   </div>
+  ${billsKpi}
   <!-- Anchor: form lives here when adding. When editing a specific bill, form is moved next to that bill. -->
   <div id="addbill-panel-anchor">
   <div id="addbill-panel" class="panel">
@@ -17108,8 +17142,8 @@ function rDiagnostics(){
   // ─── Render ──────────────────────────────────────────────────────────────
   const monthOptions=monthsForSelect.map(m=>`<option value="${m}" ${m===auditMonth?'selected':''}>${fmtYM(m)}</option>`).join('');
 
-  return`<div class="pg-eyebrow">§05 SETTINGS · DIAGNOSTICS</div><div class="settings-page-title">Diagnostics</div>
-  <div style="font-size:12px;color:var(--text3);margin-bottom:1rem;line-height:1.5">
+  return`<div class="pg-eyebrow">§05 SETTINGS · DIAGNOSTICS</div><div class="settings-page-title" style="margin-bottom:5px">Diagnostics</div>
+  <div class="pg-header-sub" style="margin-bottom:1.25rem">
     Audit tool to verify Overview numbers match underlying transaction data. Use this when investigating discrepancies. This page can be removed when you are confident the platform is reliable.
   </div>
 
@@ -22143,7 +22177,7 @@ function rAIUpload(){
   return`<div class="pg-header">
     <div class="pg-eyebrow">§02.1 TRANSACTIONS</div>
     <div class="pg-header-title">Statement Parser</div>
-    <div class="pg-header-sub">Upload a bank statement PDF, image, or Excel file. PDF and images use AI extraction. Excel files are parsed directly — instant and exact.</div>
+    <div class="pg-header-sub">Upload a PDF, image, or Excel statement. PDF and images use AI extraction; Excel parses instantly.</div>
   </div>
 
   ${!hasEdge?`<div class="lanki-banner banner-warn">
