@@ -505,6 +505,17 @@ textarea{resize:vertical;min-height:80px}
 .b-dbt{background:var(--warn-bg);color:var(--warn)}
 .b-ext{background:color-mix(in srgb,var(--c5) 22%,var(--page));color:var(--c5)}
 .b-grey{background:var(--bg3);color:var(--text2)}
+/* V10.1 — Compass plain-text type styling for the transactions table.
+   Replaces .badge pill chrome on the Type column. Color cue via class only.
+   Drops the cramped "External Transfer" pill that was clipping with text-overflow:ellipsis
+   inside the 80px column. Tx tables are the only consumer for now (buildTxTable). */
+.tx-t{display:inline-block;font-size:11px;font-weight:500;letter-spacing:-.005em;font-variant-numeric:tabular-nums}
+.tx-t-in{color:var(--pos)}
+.tx-t-out{color:var(--neg)}
+.tx-t-tr{color:var(--action)}
+.tx-t-ext{color:var(--c5)}
+.tx-t-inv{color:var(--c3)}
+.tx-t-grey{color:var(--text3)}
 /* V9.0.3 cleanup: removed .b-sub orphan (audit §10.5) */
 /* V9.0.5.6 (Session 7, C9.1): removed .b-cl and .b-ar — Session 6 closed the only consumers
    (CLOSED/ARCHIVED account badges in rAcc → status-pill). No live references. */
@@ -4835,7 +4846,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='10.0';
+const VERSION='10.1';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -5814,6 +5825,11 @@ function getAccountOpeningBal(accId,ym,_depth=0){
   return null;
 }
 function tbadge(t){const m={income:'<span class="badge b-in">Income</span>',expense:'<span class="badge b-out">Expense</span>',transfer:'<span class="badge b-tr">Transfer</span>',investment:'<span class="badge b-inv">Investment</span>',external_transfer:'<span class="badge b-ext">External Transfer</span>'};return m[t]||`<span class="badge b-grey">${t}</span>`;}
+// V10.1 — Compass plain-text type label for the transactions table.
+// Replaces tbadge() pill chrome on the Type column in buildTxTable. Same semantic colors via tx-t-* classes.
+// "External Transfer" → "External" with title tooltip (fits 80px without text-overflow:ellipsis clipping).
+// tbadge() kept for any non-tx surfaces that still want the pill treatment.
+function ttext(t){const m={income:'<span class="tx-t tx-t-in">Income</span>',expense:'<span class="tx-t tx-t-out">Expense</span>',transfer:'<span class="tx-t tx-t-tr">Transfer</span>',investment:'<span class="tx-t tx-t-inv">Investment</span>',external_transfer:'<span class="tx-t tx-t-ext" title="External transfer — outbound to a non-tracked party">External</span>'};return m[t]||`<span class="tx-t tx-t-grey">${t}</span>`;}
 
 // ─── ORPHAN DETECTION ───
 // A transaction is "orphaned" when its accountId is null, missing, or points to a non-existent account.
@@ -19063,10 +19079,13 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps, scopedAcc){
   // V8.27: tightened Actions column width per Mohammad — empty space in the row was visually noisy.
   // The 50px saved gets donated back to Description (the column that benefits most from extra room).
   // Phase A polish: actions column bumped 220→250 to fit the new ⟳ Sub button (Edit + Categorize ▾ + ⟳ + ×).
+  // V10.1: actions tightened 250→180. Mark-as-Sub, Link-Refund, and Delete moved into a ⋯ overflow
+  // menu (V10.0 row-overflow component pattern). Categorize ▾ and Edit remain visible because tx
+  // tables are the highest-frequency action surface in the app. 70px saved donated back to desc via auto.
   // Other cols tightened slightly so total still fits common viewports without horizontal scroll:
   // cat 230→210 (still readable for two-line "Category / Sub-Category" labels), date 110→95 (DD/MM/YY fits),
   // type 90→80, acc 130→110, amount 140/170→130/160. Total saved ≈ 80px, donated to actions + desc breathing room.
-  const widths={date:'95px',desc:'auto',cat:'210px',acc:'110px',amount:showAcc?'130px':'160px',balance:'130px',outstanding:'130px',type:'80px','':'250px'};
+  const widths={date:'95px',desc:'auto',cat:'210px',acc:'110px',amount:showAcc?'130px':'160px',balance:'130px',outstanding:'130px',type:'80px','':'180px'};
 
   const bulkCol=`<th style="width:32px;padding:8px 6px">${BulkMode?'<input type="checkbox" title="Select all displayed" onclick="if(this.checked)selectAllDisplayed();else clearBulkSelection()" style="cursor:pointer;width:15px;height:15px">':''}</th>`;
   const reconTh=hasRecon?`<th style="text-align:right;white-space:nowrap;font-size:var(--fs-xxs);color:var(--warn);width:110px">Stmt Bal</th>`:'';
@@ -19169,13 +19188,19 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps, scopedAcc){
         return (dir==='in'?'+':'-')+fmtP(t.amount);
       })()}</td>
       ${showBalance?`<td class="tx-balance-cell ${rb!==null?(rb<-0.005?'c-bad':rb>0.005?'c-ok':''):''}" style="text-align:right;font-size:var(--fs-xs);white-space:nowrap">${rb!==null?(Math.abs(rb)<0.005?fmt(0):fmtS(rb)):'--'}</td>`:''}
-      <td class="tx-type-cell">${tbadge(t.type)}</td>
+      <td class="tx-type-cell">${ttext(t.type)}</td>
       <td class="tx-actions-cell" style="white-space:nowrap">
-        <button class="btn btn-xs" onclick="bulkAwareEditTxn('${t.id}','${ym}')" title="Edit transaction">Edit</button>
         <button class="btn btn-xs txn-cat-cluster" onclick="event.stopPropagation();bulkAwareOpenCatCluster(this,'${t.id}','${ym}','${t.mainCatId||''}','${t.subCatId||''}',${!t.isSub?'true':'false'})" title="Categorize: set category, sub-category, or use AI">Categorize ▾</button>
-        ${!t.isSub?`<button class="btn btn-xs" onclick="event.stopPropagation();mkSub('${t.id}','${ym}')" title="Mark as subscription" style="padding:2px 6px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></button>`:''}
-        ${(t.type==='income'&&(t.subCatId==='sub_refund'||t.subCatId==='sub_reimbursement')&&!isRefundLinked(t)&&!t.synthetic)?`<button class="btn btn-xs" onclick="openRefundLinkModal('${t.id}','${ym}')" title="Link this refund/reimbursement to its original expense" style="padding:2px 6px"><span style="color:var(--pos);font-weight:600">↔</span></button>`:''}
-        <button class="btn btn-xs btn-d" onclick="bulkAwareDelTxn('${t.id}','${ym}')" title="Delete transaction">&#10005;</button>
+        <button class="btn btn-xs" onclick="bulkAwareEditTxn('${t.id}','${ym}')" title="Edit transaction">Edit</button>
+        <div class="row-overflow">
+          <button class="row-overflow-btn" onclick="event.stopPropagation();toggleRowOverflow(event,this)" title="More actions" aria-label="More actions">⋯</button>
+          <div class="row-overflow-menu">
+            ${!t.isSub?`<button class="row-overflow-item" onclick="event.stopPropagation();mkSub('${t.id}','${ym}')">Mark as subscription</button>`:''}
+            ${(t.type==='income'&&(t.subCatId==='sub_refund'||t.subCatId==='sub_reimbursement')&&!isRefundLinked(t)&&!t.synthetic)?`<button class="row-overflow-item" onclick="event.stopPropagation();openRefundLinkModal('${t.id}','${ym}')">Link refund/reimbursement</button>`:''}
+            ${(!t.isSub||(t.type==='income'&&(t.subCatId==='sub_refund'||t.subCatId==='sub_reimbursement')&&!isRefundLinked(t)&&!t.synthetic))?`<div class="row-overflow-divider"></div>`:''}
+            <button class="row-overflow-item row-overflow-danger" onclick="event.stopPropagation();bulkAwareDelTxn('${t.id}','${ym}')">Delete</button>
+          </div>
+        </div>
       </td>
       ${reconTd}
     </tr>`;}).join(''):`<tr><td colspan="${(showBalance?8:7)+1+(hasRecon?1:0)}" class="empty">No transactions found</td></tr>`;
