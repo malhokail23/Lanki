@@ -3315,7 +3315,7 @@ body.privacy-on{padding-top:28px}
 .lanki-legacy .tbl-wrap > table thead th,
 .lanki-legacy .tbl-wrap > .tx-tbl thead th{
   text-align:left;
-  padding:12px 14px;
+  padding:18px 16px;
   font-size:10.5px;
   font-weight:600;
   color:var(--text3);
@@ -3327,7 +3327,7 @@ body.privacy-on{padding-top:28px}
 }
 .lanki-legacy .tbl-wrap > table tbody td,
 .lanki-legacy .tbl-wrap > .tx-tbl tbody td{
-  padding:11px 14px;
+  padding:18px 16px;
   font-size:13px;
   color:var(--ink);
   border-bottom:1px solid var(--hairline);
@@ -3338,16 +3338,6 @@ body.privacy-on{padding-top:28px}
 .lanki-legacy .tbl-wrap > .tx-tbl tbody tr:last-child td{
   border-bottom:none;
 }
-/* V10.1.1 — tx-table padding bump scoped INSIDE the lanki-legacy cascade where
-   the actual rendering rule lives. Equal specificity to the shared rule above
-   (.lanki-legacy .tbl-wrap > .tx-tbl thead/tbody td/th) but appears later in
-   the stylesheet, so it wins via source order. Header text now sits with visible
-   breathing room below the card's 10px border-radius — matches Compass treatment.
-   Scoped to .tx-tbl only so non-tx tables (Subs, Goals, Debts, etc.) keep their
-   density. The .tx-card .tx-tbl rule earlier at line ~718 stays at 18px as
-   forward-compat for any future surface rendered outside the .lanki-legacy wrapper. */
-.lanki-legacy .tbl-wrap > .tx-tbl thead th{padding:18px 16px}
-.lanki-legacy .tbl-wrap > .tx-tbl tbody td{padding:18px 16px}
 .lanki-legacy .tbl-wrap > table tbody tr:hover td,
 .lanki-legacy .tbl-wrap > .tx-tbl tbody tr:hover td{
   background:var(--card-tint);
@@ -3364,15 +3354,22 @@ body.privacy-on{padding-top:28px}
   padding:18px 22px;
   margin-bottom:12px;
 }
-/* V10.1.2 — kill the white frame around tx-card.
+/* V10.1.2 → V10.1.3 — kill the white frame around any card that intends to host
+   an edge-to-edge table.
    .lanki-legacy .card{padding:18px 22px} (specificity 20) was shadowing
-   .tx-card{padding:0} from line 713 (specificity 10), leaving a gap between
-   the rounded card edge and the inner gray header strip. Chaining
-   .card.tx-card raises specificity to 30, winning across desktop and the
-   mobile @media override. The gray header strip now fills to the rounded
-   corners; .tx-card's overflow:hidden clips them cleanly. Matches Compass
-   "first row is part of the inside area" treatment. */
-.lanki-legacy .card.tx-card{padding:0}
+   .tx-card{padding:0}, .acc-card{padding:0}, and .tbl-clean{padding:0} (all
+   specificity 10), leaving a gap between the rounded card edge and the inner
+   gray header strip. Chaining .card.<host-class> raises specificity to 30,
+   winning across desktop and the mobile @media override. The gray header strip
+   now fills to the rounded corners; each host's overflow:hidden clips them
+   cleanly. Matches Compass "first row is part of the inside area" treatment.
+   Surfaces covered:
+     .tx-card    — Bank Accounts, Cards (V10.1)
+     .acc-card   — Accounts & Cards (V10.1.3)
+     .tbl-clean  — Inbox: Uncategorized / Missing Sub / Flagged for Review (V10.1.3) */
+.lanki-legacy .card.tx-card,
+.lanki-legacy .card.acc-card,
+.lanki-legacy .card.tbl-clean{padding:0}
 .lanki-legacy .card-bordered{
   border:1px solid var(--line);
 }
@@ -4868,7 +4865,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='10.1.2';
+const VERSION='10.1.3';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
