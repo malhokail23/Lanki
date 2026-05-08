@@ -4671,7 +4671,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='9.0.5.4';
+const VERSION='9.0.5.5';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -14973,7 +14973,7 @@ function rAcc(){
             if(!gc||!a.groupId)return '';
             return`<span title="Group: ${h(gn)}" style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${gc};flex-shrink:0;border:1px solid color-mix(in srgb,${gc} 60%,transparent)"></span>`;
           })()}
-          <div style="font-weight:500">${h(a.name)}${isClosed?' <span class="badge b-cl" style="font-size:9px;margin-left:4px">CLOSED</span>':isArch?' <span class="badge b-ar" style="font-size:9px;margin-left:4px">ARCHIVED</span>':''}</div>
+          <div style="font-weight:500">${h(a.name)}${isClosed?' <span class="status-pill" style="margin-left:4px">CLOSED</span>':isArch?' <span class="status-pill" style="margin-left:4px;opacity:.7">ARCHIVED</span>':''}</div>
         </div>
         ${a.accountNumber?`<div style="font-size:var(--fs-xxs);font-family:monospace;color:var(--text3);margin-top:2px">${h(a.accountNumber)}</div>`:''}
       </td>
@@ -15049,6 +15049,19 @@ function rAcc(){
   const reorderBtnHtml=showReorderBtn?`<button class="btn btn-sm ${reorderMode?'btn-p':''}" onclick="toggleReorderMode('accounts')" title="${reorderMode?'Done reordering':'Reorder accounts and cards'}">${reorderMode?'&#10003; Done':'&#x21C5; Reorder'}</button>`:'';
   // Reorder column header (when in reorder mode)
   const reorderHeader=reorderMode?'<th style="width:1%"></th>':'';
+  // V9.0.5.5 (Session 6, C5.1): aggregate KPI strip showing portfolio of accounts at a glance.
+  // Cash types per the canonical set used in syncRibbonNetFromOverview and Overview.
+  const cashTypes=new Set(['main_account','savings_account','sub_account','joint_account','foreign_currency_account','debit_card','prepaid_card','cash']);
+  const liveAccs=S.accounts.filter(a=>isLiveAccount(a));
+  const totalLiquid=liveAccs.filter(a=>cashTypes.has(a.type)).reduce((s,a)=>{const b=calcAccBalance(a);return b!==null?s+b:s;},0);
+  const totalCC=(S.debts||[]).filter(d=>d.type==='credit_card'&&d.status==='active').reduce((s,d)=>s+calcCCBalance(d),0);
+  const liveAccCount=liveAccs.filter(a=>BANK_ACC_TYPES.has(a.type)).length;
+  const liveCardCount=liveAccs.filter(a=>CARD_ACC_TYPES.has(a.type)).length;
+  const accountsKpi=liveAccs.length?`<div class="kpi-strip">
+    <div class="kpi-cell"><div class="kpi-cell-label">Total Liquid Cash</div><div class="kpi-cell-value ${totalLiquid>=0?'c-ok':'c-bad'}">${fmtP(totalLiquid)}</div><div class="kpi-cell-sub">Across ${liveAccCount} bank account${liveAccCount===1?'':'s'}</div></div>
+    <div class="kpi-cell"><div class="kpi-cell-label">Credit Outstanding</div><div class="kpi-cell-value ${totalCC>0?'c-warn':''}">${fmtP(totalCC)}</div><div class="kpi-cell-sub">Across ${liveCardCount} card${liveCardCount===1?'':'s'}</div></div>
+    <div class="kpi-cell"><div class="kpi-cell-label">Active Accounts</div><div class="kpi-cell-value">${liveAccs.length}</div><div class="kpi-cell-sub">${closedAccs.length} closed &middot; ${archivedAccs.length} archived</div></div>
+  </div>`:'';
   return`
   <div class="pg-header-row">
     <div>
@@ -15064,6 +15077,7 @@ function rAcc(){
       <button class="btn btn-p btn-sm" onclick="openAddAcc()">+ Add account</button>
     </div>
   </div>
+  ${accountsKpi}
 
   <!-- V8.20: Groups management panel -->
   <div id="groups-panel" class="panel">
@@ -15727,9 +15741,9 @@ function rInvestments(){
           <div class="fg" style="gap:6px;align-items:center;flex-wrap:wrap">
             ${(()=>{const gc=accGroupColor(a);return gc&&a.groupId?`<span title="Group: ${h(accGroupName(a))}" style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${gc};flex-shrink:0;border:1px solid color-mix(in srgb,${gc} 60%,transparent)"></span>`:'';})()}
             <div style="font-weight:500;font-size:15px">${h(a.name)}</div>
-            ${stale?`<span class="badge" style="background:var(--warn);color:var(--text1);font-size:9px;padding:2px 5px;cursor:pointer" onclick="triggerUpdateForAccount('${a.id}')" title="Value last updated ${days} days ago — click to update">STALE</span>`:''}
-            ${a.updateSource==='ai_public_price'?`<span class="badge" style="background:color-mix(in srgb,var(--action) 20%,transparent);color:var(--action);font-size:9px;padding:2px 5px" title="Auto-fetch via AI public-price">AI</span>`:''}
-            ${a.updateSource==='ai_assisted_manual'?`<span class="badge" style="background:color-mix(in srgb,var(--action) 12%,transparent);color:var(--action);font-size:9px;padding:2px 5px" title="AI-assisted manual update">AI assist</span>`:''}
+            ${stale?`<span class="status-pill status-warn" style="cursor:pointer" onclick="triggerUpdateForAccount('${a.id}')" title="Value last updated ${days} days ago — click to update">STALE</span>`:''}
+            ${a.updateSource==='ai_public_price'?`<span class="status-pill status-info" title="Auto-fetch via AI public-price">AI</span>`:''}
+            ${a.updateSource==='ai_assisted_manual'?`<span class="status-pill status-info" title="AI-assisted manual update">AI assist</span>`:''}
             ${_invFetchingId===a.id?`<span style="font-size:10px;color:var(--action)">Fetching…</span>`:''}
           </div>
           <div style="font-size:11px;color:var(--text3);margin-top:2px">${h(a.platform||a.institution||ATL[a.type]||a.type)} · ${ATL[a.type]||''}${a.purpose?' · '+h(a.purpose):''}</div>
@@ -15838,27 +15852,11 @@ function rInvestments(){
     </div>
   </div>
 
-  <div class="g4" style="margin-bottom:1.5rem">
-    <div class="card card-bordered">
-      <div class="ctitle">Total Current Value</div>
-      <div class="priv-mask" style="font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--text1);margin-top:6px">${fmtP(totalCurrent)}</div>
-      <div style="font-size:var(--fs-xs);color:var(--text3);margin-top:2px">${accountsWithValue} of ${invAccs.length} account${invAccs.length===1?'':'s'} have recorded values</div>
-    </div>
-    <div class="card card-bordered">
-      <div class="ctitle">Net Deployed</div>
-      <div class="priv-mask" style="font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--text1);margin-top:6px">${fmtP(totalDeployed)}</div>
-      <div style="font-size:var(--fs-xs);color:var(--text3);margin-top:2px">Cumulative deposits minus withdrawals</div>
-    </div>
-    <div class="card card-bordered">
-      <div class="ctitle">Unrealized G/L</div>
-      <div class="priv-mask" style="font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;color:${totalUnrealized>=0?'var(--pos)':'var(--neg)'};margin-top:6px">${totalUnrealized>=0?'+':''}${fmtP(totalUnrealized)}</div>
-      <div style="font-size:var(--fs-xs);color:var(--text3);margin-top:2px">Where current values are recorded</div>
-    </div>
-    <div class="card card-bordered">
-      <div class="ctitle">Accounts</div>
-      <div style="font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--text1);margin-top:6px">${invAccs.length}</div>
-      <div style="font-size:var(--fs-xs);color:var(--text3);margin-top:2px">${INV.size} types supported</div>
-    </div>
+  <div class="kpi-strip" style="grid-template-columns:repeat(4,1fr);margin-bottom:1.5rem">
+    <div class="kpi-cell"><div class="kpi-cell-label">Total Current Value</div><div class="kpi-cell-value priv-mask">${fmtP(totalCurrent)}</div><div class="kpi-cell-sub">${accountsWithValue} of ${invAccs.length} account${invAccs.length===1?'':'s'} with recorded values</div></div>
+    <div class="kpi-cell"><div class="kpi-cell-label">Net Deployed</div><div class="kpi-cell-value priv-mask">${fmtP(totalDeployed)}</div><div class="kpi-cell-sub">Cumulative deposits minus withdrawals</div></div>
+    <div class="kpi-cell"><div class="kpi-cell-label">Unrealized G/L</div><div class="kpi-cell-value priv-mask ${totalUnrealized>=0?'c-ok':'c-bad'}">${totalUnrealized>=0?'+':''}${fmtP(totalUnrealized)}</div><div class="kpi-cell-sub">Where current values are recorded</div></div>
+    <div class="kpi-cell"><div class="kpi-cell-label">Accounts</div><div class="kpi-cell-value">${invAccs.length}</div><div class="kpi-cell-sub">${INV.size} types supported</div></div>
   </div>
 
   ${accountCards}`;
@@ -16089,11 +16087,22 @@ function rFamilyInv(){
   const selfCard=memberCard({id:null,name:firstName,relationship:'Self',lastRecordedValue:null,lastRecordedValueDate:null},true);
   const memberCards=members.map(m=>memberCard(m,false)).join('');
 
+  // V9.0.5.5 (Session 6, C6.2.1): page-level aggregate KPI strip across all members + Self.
+  const totalDeployedAll=allInvTxns.reduce((s,t)=>s+t.amount,0);
+  const totalReturnsAll=allIncomeTxns.filter(t=>t.beneficiaryId||INV_INCOME_SUBS.has(t.subCatId)).reduce((s,t)=>s+t.amount,0);
+  const taggedMembers=new Set(allInvTxns.map(t=>t.beneficiaryId).filter(Boolean));
+  const familyKpi=(allInvTxns.length||allIncomeTxns.length)?`<div class="kpi-strip">
+    <div class="kpi-cell"><div class="kpi-cell-label">Total Capital Deployed</div><div class="kpi-cell-value c-bad priv-mask">${fmtP(totalDeployedAll)}</div><div class="kpi-cell-sub">Across Self &amp; ${members.length} family member${members.length===1?'':'s'}</div></div>
+    <div class="kpi-cell"><div class="kpi-cell-label">Total Returns</div><div class="kpi-cell-value c-ok priv-mask">${fmtP(totalReturnsAll)}</div><div class="kpi-cell-sub">${allIncomeTxns.filter(t=>t.beneficiaryId||INV_INCOME_SUBS.has(t.subCatId)).length} return transaction${allIncomeTxns.filter(t=>t.beneficiaryId||INV_INCOME_SUBS.has(t.subCatId)).length===1?'':'s'}</div></div>
+    <div class="kpi-cell"><div class="kpi-cell-label">Beneficiaries</div><div class="kpi-cell-value">${taggedMembers.size+(allInvTxns.some(t=>!t.beneficiaryId)?1:0)}</div><div class="kpi-cell-sub">${members.length} family + Self</div></div>
+  </div>`:'';
+
   return`<div class="pg-header">
     <div class="pg-eyebrow">§03 FINANCES</div>
     <div class="pg-header-title">Family Investments</div>
     <div class="pg-header-sub">Capital deployed per family member — all time</div>
   </div>
+  ${familyKpi}
 
   ${members.length===0?`<div class="card" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;margin-bottom:1rem;gap:12px">
     <div style="font-size:var(--fs-xs);color:var(--text3)">No family members added yet. Manage members in Settings → Household.</div>
