@@ -4885,7 +4885,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='10.3.0';
+const VERSION='10.3.1';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -20376,7 +20376,7 @@ Generate 5-8 insights covering: savings rate, spending trends, debt management, 
       headers:{'Content-Type':'application/json','Authorization':'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRnZWZzcHBraWpycnZvdGdnZW9tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4MzYyOTAsImV4cCI6MjA5MTQxMjI5MH0._MWK5XL_CQAV3ybEWPv1UrArPb-Enu6FZognyImSYzg','x-lanki-secret':S.settings.lankiSecret||''},
       body:JSON.stringify({
         model:'claude-sonnet-4-6',
-        max_tokens:1500,
+        max_tokens:4000,
         system:systemPrompt,
         messages:[{role:'user',content:userPrompt}]
       })
@@ -20389,11 +20389,23 @@ Generate 5-8 insights covering: savings rate, spending trends, debt management, 
     if(!raw){throw new Error('Empty response from API. Data: '+JSON.stringify(data).substring(0,200));}
     let result;
     try{
-      const cleaned=raw.replace(/```json|```/g,'').trim();
+      // V10.3.1: harden JSON extraction. Strip markdown fences, then if the response
+      // still has prose around the JSON object, extract the first {...} block.
+      // Resists the case where Claude prepends "Here is your analysis:" or similar.
+      let cleaned=raw.replace(/```json|```/g,'').trim();
+      if(!cleaned.startsWith('{')){
+        const firstBrace=cleaned.indexOf('{');
+        const lastBrace=cleaned.lastIndexOf('}');
+        if(firstBrace>=0&&lastBrace>firstBrace){
+          cleaned=cleaned.substring(firstBrace,lastBrace+1);
+        }
+      }
       result=JSON.parse(cleaned);
     }catch(e){
-      // Show the raw response so we can debug
-      throw new Error('Parse failed. Raw response: '+raw.substring(0,300));
+      // V10.3.1: if parse fails, surface the stop_reason — likely "max_tokens" if truncated.
+      const stopReason=data.stop_reason||'unknown';
+      const tokensUsed=data.usage?(data.usage.output_tokens||'?'):'?';
+      throw new Error(`Parse failed (stop_reason: ${stopReason}, output tokens: ${tokensUsed}). Raw: ${raw.substring(0,300)}`);
     }
 
     renderAIInsights(result,snapshot);
