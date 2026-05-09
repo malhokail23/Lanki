@@ -4727,9 +4727,20 @@ body.privacy-on{padding-top:28px}
         <div class="index-chapter"><span>Finances</span></div>
         <button class="index-item" data-tab="accounts" onclick="sw('accounts')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>Accounts &amp; Cards</button>
         <button class="index-item" data-tab="debts" onclick="sw('debts')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Debts</button>
-        <button class="index-item" data-tab="investments" onclick="sw('investments')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>Portfolio</button>
-        <button class="index-item" data-tab="familyinv" onclick="sw('familyinv')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>Family Investments</button>
         <button class="index-item" data-tab="goals" onclick="sw('goals')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>Goals</button>
+      </div>
+
+      <!-- V10.3.0 (Phase C+E): new PORTFOLIO top-level section. Six sub-pages —
+           Accounts, Holdings, and Family are functional; Strategy, Research, and
+           Decision are Phase F placeholders that reserve their nav slots. -->
+      <div class="index-section" id="ix-portfolio">
+        <div class="index-chapter"><span>Portfolio</span></div>
+        <button class="index-item" data-tab="portfolio_accounts" onclick="sw('portfolio_accounts')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>Accounts</button>
+        <button class="index-item" data-tab="portfolio_holdings" onclick="sw('portfolio_holdings')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>Holdings</button>
+        <button class="index-item" data-tab="portfolio_family" onclick="sw('portfolio_family')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>Family</button>
+        <button class="index-item" data-tab="portfolio_strategy" onclick="sw('portfolio_strategy')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>Strategy</button>
+        <button class="index-item" data-tab="portfolio_research" onclick="sw('portfolio_research')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="16" y1="16" x2="21" y2="21"/></svg>Research</button>
+        <button class="index-item" data-tab="portfolio_decision" onclick="sw('portfolio_decision')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Decision</button>
       </div>
 
       <div class="index-section" id="ix-household">
@@ -4874,7 +4885,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='10.2.0';
+const VERSION='10.3.0';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -6598,6 +6609,12 @@ function sortCatDrill(col){
 }
 
 function sw(tab){
+  // V10.3.0 (Phase C+E): backward-compat redirects for old tab keys.
+  // The old top-level Portfolio tab and Family Investments page have moved into
+  // the new PORTFOLIO section. Anyone with stored S.tab pointing at the old
+  // keys (or a deep link / muscle memory) gets silently redirected.
+  if(tab==='investments')tab='portfolio_accounts';
+  else if(tab==='familyinv')tab='portfolio_family';
   // Reset bulk selection when switching tabs
   if(BulkMode){BulkMode=false;BulkSelected.clear();}
   S.tab=tab;
@@ -6611,7 +6628,16 @@ function sw(tab){
   // V9.0.3 (audit §4.1, §4.2): renamed txinvestments → "Investment Activity",
   // top-level investments → "Portfolio", and familyinv stays "Family Investments"
   // (now under Finances chapter).
-  const allLabels={overview:'Overview',txbank:'Bank Accounts',txcards:'Cards',txinvestments:'Investment Activity',income:'Income',bills:'Bills',subscriptions:'Subscriptions',staff:'Staff',familyinv:'Family Investments',investments:'Portfolio',accounts:'Accounts & Cards',debts:'Debts',goals:'Goals',uncat:'Uncategorized',transfers:'Pending Matches',reimbursements:'Reimbursements',reviewqueue:'Review Queue',rules:'Transaction Rules',sanity:'Sanity Check',insights:'Usage Insights',settings:'Settings',projections:'Projections'};
+  const allLabels={overview:'Overview',txbank:'Bank Accounts',txcards:'Cards',txinvestments:'Investment Activity',income:'Income',bills:'Bills',subscriptions:'Subscriptions',staff:'Staff',accounts:'Accounts & Cards',debts:'Debts',goals:'Goals',uncat:'Uncategorized',transfers:'Pending Matches',reimbursements:'Reimbursements',reviewqueue:'Review Queue',rules:'Transaction Rules',sanity:'Sanity Check',insights:'Usage Insights',settings:'Settings',projections:'Projections',
+    // V10.3.0 (Phase C+E): new Portfolio section labels
+    portfolio_accounts:'Portfolio · Accounts',
+    portfolio_holdings:'Portfolio · Holdings',
+    portfolio_family:'Portfolio · Family',
+    portfolio_strategy:'Portfolio · Strategy',
+    portfolio_research:'Portfolio · Research',
+    portfolio_decision:'Portfolio · Decision',
+    portfolio_account_detail:'Portfolio · Account'
+  };
   // V9.0.3 cleanup: removed dead JS targeting .nav-item / .nav-dd / nav-dropdown
   // (audit §10.1, §10.7). The .index-item active state is managed by
   // updateIndexActive() called below. Mobile dropdown is owned by the Compass ribbon.
@@ -6783,8 +6809,15 @@ async function render(){
   else if(t==='bills')el.innerHTML=safeTabRenderSync('bills',()=>rBills());
   else if(t==='subscriptions')el.innerHTML=await safeTabRender('subscriptions',()=>rSubs());
   else if(t==='staff')el.innerHTML=safeTabRenderSync('staff',()=>rStaff());
-  else if(t==='familyinv')el.innerHTML=safeTabRenderSync('familyinv',()=>rFamilyInv());
-  else if(t==='investments'){el.innerHTML=safeTabRenderSync('investments',()=>rInvestments());setTimeout(triggerAutoRefreshIfStale,200);}
+  // V10.3.0 (Phase C+E): new Portfolio section routes. rInvestments and rFamilyInv
+  // are reused (same data shape); new render functions added for the additional pages.
+  else if(t==='portfolio_accounts'){el.innerHTML=safeTabRenderSync('portfolio_accounts',()=>rInvestments());setTimeout(triggerAutoRefreshIfStale,200);}
+  else if(t==='portfolio_account_detail')el.innerHTML=safeTabRenderSync('portfolio_account_detail',()=>rPortfolioAccountDetail());
+  else if(t==='portfolio_holdings')el.innerHTML=safeTabRenderSync('portfolio_holdings',()=>rPortfolioHoldings());
+  else if(t==='portfolio_family')el.innerHTML=safeTabRenderSync('portfolio_family',()=>rFamilyInv());
+  else if(t==='portfolio_strategy')el.innerHTML=safeTabRenderSync('portfolio_strategy',()=>rPortfolioStrategy());
+  else if(t==='portfolio_research')el.innerHTML=safeTabRenderSync('portfolio_research',()=>rPortfolioResearch());
+  else if(t==='portfolio_decision')el.innerHTML=safeTabRenderSync('portfolio_decision',()=>rPortfolioDecision());
   else if(t==='accounts')el.innerHTML=safeTabRenderSync('accounts',()=>rAcc());
   else if(t==='debts')el.innerHTML=safeTabRenderSync('debts',()=>rDebts());
   else if(t==='goals')el.innerHTML=safeTabRenderSync('goals',()=>rGoals());
@@ -15761,6 +15794,20 @@ function rAcc(){
   </div>
   ${accountsKpi}
 
+  <!-- V10.3.0 (Phase C+E): investment accounts moved to the new Portfolio section.
+       This banner is the discoverability hint for users who try to add or find
+       them here. -->
+  ${(()=>{
+    const hasInv=S.accounts.some(a=>INV.has(a.type));
+    return`<div class="lanki-banner banner-info" style="margin-bottom:14px">
+      <div class="lanki-banner-icon">ℹ</div>
+      <div class="lanki-banner-content">
+        <div class="lanki-banner-body"><strong>Investment accounts</strong> live in the <strong>Portfolio</strong> section${hasInv?' (your existing investment accounts are already there)':''}. Use Portfolio to add brokerage, fund, gold, crypto, real estate, sukuk, P2P, direct equity, and VC fund accounts with full holdings tracking.</div>
+      </div>
+      <div class="lanki-banner-actions"><button class="btn btn-xs btn-p" onclick="sw('portfolio_accounts')">Open Portfolio &rarr;</button></div>
+    </div>`;
+  })()}
+
   <!-- V8.20: Groups management panel -->
   <div id="groups-panel" class="panel">
     <div class="chdr">Account Groups</div>
@@ -15820,7 +15867,7 @@ function rAcc(){
       <div><label class="lbl">Institution</label><input type="text" id="ac-inst" placeholder="e.g. Al Rajhi, D360"></div>
     </div>
     <div class="fr3" style="margin-top:8px">
-      <div><label class="lbl">Type</label><select id="ac-type" onchange="onATC(this.value)">${ATS}</select></div>
+      <div><label class="lbl">Type</label><select id="ac-type" onchange="onATC(this.value)">${ATG.filter(g=>g.g!=='Investments').map(g=>`<optgroup label="${g.g}">${g.o.map(o=>`<option value="${o.v}">${o.l}</option>`).join('')}</optgroup>`).join('')}</select></div>
       <div><label class="lbl">IBAN or Card Number</label><input type="text" id="ac-no" placeholder="SA followed by 22 digits"></div>
       <div id="ac-currency-row" style="display:none"><label class="lbl">Billing Currency</label><select id="ac-currency"><option value="SAR">SAR</option><option value="USD">USD</option></select></div>
     </div>
@@ -16402,17 +16449,50 @@ let _invAssistOpen=null;           // which account has the AI-assisted panel op
 let _invAssistData=null;           // {accountId, response} from last estimate call
 let _invAutoRefreshDoneAt=null;    // timestamp of last auto-refresh, debounce key
 function rInvestments(){
-  const invAccs=S.accounts.filter(a=>isInvestmentAccount(a)&&isLiveAccount(a));
-  if(invAccs.length===0){
+  // V10.3.0 (Phase C+E): renders for the new portfolio_accounts tab. Owner filter
+  // and direct creation flow (openAddInvAcc instead of redirect to Accounts page).
+  const ownerFilter=_portfolioFilters.owner||'all';
+  const typeFilter=_portfolioFilters.type||'all';
+  let invAccs=S.accounts.filter(a=>isInvestmentAccount(a)&&isLiveAccount(a));
+  // Apply filters
+  if(ownerFilter==='self')invAccs=invAccs.filter(a=>!a.ownerId);
+  else if(ownerFilter!=='all')invAccs=invAccs.filter(a=>a.ownerId===ownerFilter);
+  if(typeFilter!=='all')invAccs=invAccs.filter(a=>a.type===typeFilter);
+  const invAccsAll=S.accounts.filter(a=>isInvestmentAccount(a)&&isLiveAccount(a));
+  // Build owner filter chips
+  const memberCounts={};
+  invAccsAll.forEach(a=>{const k=a.ownerId||'self';memberCounts[k]=(memberCounts[k]||0)+1;});
+  const ownerChip=(val,label,count)=>`<button class="opill ${ownerFilter===val?'active':''}" onclick="setPortfolioFilter('owner','${val}')">${h(label)}${count!==undefined?` <span style="font-size:10px;opacity:.7">${count}</span>`:''}</button>`;
+  const ownerChips=`<div class="fg" style="gap:6px;flex-wrap:wrap;align-items:center">
+    ${ownerChip('all','All',invAccsAll.length)}
+    ${ownerChip('self','Self',memberCounts['self']||0)}
+    ${(S.familyMembers||[]).map(m=>ownerChip(m.id,m.name,memberCounts[m.id]||0)).join('')}
+  </div>`;
+  if(invAccsAll.length===0){
     return`<div class="pg-header-row">
       <div>
-        <div class="pg-eyebrow">03 FINANCES</div>
-        <div class="pg-header-title">Portfolio</div>
+        <div class="pg-eyebrow">04 PORTFOLIO</div>
+        <div class="pg-header-title">Accounts</div>
         <div class="pg-header-sub">Investment accounts with current valuations and deployed capital. Stale values are flagged for refresh.</div>
       </div>
-      <button class="btn btn-p btn-sm" onclick="sw('accounts');setTimeout(()=>openAddAcc(),150)">+ Add investment account</button>
+      <button class="btn btn-p btn-sm" onclick="openAddInvAcc()">+ Add investment account</button>
     </div>
-    <div class="card"><div class="empty">No investment accounts yet. Add one from the Accounts page (pick an investment type like Brokerage, Fund, Gold, Crypto, Real Estate Fund, or Direct Investment).</div></div>`;
+    ${rInvAcctFormPanel()}
+    <div class="card"><div class="empty">No investment accounts yet. Click <strong>+ Add investment account</strong> above to create your first one. You can choose from brokerage, fund, gold, crypto, real estate, sukuk, P2P, direct equity, VC fund, and more.</div></div>`;
+  }
+  if(invAccs.length===0){
+    // Filtered to nothing
+    return`<div class="pg-header-row">
+      <div>
+        <div class="pg-eyebrow">04 PORTFOLIO</div>
+        <div class="pg-header-title">Accounts</div>
+        <div class="pg-header-sub">Investment accounts with current valuations and deployed capital. Stale values are flagged for refresh.</div>
+      </div>
+      <button class="btn btn-p btn-sm" onclick="openAddInvAcc()">+ Add investment account</button>
+    </div>
+    ${rInvAcctFormPanel()}
+    <div style="margin-bottom:14px">${ownerChips}</div>
+    <div class="card"><div class="empty">No investment accounts match this filter. <button class="btn btn-xs" onclick="setPortfolioFilter('owner','all');setPortfolioFilter('type','all')">Clear filters</button></div></div>`;
   }
   // Aggregate KPIs
   const totalCurrent=invAccs.reduce((s,a)=>{const v=getInvestmentValue(a);return v!==null?s+v:s;},0);
@@ -16462,7 +16542,7 @@ function rInvestments(){
         </div>
         <div class="fg" style="gap:4px;flex-shrink:0">
           <button class="btn btn-sm ${cv===null||stale?'btn-p':''}" onclick="triggerUpdateForAccount('${a.id}')" ${_invFetchingId===a.id?'disabled':''}>${cv===null?'Record value':'Update value'}</button>
-          <button class="btn btn-sm" onclick="sw('accounts');openEditAcc('${a.id}')" title="Edit account">&#9998;</button>
+          <button class="btn btn-sm" onclick="openEditInvAcc('${a.id}')" title="Edit account">&#9998;</button>
         </div>
       </div>
 
@@ -16551,21 +16631,25 @@ function rInvestments(){
 
   return`<div class="pg-header-row">
     <div>
-      <div class="pg-eyebrow">03 FINANCES</div>
-      <div class="pg-header-title">Portfolio</div>
+      <div class="pg-eyebrow">04 PORTFOLIO</div>
+      <div class="pg-header-title">Accounts</div>
       <div class="pg-header-sub">Investment accounts with current valuations and deployed capital. Stale values are flagged for refresh.</div>
     </div>
     <div class="fg" style="gap:6px;flex-wrap:wrap">
       ${staleCount>0?`<span class="status-pill status-warn" style="align-self:center" title="${staleCount} account${staleCount===1?'':'s'} have values older than 30 days">${staleCount} stale</span>`:''}
       ${(()=>{
         // V8.21.5: Update Values bulk button — only when at least one ai_public_price account exists
-        const hasAi=invAccs.some(a=>a.updateSource==='ai_public_price'&&Array.isArray(a.holdings)&&a.holdings.length>0);
+        const hasAi=invAccsAll.some(a=>a.updateSource==='ai_public_price'&&Array.isArray(a.holdings)&&a.holdings.length>0);
         if(!hasAi)return '';
         return`<button class="btn btn-sm" onclick="bulkUpdateValues()" ${_invFetchingBatch?'disabled':''} title="Fetch current prices for AI-enabled accounts" style="display:inline-flex;align-items:center;gap:5px">${_invFetchingBatch?'Fetching…':`<span style="color:var(--action)">${CASE9_AI_ICON_SVG}</span> Update values`}</button>`;
       })()}
-      <button class="btn btn-p btn-sm" onclick="sw('accounts');setTimeout(()=>openAddAcc(),150)">+ Add investment account</button>
+      <button class="btn btn-p btn-sm" onclick="openAddInvAcc()">+ Add investment account</button>
     </div>
   </div>
+
+  ${rInvAcctFormPanel()}
+
+  <div style="margin-bottom:14px">${ownerChips}</div>
 
   <div class="kpi-strip">
     <div class="kpi-cell"><div class="kpi-cell-label">Total Current Value</div><div class="kpi-cell-value priv-mask">${fmtP(totalCurrent)}</div><div class="kpi-cell-sub">${accountsWithValue} of ${invAccs.length} account${invAccs.length===1?'':'s'} with recorded values</div></div>
@@ -16576,6 +16660,1118 @@ function rInvestments(){
 
   ${accountCards}`;
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// V10.3.0 PHASE C+E — PORTFOLIO SECTION
+// ═══════════════════════════════════════════════════════════════════════════════
+// New top-level Portfolio section with 6 sub-pages (Accounts, Holdings, Family,
+// Strategy, Research, Decision). Investment account creation moves from Accounts
+// & Cards to Portfolio → Accounts. Polymorphic holdings editor with type-driven
+// fields, lots/sales/distributions tracking, FX rates, fetch source per holding,
+// PFIC tag. Strategy/Research/Decision are Phase F placeholders.
+
+// Module state
+const _portfolioFilters={owner:'all',type:'all'};
+let _invAcctFormOpen=false;          // is the in-place add/edit account form open?
+let _invAcctEditId=null;              // null = adding new, else editing this account ID
+let _portfolioAccountDetailId=null;   // account being viewed in detail
+let _holdingEditorOpen=false;         // is the holding editor modal open?
+let _holdingEditorAccId=null;
+let _holdingEditorId=null;            // null = adding new, else editing this holding
+let _holdingEditorTab='details';      // 'details' | 'lots' | 'sales' | 'distributions'
+let _lotEditorOpen=false;             // is the add/edit lot modal open?
+let _lotEditorId=null;                // lot id being edited (null = new)
+let _saleEditorOpen=false;
+let _saleEditorId=null;
+let _distEditorOpen=false;
+let _distEditorId=null;
+
+function setPortfolioFilter(key,val){
+  _portfolioFilters[key]=val;
+  render();
+}
+
+function ownerLabel(ownerId){
+  if(!ownerId)return 'Self';
+  const m=(S.familyMembers||[]).find(x=>x.id===ownerId);
+  return m?m.name:'(unknown)';
+}
+
+function holdingTypeMeta(typeV){
+  return PHB_HOLDING_TYPES.find(t=>t.v===typeV)||PHB_HOLDING_TYPES[PHB_HOLDING_TYPES.length-1];
+}
+
+function holdingTypeLabel(typeV){return holdingTypeMeta(typeV).l;}
+
+function allowedHoldingTypesForAccount(a){
+  if(!a)return PHB_HOLDING_TYPES.map(t=>t.v);
+  const allowed=PHB_ACCOUNT_HOLDING_MAP[a.type];
+  if(allowed)return allowed;
+  // Fallback: legacy/unmapped account types get permissive list
+  return PHB_HOLDING_TYPES.map(t=>t.v);
+}
+
+// ─── INVESTMENT ACCOUNT FORM (in-place panel, lives on Portfolio Accounts) ────
+
+function openAddInvAcc(){
+  _invAcctFormOpen=true;
+  _invAcctEditId=null;
+  render();
+  setTimeout(()=>{
+    const el=document.getElementById('inv-acct-form-panel');
+    if(el)el.scrollIntoView({behavior:'smooth',block:'start'});
+  },50);
+}
+
+function openEditInvAcc(accId){
+  _invAcctFormOpen=true;
+  _invAcctEditId=accId;
+  render();
+  setTimeout(()=>{
+    const el=document.getElementById('inv-acct-form-panel');
+    if(el)el.scrollIntoView({behavior:'smooth',block:'start'});
+  },50);
+}
+
+function closeInvAcctForm(){
+  _invAcctFormOpen=false;
+  _invAcctEditId=null;
+  render();
+}
+
+function rInvAcctFormPanel(){
+  if(!_invAcctFormOpen)return '';
+  const editing=!!_invAcctEditId;
+  const a=editing?S.accounts.find(x=>x.id===_invAcctEditId):null;
+  if(editing&&!a){closeInvAcctForm();return '';}
+  // Investment-only type list (no bank fields like IBAN, no opening balance).
+  const invTypes=PHB_HOLDING_TYPES; // not used directly here, but referenced for context
+  // Type dropdown — only investment container types
+  const invTypesGroup=ATG.find(g=>g.g==='Investments')||{o:[]};
+  const typeOpts=invTypesGroup.o.map(o=>`<option value="${o.v}">${o.l}</option>`).join('');
+  return`<div class="card card-bordered" id="inv-acct-form-panel" style="margin-bottom:18px;padding:16px 18px;background:var(--bg2)">
+    <div class="fg jb" style="margin-bottom:12px;align-items:center">
+      <div style="font-size:14px;font-weight:600">${editing?'Edit investment account':'Add investment account'}</div>
+      <button class="btn btn-xs" onclick="closeInvAcctForm()" title="Close">&times;</button>
+    </div>
+    <div class="fr" style="gap:10px;margin-bottom:8px">
+      <div style="flex:2"><label class="lbl">Name</label><input type="text" id="iaf-name" value="${a?h(a.name||''):''}" placeholder="e.g. Derayah Mohammad Local"></div>
+      <div style="flex:2"><label class="lbl">Institution</label><input type="text" id="iaf-inst" value="${a?h(a.institution||''):''}" placeholder="e.g. Derayah, Tamra Capital"></div>
+      <div style="flex:1"><label class="lbl">Type</label><select id="iaf-type">${typeOpts}</select></div>
+    </div>
+    <div class="fr" style="gap:10px;margin-bottom:8px">
+      <div style="flex:1"><label class="lbl">Owner</label><select id="iaf-owner"><option value="">Self</option>${(S.familyMembers||[]).map(m=>`<option value="${m.id}">${h(m.name)}${m.relationship?' ('+h(m.relationship)+')':''}</option>`).join('')}</select></div>
+      <div style="flex:1"><label class="lbl">Tax Jurisdiction</label><select id="iaf-taxjur"><option value="both">Both (US + Saudi)</option><option value="us">US only</option><option value="saudi">Saudi only</option></select></div>
+      <div style="flex:1"><label class="lbl">Platform / Broker (optional)</label><input type="text" id="iaf-platform" value="${a?h(a.platform||''):''}" placeholder="e.g. Tameed, Tadawul, Binance"></div>
+    </div>
+    <div class="fr" style="gap:10px;margin-bottom:8px">
+      <div style="flex:2"><label class="lbl">Purpose / Notes (optional)</label><input type="text" id="iaf-purpose" value="${a?h(a.purpose||''):''}" placeholder="e.g. Retirement savings, kids' education"></div>
+      <div style="flex:1"><label class="lbl">Account Number (optional)</label><input type="text" id="iaf-accnum" value="${a?h(a.accountNumber||''):''}" placeholder="Reference only"></div>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin:6px 0 12px;line-height:1.6">Holdings (lots, sales, distributions) are managed inside the account once it is created. ${editing?'<strong>Tip:</strong> the underlying holdings are not lost when you change the account type — only the allowed holding types may change.':''}</div>
+    <div class="fg" style="gap:8px">
+      <button class="btn btn-p" onclick="saveInvAcct()">${editing?'Save changes':'Add account'}</button>
+      <button class="btn" onclick="closeInvAcctForm()">Cancel</button>
+      ${editing?`<button class="btn btn-d" style="margin-left:auto" onclick="if(confirm('Delete this investment account? Holdings will be lost. This cannot be undone.')){delAcc('${a.id}');closeInvAcctForm();}">Delete account</button>`:''}
+    </div>
+  </div>`;
+}
+
+function saveInvAcct(){
+  const name=(document.getElementById('iaf-name')?.value||'').trim();
+  if(!name){toast('Name required',false);return;}
+  const inst=(document.getElementById('iaf-inst')?.value||'').trim();
+  if(!inst){toast('Institution required',false);return;}
+  const type=document.getElementById('iaf-type')?.value||'brokerage_account';
+  if(!INV.has(type)){toast('Pick an investment account type',false);return;}
+  const ownerId=(document.getElementById('iaf-owner')?.value||'').trim()||null;
+  const taxJurisdiction=document.getElementById('iaf-taxjur')?.value||'both';
+  const platform=(document.getElementById('iaf-platform')?.value||'').trim();
+  const purpose=(document.getElementById('iaf-purpose')?.value||'').trim();
+  const accNum=(document.getElementById('iaf-accnum')?.value||'').trim();
+  if(_invAcctEditId){
+    const ex=S.accounts.find(a=>a.id===_invAcctEditId);
+    if(!ex){toast('Account not found',false);return;}
+    Object.assign(ex,{name,institution:inst,type,ownerId,taxJurisdiction,platform,purpose,accountNumber:accNum||null,_v10_2_migrated:true});
+    sched();toast('Account updated');
+  }else{
+    const newId='acc_'+randSuffix(10);
+    S.accounts.push({
+      id:newId,
+      name,
+      institution:inst,
+      type,
+      ownerId,
+      taxJurisdiction,
+      platform,
+      purpose,
+      accountNumber:accNum||null,
+      updateSource:'manual',
+      holdings:[],
+      _v10_2_migrated:true,
+      sortIndex:S.accounts.length
+    });
+    sched();toast('Account added');
+  }
+  closeInvAcctForm();
+}
+
+// ─── PORTFOLIO ACCOUNT DETAIL PAGE ────────────────────────────────────────────
+
+function openPortfolioAccountDetail(accId){
+  _portfolioAccountDetailId=accId;
+  sw('portfolio_account_detail');
+}
+
+function rPortfolioAccountDetail(){
+  const accId=_portfolioAccountDetailId;
+  const a=accId?S.accounts.find(x=>x.id===accId):null;
+  if(!a){
+    return`<div class="pg-header"><div class="pg-eyebrow">04 PORTFOLIO</div><div class="pg-header-title">Account not found</div></div>
+    <div class="card"><div class="empty">This account no longer exists. <button class="btn btn-sm" onclick="sw('portfolio_accounts')">Back to Portfolio Accounts</button></div></div>`;
+  }
+  const holdings=Array.isArray(a.holdings)?a.holdings:[];
+  // Aggregate from holdings
+  const sumCV=holdings.reduce((s,h)=>{const v=holdingCurrentValue(h);return v!=null?s+v:s;},0);
+  const sumCB=holdings.reduce((s,h)=>s+holdingCostBasis(h),0);
+  const pricedCount=holdings.filter(h=>h.currentPrice!=null).length;
+  const sumUnreal=holdings.reduce((s,h)=>{const u=holdingUnrealizedGL(h);return u!=null?s+u:s;},0);
+  const yearNow=new Date().getFullYear();
+  const sumRealYTD=holdings.reduce((s,h)=>s+holdingRealizedGLYTD(h,yearNow),0);
+  const staleCount=holdings.filter(h=>{
+    if(!h.currentPriceAsOf)return false;
+    const days=Math.floor((Date.now()-new Date(h.currentPriceAsOf).getTime())/86400000);
+    return days>30;
+  }).length;
+  // Build holding cards
+  const holdingCards=holdings.length===0
+    ? `<div class="card"><div class="empty">No holdings yet. Click <strong>+ Add holding</strong> below to track stocks, funds, gold, crypto, real estate, and more.</div></div>`
+    : holdings.map(h=>rHoldingCard(a,h)).join('');
+  const ownerName=ownerLabel(a.ownerId);
+  const taxJur=a.taxJurisdiction||'both';
+  const taxJurLabel={us:'US only',saudi:'Saudi only',both:'Both (US + Saudi)'}[taxJur]||taxJur;
+  return`<div class="pg-header-row">
+    <div>
+      <div class="pg-eyebrow">04 PORTFOLIO &middot; ACCOUNT</div>
+      <div class="pg-header-title">${h(a.name)}</div>
+      <div class="pg-header-sub">${h(a.institution||'')} &middot; ${h(ATL[a.type]||a.type)} &middot; Owner: <strong>${h(ownerName)}</strong> &middot; Tax: ${h(taxJurLabel)}</div>
+    </div>
+    <div class="fg" style="gap:6px;flex-wrap:wrap">
+      <button class="btn btn-sm" onclick="sw('portfolio_accounts')" title="Back to all accounts">&larr; Back</button>
+      <button class="btn btn-sm" onclick="openEditInvAccFromDetail('${a.id}')" title="Edit account">&#9998; Edit</button>
+      <button class="btn btn-p btn-sm" onclick="openHoldingEditor('${a.id}',null)">+ Add holding</button>
+    </div>
+  </div>
+
+  ${rInvAcctFormPanel()}
+
+  <div class="kpi-strip">
+    <div class="kpi-cell"><div class="kpi-cell-label">Current Value</div><div class="kpi-cell-value priv-mask">${pricedCount?fmtP(sumCV):'—'}</div><div class="kpi-cell-sub">${pricedCount} of ${holdings.length} priced</div></div>
+    <div class="kpi-cell"><div class="kpi-cell-label">Cost Basis</div><div class="kpi-cell-value priv-mask">${fmtP(sumCB)}</div><div class="kpi-cell-sub">Sum of remaining lots</div></div>
+    <div class="kpi-cell"><div class="kpi-cell-label">Unrealized G/L</div><div class="kpi-cell-value priv-mask ${sumUnreal>=0?'c-ok':'c-bad'}">${pricedCount?(sumUnreal>=0?'+':'')+fmtP(sumUnreal):'—'}</div><div class="kpi-cell-sub">Where prices are recorded</div></div>
+    <div class="kpi-cell"><div class="kpi-cell-label">Realized G/L (YTD)</div><div class="kpi-cell-value priv-mask ${sumRealYTD>=0?'c-ok':'c-bad'}">${sumRealYTD>=0?'+':''}${fmtP(sumRealYTD)}</div><div class="kpi-cell-sub">${yearNow}</div></div>
+    <div class="kpi-cell"><div class="kpi-cell-label">Holdings</div><div class="kpi-cell-value">${holdings.length}</div><div class="kpi-cell-sub">${staleCount} stale</div></div>
+  </div>
+
+  ${holdingCards}
+
+  ${rHoldingEditorPanel()}`;
+}
+
+function openEditInvAccFromDetail(accId){
+  _invAcctEditId=accId;
+  _invAcctFormOpen=true;
+  render();
+  setTimeout(()=>{
+    const el=document.getElementById('inv-acct-form-panel');
+    if(el)el.scrollIntoView({behavior:'smooth',block:'start'});
+  },50);
+}
+
+// ─── HOLDING CARD (one card per holding inside the account detail) ────────────
+
+function rHoldingCard(a,hd){
+  const meta=holdingTypeMeta(hd.type);
+  const qty=holdingQuantity(hd);
+  const cb=holdingCostBasis(hd);
+  const cv=holdingCurrentValue(hd);
+  const ugl=holdingUnrealizedGL(hd);
+  const uglPct=(cb>0&&ugl!=null)?((ugl/cb)*100):null;
+  const lots=Array.isArray(hd.lots)?hd.lots.length:0;
+  const sales=Array.isArray(hd.sales)?hd.sales.length:0;
+  const dists=Array.isArray(hd.distributions)?hd.distributions.length:0;
+  const stale=(()=>{
+    if(!hd.currentPriceAsOf)return false;
+    const days=Math.floor((Date.now()-new Date(hd.currentPriceAsOf).getTime())/86400000);
+    return days>30;
+  })();
+  return`<div class="card card-bordered" style="margin-bottom:12px;padding:14px 18px">
+    <div class="fg jb" style="margin-bottom:8px;align-items:flex-start;gap:10px;flex-wrap:wrap">
+      <div style="flex:1;min-width:0">
+        <div class="fg" style="gap:8px;align-items:center;flex-wrap:wrap">
+          <span class="status-pill status-info" style="font-size:9px">${h(meta.l)}</span>
+          <div style="font-weight:500;font-size:15px">${h(hd.name||'(unnamed)')}</div>
+          ${hd.identifier?`<span style="font-size:11px;color:var(--text3);font-family:monospace">${h(hd.identifier)}</span>`:''}
+          ${hd.isPFIC?`<span class="status-pill status-warn" style="font-size:9px" title="Passive Foreign Investment Company — US tax form 8621 required annually">PFIC</span>`:''}
+          ${stale?`<span class="status-pill status-warn" style="font-size:9px">STALE</span>`:''}
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">
+          ${qty} ${h(hd.unitLabel||meta.unit||'')} &middot; ${h(hd.assetClass||'—')} &middot; ${h(hd.region||'—')} &middot; ${h(hd.currency||'SAR')}
+          ${lots?` &middot; ${lots} lot${lots===1?'':'s'}`:''}${sales?` &middot; ${sales} sale${sales===1?'':'s'}`:''}${dists?` &middot; ${dists} dist${dists===1?'':'s'}`:''}
+        </div>
+      </div>
+      <div class="fg" style="gap:4px;flex-shrink:0">
+        <button class="btn btn-sm" onclick="openHoldingEditor('${a.id}','${hd.id}')" title="Edit holding">&#9998;</button>
+        <button class="btn btn-sm btn-d" onclick="if(confirm('Delete holding ${h(hd.name||'(unnamed)').replace(/'/g,'')}? All lots, sales, and distributions will be lost.')){deleteHolding('${a.id}','${hd.id}')}" title="Delete holding">&times;</button>
+      </div>
+    </div>
+    <div class="fg" style="gap:18px;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--bg3);font-variant-numeric:tabular-nums">
+      <div>
+        <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Cost Basis</div>
+        <div class="priv-mask" style="font-size:13px;font-weight:500;color:var(--text1)">${fmtP(cb)}</div>
+      </div>
+      <div>
+        <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Current Value</div>
+        <div class="priv-mask" style="font-size:13px;font-weight:500;color:${cv!=null?'var(--text1)':'var(--text3)'}">${cv!=null?fmtP(cv):'Not priced'}</div>
+        ${hd.currentPriceAsOf?`<div style="font-size:10px;color:var(--text3)">as of ${toDD(hd.currentPriceAsOf)}</div>`:''}
+      </div>
+      ${ugl!=null?`<div>
+        <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Unrealized G/L</div>
+        <div class="priv-mask" style="font-size:13px;font-weight:600;color:${ugl>=0?'var(--pos)':'var(--neg)'}">${ugl>=0?'+':''}${fmtP(ugl)}${uglPct!=null?` <span style="font-size:10px;font-weight:400">(${uglPct>=0?'+':''}${uglPct.toFixed(2)}%)</span>`:''}</div>
+      </div>`:''}
+    </div>
+  </div>`;
+}
+
+function deleteHolding(accId,hdId){
+  const a=S.accounts.find(x=>x.id===accId);
+  if(!a||!Array.isArray(a.holdings))return;
+  a.holdings=a.holdings.filter(h=>h.id!==hdId);
+  sched();render();toast('Holding removed');
+}
+
+// ─── HOLDING EDITOR (slide-over panel with type selector + tabs) ──────────────
+
+function openHoldingEditor(accId,hdId){
+  _holdingEditorOpen=true;
+  _holdingEditorAccId=accId;
+  _holdingEditorId=hdId||null;
+  _holdingEditorTab='details';
+  // If editing existing, default to lots tab if user already filled details
+  if(hdId){
+    const a=S.accounts.find(x=>x.id===accId);
+    const h=a&&Array.isArray(a.holdings)?a.holdings.find(x=>x.id===hdId):null;
+    if(h&&h.type&&h.name)_holdingEditorTab='lots';
+  }
+  render();
+}
+
+function closeHoldingEditor(){
+  _holdingEditorOpen=false;
+  _holdingEditorAccId=null;
+  _holdingEditorId=null;
+  _holdingEditorTab='details';
+  render();
+}
+
+function setHoldingEditorTab(tab){
+  _holdingEditorTab=tab;
+  render();
+}
+
+function rHoldingEditorPanel(){
+  if(!_holdingEditorOpen)return '';
+  const a=S.accounts.find(x=>x.id===_holdingEditorAccId);
+  if(!a){closeHoldingEditor();return '';}
+  const editing=!!_holdingEditorId;
+  const hd=editing?(a.holdings||[]).find(x=>x.id===_holdingEditorId):null;
+  if(editing&&!hd){closeHoldingEditor();return '';}
+  const allowedTypes=allowedHoldingTypesForAccount(a);
+  // Type-driven form fields
+  const currentType=hd?hd.type:(allowedTypes[0]||'stock');
+  const meta=holdingTypeMeta(currentType);
+  const tab=_holdingEditorTab;
+  // Tabs are only meaningful once details are saved
+  const detailsOnly=!editing;
+  const tabBtn=(key,label,disabled)=>`<button class="btn btn-xs ${tab===key?'btn-p':''}" ${disabled?'disabled style="opacity:0.4"':''} onclick="setHoldingEditorTab('${key}')">${label}</button>`;
+  return`<div class="modal-backdrop" onclick="if(event.target===this)closeHoldingEditor()" style="position:fixed;inset:0;background:rgba(2,23,81,0.5);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto">
+    <div class="card" style="background:var(--card);width:100%;max-width:780px;padding:0;border-radius:var(--r);box-shadow:0 12px 60px rgba(0,0,0,0.3);overflow:hidden">
+      <div class="fg jb" style="padding:14px 18px;border-bottom:1px solid var(--line);align-items:center">
+        <div>
+          <div style="font-size:14px;font-weight:600">${editing?'Edit holding':'Add holding'} <span style="font-weight:400;color:var(--text3)">in ${h(a.name)}</span></div>
+        </div>
+        <button class="btn btn-xs" onclick="closeHoldingEditor()" title="Close">&times;</button>
+      </div>
+      ${editing?`<div class="fg" style="gap:6px;padding:10px 18px;border-bottom:1px solid var(--line);background:var(--bg2)">
+        ${tabBtn('details','Details')}
+        ${tabBtn('lots','Lots ('+(Array.isArray(hd.lots)?hd.lots.length:0)+')',false)}
+        ${tabBtn('sales','Sales ('+(Array.isArray(hd.sales)?hd.sales.length:0)+')',false)}
+        ${tabBtn('distributions','Distributions ('+(Array.isArray(hd.distributions)?hd.distributions.length:0)+')',false)}
+      </div>`:''}
+      <div style="padding:16px 18px;max-height:65vh;overflow-y:auto">
+        ${(tab==='details'||detailsOnly)?rHoldingDetailsForm(a,hd,allowedTypes,currentType):''}
+        ${tab==='lots'&&editing?rHoldingLotsTab(a,hd):''}
+        ${tab==='sales'&&editing?rHoldingSalesTab(a,hd):''}
+        ${tab==='distributions'&&editing?rHoldingDistributionsTab(a,hd):''}
+      </div>
+      ${(tab==='details'||detailsOnly)?`<div class="fg" style="padding:14px 18px;border-top:1px solid var(--line);gap:8px;background:var(--bg2)">
+        <button class="btn btn-p" onclick="saveHoldingDetails()">${editing?'Save changes':'Add holding'}</button>
+        <button class="btn" onclick="closeHoldingEditor()">Cancel</button>
+      </div>`:''}
+    </div>
+    ${_lotEditorOpen?rLotEditorModal(a,hd):''}
+    ${_saleEditorOpen?rSaleEditorModal(a,hd):''}
+    ${_distEditorOpen?rDistEditorModal(a,hd):''}
+  </div>`;
+}
+
+function rHoldingDetailsForm(a,hd,allowedTypes,currentType){
+  const meta=holdingTypeMeta(currentType);
+  // Field rendering driven by type. Common fields first, then type-specific.
+  const typeOpts=PHB_HOLDING_TYPES.filter(t=>allowedTypes.includes(t.v)).map(t=>`<option value="${t.v}" ${t.v===currentType?'selected':''}>${t.l}</option>`).join('');
+  const acsOpts=PHB_ASSET_CLASSES.map(c=>`<option value="${c.v}" ${(hd?hd.assetClass:meta.defaultAssetClass)===c.v?'selected':''}>${c.l}</option>`).join('');
+  const regOpts=PHB_REGIONS.map(r=>`<option value="${r.v}" ${(hd?hd.region:'saudi')===r.v?'selected':''}>${r.l}</option>`).join('');
+  const curOpts=PHB_CURRENCIES.map(c=>`<option value="${c}" ${(hd?hd.currency:'SAR')===c?'selected':''}>${c}</option>`).join('');
+  const fetchOpts=[['auto','Auto'],['prompt','Prompt'],['manual','Manual']].map(([v,l])=>`<option value="${v}" ${(hd?hd.fetchSource:(currentType==='stock'||currentType==='etf'||currentType==='crypto'||currentType==='gold'?'auto':currentType==='fund'?'prompt':'manual'))===v?'selected':''}>${l}</option>`).join('');
+  // Identifier label varies by type
+  const idLabel={
+    stock:'Ticker (e.g. TADAWUL:2222)',
+    etf:'Ticker',
+    fund:'ISIN or Fund Code',
+    crypto:'Coin Symbol (e.g. BTC)',
+    sukuk:'ISIN',
+    real_estate_unit:'Fund / REIT Code',
+    direct_equity:'Company Identifier (optional)',
+    custom:'Identifier (optional)'
+  }[currentType]||'Identifier (optional)';
+  // Show identifier only for relevant types
+  const showIdentifier=['stock','etf','fund','crypto','sukuk','real_estate_unit','direct_equity','custom'].includes(currentType);
+  // PFIC default: true for non-US funds, false otherwise
+  const defaultPFIC=currentType==='fund';
+  const pficVal=hd?(!!hd.isPFIC):defaultPFIC;
+  return`<div>
+    <div class="fr" style="gap:10px;margin-bottom:8px">
+      <div style="flex:1"><label class="lbl">Type</label><select id="hef-type" onchange="onHoldingTypeChange(this.value)">${typeOpts}</select></div>
+      <div style="flex:2"><label class="lbl">Display name</label><input type="text" id="hef-name" value="${hd?h(hd.name||''):''}" placeholder="e.g. Aramco, Tamra Local Equity Fund"></div>
+    </div>
+    ${showIdentifier?`<div class="fr" style="gap:10px;margin-bottom:8px">
+      <div style="flex:1"><label class="lbl">${h(idLabel)}</label><input type="text" id="hef-identifier" value="${hd?h(hd.identifier||''):''}" placeholder="${currentType==='stock'?'TADAWUL:2222':currentType==='fund'?'SA1234567890':currentType==='crypto'?'BTC':''}"></div>
+      <div style="flex:1"><label class="lbl">Unit label</label><input type="text" id="hef-unit" value="${hd?h(hd.unitLabel||meta.unit):h(meta.unit)}" placeholder="${h(meta.unit)}"></div>
+    </div>`:`<div class="fr" style="gap:10px;margin-bottom:8px">
+      <div style="flex:1"><label class="lbl">Unit label</label><input type="text" id="hef-unit" value="${hd?h(hd.unitLabel||meta.unit):h(meta.unit)}" placeholder="${h(meta.unit)}"></div>
+    </div>`}
+    <div class="fr" style="gap:10px;margin-bottom:8px">
+      <div style="flex:1"><label class="lbl">Currency</label><select id="hef-currency">${curOpts}</select></div>
+      <div style="flex:1"><label class="lbl">Asset class</label><select id="hef-assetclass">${acsOpts}</select></div>
+      <div style="flex:1"><label class="lbl">Region</label><select id="hef-region">${regOpts}</select></div>
+    </div>
+    <div class="fr" style="gap:10px;margin-bottom:8px">
+      <div style="flex:1"><label class="lbl">Fetch source</label><select id="hef-fetchsrc">${fetchOpts}</select></div>
+      <div style="flex:1"><label class="lbl">Current price (per unit, in holding currency)</label><input type="number" inputmode="decimal" id="hef-currentprice" value="${hd&&hd.currentPrice!=null?hd.currentPrice:''}" placeholder="optional"></div>
+      <div style="flex:1"><label class="lbl">Price as of (DD/MM/YYYY)</label><div class="date-inp-wrap"><input type="text" id="hef-priceasof" class="date-inp" value="${hd&&hd.currentPriceAsOf?toDD(hd.currentPriceAsOf):''}" maxlength="10"><button type="button" class="cal-btn" onclick="openCal('hef-priceasof')" title="Pick date">📅</button></div></div>
+    </div>
+    <div class="fr" style="gap:10px;margin-bottom:8px;align-items:center">
+      <div><label style="display:flex;gap:6px;align-items:center;font-size:12px;cursor:pointer"><input type="checkbox" id="hef-pfic" ${pficVal?'checked':''} style="width:auto;margin:0"> Tag as PFIC (US tax form 8621 required annually)</label></div>
+    </div>
+    <div style="margin-bottom:8px"><label class="lbl">Notes (optional)</label><textarea id="hef-notes" rows="2" placeholder="Anything to remember about this holding">${hd?h(hd.notes||''):''}</textarea></div>
+    ${!_holdingEditorId?`<div style="font-size:11px;color:var(--text3);line-height:1.6;background:var(--bg2);padding:8px 10px;border-radius:var(--rsm)">After you save these details, you can add buy lots, sales, and distributions on the next screen.</div>`:''}
+  </div>`;
+}
+
+function onHoldingTypeChange(newType){
+  // Re-render the form so type-specific fields update.
+  // Capture current form values first so they aren't lost.
+  const a=S.accounts.find(x=>x.id===_holdingEditorAccId);
+  if(!a)return;
+  const captured=captureHoldingDetailsForm();
+  // Stash in a temp holding for the redraw
+  if(!_holdingEditorId){
+    // New holding — store partial in editor scratchpad
+    _holdingEditorScratch=captured;
+  }
+  render();
+}
+let _holdingEditorScratch=null;
+
+function captureHoldingDetailsForm(){
+  return {
+    type:document.getElementById('hef-type')?.value,
+    name:(document.getElementById('hef-name')?.value||'').trim(),
+    identifier:(document.getElementById('hef-identifier')?.value||'').trim(),
+    unitLabel:(document.getElementById('hef-unit')?.value||'').trim(),
+    currency:document.getElementById('hef-currency')?.value||'SAR',
+    assetClass:document.getElementById('hef-assetclass')?.value,
+    region:document.getElementById('hef-region')?.value||'saudi',
+    fetchSource:document.getElementById('hef-fetchsrc')?.value||'manual',
+    currentPrice:(()=>{const v=document.getElementById('hef-currentprice')?.value;return v!==''&&v!=null?parseFloat(v):null;})(),
+    currentPriceAsOf:(()=>{const v=document.getElementById('hef-priceasof')?.value;return v?fromDD(v):null;})(),
+    isPFIC:!!document.getElementById('hef-pfic')?.checked,
+    notes:(document.getElementById('hef-notes')?.value||'').trim()
+  };
+}
+
+function saveHoldingDetails(){
+  const a=S.accounts.find(x=>x.id===_holdingEditorAccId);
+  if(!a){toast('Account not found',false);return;}
+  const cap=captureHoldingDetailsForm();
+  if(!cap.name){toast('Display name required',false);return;}
+  if(!cap.type){toast('Type required',false);return;}
+  const meta=holdingTypeMeta(cap.type);
+  if(!a.holdings)a.holdings=[];
+  if(_holdingEditorId){
+    const hd=a.holdings.find(x=>x.id===_holdingEditorId);
+    if(!hd){toast('Holding not found',false);return;}
+    Object.assign(hd,cap);
+    if(!hd.unitLabel)hd.unitLabel=meta.unit;
+    if(!hd.assetClass)hd.assetClass=meta.defaultAssetClass;
+    sched();render();toast('Holding updated');
+  }else{
+    const newHd={
+      id:'hld_'+randSuffix(10),
+      type:cap.type,
+      name:cap.name,
+      identifier:cap.identifier||null,
+      unitLabel:cap.unitLabel||meta.unit,
+      currency:cap.currency||'SAR',
+      assetClass:cap.assetClass||meta.defaultAssetClass,
+      region:cap.region||'saudi',
+      lots:[],
+      sales:[],
+      distributions:[],
+      currentPrice:cap.currentPrice,
+      currentPriceAsOf:cap.currentPriceAsOf,
+      currentFxRate:null,
+      fetchSource:cap.fetchSource||'manual',
+      isPFIC:cap.isPFIC,
+      notes:cap.notes||''
+    };
+    a.holdings.push(newHd);
+    _holdingEditorId=newHd.id;
+    _holdingEditorTab='lots';
+    _holdingEditorScratch=null;
+    sched();render();toast('Holding added — now record your buy lots');
+  }
+}
+
+// ─── LOTS TAB ─────────────────────────────────────────────────────────────────
+
+function rHoldingLotsTab(a,hd){
+  const lots=Array.isArray(hd.lots)?hd.lots:[];
+  if(lots.length===0){
+    return`<div>
+      <div class="fg jb" style="margin-bottom:10px;align-items:center">
+        <div style="font-size:13px;font-weight:500">Buy lots</div>
+        <button class="btn btn-p btn-sm" onclick="openLotEditor(null)">+ Add lot</button>
+      </div>
+      <div class="card" style="padding:14px;background:var(--bg2);border:1px dashed var(--line)"><div class="empty">No lots yet. Each buy you make is a separate lot. This is how Lanki computes cost basis for IRS Form 8949 reporting and tax-aware decisions.</div></div>
+    </div>`;
+  }
+  const totalQty=lots.reduce((s,l)=>s+(parseFloat(l.quantity)||0),0);
+  const totalCB=holdingCostBasis(hd);
+  const rows=lots.map(l=>{
+    const qty=parseFloat(l.quantity)||0;
+    const price=parseFloat(l.pricePerUnit)||0;
+    const fx=parseFloat(l.fxRate)||1;
+    const fees=parseFloat(l.fees)||0;
+    const cost=qty*price*fx+fees;
+    const stale=l.notes&&l.notes.indexOf('Migrated')>=0;
+    return`<tr${stale?' style="background:var(--bg2)"':''}>
+      <td style="white-space:nowrap">${toDD(l.date)||'—'}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums">${qty} ${h(hd.unitLabel||'')}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums">${fmtP(price)} ${h(hd.currency||'SAR')}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums">${hd.currency!=='SAR'?fx.toFixed(4):'—'}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums">${fees>0?fmtP(fees):'—'}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;font-weight:500">${fmtP(cost)}</td>
+      <td style="font-size:10px;color:var(--text3)">${l.notes?h(l.notes.substr(0,40)):''}</td>
+      <td style="text-align:right;white-space:nowrap">
+        <button class="btn btn-xs" onclick="openLotEditor('${l.id}')" title="Edit">&#9998;</button>
+        <button class="btn btn-xs btn-d" onclick="if(confirm('Delete this lot? Sales that allocate from this lot will become invalid.')){deleteLot('${l.id}')}" title="Delete">&times;</button>
+      </td>
+    </tr>`;
+  }).join('');
+  return`<div>
+    <div class="fg jb" style="margin-bottom:10px;align-items:center">
+      <div style="font-size:13px;font-weight:500">Buy lots</div>
+      <button class="btn btn-p btn-sm" onclick="openLotEditor(null)">+ Add lot</button>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden"><div class="tbl-wrap"><table class="tx-tbl">
+      <thead><tr><th>Date</th><th style="text-align:right">Quantity</th><th style="text-align:right">Price</th><th style="text-align:right">FX</th><th style="text-align:right">Fees</th><th style="text-align:right">Cost (SAR)</th><th>Notes</th><th></th></tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr style="background:var(--bg2);font-weight:500"><td>Total</td><td style="text-align:right;font-variant-numeric:tabular-nums">${totalQty}</td><td colspan="3"></td><td style="text-align:right;font-variant-numeric:tabular-nums">${fmtP(totalCB)}</td><td colspan="2" style="font-size:10px;color:var(--text3)">Cost basis (after sales)</td></tr></tfoot>
+    </table></div></div>
+  </div>`;
+}
+
+function openLotEditor(lotId){
+  _lotEditorOpen=true;
+  _lotEditorId=lotId;
+  render();
+}
+
+function closeLotEditor(){
+  _lotEditorOpen=false;
+  _lotEditorId=null;
+  render();
+}
+
+function rLotEditorModal(a,hd){
+  const editing=!!_lotEditorId;
+  const l=editing?(hd.lots||[]).find(x=>x.id===_lotEditorId):null;
+  const today=toDD(localISO(new Date()));
+  return`<div class="modal-backdrop" onclick="if(event.target===this)closeLotEditor()" style="position:fixed;inset:0;background:rgba(2,23,81,0.55);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px">
+    <div class="card" style="background:var(--card);width:100%;max-width:520px;padding:18px;border-radius:var(--r);box-shadow:0 12px 60px rgba(0,0,0,0.4)" onclick="event.stopPropagation()">
+      <div class="fg jb" style="margin-bottom:14px;align-items:center">
+        <div style="font-size:14px;font-weight:600">${editing?'Edit lot':'Add lot'}</div>
+        <button class="btn btn-xs" onclick="closeLotEditor()">&times;</button>
+      </div>
+      <div class="fr" style="gap:10px;margin-bottom:8px">
+        <div style="flex:1"><label class="lbl">Date</label><div class="date-inp-wrap"><input type="text" id="lef-date" class="date-inp" value="${l?toDD(l.date)||today:today}" maxlength="10"><button type="button" class="cal-btn" onclick="openCal('lef-date')">📅</button></div></div>
+        <div style="flex:1"><label class="lbl">Quantity</label><input type="number" inputmode="decimal" id="lef-qty" min="0" step="0.0001" value="${l?l.quantity:''}" placeholder="100"></div>
+      </div>
+      <div class="fr" style="gap:10px;margin-bottom:8px">
+        <div style="flex:1"><label class="lbl">Price per unit (in ${h(hd.currency||'SAR')})</label><input type="number" inputmode="decimal" id="lef-price" min="0" step="0.0001" value="${l?l.pricePerUnit:''}" placeholder="450"></div>
+        ${hd.currency!=='SAR'?`<div style="flex:1"><label class="lbl">FX rate (${h(hd.currency)} → SAR at buy time)</label><input type="number" inputmode="decimal" id="lef-fx" min="0" step="0.0001" value="${l?l.fxRate||3.75:3.75}" placeholder="3.75"></div>`:''}
+        <div style="flex:1"><label class="lbl">Fees (in SAR)</label><input type="number" inputmode="decimal" id="lef-fees" min="0" step="0.01" value="${l?l.fees||0:''}" placeholder="0"></div>
+      </div>
+      <div style="margin-bottom:14px"><label class="lbl">Notes (optional)</label><input type="text" id="lef-notes" value="${l?h(l.notes||''):''}" placeholder="Broker, lot reference, anything else"></div>
+      <div class="fg" style="gap:8px">
+        <button class="btn btn-p" onclick="saveLot()">${editing?'Save lot':'Add lot'}</button>
+        <button class="btn" onclick="closeLotEditor()">Cancel</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function saveLot(){
+  const a=S.accounts.find(x=>x.id===_holdingEditorAccId);
+  const hd=a?(a.holdings||[]).find(x=>x.id===_holdingEditorId):null;
+  if(!hd){toast('Holding not found',false);return;}
+  const dateStr=document.getElementById('lef-date')?.value;
+  const date=dateStr?fromDD(dateStr):null;
+  const qty=parseFloat(document.getElementById('lef-qty')?.value);
+  const price=parseFloat(document.getElementById('lef-price')?.value);
+  const fxEl=document.getElementById('lef-fx');
+  const fx=fxEl?parseFloat(fxEl.value)||1:null;
+  const fees=parseFloat(document.getElementById('lef-fees')?.value)||0;
+  const notes=(document.getElementById('lef-notes')?.value||'').trim();
+  if(!date){toast('Date required',false);return;}
+  if(!qty||qty<=0){toast('Quantity required',false);return;}
+  if(price==null||isNaN(price)||price<0){toast('Price required',false);return;}
+  if(!hd.lots)hd.lots=[];
+  if(_lotEditorId){
+    const l=hd.lots.find(x=>x.id===_lotEditorId);
+    if(!l){toast('Lot not found',false);return;}
+    Object.assign(l,{date,quantity:qty,pricePerUnit:price,fxRate:fx,fees,notes});
+  }else{
+    hd.lots.push({id:'lot_'+randSuffix(8),date,quantity:qty,pricePerUnit:price,fxRate:fx,fees,notes});
+  }
+  sched();closeLotEditor();toast(_lotEditorId?'Lot saved':'Lot added');
+}
+
+function deleteLot(lotId){
+  const a=S.accounts.find(x=>x.id===_holdingEditorAccId);
+  const hd=a?(a.holdings||[]).find(x=>x.id===_holdingEditorId):null;
+  if(!hd||!Array.isArray(hd.lots))return;
+  hd.lots=hd.lots.filter(l=>l.id!==lotId);
+  sched();render();toast('Lot removed');
+}
+
+// ─── SALES TAB ────────────────────────────────────────────────────────────────
+
+function rHoldingSalesTab(a,hd){
+  const sales=Array.isArray(hd.sales)?hd.sales:[];
+  const qtyAvail=holdingQuantity(hd);
+  if(sales.length===0){
+    return`<div>
+      <div class="fg jb" style="margin-bottom:10px;align-items:center">
+        <div style="font-size:13px;font-weight:500">Sales (realized)</div>
+        <button class="btn btn-p btn-sm" onclick="openSaleEditor(null)" ${qtyAvail<=0?'disabled':''}>+ Add sale</button>
+      </div>
+      <div class="card" style="padding:14px;background:var(--bg2);border:1px dashed var(--line)"><div class="empty">No sales yet. Sales record realized gain/loss using the lots you bought. ${qtyAvail<=0?'Add a buy lot first before recording a sale.':'Click + Add sale to record one.'}</div></div>
+    </div>`;
+  }
+  const rows=sales.map(s=>{
+    const qty=parseFloat(s.quantity)||0;
+    const price=parseFloat(s.pricePerUnit)||0;
+    const rgl=parseFloat(s.realizedGL)||0;
+    return`<tr>
+      <td style="white-space:nowrap">${toDD(s.date)||'—'}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums">${qty} ${h(hd.unitLabel||'')}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums">${fmtP(price)} ${h(hd.currency||'SAR')}</td>
+      <td style="font-size:10px"><span class="status-pill status-info">${h(s.method||'FIFO')}</span></td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;font-weight:500;color:${rgl>=0?'var(--pos)':'var(--neg)'}">${rgl>=0?'+':''}${fmtP(rgl)}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;font-size:10px;color:var(--text3)">${s.holdingPeriodDays||0}d</td>
+      <td style="text-align:right;white-space:nowrap">
+        <button class="btn btn-xs btn-d" onclick="if(confirm('Delete this sale? The shares return to the holding and the realized G/L is reversed.')){deleteSale('${s.id}')}" title="Delete">&times;</button>
+      </td>
+    </tr>`;
+  }).join('');
+  return`<div>
+    <div class="fg jb" style="margin-bottom:10px;align-items:center">
+      <div style="font-size:13px;font-weight:500">Sales (realized)</div>
+      <button class="btn btn-p btn-sm" onclick="openSaleEditor(null)" ${qtyAvail<=0?'disabled':''}>+ Add sale</button>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden"><div class="tbl-wrap"><table class="tx-tbl">
+      <thead><tr><th>Date</th><th style="text-align:right">Quantity</th><th style="text-align:right">Price</th><th>Method</th><th style="text-align:right">Realized G/L</th><th style="text-align:right">Hold</th><th></th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div></div>
+  </div>`;
+}
+
+function openSaleEditor(saleId){
+  _saleEditorOpen=true;
+  _saleEditorId=saleId;
+  render();
+}
+
+function closeSaleEditor(){
+  _saleEditorOpen=false;
+  _saleEditorId=null;
+  render();
+}
+
+function rSaleEditorModal(a,hd){
+  const editing=!!_saleEditorId;
+  const today=toDD(localISO(new Date()));
+  const lots=Array.isArray(hd.lots)?hd.lots:[];
+  // Compute remaining quantity per lot (after prior sales)
+  const lotRemaining={};
+  lots.forEach(l=>{lotRemaining[l.id]=parseFloat(l.quantity)||0;});
+  (hd.sales||[]).forEach(s=>{
+    if(editing&&s.id===_saleEditorId)return; // exclude the sale being edited
+    (s.lotAllocations||[]).forEach(al=>{lotRemaining[al.lotId]=(lotRemaining[al.lotId]||0)-(parseFloat(al.quantity)||0);});
+  });
+  const totalAvail=Object.values(lotRemaining).reduce((s,v)=>s+v,0);
+  return`<div class="modal-backdrop" onclick="if(event.target===this)closeSaleEditor()" style="position:fixed;inset:0;background:rgba(2,23,81,0.55);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px">
+    <div class="card" style="background:var(--card);width:100%;max-width:620px;padding:18px;border-radius:var(--r);box-shadow:0 12px 60px rgba(0,0,0,0.4);max-height:85vh;overflow-y:auto" onclick="event.stopPropagation()">
+      <div class="fg jb" style="margin-bottom:14px;align-items:center">
+        <div style="font-size:14px;font-weight:600">${editing?'Edit sale':'Add sale'}</div>
+        <button class="btn btn-xs" onclick="closeSaleEditor()">&times;</button>
+      </div>
+      <div class="fr" style="gap:10px;margin-bottom:8px">
+        <div style="flex:1"><label class="lbl">Date</label><div class="date-inp-wrap"><input type="text" id="sef-date" class="date-inp" value="${today}" maxlength="10"><button type="button" class="cal-btn" onclick="openCal('sef-date')">📅</button></div></div>
+        <div style="flex:1"><label class="lbl">Quantity to sell (max ${totalAvail})</label><input type="number" inputmode="decimal" id="sef-qty" min="0" max="${totalAvail}" step="0.0001" placeholder="50" oninput="onSaleQtyOrMethodChange()"></div>
+      </div>
+      <div class="fr" style="gap:10px;margin-bottom:8px">
+        <div style="flex:1"><label class="lbl">Price per unit (in ${h(hd.currency||'SAR')})</label><input type="number" inputmode="decimal" id="sef-price" min="0" step="0.0001" placeholder="600"></div>
+        ${hd.currency!=='SAR'?`<div style="flex:1"><label class="lbl">FX rate</label><input type="number" inputmode="decimal" id="sef-fx" min="0" step="0.0001" value="3.75"></div>`:''}
+        <div style="flex:1"><label class="lbl">Fees (SAR)</label><input type="number" inputmode="decimal" id="sef-fees" min="0" step="0.01" value="0"></div>
+        <div style="flex:1"><label class="lbl">Method</label><select id="sef-method" onchange="onSaleQtyOrMethodChange()">
+          <option value="FIFO">FIFO (oldest first)</option>
+          <option value="LIFO">LIFO (newest first)</option>
+          <option value="HIFO">HIFO (highest cost first)</option>
+          <option value="specific">Specific lot</option>
+        </select></div>
+      </div>
+      <div id="sef-allocation-area" style="margin-bottom:14px;padding:10px;background:var(--bg2);border-radius:var(--rsm);font-size:11px;color:var(--text3)">Enter quantity and pick method — the lot allocation will appear here.</div>
+      <div style="margin-bottom:14px"><label class="lbl">Notes (optional)</label><input type="text" id="sef-notes" placeholder="e.g. Rebalance, profit-take, tax-loss"></div>
+      <div class="fg" style="gap:8px">
+        <button class="btn btn-p" onclick="saveSale()">Add sale</button>
+        <button class="btn" onclick="closeSaleEditor()">Cancel</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function onSaleQtyOrMethodChange(){
+  const a=S.accounts.find(x=>x.id===_holdingEditorAccId);
+  const hd=a?(a.holdings||[]).find(x=>x.id===_holdingEditorId):null;
+  if(!hd)return;
+  const qty=parseFloat(document.getElementById('sef-qty')?.value)||0;
+  const method=document.getElementById('sef-method')?.value||'FIFO';
+  const area=document.getElementById('sef-allocation-area');
+  if(!area)return;
+  if(qty<=0){area.innerHTML='Enter quantity and pick method — the lot allocation will appear here.';return;}
+  // Compute remaining per lot (excluding any sale being edited)
+  const lots=Array.isArray(hd.lots)?[...hd.lots]:[];
+  const remaining={};
+  lots.forEach(l=>{remaining[l.id]=parseFloat(l.quantity)||0;});
+  (hd.sales||[]).forEach(s=>{
+    if(_saleEditorId&&s.id===_saleEditorId)return;
+    (s.lotAllocations||[]).forEach(al=>{remaining[al.lotId]=(remaining[al.lotId]||0)-(parseFloat(al.quantity)||0);});
+  });
+  // Sort lots per method
+  let ordered=lots.filter(l=>remaining[l.id]>0);
+  if(method==='FIFO')ordered.sort((x,y)=>(x.date||'').localeCompare(y.date||''));
+  else if(method==='LIFO')ordered.sort((x,y)=>(y.date||'').localeCompare(x.date||''));
+  else if(method==='HIFO')ordered.sort((x,y)=>{
+    const xp=(parseFloat(x.pricePerUnit)||0)*(parseFloat(x.fxRate)||1);
+    const yp=(parseFloat(y.pricePerUnit)||0)*(parseFloat(y.fxRate)||1);
+    return yp-xp;
+  });
+  // Allocate
+  let need=qty;
+  const allocs=[];
+  for(const l of ordered){
+    if(need<=0)break;
+    const take=Math.min(need,remaining[l.id]);
+    if(take>0){allocs.push({lotId:l.id,quantity:take});need-=take;}
+  }
+  if(method==='specific'){
+    // Show editable allocation row per lot with available qty
+    const rows=lots.filter(l=>remaining[l.id]>0).map(l=>`<div class="fr" style="gap:8px;margin-bottom:4px;align-items:center">
+      <div style="flex:1;font-size:11px">${toDD(l.date)} &middot; ${l.quantity} @ ${fmtP(l.pricePerUnit)} (${remaining[l.id]} avail)</div>
+      <input type="number" data-lot-id="${l.id}" class="sef-lot-alloc" min="0" max="${remaining[l.id]}" step="0.0001" placeholder="0" style="width:100px;font-size:11px">
+    </div>`).join('');
+    area.innerHTML=`<div style="font-size:11px;font-weight:600;margin-bottom:6px">Specific lot allocation (must sum to ${qty}):</div>${rows}`;
+    return;
+  }
+  // Auto allocation summary
+  if(need>0){
+    area.innerHTML=`<div style="color:var(--neg);font-size:11px">Cannot allocate ${qty} ${h(hd.unitLabel||'')} — only ${qty-need} available. Reduce quantity or add more lots.</div>`;
+    return;
+  }
+  const allocList=allocs.map(al=>{
+    const lot=lots.find(l=>l.id===al.lotId);
+    return`<div style="font-size:11px;padding:2px 0">${toDD(lot.date)}: ${al.quantity} @ ${fmtP(lot.pricePerUnit)} = cost ${fmtP(al.quantity*(parseFloat(lot.pricePerUnit)||0)*(parseFloat(lot.fxRate)||1))}</div>`;
+  }).join('');
+  area.innerHTML=`<div style="font-size:11px;font-weight:600;margin-bottom:6px">${method} allocation:</div>${allocList}`;
+}
+
+function saveSale(){
+  const a=S.accounts.find(x=>x.id===_holdingEditorAccId);
+  const hd=a?(a.holdings||[]).find(x=>x.id===_holdingEditorId):null;
+  if(!hd){toast('Holding not found',false);return;}
+  const dateStr=document.getElementById('sef-date')?.value;
+  const date=dateStr?fromDD(dateStr):null;
+  const qty=parseFloat(document.getElementById('sef-qty')?.value);
+  const price=parseFloat(document.getElementById('sef-price')?.value);
+  const fxEl=document.getElementById('sef-fx');
+  const fx=fxEl?parseFloat(fxEl.value)||1:null;
+  const fees=parseFloat(document.getElementById('sef-fees')?.value)||0;
+  const method=document.getElementById('sef-method')?.value||'FIFO';
+  const notes=(document.getElementById('sef-notes')?.value||'').trim();
+  if(!date){toast('Date required',false);return;}
+  if(!qty||qty<=0){toast('Quantity required',false);return;}
+  if(price==null||isNaN(price)||price<0){toast('Price required',false);return;}
+  // Build lot allocations
+  const lots=Array.isArray(hd.lots)?[...hd.lots]:[];
+  const remaining={};
+  lots.forEach(l=>{remaining[l.id]=parseFloat(l.quantity)||0;});
+  (hd.sales||[]).forEach(s=>{
+    if(_saleEditorId&&s.id===_saleEditorId)return;
+    (s.lotAllocations||[]).forEach(al=>{remaining[al.lotId]=(remaining[al.lotId]||0)-(parseFloat(al.quantity)||0);});
+  });
+  let allocs=[];
+  if(method==='specific'){
+    document.querySelectorAll('.sef-lot-alloc').forEach(inp=>{
+      const lid=inp.dataset.lotId;
+      const v=parseFloat(inp.value)||0;
+      if(v>0)allocs.push({lotId:lid,quantity:v});
+    });
+    const totalAlloc=allocs.reduce((s,al)=>s+al.quantity,0);
+    if(Math.abs(totalAlloc-qty)>0.0001){toast('Specific allocation must sum to '+qty,false);return;}
+    // Validate each doesn't exceed remaining
+    for(const al of allocs){
+      if(al.quantity>(remaining[al.lotId]||0)){toast('Lot allocation exceeds available',false);return;}
+    }
+  }else{
+    let ordered=lots.filter(l=>remaining[l.id]>0);
+    if(method==='FIFO')ordered.sort((x,y)=>(x.date||'').localeCompare(y.date||''));
+    else if(method==='LIFO')ordered.sort((x,y)=>(y.date||'').localeCompare(x.date||''));
+    else if(method==='HIFO')ordered.sort((x,y)=>{
+      const xp=(parseFloat(x.pricePerUnit)||0)*(parseFloat(x.fxRate)||1);
+      const yp=(parseFloat(y.pricePerUnit)||0)*(parseFloat(y.fxRate)||1);
+      return yp-xp;
+    });
+    let need=qty;
+    for(const l of ordered){
+      if(need<=0)break;
+      const take=Math.min(need,remaining[l.id]);
+      if(take>0){allocs.push({lotId:l.id,quantity:take});need-=take;}
+    }
+    if(need>0){toast('Cannot allocate '+qty+' — only '+(qty-need)+' available',false);return;}
+  }
+  // Compute realized G/L
+  let basisOut=0;
+  let weightedDays=0;
+  const saleDate=new Date(date);
+  allocs.forEach(al=>{
+    const lot=lots.find(l=>l.id===al.lotId);
+    if(!lot)return;
+    const lotPrice=(parseFloat(lot.pricePerUnit)||0)*(parseFloat(lot.fxRate)||1);
+    basisOut+=lotPrice*al.quantity;
+    if(lot.date){
+      const d=Math.floor((saleDate-new Date(lot.date))/86400000);
+      weightedDays+=d*al.quantity;
+    }
+  });
+  const proceeds=qty*price*(fx||1)-fees;
+  const realizedGL=proceeds-basisOut;
+  const holdingPeriodDays=qty>0?Math.round(weightedDays/qty):0;
+  if(!hd.sales)hd.sales=[];
+  if(_saleEditorId){
+    const ex=hd.sales.find(s=>s.id===_saleEditorId);
+    if(!ex){toast('Sale not found',false);return;}
+    Object.assign(ex,{date,quantity:qty,pricePerUnit:price,fxRate:fx,fees,method,lotAllocations:allocs,realizedGL,holdingPeriodDays,notes});
+  }else{
+    hd.sales.push({id:'sal_'+randSuffix(8),date,quantity:qty,pricePerUnit:price,fxRate:fx,fees,method,lotAllocations:allocs,realizedGL,holdingPeriodDays,notes});
+  }
+  sched();closeSaleEditor();toast('Sale recorded — realized G/L: '+(realizedGL>=0?'+':'')+fmtP(realizedGL));
+}
+
+function deleteSale(saleId){
+  const a=S.accounts.find(x=>x.id===_holdingEditorAccId);
+  const hd=a?(a.holdings||[]).find(x=>x.id===_holdingEditorId):null;
+  if(!hd||!Array.isArray(hd.sales))return;
+  hd.sales=hd.sales.filter(s=>s.id!==saleId);
+  sched();render();toast('Sale removed');
+}
+
+// ─── DISTRIBUTIONS TAB ────────────────────────────────────────────────────────
+
+function rHoldingDistributionsTab(a,hd){
+  const dists=Array.isArray(hd.distributions)?hd.distributions:[];
+  if(dists.length===0){
+    return`<div>
+      <div class="fg jb" style="margin-bottom:10px;align-items:center">
+        <div style="font-size:13px;font-weight:500">Distributions (income)</div>
+        <button class="btn btn-p btn-sm" onclick="openDistEditor(null)">+ Add distribution</button>
+      </div>
+      <div class="card" style="padding:14px;background:var(--bg2);border:1px dashed var(--line)"><div class="empty">No distributions yet. Record dividends, coupons, capital gain distributions, return of capital, and interest payments here. Reinvested distributions automatically create a new buy lot.</div></div>
+    </div>`;
+  }
+  const totalAmt=dists.reduce((s,d)=>s+(parseFloat(d.amount)||0)*(parseFloat(d.fxRate)||1),0);
+  const rows=dists.map(d=>{
+    const amt=parseFloat(d.amount)||0;
+    const fx=parseFloat(d.fxRate)||1;
+    const sarAmt=amt*fx;
+    return`<tr>
+      <td style="white-space:nowrap">${toDD(d.date)||'—'}</td>
+      <td style="font-size:11px"><span class="status-pill status-info">${h(d.type||'other')}</span></td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums">${fmtP(amt)} ${h(d.currency||'SAR')}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums">${d.currency!=='SAR'?fx.toFixed(4):'—'}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;font-weight:500;color:var(--pos)">+${fmtP(sarAmt)}</td>
+      <td style="font-size:10px;color:var(--text3)">${d.reinvested?'<span class="status-pill" style="font-size:9px">Reinvested</span>':'—'}</td>
+      <td style="text-align:right;white-space:nowrap">
+        <button class="btn btn-xs btn-d" onclick="if(confirm('Delete this distribution?')){deleteDist('${d.id}')}" title="Delete">&times;</button>
+      </td>
+    </tr>`;
+  }).join('');
+  return`<div>
+    <div class="fg jb" style="margin-bottom:10px;align-items:center">
+      <div style="font-size:13px;font-weight:500">Distributions (income)</div>
+      <button class="btn btn-p btn-sm" onclick="openDistEditor(null)">+ Add distribution</button>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden"><div class="tbl-wrap"><table class="tx-tbl">
+      <thead><tr><th>Date</th><th>Type</th><th style="text-align:right">Amount</th><th style="text-align:right">FX</th><th style="text-align:right">SAR</th><th>Reinvested</th><th></th></tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr style="background:var(--bg2);font-weight:500"><td colspan="4">Total received</td><td style="text-align:right;font-variant-numeric:tabular-nums">${fmtP(totalAmt)}</td><td colspan="2"></td></tr></tfoot>
+    </table></div></div>
+  </div>`;
+}
+
+function openDistEditor(distId){
+  _distEditorOpen=true;
+  _distEditorId=distId;
+  render();
+}
+
+function closeDistEditor(){
+  _distEditorOpen=false;
+  _distEditorId=null;
+  render();
+}
+
+function rDistEditorModal(a,hd){
+  const editing=!!_distEditorId;
+  const today=toDD(localISO(new Date()));
+  return`<div class="modal-backdrop" onclick="if(event.target===this)closeDistEditor()" style="position:fixed;inset:0;background:rgba(2,23,81,0.55);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px">
+    <div class="card" style="background:var(--card);width:100%;max-width:520px;padding:18px;border-radius:var(--r);box-shadow:0 12px 60px rgba(0,0,0,0.4)" onclick="event.stopPropagation()">
+      <div class="fg jb" style="margin-bottom:14px;align-items:center">
+        <div style="font-size:14px;font-weight:600">${editing?'Edit distribution':'Add distribution'}</div>
+        <button class="btn btn-xs" onclick="closeDistEditor()">&times;</button>
+      </div>
+      <div class="fr" style="gap:10px;margin-bottom:8px">
+        <div style="flex:1"><label class="lbl">Date</label><div class="date-inp-wrap"><input type="text" id="def-date" class="date-inp" value="${today}" maxlength="10"><button type="button" class="cal-btn" onclick="openCal('def-date')">📅</button></div></div>
+        <div style="flex:1"><label class="lbl">Type</label><select id="def-type">
+          <option value="dividend">Dividend</option>
+          <option value="interest">Interest</option>
+          <option value="coupon">Coupon</option>
+          <option value="capital_gain_dist">Capital Gain Distribution</option>
+          <option value="roc">Return of Capital</option>
+          <option value="other">Other</option>
+        </select></div>
+      </div>
+      <div class="fr" style="gap:10px;margin-bottom:8px">
+        <div style="flex:1"><label class="lbl">Amount</label><input type="number" inputmode="decimal" id="def-amount" min="0" step="0.01" placeholder="100"></div>
+        <div style="flex:1"><label class="lbl">Currency</label><select id="def-currency">${PHB_CURRENCIES.map(c=>`<option value="${c}" ${(hd.currency||'SAR')===c?'selected':''}>${c}</option>`).join('')}</select></div>
+        <div style="flex:1"><label class="lbl">FX rate (to SAR)</label><input type="number" inputmode="decimal" id="def-fx" min="0" step="0.0001" value="1"></div>
+      </div>
+      <div style="margin-bottom:8px;background:var(--bg2);padding:10px;border-radius:var(--rsm)">
+        <label style="display:flex;gap:6px;align-items:center;font-size:12px;cursor:pointer;margin-bottom:6px"><input type="checkbox" id="def-reinvest" style="width:auto;margin:0"> Reinvested (auto-creates a new buy lot for the same amount in units)</label>
+        <div style="font-size:11px;color:var(--text3);line-height:1.5">If checked, you must also enter the price per unit at reinvestment time, so the new lot can be created with the right quantity.</div>
+        <div class="fr" style="gap:10px;margin-top:8px">
+          <div style="flex:1"><label class="lbl">Reinvest price per unit (in ${h(hd.currency||'SAR')})</label><input type="number" inputmode="decimal" id="def-reinvest-price" min="0" step="0.0001" placeholder="If reinvested"></div>
+        </div>
+      </div>
+      <div style="margin-bottom:14px"><label class="lbl">Notes (optional)</label><input type="text" id="def-notes" placeholder=""></div>
+      <div class="fg" style="gap:8px">
+        <button class="btn btn-p" onclick="saveDist()">Add distribution</button>
+        <button class="btn" onclick="closeDistEditor()">Cancel</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function saveDist(){
+  const a=S.accounts.find(x=>x.id===_holdingEditorAccId);
+  const hd=a?(a.holdings||[]).find(x=>x.id===_holdingEditorId):null;
+  if(!hd){toast('Holding not found',false);return;}
+  const dateStr=document.getElementById('def-date')?.value;
+  const date=dateStr?fromDD(dateStr):null;
+  const type=document.getElementById('def-type')?.value||'dividend';
+  const amount=parseFloat(document.getElementById('def-amount')?.value);
+  const currency=document.getElementById('def-currency')?.value||'SAR';
+  const fx=parseFloat(document.getElementById('def-fx')?.value)||1;
+  const reinvested=!!document.getElementById('def-reinvest')?.checked;
+  const reinvestPrice=parseFloat(document.getElementById('def-reinvest-price')?.value);
+  const notes=(document.getElementById('def-notes')?.value||'').trim();
+  if(!date){toast('Date required',false);return;}
+  if(!amount||amount<=0){toast('Amount required',false);return;}
+  if(!hd.distributions)hd.distributions=[];
+  let reinvestLotId=null;
+  if(reinvested){
+    if(!reinvestPrice||reinvestPrice<=0){toast('Enter price per unit for reinvestment',false);return;}
+    const newQty=amount/reinvestPrice;
+    if(!hd.lots)hd.lots=[];
+    reinvestLotId='lot_'+randSuffix(8);
+    hd.lots.push({id:reinvestLotId,date,quantity:newQty,pricePerUnit:reinvestPrice,fxRate:fx,fees:0,notes:'Reinvested distribution'});
+  }
+  hd.distributions.push({id:'dis_'+randSuffix(8),date,type,amount,currency,fxRate:fx,reinvested,reinvestLotId,notes});
+  sched();closeDistEditor();toast(reinvested?'Distribution recorded and reinvested as new lot':'Distribution recorded');
+}
+
+function deleteDist(distId){
+  const a=S.accounts.find(x=>x.id===_holdingEditorAccId);
+  const hd=a?(a.holdings||[]).find(x=>x.id===_holdingEditorId):null;
+  if(!hd||!Array.isArray(hd.distributions))return;
+  // If reinvested, also delete the linked lot
+  const d=hd.distributions.find(x=>x.id===distId);
+  if(d&&d.reinvestLotId&&Array.isArray(hd.lots)){
+    hd.lots=hd.lots.filter(l=>l.id!==d.reinvestLotId);
+  }
+  hd.distributions=hd.distributions.filter(x=>x.id!==distId);
+  sched();render();toast('Distribution removed');
+}
+
+// ─── PORTFOLIO HOLDINGS PAGE (flat list across all accounts) ──────────────────
+
+function rPortfolioHoldings(){
+  const invAccs=S.accounts.filter(a=>isInvestmentAccount(a)&&isLiveAccount(a));
+  // Flatten: each holding annotated with its account context
+  const allHoldings=[];
+  invAccs.forEach(a=>{
+    (a.holdings||[]).forEach(hd=>allHoldings.push({hd,acc:a}));
+  });
+  if(allHoldings.length===0){
+    return`<div class="pg-header-row">
+      <div>
+        <div class="pg-eyebrow">04 PORTFOLIO</div>
+        <div class="pg-header-title">Holdings</div>
+        <div class="pg-header-sub">Every position across every investment account in one view, sortable and filterable.</div>
+      </div>
+      <button class="btn btn-p btn-sm" onclick="sw('portfolio_accounts')">Go to Accounts</button>
+    </div>
+    <div class="card"><div class="empty">No holdings yet. Add an investment account from <a href="javascript:sw('portfolio_accounts')" style="color:var(--action)">Portfolio → Accounts</a> and record your first buy lot.</div></div>`;
+  }
+  // Aggregate KPIs
+  const totalCV=allHoldings.reduce((s,{hd})=>{const v=holdingCurrentValue(hd);return v!=null?s+v:s;},0);
+  const totalCB=allHoldings.reduce((s,{hd})=>s+holdingCostBasis(hd),0);
+  const totalUnreal=allHoldings.reduce((s,{hd})=>{const u=holdingUnrealizedGL(hd);return u!=null?s+u:s;},0);
+  const pricedCount=allHoldings.filter(({hd})=>hd.currentPrice!=null).length;
+  const wPct=totalCB>0?((totalUnreal/totalCB)*100):null;
+  // Sort: priced first by current value descending, then unpriced
+  const ordered=allHoldings.slice().sort((x,y)=>{
+    const xv=holdingCurrentValue(x.hd);
+    const yv=holdingCurrentValue(y.hd);
+    if(xv==null&&yv!=null)return 1;
+    if(xv!=null&&yv==null)return -1;
+    if(xv!=null&&yv!=null)return yv-xv;
+    return (x.hd.name||'').localeCompare(y.hd.name||'');
+  });
+  const rows=ordered.map(({hd,acc})=>{
+    const meta=holdingTypeMeta(hd.type);
+    const qty=holdingQuantity(hd);
+    const cb=holdingCostBasis(hd);
+    const cv=holdingCurrentValue(hd);
+    const ugl=holdingUnrealizedGL(hd);
+    const pct=(cb>0&&ugl!=null)?(ugl/cb)*100:null;
+    return`<tr style="cursor:pointer" onclick="openPortfolioAccountDetail('${acc.id}')">
+      <td>
+        <div style="font-weight:500">${h(hd.name||'(unnamed)')}</div>
+        ${hd.identifier?`<div style="font-size:10px;color:var(--text3);font-family:monospace">${h(hd.identifier)}</div>`:''}
+      </td>
+      <td><span class="status-pill status-info" style="font-size:9px">${h(meta.l)}</span></td>
+      <td>${h(acc.name)}</td>
+      <td>${h(ownerLabel(acc.ownerId))}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums">${qty} ${h(hd.unitLabel||'')}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums">${fmtP(cb)}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums">${cv!=null?fmtP(cv):'—'}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;font-weight:500;color:${ugl!=null?(ugl>=0?'var(--pos)':'var(--neg)'):'var(--text3)'}">${ugl!=null?(ugl>=0?'+':'')+fmtP(ugl):'—'}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;font-size:11px;color:${pct!=null?(pct>=0?'var(--pos)':'var(--neg)'):'var(--text3)'}">${pct!=null?(pct>=0?'+':'')+pct.toFixed(2)+'%':'—'}</td>
+    </tr>`;
+  }).join('');
+  return`<div class="pg-header-row">
+    <div>
+      <div class="pg-eyebrow">04 PORTFOLIO</div>
+      <div class="pg-header-title">Holdings</div>
+      <div class="pg-header-sub">Every position across every investment account in one view. Click a row to drill into the account.</div>
+    </div>
+  </div>
+  <div class="kpi-strip">
+    <div class="kpi-cell"><div class="kpi-cell-label">Total Holdings</div><div class="kpi-cell-value">${allHoldings.length}</div><div class="kpi-cell-sub">across ${invAccs.length} account${invAccs.length===1?'':'s'}</div></div>
+    <div class="kpi-cell"><div class="kpi-cell-label">Current Value</div><div class="kpi-cell-value priv-mask">${pricedCount?fmtP(totalCV):'—'}</div><div class="kpi-cell-sub">${pricedCount} of ${allHoldings.length} priced</div></div>
+    <div class="kpi-cell"><div class="kpi-cell-label">Cost Basis</div><div class="kpi-cell-value priv-mask">${fmtP(totalCB)}</div></div>
+    <div class="kpi-cell"><div class="kpi-cell-label">Unrealized G/L</div><div class="kpi-cell-value priv-mask ${totalUnreal>=0?'c-ok':'c-bad'}">${pricedCount?(totalUnreal>=0?'+':'')+fmtP(totalUnreal):'—'}</div></div>
+    <div class="kpi-cell"><div class="kpi-cell-label">% Return</div><div class="kpi-cell-value ${wPct!=null&&wPct>=0?'c-ok':wPct!=null?'c-bad':''}">${wPct!=null?(wPct>=0?'+':'')+wPct.toFixed(2)+'%':'—'}</div></div>
+  </div>
+  <div class="card card-flush"><div class="tbl-wrap"><table class="tx-tbl">
+    <thead><tr><th>Holding</th><th>Type</th><th>Account</th><th>Owner</th><th style="text-align:right">Quantity</th><th style="text-align:right">Cost Basis</th><th style="text-align:right">Current Value</th><th style="text-align:right">Unrealized G/L</th><th style="text-align:right">% Return</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div></div>`;
+}
+
+// ─── PORTFOLIO STRATEGY / RESEARCH / DECISION (Phase F placeholders) ──────────
+
+function rPortfolioPlaceholder(eyebrow,title,sub,description,featureBullets){
+  return`<div class="pg-header">
+    <div class="pg-eyebrow">${eyebrow}</div>
+    <div class="pg-header-title">${title}</div>
+    <div class="pg-header-sub">${sub}</div>
+  </div>
+  <div class="card card-bordered" style="padding:24px;background:var(--bg2);text-align:center;margin-top:14px">
+    <div style="font-size:36px;margin-bottom:12px;opacity:0.4">⏳</div>
+    <div style="font-size:16px;font-weight:600;margin-bottom:8px">Coming in Phase F</div>
+    <div style="font-size:13px;color:var(--text2);max-width:580px;margin:0 auto 18px;line-height:1.6">${description}</div>
+    <div style="text-align:left;max-width:520px;margin:0 auto;font-size:12px;color:var(--text2);line-height:1.8">
+      ${featureBullets.map(b=>`<div style="padding:4px 0">&middot; ${b}</div>`).join('')}
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-top:18px">Phase B (schema) and Phase C+E (Accounts, Holdings, Family) ship first. This module activates after those land in production.</div>
+  </div>`;
+}
+
+function rPortfolioStrategy(){
+  return rPortfolioPlaceholder('04 PORTFOLIO','Strategy','Target asset allocation, drift monitoring, and rebalancing flags.',
+    'Define your strategic asset allocation (SAA) by asset class, region, and beneficiary. Lanki tracks drift between current and target weights, flags rebalancing opportunities, and versions every change so you can see how your strategy evolved.',
+    ['Versioned SAA per beneficiary (Self, Mohammad, Turki, Lana)','Current vs target weight per asset class and region','Drift threshold alerts','Rebalancing simulation: "what if I sell X and buy Y"','Strategy change log']);
+}
+
+function rPortfolioResearch(){
+  return rPortfolioPlaceholder('04 PORTFOLIO','Research','AI-generated candidate ideas and watchlist.',
+    'Lanki suggests investment candidates that fit gaps in your strategy. You maintain a watchlist, save theses per candidate, and track which research converted into actual positions.',
+    ['AI candidate search by asset class, region, theme','Watchlist with notes and target entry prices','Saved investment theses per candidate','Conversion tracking: which research became a holding','Comparison: candidate vs current holdings']);
+}
+
+function rPortfolioDecision(){
+  return rPortfolioPlaceholder('04 PORTFOLIO','Decision','Sell-to-buy pairing and weekly Action Brief.',
+    'When you want to make a move, Decision pairs the sell side with the buy side and previews the realized G/L, tax impact, and resulting allocation drift. Weekly Action Brief synthesizes Strategy, Research, and current holdings into prioritized actions.',
+    ['Sell-to-buy pair editor with realized G/L preview','Weekly Action Brief: top 3-5 prioritized moves','Tax-aware FIFO/LIFO/specific-lot suggestion per pair','Allocation drift impact preview before executing','Decision log: every move recorded with rationale']);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// END V10.3.0 PHASE C+E
+// ═══════════════════════════════════════════════════════════════════════════════
 
 function openRecordValue(accId){_invRecordingId=accId;render();}
 function closeRecordValue(){_invRecordingId=null;render();}
@@ -16813,9 +18009,9 @@ function rFamilyInv(){
   </div>`:'';
 
   return`<div class="pg-header">
-    <div class="pg-eyebrow">03 FINANCES</div>
-    <div class="pg-header-title">Family Investments</div>
-    <div class="pg-header-sub">Capital deployed per family member — all time</div>
+    <div class="pg-eyebrow">04 PORTFOLIO</div>
+    <div class="pg-header-title">Family</div>
+    <div class="pg-header-sub">Capital deployed per family member, with returns and last recorded values rolled up across all of their accounts.</div>
   </div>
   ${familyKpi}
 
