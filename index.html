@@ -4885,7 +4885,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='10.3.1';
+const VERSION='10.4.0';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -6025,6 +6025,11 @@ function restoreS(d){
   // V10.2.0 (Phase B): migrate investment accounts to new schema. Idempotent —
   // tagged with _v10_2_migrated so re-running on subsequent loads is a no-op.
   if(typeof runInvestmentMigrations==='function')runInvestmentMigrations();
+  // V10.4.0 (Phase F.1): re-evaluate fetchSource defaults. Phase B defaulted all to
+  // 'manual' (safe before AI plumbing existed). Now flip stocks/etfs/gold/crypto to
+  // 'auto' and funds/sukuk/REITs to 'prompt' for legacy holdings. Idempotent via
+  // _v10_4_fetchsrc_migrated tag.
+  if(typeof runFetchSourceMigrations==='function')runFetchSourceMigrations();
 }
 // ─── CATEGORY TIER DEFINITIONS ───
 // Tier C — locked from deletion because hardcoded business logic depends on these IDs.
@@ -16859,6 +16864,7 @@ function rPortfolioAccountDetail(){
     <div class="fg" style="gap:6px;flex-wrap:wrap">
       <button class="btn btn-sm" onclick="sw('portfolio_accounts')" title="Back to all accounts">&larr; Back</button>
       <button class="btn btn-sm" onclick="openEditInvAccFromDetail('${a.id}')" title="Edit account">&#9998; Edit</button>
+      ${holdings.length>0?`<button class="btn btn-sm" onclick="startUpdatePricesForAccount('${a.id}')" ${_priceUpdateInProgress?'disabled':''} title="Fetch current prices for all holdings via AI">${_priceUpdateInProgress?'Fetching…':'<span style="color:var(--action)">'+CASE9_AI_ICON_SVG+'</span> Update prices'}</button>`:''}
       <button class="btn btn-p btn-sm" onclick="openHoldingEditor('${a.id}',null)">+ Add holding</button>
     </div>
   </div>
@@ -16875,7 +16881,8 @@ function rPortfolioAccountDetail(){
 
   ${holdingCards}
 
-  ${rHoldingEditorPanel()}`;
+  ${rHoldingEditorPanel()}
+  ${rPriceUpdateModal()}`;
 }
 
 function openEditInvAccFromDetail(accId){
@@ -17771,6 +17778,526 @@ function rPortfolioDecision(){
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // END V10.3.0 PHASE C+E
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// V10.4.0 PHASE F.1 — AI AUTO-FETCH WIRING FOR HOLDINGS PRICES
+// ═══════════════════════════════════════════════════════════════════════════════
+// Per-holding price-fetching driven by holding.fetchSource ('auto'|'prompt'|'manual').
+// One AI call per holding (V1; batching is a follow-up). Prompts are type-specific
+// — Saudi Exchange for Tadawul tickers, Yahoo for international, CoinGecko for crypto,
+// gold spot, AI fallback for funds/sukuk. Manual-only types (direct_equity, vc_fund,
+// p2p_loan, real_estate_property, custom) are surfaced in the review modal with an
+// inline edit field instead of being silently skipped. Updates stage in memory and
+// persist only on Apply. Parallel cap: 5 concurrent. FX rates cached 24h to dedupe
+// across same-currency holdings.
+
+// Module state — pricing update flow
+let _priceUpdateOpen=false;          // is the review modal open?
+let _priceUpdateAccountId=null;       // which account is being updated
+let _priceUpdateInProgress=false;     // active fetching (button shows spinner)
+let _priceUpdateResults=[];           // [{holdingId, status, ...}]
+let _priceUpdateProgress={done:0,total:0};
+
+// FX rate cache — 24h TTL, deduplicates currency lookups across batched holdings
+function getFxRateCached(currencyCode){
+  if(!currencyCode||currencyCode==='SAR')return 1;
+  if(!S.settings)S.settings={};
+  if(!S.settings.fxRateCache)S.settings.fxRateCache={};
+  const cache=S.settings.fxRateCache;
+  const key='SAR_'+currencyCode;
+  const entry=cache[key];
+  if(entry&&entry.fetchedAt&&(Date.now()-entry.fetchedAt)<86400000){
+    return entry.rate;
+  }
+  return null; // caller must fetch
+}
+function setFxRateCached(currencyCode,rate){
+  if(!currencyCode||currencyCode==='SAR')return;
+  if(!S.settings)S.settings={};
+  if(!S.settings.fxRateCache)S.settings.fxRateCache={};
+  S.settings.fxRateCache['SAR_'+currencyCode]={rate,fetchedAt:Date.now()};
+}
+
+// Per-type fetchSource defaults (matches Phase F.1 brief Decision table)
+function defaultFetchSourceForType(typeV){
+  switch(typeV){
+    case 'stock':case 'etf':case 'gold':case 'crypto':return 'auto';
+    case 'fund':case 'sukuk':case 'real_estate_unit':return 'prompt';
+    default:return 'manual';
+  }
+}
+
+// V10.4.0 one-time re-migration: legacy V10.2.0 migration defaulted all fetchSource
+// to 'manual' (safer default at the time, no AI plumbing yet). Now that AI auto-fetch
+// is wired, re-evaluate based on holding type. Idempotent via _v10_4_fetchsrc_migrated tag.
+function migrateFetchSourceDefaults(){
+  if(!Array.isArray(S.accounts))return 0;
+  let count=0;
+  S.accounts.forEach(a=>{
+    if(!INV.has(a.type))return;
+    if(a._v10_4_fetchsrc_migrated)return;
+    if(!Array.isArray(a.holdings)){a._v10_4_fetchsrc_migrated=true;return;}
+    a.holdings.forEach(hd=>{
+      if(!hd)return;
+      // Only flip if user hasn't customized (currently manual + matches default-manual type → leave alone;
+      // currently manual + would-be-auto type → bump to auto/prompt; non-manual → leave alone)
+      if(hd.fetchSource!=='manual')return;
+      const target=defaultFetchSourceForType(hd.type);
+      if(target!=='manual'){hd.fetchSource=target;count++;}
+    });
+    a._v10_4_fetchsrc_migrated=true;
+  });
+  return count;
+}
+
+// Run on load — additive, idempotent. Called from same hook as Phase B migration.
+function runFetchSourceMigrations(){
+  return migrateFetchSourceDefaults();
+}
+
+// ─── PROMPT BUILDERS — one per holding type ──────────────────────────────────
+
+function buildHoldingFetchPrompt(hd,acc){
+  const t=hd.type;
+  const ident=hd.identifier||hd.name||'';
+  const display=hd.name||ident||'(unnamed)';
+  const cur=hd.currency||'SAR';
+  // Common JSON schema instruction
+  const schemaInstr=`Respond with ONLY a JSON object, no prose, no markdown fences:
+{
+  "price": <number, in the asset's native currency>,
+  "currency": "<3-letter currency code>",
+  "asOf": "<ISO date YYYY-MM-DD>",
+  "source": "<short name of source>",
+  "fxToSAR": <number — only if currency is not SAR; rate that converts 1 unit of currency to SAR; omit if SAR>,
+  "confidence": "<high|medium|low>",
+  "notes": "<optional one-line note>"
+}
+If you cannot find a reliable price, return: { "error": "<short reason>" }`;
+  switch(t){
+    case 'stock':
+    case 'etf':{
+      const isSaudi=ident.toUpperCase().startsWith('TADAWUL:')||/^\d{4}$/.test(ident);
+      const sourceHint=isSaudi
+        ? 'Use Saudi Exchange (saudiexchange.sa) as the primary source. The numeric ticker is the Tadawul listing ID.'
+        : 'Use Yahoo Finance, Google Finance, or another reputable financial data source.';
+      return `You are a financial data lookup tool. Find the current market price for this holding.
+
+Holding type: ${t}
+Identifier: ${ident}
+Display name: ${display}
+Expected currency: ${cur}
+
+${sourceHint}
+
+${schemaInstr}`;
+    }
+    case 'fund':
+      return `You are a financial data lookup tool. Find the current NAV per unit for this fund.
+
+Holding type: fund
+Identifier: ${ident}
+Display name: ${display}
+Expected currency: ${cur}
+
+Search strategy:
+1. If identifier looks like a Saudi Exchange listed-fund ID (numeric, e.g. 133005), use saudiexchange.sa.
+2. Otherwise search the fund manager's website or CMA disclosures for NAV per unit.
+3. If neither works, return error.
+
+${schemaInstr}`;
+    case 'crypto':
+      return `You are a financial data lookup tool. Find the current spot price for this cryptocurrency.
+
+Coin: ${ident||display}
+Expected currency: ${cur} (typically USD; convert via fxToSAR field if expected currency is SAR)
+
+Use CoinGecko, CoinMarketCap, or a similarly reputable source. Return the price in the asset's natural quote currency (usually USD).
+
+${schemaInstr}`;
+    case 'gold':
+      return `You are a financial data lookup tool. Find the current spot gold price per gram.
+
+Holding type: gold
+Display name: ${display}
+Expected currency: ${cur} (if SAR, convert from USD via fxToSAR field)
+
+Use Kitco, LBMA, or a similar reputable source. Return price per gram (not per ounce — convert if needed: 1 troy oz = 31.1035 grams).
+
+${schemaInstr}`;
+    case 'real_estate_unit':
+      return `You are a financial data lookup tool. Find the current NAV per unit for this real estate fund / REIT.
+
+Holding type: real_estate_unit
+Identifier: ${ident}
+Display name: ${display}
+Expected currency: ${cur}
+
+If the REIT is listed on Saudi Exchange, use saudiexchange.sa. Otherwise search the fund manager's site.
+
+${schemaInstr}`;
+    case 'sukuk':
+      return `You are a financial data lookup tool. Find the current price for this sukuk.
+
+Holding type: sukuk
+Identifier (ISIN or local code): ${ident}
+Display name: ${display}
+Expected currency: ${cur}
+
+Use Saudi Exchange, Bloomberg, or a similar source. Return clean price (per face value).
+
+${schemaInstr}`;
+    default:
+      // Should never reach here — manual types are filtered out before fetch
+      return null;
+  }
+}
+
+// ─── FETCHER — one holding at a time ──────────────────────────────────────────
+
+async function fetchSingleHoldingPrice(hd,acc){
+  const prompt=buildHoldingFetchPrompt(hd,acc);
+  if(!prompt)return{ok:false,reason:'No fetch strategy for type '+hd.type};
+  const SECRET=S.settings&&S.settings.lankiSecret;
+  if(!SECRET)return{ok:false,reason:'Edge Function Secret not set in Settings'};
+  const EDGE_URL='https://dgefsppkijrrvotggeom.supabase.co/functions/v1/ai-proxy';
+  let resp;
+  try{
+    resp=await fetch(EDGE_URL,{
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'Authorization':'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRnZWZzcHBraWpycnZvdGdnZW9tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4MzYyOTAsImV4cCI6MjA5MTQxMjI5MH0._MWK5XL_CQAV3ybEWPv1UrArPb-Enu6FZognyImSYzg',
+        'x-lanki-secret':SECRET
+      },
+      body:JSON.stringify({
+        model:'claude-sonnet-4-6',
+        max_tokens:1500,
+        tools:[{type:'web_search_20250305',name:'web_search'}],
+        messages:[{role:'user',content:prompt}]
+      })
+    });
+  }catch(e){
+    return{ok:false,reason:'Network error: '+(e.message||String(e))};
+  }
+  if(!resp.ok){
+    const body=await resp.text().catch(()=>'');
+    return{ok:false,reason:`HTTP ${resp.status}: ${body.substr(0,150)}`};
+  }
+  const data=await resp.json().catch(()=>null);
+  if(!data)return{ok:false,reason:'Response was not valid JSON'};
+  // Extract text content (web search returns multiple block types)
+  const textBlocks=(data.content||[]).filter(b=>b.type==='text').map(b=>b.text||'');
+  const text=textBlocks.join('\n').trim();
+  if(!text)return{ok:false,reason:'AI returned no text content'};
+  // Parse — strip fences, extract first {...} if needed (V10.3.1 pattern)
+  let parsed;
+  try{
+    let cleaned=text.replace(/```json|```/g,'').trim();
+    if(!cleaned.startsWith('{')){
+      const fb=cleaned.indexOf('{'),lb=cleaned.lastIndexOf('}');
+      if(fb>=0&&lb>fb)cleaned=cleaned.substring(fb,lb+1);
+    }
+    parsed=JSON.parse(cleaned);
+  }catch(e){
+    return{ok:false,reason:'Could not parse AI response as JSON',raw:text.substring(0,200)};
+  }
+  if(parsed.error){
+    return{ok:false,reason:parsed.error};
+  }
+  // Validate required fields
+  const price=parseFloat(parsed.price);
+  if(!isFinite(price)||price<0){
+    return{ok:false,reason:'Invalid price returned: '+parsed.price};
+  }
+  const result={
+    ok:true,
+    price,
+    currency:parsed.currency||hd.currency||'SAR',
+    asOf:parsed.asOf||localISO(new Date()).substr(0,10),
+    source:parsed.source||'AI lookup',
+    confidence:parsed.confidence||'medium',
+    notes:parsed.notes||''
+  };
+  // FX handling: if non-SAR currency and AI provided fxToSAR, capture it
+  if(result.currency&&result.currency!=='SAR'){
+    const fx=parseFloat(parsed.fxToSAR);
+    if(isFinite(fx)&&fx>0){
+      result.fxRate=fx;
+      setFxRateCached(result.currency,fx);
+    }else{
+      // Try cache fallback
+      const cached=getFxRateCached(result.currency);
+      if(cached!=null)result.fxRate=cached;
+    }
+  }else{
+    result.fxRate=1;
+  }
+  return result;
+}
+
+// ─── ENTRY POINT — bulk update prices for an account ──────────────────────────
+
+async function startUpdatePricesForAccount(accId){
+  const a=S.accounts.find(x=>x.id===accId);
+  if(!a){toast('Account not found',false);return;}
+  const holdings=Array.isArray(a.holdings)?a.holdings:[];
+  if(holdings.length===0){toast('No holdings to update.',false);return;}
+  if(_priceUpdateInProgress){toast('Update already in progress',false);return;}
+  // Demo mode safeguard
+  if(typeof IS_DEMO!=='undefined'&&IS_DEMO){
+    toast('AI fetch is disabled in demo mode (would expose API costs).',false);
+    return;
+  }
+  // Cost confirmation — give user a heads-up estimate
+  const fetchable=holdings.filter(hd=>(hd.fetchSource||defaultFetchSourceForType(hd.type))!=='manual');
+  const manualOnly=holdings.length-fetchable.length;
+  if(fetchable.length===0){
+    if(!confirm(`All ${holdings.length} holding${holdings.length===1?'':'s'} are set to manual fetch source. The review screen will let you enter values directly. Continue?`)){
+      return;
+    }
+  }else{
+    const estCostLow=(fetchable.length*0.02).toFixed(2);
+    const estCostHigh=(fetchable.length*0.04).toFixed(2);
+    const msg=`This will fetch prices for ${fetchable.length} holding${fetchable.length===1?'':'s'} via AI.${manualOnly>0?` ${manualOnly} manual-only holding${manualOnly===1?'':'s'} will appear in the review screen.`:''}\n\nEstimated cost: $${estCostLow}–$${estCostHigh} (Anthropic API tokens).\n\nProceed?`;
+    if(!confirm(msg))return;
+  }
+  // Init state
+  _priceUpdateInProgress=true;
+  _priceUpdateAccountId=accId;
+  _priceUpdateResults=holdings.map(hd=>({
+    holdingId:hd.id,
+    holdingName:hd.name,
+    holdingType:hd.type,
+    fetchSource:hd.fetchSource||defaultFetchSourceForType(hd.type),
+    status:'queued',          // queued | fetching | success | manual | failed
+    result:null,
+    manualPrice:null,         // user-entered value for manual-only or failed
+    manualAsOf:null
+  }));
+  _priceUpdateProgress={done:0,total:fetchable.length};
+  _priceUpdateOpen=true;
+  render();
+  // Run in parallel with concurrency cap of 5
+  const queue=_priceUpdateResults.filter(r=>r.fetchSource!=='manual').map(r=>r);
+  // Mark non-fetchable as 'manual' immediately
+  _priceUpdateResults.forEach(r=>{if(r.fetchSource==='manual')r.status='manual';});
+  await runWithConcurrency(queue,5,async (r)=>{
+    if(!_priceUpdateInProgress)return; // cancelled
+    r.status='fetching';
+    render();
+    const acc=S.accounts.find(x=>x.id===_priceUpdateAccountId);
+    const hd=(acc&&acc.holdings||[]).find(x=>x.id===r.holdingId);
+    if(!hd){r.status='failed';r.result={ok:false,reason:'Holding disappeared'};return;}
+    try{
+      const res=await fetchSingleHoldingPrice(hd,acc);
+      r.result=res;
+      r.status=res.ok?'success':'failed';
+    }catch(e){
+      r.result={ok:false,reason:e.message||String(e)};
+      r.status='failed';
+    }
+    _priceUpdateProgress.done++;
+    render();
+  });
+  _priceUpdateInProgress=false;
+  render();
+}
+
+// Concurrency-limited parallel execution
+async function runWithConcurrency(items,limit,worker){
+  const queue=[...items];
+  const running=[];
+  while(queue.length>0||running.length>0){
+    while(running.length<limit&&queue.length>0){
+      const item=queue.shift();
+      const p=worker(item).then(()=>{running.splice(running.indexOf(p),1);});
+      running.push(p);
+    }
+    if(running.length>0)await Promise.race(running);
+  }
+}
+
+function cancelPriceUpdate(){
+  _priceUpdateInProgress=false;
+  // Mark any still-queued or still-fetching as failed/cancelled
+  _priceUpdateResults.forEach(r=>{
+    if(r.status==='queued'||r.status==='fetching'){
+      r.status='failed';
+      r.result={ok:false,reason:'Cancelled by user'};
+    }
+  });
+  render();
+}
+
+function closePriceUpdateModal(){
+  // Warn if there are unapplied successful updates
+  const unapplied=_priceUpdateResults.filter(r=>r.status==='success');
+  if(unapplied.length>0&&!_priceUpdateInProgress){
+    if(!confirm(`${unapplied.length} successful update${unapplied.length===1?'':'s'} have not been applied. Close without saving?`))return;
+  }
+  _priceUpdateOpen=false;
+  _priceUpdateAccountId=null;
+  _priceUpdateResults=[];
+  _priceUpdateProgress={done:0,total:0};
+  _priceUpdateInProgress=false;
+  render();
+}
+
+function applyPriceUpdates(){
+  const acc=S.accounts.find(x=>x.id===_priceUpdateAccountId);
+  if(!acc){toast('Account not found',false);return;}
+  let appliedCount=0;
+  _priceUpdateResults.forEach(r=>{
+    const hd=(acc.holdings||[]).find(x=>x.id===r.holdingId);
+    if(!hd)return;
+    if(r.status==='success'&&r.result&&r.result.ok){
+      hd.currentPrice=r.result.price;
+      hd.currentPriceAsOf=r.result.asOf;
+      if(r.result.fxRate&&hd.currency!=='SAR')hd.currentFxRate=r.result.fxRate;
+      appliedCount++;
+    }else if((r.status==='manual'||r.status==='failed')&&r.manualPrice!=null&&isFinite(r.manualPrice)){
+      hd.currentPrice=r.manualPrice;
+      hd.currentPriceAsOf=r.manualAsOf||localISO(new Date()).substr(0,10);
+      appliedCount++;
+    }
+  });
+  // Stamp the account-level update timestamp so stale-detection works
+  if(appliedCount>0){
+    acc.currentValueAsOf=localISO(new Date());
+  }
+  sched();
+  toast(`Applied ${appliedCount} update${appliedCount===1?'':'s'}`);
+  closePriceUpdateModal();
+}
+
+function setManualPriceForResult(holdingId,price,asOf){
+  const r=_priceUpdateResults.find(x=>x.holdingId===holdingId);
+  if(!r)return;
+  r.manualPrice=parseFloat(price);
+  r.manualAsOf=asOf||localISO(new Date()).substr(0,10);
+  // No render() — handled by oninput; review modal updates the badge via DOM directly
+}
+
+async function retryFetchForResult(holdingId){
+  const r=_priceUpdateResults.find(x=>x.holdingId===holdingId);
+  if(!r)return;
+  const acc=S.accounts.find(x=>x.id===_priceUpdateAccountId);
+  const hd=(acc&&acc.holdings||[]).find(x=>x.id===r.holdingId);
+  if(!hd)return;
+  r.status='fetching';
+  render();
+  try{
+    const res=await fetchSingleHoldingPrice(hd,acc);
+    r.result=res;
+    r.status=res.ok?'success':'failed';
+  }catch(e){
+    r.result={ok:false,reason:e.message||String(e)};
+    r.status='failed';
+  }
+  render();
+}
+
+// ─── REVIEW MODAL ─────────────────────────────────────────────────────────────
+
+function rPriceUpdateModal(){
+  if(!_priceUpdateOpen)return '';
+  const acc=S.accounts.find(x=>x.id===_priceUpdateAccountId);
+  if(!acc)return '';
+  const results=_priceUpdateResults;
+  const succeeded=results.filter(r=>r.status==='success');
+  const manual=results.filter(r=>r.status==='manual');
+  const failed=results.filter(r=>r.status==='failed');
+  const stillRunning=results.filter(r=>r.status==='queued'||r.status==='fetching');
+  const inProg=_priceUpdateInProgress&&stillRunning.length>0;
+  // Each section
+  const sectionSuccess=succeeded.length>0?`<div style="margin-bottom:14px">
+    <div style="font-size:11px;font-weight:600;color:var(--pos);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">✓ Auto-updated (${succeeded.length})</div>
+    ${succeeded.map(r=>{
+      const res=r.result;
+      const fxNote=res.fxRate&&res.currency!=='SAR'?` × ${res.fxRate} = SAR ${(res.price*res.fxRate).toFixed(2)}`:'';
+      return`<div style="padding:8px 12px;background:var(--bg2);border-radius:var(--rsm);margin-bottom:4px;font-size:12px">
+        <div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline">
+          <div style="font-weight:500">${h(r.holdingName)}</div>
+          <div style="font-variant-numeric:tabular-nums;color:var(--text1)">${res.price.toFixed(4)} ${h(res.currency)}${fxNote}</div>
+        </div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">${h(res.source)} · ${h(res.asOf)} · confidence: ${h(res.confidence)}${res.notes?' · '+h(res.notes):''}</div>
+      </div>`;
+    }).join('')}
+  </div>`:'';
+  const sectionManual=manual.length>0?`<div style="margin-bottom:14px">
+    <div style="font-size:11px;font-weight:600;color:var(--warn);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">⚠ Needs manual entry (${manual.length})</div>
+    ${manual.map(r=>`<div style="padding:8px 12px;background:var(--bg2);border-radius:var(--rsm);margin-bottom:4px;font-size:12px">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap">
+        <div>
+          <div style="font-weight:500">${h(r.holdingName)}</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:2px">${holdingTypeLabel(r.holdingType)} · fetch source: ${h(r.fetchSource)}</div>
+        </div>
+        <div class="fg" style="gap:6px;align-items:center">
+          <input type="number" step="0.0001" inputmode="decimal" placeholder="Current price" oninput="setManualPriceForResult('${r.holdingId}',this.value,document.getElementById('mp-${r.holdingId}-d')?.value)" style="width:120px;font-size:11px">
+          <input type="text" id="mp-${r.holdingId}-d" value="${toDD(localISO(new Date()))}" maxlength="10" style="width:90px;font-size:11px" oninput="setManualPriceForResult('${r.holdingId}',document.getElementById('mp-${r.holdingId}-p')?.value,fromDD(this.value))">
+        </div>
+      </div>
+    </div>`).join('')}
+  </div>`:'';
+  const sectionFailed=failed.length>0?`<div style="margin-bottom:14px">
+    <div style="font-size:11px;font-weight:600;color:var(--neg);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">✕ Failed (${failed.length})</div>
+    ${failed.map(r=>`<div style="padding:8px 12px;background:var(--bg2);border-radius:var(--rsm);margin-bottom:4px;font-size:12px">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap">
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:500">${h(r.holdingName)}</div>
+          <div style="font-size:10px;color:var(--neg);margin-top:2px">${h(r.result&&r.result.reason||'Unknown error')}</div>
+        </div>
+        <div class="fg" style="gap:6px;align-items:center">
+          <input type="number" step="0.0001" inputmode="decimal" placeholder="Manual" oninput="setManualPriceForResult('${r.holdingId}',this.value,null)" style="width:100px;font-size:11px">
+          <button class="btn btn-xs" onclick="retryFetchForResult('${r.holdingId}')" ${_priceUpdateInProgress?'disabled':''}>↻ Retry</button>
+        </div>
+      </div>
+    </div>`).join('')}
+  </div>`:'';
+  const sectionInProgress=stillRunning.length>0?`<div style="margin-bottom:14px">
+    <div style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">⋯ In progress (${stillRunning.length})</div>
+    ${stillRunning.map(r=>`<div style="padding:8px 12px;background:var(--bg2);border-radius:var(--rsm);margin-bottom:4px;font-size:12px;opacity:0.7">
+      <div style="display:flex;justify-content:space-between;gap:10px">
+        <div style="font-weight:500">${h(r.holdingName)}</div>
+        <div style="font-size:11px;color:var(--text3)">${r.status==='fetching'?'Fetching…':'Queued'}</div>
+      </div>
+    </div>`).join('')}
+  </div>`:'';
+  const progressPct=_priceUpdateProgress.total>0?Math.round((_priceUpdateProgress.done/_priceUpdateProgress.total)*100):0;
+  return`<div class="modal-backdrop" onclick="if(event.target===this&&!_priceUpdateInProgress)closePriceUpdateModal()" style="position:fixed;inset:0;background:rgba(2,23,81,0.55);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:30px 16px;overflow-y:auto">
+    <div class="card" style="background:var(--card);width:100%;max-width:680px;padding:0;border-radius:var(--r);box-shadow:0 12px 60px rgba(0,0,0,0.4);overflow:hidden">
+      <div class="fg jb" style="padding:14px 18px;border-bottom:1px solid var(--line);align-items:center">
+        <div>
+          <div style="font-size:14px;font-weight:600">Price Update Review</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">${h(acc.name)} · ${results.length} holding${results.length===1?'':'s'}</div>
+        </div>
+        <button class="btn btn-xs" onclick="closePriceUpdateModal()" ${_priceUpdateInProgress?'disabled':''}>&times;</button>
+      </div>
+      ${inProg?`<div style="padding:10px 18px;background:var(--bg2);border-bottom:1px solid var(--line);font-size:11px">
+        <div class="fg jb" style="margin-bottom:4px"><span>Fetching ${_priceUpdateProgress.done} of ${_priceUpdateProgress.total}</span><span>${progressPct}%</span></div>
+        <div style="height:4px;background:var(--bg3);border-radius:2px;overflow:hidden"><div style="width:${progressPct}%;height:100%;background:var(--action);transition:width 0.3s"></div></div>
+      </div>`:''}
+      <div style="padding:14px 18px;max-height:60vh;overflow-y:auto">
+        ${sectionSuccess}
+        ${sectionManual}
+        ${sectionFailed}
+        ${sectionInProgress}
+        ${results.length===0?`<div class="empty">No holdings to update.</div>`:''}
+      </div>
+      <div class="fg" style="padding:14px 18px;border-top:1px solid var(--line);gap:8px;background:var(--bg2);justify-content:flex-end">
+        ${_priceUpdateInProgress?`<button class="btn btn-d" onclick="cancelPriceUpdate()">Cancel fetch</button>`:`
+          <button class="btn" onclick="closePriceUpdateModal()">Skip remaining</button>
+          <button class="btn btn-p" onclick="applyPriceUpdates()" ${succeeded.length===0&&manual.every(r=>r.manualPrice==null)&&failed.every(r=>r.manualPrice==null)?'disabled':''}>Apply ${succeeded.length+manual.filter(r=>r.manualPrice!=null).length+failed.filter(r=>r.manualPrice!=null).length} update${(succeeded.length+manual.filter(r=>r.manualPrice!=null).length+failed.filter(r=>r.manualPrice!=null).length)===1?'':'s'}</button>
+        `}
+      </div>
+    </div>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// END V10.4.0 PHASE F.1
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function openRecordValue(accId){_invRecordingId=accId;render();}
