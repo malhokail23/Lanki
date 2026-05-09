@@ -4874,7 +4874,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='10.1.11';
+const VERSION='10.2.0';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -6011,6 +6011,9 @@ function restoreS(d){
   // txnCache stays separate - loaded in loadS
   applyDeletions();
   applyCatCustomizations();
+  // V10.2.0 (Phase B): migrate investment accounts to new schema. Idempotent —
+  // tagged with _v10_2_migrated so re-running on subsequent loads is a no-op.
+  if(typeof runInvestmentMigrations==='function')runInvestmentMigrations();
 }
 // ─── CATEGORY TIER DEFINITIONS ───
 // Tier C — locked from deletion because hardcoded business logic depends on these IDs.
@@ -14769,7 +14772,8 @@ const ATG=[
     {v:'p2p_lending',l:'P2P Lending'},
     {v:'physical_gold',l:'Physical Gold'},
     {v:'collectibles',l:'Collectibles'},
-    {v:'retirement_pension',l:'Retirement / Pension'}
+    {v:'retirement_pension',l:'Retirement / Pension'},
+    {v:'vc_fund_account',l:'VC / PE Fund'}
   ]},
   {g:'Other',o:[
     {v:'cash',l:'Cash'},
@@ -14780,7 +14784,231 @@ const ATL=ATG.flatMap(g=>g.o).reduce((m,o)=>{m[o.v]=o.l;return m;},{});
 const ATS=ATG.map(g=>`<optgroup label="${g.g}">${g.o.map(o=>`<option value="${o.v}">${o.l}</option>`).join('')}</optgroup>`).join('');
 // V8.23: extended INV set with all new investment types. The holdings/value tracking
 // infrastructure from V8.21/V8.21.5 applies to all of these uniformly.
-const INV=new Set(['brokerage_account','fund_account','reit','sukuk','crypto_wallet','gold_account','real_estate_fund','real_estate_direct','direct_investment','p2p_lending','physical_gold','collectibles','retirement_pension']);
+// V10.2.0 (Phase B): added vc_fund_account for VC/PE LP positions. The container types
+// constrain which Phase B holding types are allowed inside (see PHB_ACCOUNT_HOLDING_MAP).
+const INV=new Set(['brokerage_account','fund_account','reit','sukuk','crypto_wallet','gold_account','real_estate_fund','real_estate_direct','direct_investment','p2p_lending','physical_gold','collectibles','retirement_pension','vc_fund_account']);
+
+// ─── V10.2.0 PHASE B — INVESTMENT SCHEMA REDESIGN ─────────────────────────────
+// Polymorphic holdings: each holding has a `type` field, drives form fields,
+// asset-class defaults, and AI fetch behavior. Lots/sales/distributions tracked
+// per holding for IRS-compliant cost basis (FATCA/US-citizen). All schema is
+// additive — existing holdings auto-migrate via migrateInvestmentAccount() on load.
+
+// Holding types (12 first-class + custom). See Phase B brief Decision 1.
+const PHB_HOLDING_TYPES=[
+  {v:'stock',           l:'Stock',            unit:'shares',     defaultAssetClass:'public_equity'},
+  {v:'etf',             l:'ETF',              unit:'shares',     defaultAssetClass:'public_equity'},
+  {v:'fund',            l:'Fund',             unit:'units',      defaultAssetClass:'mixed'},
+  {v:'gold',            l:'Gold',             unit:'grams',      defaultAssetClass:'commodity'},
+  {v:'crypto',          l:'Crypto',           unit:'coins',      defaultAssetClass:'crypto'},
+  {v:'real_estate_unit',l:'Real Estate Unit', unit:'units',      defaultAssetClass:'real_estate'},
+  {v:'real_estate_property',l:'Property',     unit:'1',          defaultAssetClass:'real_estate'},
+  {v:'sukuk',           l:'Sukuk',            unit:'face value', defaultAssetClass:'fixed_income'},
+  {v:'p2p_loan',        l:'P2P Loan',         unit:'SAR principal', defaultAssetClass:'private_credit'},
+  {v:'direct_equity',   l:'Direct Equity',    unit:'shares',     defaultAssetClass:'private_equity'},
+  {v:'vc_fund',         l:'VC / PE Fund',     unit:'commitment', defaultAssetClass:'private_equity'},
+  {v:'cash',            l:'Cash',             unit:'amount',     defaultAssetClass:'cash'},
+  {v:'custom',          l:'Custom',           unit:'',           defaultAssetClass:'alternative'}
+];
+
+// Account container → allowed holding types (Decision 2).
+const PHB_ACCOUNT_HOLDING_MAP={
+  brokerage_account:    ['stock','etf','fund','sukuk','cash','custom'],
+  fund_account:         ['fund','cash'],
+  gold_account:         ['gold'],
+  crypto_wallet:        ['crypto','cash'],
+  real_estate_fund:     ['real_estate_unit','cash'],
+  real_estate_direct:   ['real_estate_property'],
+  p2p_lending:          ['p2p_loan','cash'],
+  sukuk:                ['sukuk'],
+  direct_investment:    ['direct_equity'],
+  vc_fund_account:      ['vc_fund'],
+  retirement_pension:   ['stock','etf','fund','cash'],
+  // Legacy types (pre-Phase B) — keep permissive
+  reit:                 ['real_estate_unit','cash'],
+  physical_gold:        ['gold'],
+  collectibles:         ['custom']
+};
+
+// Asset class taxonomy (Decision 3). Per-holding, fixed list, override-able.
+const PHB_ASSET_CLASSES=[
+  {v:'public_equity',  l:'Public Equity'},
+  {v:'fixed_income',   l:'Fixed Income'},
+  {v:'real_estate',    l:'Real Estate'},
+  {v:'commodity',      l:'Commodity'},
+  {v:'crypto',         l:'Crypto'},
+  {v:'cash',           l:'Cash'},
+  {v:'private_credit', l:'Private Credit'},
+  {v:'private_equity', l:'Private Equity'},
+  {v:'mixed',          l:'Mixed (fund-level)'},
+  {v:'alternative',    l:'Alternative'}
+];
+
+// Region taxonomy (Decision 6).
+const PHB_REGIONS=[
+  {v:'saudi',     l:'Saudi'},
+  {v:'gcc',       l:'GCC'},
+  {v:'mena',      l:'MENA'},
+  {v:'us',        l:'US'},
+  {v:'developed', l:'Developed'},
+  {v:'emerging',  l:'Emerging'},
+  {v:'global',    l:'Global'}
+];
+
+// Supported currencies for V1 (Decision 5 confirm-set).
+const PHB_CURRENCIES=['SAR','USD','AED','EUR','GBP'];
+
+// ─── HOLDING COMPUTED HELPERS ─────────────────────────────────────────────────
+// Derived from lots, sales, and current price. Never stored; computed on demand.
+// Currency conversion: lot.fxRate captures the SAR-equivalent rate at buy/sale
+// time; cost basis is therefore always SAR-denominated regardless of holding currency.
+
+function holdingQuantity(h){
+  if(!h)return 0;
+  const lots=Array.isArray(h.lots)?h.lots:[];
+  const sales=Array.isArray(h.sales)?h.sales:[];
+  const bought=lots.reduce((s,l)=>s+(parseFloat(l.quantity)||0),0);
+  const sold=sales.reduce((s,sa)=>s+(parseFloat(sa.quantity)||0),0);
+  return bought-sold;
+}
+
+// Cost basis in SAR. For each lot: quantity × pricePerUnit × (fxRate or 1) + fees.
+// For sales: subtract the basis attributed via lotAllocations (FIFO-style basis-out).
+function holdingCostBasis(h){
+  if(!h)return 0;
+  const lots=Array.isArray(h.lots)?h.lots:[];
+  const sales=Array.isArray(h.sales)?h.sales:[];
+  // Total basis paid in
+  const basisIn=lots.reduce((s,l)=>{
+    const q=parseFloat(l.quantity)||0;
+    const p=parseFloat(l.pricePerUnit)||0;
+    const fx=parseFloat(l.fxRate)||1;
+    const fees=parseFloat(l.fees)||0;
+    return s+(q*p*fx)+fees;
+  },0);
+  // Basis allocated out via sales — sum cost of sold portions of each lot
+  let basisOut=0;
+  sales.forEach(sa=>{
+    const allocs=Array.isArray(sa.lotAllocations)?sa.lotAllocations:[];
+    allocs.forEach(a=>{
+      const lot=lots.find(l=>l.id===a.lotId);
+      if(!lot)return;
+      const lotPrice=(parseFloat(lot.pricePerUnit)||0)*(parseFloat(lot.fxRate)||1);
+      basisOut+=lotPrice*(parseFloat(a.quantity)||0);
+    });
+  });
+  return basisIn-basisOut;
+}
+
+// Current SAR value: quantity × currentPrice × fxRate (if non-SAR currency).
+// Returns null if no current price is recorded.
+function holdingCurrentValue(h){
+  if(!h||h.currentPrice==null)return null;
+  const q=holdingQuantity(h);
+  const p=parseFloat(h.currentPrice)||0;
+  const fx=h.currency&&h.currency!=='SAR'?(parseFloat(h.currentFxRate)||1):1;
+  return q*p*fx;
+}
+
+function holdingUnrealizedGL(h){
+  const cv=holdingCurrentValue(h);
+  if(cv==null)return null;
+  return cv-holdingCostBasis(h);
+}
+
+function holdingRealizedGLYTD(h,year){
+  if(!h)return 0;
+  const sales=Array.isArray(h.sales)?h.sales:[];
+  const y=year||new Date().getFullYear();
+  return sales.filter(sa=>{
+    const d=sa.date?new Date(sa.date):null;
+    return d&&d.getFullYear()===y;
+  }).reduce((s,sa)=>s+(parseFloat(sa.realizedGL)||0),0);
+}
+
+// Account-level computed value: sum of holding current values. Falls back to the
+// stored account.currentValue if no holdings have priced data — preserves Phase A
+// behavior for legacy accounts during the migration window.
+function accountCurrentValueComputed(a){
+  if(!a)return null;
+  const hs=Array.isArray(a.holdings)?a.holdings:[];
+  const priced=hs.filter(h=>h.currentPrice!=null);
+  if(priced.length===0){
+    // No holdings have priced data — fall back to legacy account-level value
+    return a.currentValue!=null?parseFloat(a.currentValue):null;
+  }
+  return hs.reduce((s,h)=>{
+    const cv=holdingCurrentValue(h);
+    return s+(cv||0);
+  },0);
+}
+
+// ─── MIGRATION ────────────────────────────────────────────────────────────────
+// Idempotent. Tagged with _v10_2_migrated so it never re-runs. Purely additive:
+// adds missing fields, never overwrites existing ones. Old holdings are upgraded
+// to the new shape with sensible defaults; cost basis is unknown (price 0) and
+// flagged via lot.notes so the user knows to backfill via Phase E UI.
+function migrateInvestmentAccount(a){
+  if(!a||a._v10_2_migrated)return false;
+  if(!INV.has(a.type))return false;
+  let mutated=false;
+  // Account-level new fields
+  if(a.ownerId===undefined){a.ownerId=null;mutated=true;}
+  if(a.taxJurisdiction===undefined){a.taxJurisdiction='both';mutated=true;}
+  // Per-holding upgrade
+  if(Array.isArray(a.holdings)){
+    a.holdings=a.holdings.map(old=>{
+      // Already upgraded? Detect by presence of lots/type/assetClass on the holding
+      if(old.type&&Array.isArray(old.lots))return old;
+      // Old shape: {symbol, symbolDisplay, quantity, addedAt}
+      const sym=old.symbol||'';
+      const name=old.symbolDisplay||sym||'Migrated holding';
+      const qty=parseFloat(old.quantity)||0;
+      const addedAt=old.addedAt||localISO(new Date());
+      // Best-guess type: assume stock for symbol-shaped entries
+      const guessType='stock';
+      const guessTypeMeta=PHB_HOLDING_TYPES.find(t=>t.v===guessType)||PHB_HOLDING_TYPES[0];
+      mutated=true;
+      return {
+        id:'hld_'+randSuffix(10),
+        type:guessType,
+        name:name,
+        identifier:sym||null,
+        unitLabel:guessTypeMeta.unit,
+        currency:'SAR',
+        assetClass:guessTypeMeta.defaultAssetClass,
+        region:'saudi',
+        lots:qty>0?[{
+          id:'lot_'+randSuffix(8),
+          date:addedAt.substr(0,10),
+          quantity:qty,
+          pricePerUnit:0,
+          fees:0,
+          fxRate:null,
+          notes:'Migrated from V10.1.x — please update cost basis'
+        }]:[],
+        sales:[],
+        distributions:[],
+        currentPrice:null,
+        currentPriceAsOf:null,
+        currentFxRate:null,
+        fetchSource:'manual',
+        isPFIC:false,
+        notes:''
+      };
+    });
+  }
+  a._v10_2_migrated=true;
+  return mutated;
+}
+
+// Run migration over all investment accounts. Called once after vault decrypt.
+function runInvestmentMigrations(){
+  if(!Array.isArray(S.accounts))return;
+  let count=0;
+  S.accounts.forEach(a=>{if(migrateInvestmentAccount(a))count++;});
+  return count;
+}
 
 // V8.21: investment value tracking helpers. These work alongside calcAccBalance — they don't
 // replace it. calcAccBalance still computes "transactions in this account", but for investment
@@ -15607,6 +15835,27 @@ function rAcc(){
       </select>
     </div>`:''}
     <div id="ac-row" style="display:none;margin-top:8px">
+      <!-- V10.2.0 (Phase B): Owner field — first-class on every investment account.
+           Defaults to Self. Required for new investment accounts. Powered by S.familyMembers
+           registry; until Phase D adds a dedicated registry UX, members are added via
+           Settings → Household. -->
+      <div class="fr" style="margin-bottom:8px">
+        <div>
+          <label class="lbl">Owner</label>
+          <select id="ac-inv-owner">
+            <option value="">Self</option>
+            ${(S.familyMembers||[]).map(m=>`<option value="${m.id}">${h(m.name)}${m.relationship?' ('+h(m.relationship)+')':''}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label class="lbl">Tax Jurisdiction</label>
+          <select id="ac-inv-taxjur">
+            <option value="both">Both (US + Saudi)</option>
+            <option value="us">US only</option>
+            <option value="saudi">Saudi only</option>
+          </select>
+        </div>
+      </div>
       <label class="lbl">Asset Class</label><select id="a-asclass">${ACS.map(o=>`<option value="${o.v}">${o.l}</option>`).join('')}</select>
       <!-- V8.21: investment-specific fields. V8.21.5: AI options enabled -->
       <div class="fr" style="margin-top:8px">
@@ -15674,7 +15923,7 @@ function rAcc(){
     </div>
   </div>`:''}`;
 }
-function openAddAcc(){editAccId=null;['ac-name','ac-inst','ac-no','ac-purp','ac-inv-platform','ac-inv-value','ac-inv-asof'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});const sourceEl=document.getElementById('ac-inv-source');if(sourceEl)sourceEl.value='manual';const holdingsRows=document.getElementById('ac-inv-holdings-rows');if(holdingsRows)holdingsRows.innerHTML='';const holdingsWrap=document.getElementById('ac-inv-holdings-wrap');if(holdingsWrap)holdingsWrap.style.display='none';document.getElementById('acc-ptitle').textContent='Add account';document.getElementById('acc-sbtn').textContent='Add account';/* V9.0-rc1.7 Item 15: filter group select for the default type so the dropdown is correct from the first paint */const typeEl=document.getElementById('ac-type');if(typeEl)refreshGroupSelectForType(typeEl.value);const p=document.getElementById('acc-panel');if(p&&!p.classList.contains('open')){p.classList.add('open');p.scrollIntoView({behavior:'smooth'});}}
+function openAddAcc(){editAccId=null;['ac-name','ac-inst','ac-no','ac-purp','ac-inv-platform','ac-inv-value','ac-inv-asof'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});const sourceEl=document.getElementById('ac-inv-source');if(sourceEl)sourceEl.value='manual';const holdingsRows=document.getElementById('ac-inv-holdings-rows');if(holdingsRows)holdingsRows.innerHTML='';const holdingsWrap=document.getElementById('ac-inv-holdings-wrap');if(holdingsWrap)holdingsWrap.style.display='none';/* V10.2.0 (Phase B): reset Owner to Self and Tax Jurisdiction to both for new accounts */const ownerEl=document.getElementById('ac-inv-owner');if(ownerEl)ownerEl.value='';const taxJurEl=document.getElementById('ac-inv-taxjur');if(taxJurEl)taxJurEl.value='both';document.getElementById('acc-ptitle').textContent='Add account';document.getElementById('acc-sbtn').textContent='Add account';/* V9.0-rc1.7 Item 15: filter group select for the default type so the dropdown is correct from the first paint */const typeEl=document.getElementById('ac-type');if(typeEl)refreshGroupSelectForType(typeEl.value);const p=document.getElementById('acc-panel');if(p&&!p.classList.contains('open')){p.classList.add('open');p.scrollIntoView({behavior:'smooth'});}}
 // V8.18: archive/close/reopen — three-state account status (active/closed/archived).
 // Each setter writes BOTH `status` (V8.18+) AND `archived` (legacy V8.17 fallback) so a user
 // reverting to V8.17 still sees these accounts excluded from active dropdowns.
@@ -15768,6 +16017,12 @@ function openEditAcc(id){
   const invSourceEl=document.getElementById('ac-inv-source');if(invSourceEl)invSourceEl.value=a.updateSource||'manual';
   const invValueEl=document.getElementById('ac-inv-value');if(invValueEl)invValueEl.value=a.currentValue!==undefined?a.currentValue:'';
   const invAsOfEl=document.getElementById('ac-inv-asof');if(invAsOfEl)invAsOfEl.value=a.currentValueAsOf?toDD(a.currentValueAsOf):'';
+  // V10.2.0 (Phase B): populate Owner and Tax Jurisdiction fields. Default to Self/both
+  // for accounts that pre-date the migration and somehow weren't tagged.
+  const invOwnerEl=document.getElementById('ac-inv-owner');
+  if(invOwnerEl)invOwnerEl.value=a.ownerId||'';
+  const invTaxJurEl=document.getElementById('ac-inv-taxjur');
+  if(invTaxJurEl)invTaxJurEl.value=a.taxJurisdiction||'both';
   // V8.21.5: prefill holdings UI if account uses ai_public_price
   if(INV.has(a.type)){
     onUpdateSourceChange(a.updateSource||'manual');
@@ -15794,7 +16049,10 @@ function saveAcc(){
   const invAsOf=invAsOfRaw?fromDD(invAsOfRaw):undefined;
   // V8.21.5: capture holdings array when ai_public_price is selected
   const invHoldings=(isInv&&invSource==='ai_public_price')?readHoldingsFromForm():null;
-  const data={name,institution:document.getElementById('ac-inst').value.trim(),type,accountNumber:document.getElementById('ac-no').value.trim()||null,purpose:document.getElementById('ac-purp')?.value.trim()||'',openingBalance:balVal!==''&&balVal!==undefined?parseFloat(balVal):undefined,balanceAsOf:fromDD(document.getElementById('ac-bal-date')?.value||'')||undefined,...(groupId?{groupId}:{}),...((type==='credit_card'||type==='charge_card')?{currency:curVal}:{}),...(isInv?{platform:invPlatform,updateSource:invSource||'manual'}:{}),...(invHoldings!==null?{holdings:invHoldings}:{})};
+  // V10.2.0 (Phase B): capture owner and tax jurisdiction for investment accounts
+  const invOwnerId=isInv?(document.getElementById('ac-inv-owner')?.value||''):'';
+  const invTaxJur=isInv?(document.getElementById('ac-inv-taxjur')?.value||'both'):'';
+  const data={name,institution:document.getElementById('ac-inst').value.trim(),type,accountNumber:document.getElementById('ac-no').value.trim()||null,purpose:document.getElementById('ac-purp')?.value.trim()||'',openingBalance:balVal!==''&&balVal!==undefined?parseFloat(balVal):undefined,balanceAsOf:fromDD(document.getElementById('ac-bal-date')?.value||'')||undefined,...(groupId?{groupId}:{}),...((type==='credit_card'||type==='charge_card')?{currency:curVal}:{}),...(isInv?{platform:invPlatform,updateSource:invSource||'manual',ownerId:invOwnerId||null,taxJurisdiction:invTaxJur||'both',_v10_2_migrated:true}:{}),...(invHoldings!==null?{holdings:invHoldings}:{})};
   if(editAccId){
     const existing=S.accounts.find(x=>x.id===editAccId);
     // V8.21: detect value change for investment accounts → append to lastValueHistory
