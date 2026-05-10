@@ -4885,7 +4885,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='10.4.0';
+const VERSION='10.4.1';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -16537,16 +16537,16 @@ function rInvestments(){
         <div style="flex:1;min-width:0">
           <div class="fg" style="gap:6px;align-items:center;flex-wrap:wrap">
             ${(()=>{const gc=accGroupColor(a);return gc&&a.groupId?`<span title="Group: ${h(accGroupName(a))}" style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${gc};flex-shrink:0;border:1px solid color-mix(in srgb,${gc} 60%,transparent)"></span>`:'';})()}
-            <div style="font-weight:500;font-size:15px">${h(a.name)}</div>
+            <a href="javascript:void(0)" onclick="openPortfolioAccountDetail('${a.id}')" style="font-weight:500;font-size:15px;color:var(--text1);text-decoration:none;cursor:pointer" onmouseover="this.style.color='var(--action)';this.style.textDecoration='underline'" onmouseout="this.style.color='var(--text1)';this.style.textDecoration='none'" title="Open account detail to manage holdings">${h(a.name)}</a>
             ${stale?`<span class="status-pill status-warn" style="cursor:pointer" onclick="triggerUpdateForAccount('${a.id}')" title="Value last updated ${days} days ago — click to update">STALE</span>`:''}
             ${a.updateSource==='ai_public_price'?`<span class="status-pill status-info" title="Auto-fetch via AI public-price">AI</span>`:''}
             ${a.updateSource==='ai_assisted_manual'?`<span class="status-pill status-info" title="AI-assisted manual update">AI assist</span>`:''}
             ${_invFetchingId===a.id?`<span style="font-size:10px;color:var(--action)">Fetching…</span>`:''}
           </div>
-          <div style="font-size:11px;color:var(--text3);margin-top:2px">${h(a.platform||a.institution||ATL[a.type]||a.type)} · ${ATL[a.type]||''}${a.purpose?' · '+h(a.purpose):''}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">${h(ATL[a.type]||a.type)}${a.purpose?' · '+h(a.purpose):''}</div>
         </div>
         <div class="fg" style="gap:4px;flex-shrink:0">
-          <button class="btn btn-sm ${cv===null||stale?'btn-p':''}" onclick="triggerUpdateForAccount('${a.id}')" ${_invFetchingId===a.id?'disabled':''}>${cv===null?'Record value':'Update value'}</button>
+          <button class="btn btn-sm btn-p" onclick="openPortfolioAccountDetail('${a.id}')" title="Open account detail to manage holdings">Open &rarr;</button>
           <button class="btn btn-sm" onclick="openEditInvAcc('${a.id}')" title="Edit account">&#9998;</button>
         </div>
       </div>
@@ -16749,29 +16749,48 @@ function rInvAcctFormPanel(){
   const editing=!!_invAcctEditId;
   const a=editing?S.accounts.find(x=>x.id===_invAcctEditId):null;
   if(editing&&!a){closeInvAcctForm();return '';}
-  // Investment-only type list (no bank fields like IBAN, no opening balance).
-  const invTypes=PHB_HOLDING_TYPES; // not used directly here, but referenced for context
   // Type dropdown — only investment container types
   const invTypesGroup=ATG.find(g=>g.g==='Investments')||{o:[]};
-  const typeOpts=invTypesGroup.o.map(o=>`<option value="${o.v}">${o.l}</option>`).join('');
+  const typeOpts=invTypesGroup.o.map(o=>`<option value="${o.v}" ${a&&a.type===o.v?'selected':''}>${o.l}</option>`).join('');
+  // Owner dropdown — current owner pre-selected on edit
+  const currentOwner=a?a.ownerId||'':'';
+  const ownerOpts=`<option value="" ${currentOwner===''?'selected':''}>Self</option>`+
+    (S.familyMembers||[]).map(m=>`<option value="${m.id}" ${currentOwner===m.id?'selected':''}>${h(m.name)}${m.relationship?' ('+h(m.relationship)+')':''}</option>`).join('');
+  // Tax jurisdiction — current pre-selected
+  const currentTax=a?(a.taxJurisdiction||'both'):'both';
+  const taxOpts=[['both','Both (US + Saudi)'],['us','US only'],['saudi','Saudi only']].map(([v,l])=>`<option value="${v}" ${currentTax===v?'selected':''}>${l}</option>`).join('');
+  // V10.4.1: Open Date — defaults to today on add, preserves existing on edit
+  const todayDD=toDD(localISO(new Date()));
+  const openDateVal=a&&a.openDate?toDD(a.openDate):(editing?'':todayDD);
+  // V10.4.1: Linked Bank Account — dropdown of bank-type accounts only
+  const bankAccs=(S.accounts||[]).filter(x=>BANK_ACC_TYPES.has(x.type)&&isLiveAccount(x));
+  const currentLinkedBank=a?(a.linkedBankId||''):'';
+  const bankOpts=`<option value="" ${currentLinkedBank===''?'selected':''}>None</option>`+
+    bankAccs.map(b=>`<option value="${b.id}" ${currentLinkedBank===b.id?'selected':''}>${h(b.name)}${b.institution?' — '+h(b.institution):''}</option>`).join('');
   return`<div class="card card-bordered" id="inv-acct-form-panel" style="margin-bottom:18px;padding:16px 18px;background:var(--bg2)">
     <div class="fg jb" style="margin-bottom:12px;align-items:center">
       <div style="font-size:14px;font-weight:600">${editing?'Edit investment account':'Add investment account'}</div>
       <button class="btn btn-xs" onclick="closeInvAcctForm()" title="Close">&times;</button>
     </div>
+    <!-- Row 1: Name | Type -->
     <div class="fr" style="gap:10px;margin-bottom:8px">
-      <div style="flex:2"><label class="lbl">Name</label><input type="text" id="iaf-name" value="${a?h(a.name||''):''}" placeholder="e.g. Derayah Mohammad Local"></div>
-      <div style="flex:2"><label class="lbl">Institution</label><input type="text" id="iaf-inst" value="${a?h(a.institution||''):''}" placeholder="e.g. Derayah, Tamra Capital"></div>
+      <div style="flex:1"><label class="lbl">Name</label><input type="text" id="iaf-name" value="${a?h(a.name||''):''}" placeholder="e.g. Tameed, Derayah Mohammad"></div>
       <div style="flex:1"><label class="lbl">Type</label><select id="iaf-type">${typeOpts}</select></div>
     </div>
+    <!-- Row 2: Owner | Tax Jurisdiction -->
     <div class="fr" style="gap:10px;margin-bottom:8px">
-      <div style="flex:1"><label class="lbl">Owner</label><select id="iaf-owner"><option value="">Self</option>${(S.familyMembers||[]).map(m=>`<option value="${m.id}">${h(m.name)}${m.relationship?' ('+h(m.relationship)+')':''}</option>`).join('')}</select></div>
-      <div style="flex:1"><label class="lbl">Tax Jurisdiction</label><select id="iaf-taxjur"><option value="both">Both (US + Saudi)</option><option value="us">US only</option><option value="saudi">Saudi only</option></select></div>
-      <div style="flex:1"><label class="lbl">Platform / Broker (optional)</label><input type="text" id="iaf-platform" value="${a?h(a.platform||''):''}" placeholder="e.g. Tameed, Tadawul, Binance"></div>
+      <div style="flex:1"><label class="lbl">Owner</label><select id="iaf-owner">${ownerOpts}</select></div>
+      <div style="flex:1"><label class="lbl">Tax Jurisdiction</label><select id="iaf-taxjur">${taxOpts}</select></div>
     </div>
+    <!-- Row 3: Open Date | Linked Bank Account (V10.4.1: both new) -->
     <div class="fr" style="gap:10px;margin-bottom:8px">
-      <div style="flex:2"><label class="lbl">Purpose / Notes (optional)</label><input type="text" id="iaf-purpose" value="${a?h(a.purpose||''):''}" placeholder="e.g. Retirement savings, kids' education"></div>
+      <div style="flex:1"><label class="lbl">Open Date${editing?'':' (defaults to today)'}</label><div class="date-inp-wrap"><input type="text" id="iaf-opendate" class="date-inp" value="${openDateVal}" maxlength="10" placeholder="DD/MM/YYYY"><button type="button" class="cal-btn" onclick="openCal('iaf-opendate')" title="Pick date">📅</button></div></div>
+      <div style="flex:1"><label class="lbl">Linked Bank Account${bankAccs.length===0?' (no bank accounts available)':' (optional)'}</label><select id="iaf-linkedbank" ${bankAccs.length===0?'disabled':''}>${bankOpts}</select></div>
+    </div>
+    <!-- Row 4: Account Number | Notes -->
+    <div class="fr" style="gap:10px;margin-bottom:8px">
       <div style="flex:1"><label class="lbl">Account Number (optional)</label><input type="text" id="iaf-accnum" value="${a?h(a.accountNumber||''):''}" placeholder="Reference only"></div>
+      <div style="flex:1"><label class="lbl">Notes (optional)</label><input type="text" id="iaf-purpose" value="${a?h(a.purpose||''):''}" placeholder="e.g. Retirement savings, kids' education"></div>
     </div>
     <div style="font-size:11px;color:var(--text3);margin:6px 0 12px;line-height:1.6">Holdings (lots, sales, distributions) are managed inside the account once it is created. ${editing?'<strong>Tip:</strong> the underlying holdings are not lost when you change the account type — only the allowed holding types may change.':''}</div>
     <div class="fg" style="gap:8px">
@@ -16785,30 +16804,32 @@ function rInvAcctFormPanel(){
 function saveInvAcct(){
   const name=(document.getElementById('iaf-name')?.value||'').trim();
   if(!name){toast('Name required',false);return;}
-  const inst=(document.getElementById('iaf-inst')?.value||'').trim();
-  if(!inst){toast('Institution required',false);return;}
   const type=document.getElementById('iaf-type')?.value||'brokerage_account';
   if(!INV.has(type)){toast('Pick an investment account type',false);return;}
   const ownerId=(document.getElementById('iaf-owner')?.value||'').trim()||null;
   const taxJurisdiction=document.getElementById('iaf-taxjur')?.value||'both';
-  const platform=(document.getElementById('iaf-platform')?.value||'').trim();
+  // V10.4.1: Open Date — convert DD/MM/YYYY to ISO; null if blank
+  const openDateRaw=(document.getElementById('iaf-opendate')?.value||'').trim();
+  const openDate=openDateRaw?fromDD(openDateRaw):null;
+  // V10.4.1: Linked Bank Account — null if "None"
+  const linkedBankId=(document.getElementById('iaf-linkedbank')?.value||'').trim()||null;
   const purpose=(document.getElementById('iaf-purpose')?.value||'').trim();
   const accNum=(document.getElementById('iaf-accnum')?.value||'').trim();
   if(_invAcctEditId){
     const ex=S.accounts.find(a=>a.id===_invAcctEditId);
     if(!ex){toast('Account not found',false);return;}
-    Object.assign(ex,{name,institution:inst,type,ownerId,taxJurisdiction,platform,purpose,accountNumber:accNum||null,_v10_2_migrated:true});
+    Object.assign(ex,{name,type,ownerId,taxJurisdiction,openDate,linkedBankId,purpose,accountNumber:accNum||null,_v10_2_migrated:true});
     sched();toast('Account updated');
   }else{
     const newId='acc_'+randSuffix(10);
     S.accounts.push({
       id:newId,
       name,
-      institution:inst,
       type,
       ownerId,
       taxJurisdiction,
-      platform,
+      openDate,
+      linkedBankId,
       purpose,
       accountNumber:accNum||null,
       updateSource:'manual',
@@ -16859,7 +16880,7 @@ function rPortfolioAccountDetail(){
     <div>
       <div class="pg-eyebrow">04 PORTFOLIO &middot; ACCOUNT</div>
       <div class="pg-header-title">${h(a.name)}</div>
-      <div class="pg-header-sub">${h(a.institution||'')} &middot; ${h(ATL[a.type]||a.type)} &middot; Owner: <strong>${h(ownerName)}</strong> &middot; Tax: ${h(taxJurLabel)}</div>
+      <div class="pg-header-sub">${h(ATL[a.type]||a.type)} &middot; Owner: <strong>${h(ownerName)}</strong> &middot; Tax: ${h(taxJurLabel)}${a.openDate?' &middot; Open since '+h(toDD(a.openDate)):''}${a.purpose?' &middot; '+h(a.purpose):''}</div>
     </div>
     <div class="fg" style="gap:6px;flex-wrap:wrap">
       <button class="btn btn-sm" onclick="sw('portfolio_accounts')" title="Back to all accounts">&larr; Back</button>
