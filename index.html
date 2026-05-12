@@ -1723,6 +1723,12 @@ body.privacy-on{padding-top:28px}
 .compass .index{width:204px;background:transparent;padding:22px 0 16px;display:flex;flex-direction:column;flex-shrink:0;border-right:1px solid var(--line)}
 
 .compass .index-section{margin-bottom:18px}
+/* V10.5.0: Two-engine sidebar filter. Sections tagged data-engine="cashflow"
+   or data-engine="portfolio" are shown only when the body's data-current-engine
+   attribute matches. Default (no attribute) shows cashflow sections. */
+body[data-current-engine="cashflow"] .index-section[data-engine="portfolio"]{display:none}
+body[data-current-engine="portfolio"] .index-section[data-engine="cashflow"]{display:none}
+body:not([data-current-engine]) .index-section[data-engine="portfolio"]{display:none}
 
 .compass .index-chapter{display:flex;align-items:baseline;gap:8px;padding:0 22px 8px;font-size:9.5px;color:var(--text3);text-transform:uppercase;letter-spacing:.14em;font-weight:600}
 
@@ -4460,19 +4466,16 @@ body.privacy-on{padding-top:28px}
         <span class="mod-badge mb-active">Active</span>
       </div>
 
-      <!-- Portfolio Engine — Locked -->
-      <div class="mod-card locked">
-        <div class="mod-lock-icon">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-        </div>
-        <div class="mod-icon" style="background:rgba(163,188,215,.1)">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4A6FB5" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <!-- Portfolio Engine — V10.5.0: Active -->
+      <div class="mod-card active-mod" onclick="enterEngine('portfolio')">
+        <div class="mod-icon" style="background:rgba(163,188,215,.15)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0E40C5" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>
           </svg>
         </div>
         <div class="mod-name">Portfolio</div>
         <div class="mod-desc">Investment portfolio, strategic asset allocation, P&amp;L, and performance tracking.</div>
-        <span class="mod-badge mb-soon">Coming Soon</span>
+        <span class="mod-badge mb-active">Active</span>
       </div>
 
       <!-- Capital Intelligence — Locked -->
@@ -4561,15 +4564,15 @@ body.privacy-on{padding-top:28px}
       <div style="font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--charcoal)">Capital OS</div>
     </div>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
-      <div class="mod-card active-mod" onclick="closeEngOverlay()" style="padding:.9rem;cursor:pointer">
+      <div id="eng-card-cashflow" class="mod-card active-mod" onclick="enterEngine('cashflow')" style="padding:.9rem;cursor:pointer">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0E40C5" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:6px"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
         <div style="font-size:12px;font-weight:600">Cash Flow</div>
-        <div style="font-size:10px;color:var(--pos);margin-top:3px">&#10003; Active</div>
+        <div id="eng-card-cashflow-status" style="font-size:10px;color:var(--pos);margin-top:3px">&#10003; Active</div>
       </div>
-      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:.9rem;opacity:.5">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4A6FB5" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:6px"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+      <div id="eng-card-portfolio" class="mod-card active-mod" onclick="enterEngine('portfolio')" style="padding:.9rem;cursor:pointer">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0E40C5" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:6px"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
         <div style="font-size:12px;font-weight:600">Portfolio</div>
-        <div style="font-size:10px;color:var(--text3);margin-top:3px">Coming Soon</div>
+        <div id="eng-card-portfolio-status" style="font-size:10px;color:var(--text3);margin-top:3px">Active</div>
       </div>
       <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:.9rem;opacity:.5">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4A6FB5" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:6px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
@@ -4683,13 +4686,17 @@ body.privacy-on{padding-top:28px}
   <div class="body" id="compass-body">
     <nav class="index" id="compass-index" aria-label="Primary navigation">
 
-      <div class="index-section" id="ix-pulse">
+      <!-- V10.5.0: Sections tagged with data-engine for two-engine nav filtering.
+           CSS hides sections that don't match body[data-current-engine]. -->
+
+      <!-- ═══ CASH FLOW ENGINE NAV ═══ -->
+      <div class="index-section" id="ix-pulse" data-engine="cashflow">
         <div class="index-chapter"><span>Pulse</span></div>
         <button class="index-item" data-tab="overview" onclick="sw('overview')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Overview</button>
         <button class="index-item" data-tab="projections" onclick="sw('projections')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="14 7 21 7 21 14"/></svg>Projections</button>
       </div>
 
-      <div class="index-section" id="ix-activity">
+      <div class="index-section" id="ix-activity" data-engine="cashflow">
         <div class="index-chapter"><span>Activity</span></div>
 
         <button class="index-item nav-group" data-group="transactions" onclick="toggleGroup('transactions')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/></svg>Transactions<span class="ix-arrow nav-arrow" id="arr-transactions">&#8250;</span></button>
@@ -4723,29 +4730,45 @@ body.privacy-on{padding-top:28px}
         </div>
       </div>
 
-      <div class="index-section" id="ix-finances">
+      <div class="index-section" id="ix-finances" data-engine="cashflow">
         <div class="index-chapter"><span>Finances</span></div>
         <button class="index-item" data-tab="accounts" onclick="sw('accounts')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>Accounts &amp; Cards</button>
         <button class="index-item" data-tab="debts" onclick="sw('debts')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Debts</button>
         <button class="index-item" data-tab="goals" onclick="sw('goals')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>Goals</button>
       </div>
 
-      <!-- V10.3.0 (Phase C+E): new PORTFOLIO top-level section. Six sub-pages —
-           Accounts, Holdings, and Family are functional; Strategy, Research, and
-           Decision are Phase F placeholders that reserve their nav slots. -->
-      <div class="index-section" id="ix-portfolio">
-        <div class="index-chapter"><span>Portfolio</span></div>
+      <div class="index-section" id="ix-household" data-engine="cashflow">
+        <div class="index-chapter"><span>Household</span></div>
+        <button class="index-item" data-tab="staff" onclick="sw('staff')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>Staff</button>
+      </div>
+
+      <!-- ═══ PORTFOLIO ENGINE NAV (V10.5.0) ═══
+           Each section tagged data-engine="portfolio" so it appears only when
+           body[data-current-engine="portfolio"]. -->
+
+      <div class="index-section" id="ix-port-pulse" data-engine="portfolio">
+        <div class="index-chapter"><span>Pulse</span></div>
+        <button class="index-item" data-tab="portfolio_overview" onclick="sw('portfolio_overview')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Overview</button>
+      </div>
+
+      <div class="index-section" id="ix-port-positions" data-engine="portfolio">
+        <div class="index-chapter"><span>Positions</span></div>
         <button class="index-item" data-tab="portfolio_accounts" onclick="sw('portfolio_accounts')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>Accounts</button>
         <button class="index-item" data-tab="portfolio_holdings" onclick="sw('portfolio_holdings')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>Holdings</button>
         <button class="index-item" data-tab="portfolio_family" onclick="sw('portfolio_family')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>Family</button>
+      </div>
+
+      <div class="index-section" id="ix-port-activity" data-engine="portfolio">
+        <div class="index-chapter"><span>Activity</span></div>
+        <button class="index-item" data-tab="portfolio_inbox" onclick="sw('portfolio_inbox')" style="display:flex;justify-content:space-between;align-items:center"><span style="display:flex;align-items:center;gap:8px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>Inbox</span><span id="nb-port-inbox" class="nav-notify-dot warn" style="display:none"></span></button>
+        <button class="index-item" data-tab="txinvestments" onclick="sw('txinvestments')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>Investment Activity</button>
+      </div>
+
+      <div class="index-section" id="ix-port-intelligence" data-engine="portfolio">
+        <div class="index-chapter"><span>Intelligence</span></div>
         <button class="index-item" data-tab="portfolio_strategy" onclick="sw('portfolio_strategy')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>Strategy</button>
         <button class="index-item" data-tab="portfolio_research" onclick="sw('portfolio_research')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="16" y1="16" x2="21" y2="21"/></svg>Research</button>
         <button class="index-item" data-tab="portfolio_decision" onclick="sw('portfolio_decision')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Decision</button>
-      </div>
-
-      <div class="index-section" id="ix-household">
-        <div class="index-chapter"><span>Household</span></div>
-        <button class="index-item" data-tab="staff" onclick="sw('staff')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>Staff</button>
       </div>
 
       <div class="index-foot">
@@ -4885,7 +4908,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='10.4.1';
+const VERSION='10.5.0';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -4982,8 +5005,49 @@ async function sbDel(id){
 // ─── AUTH SCREENS ───
 function showAuth(id){['s-loading','s-setup','s-unlock','s-modules'].forEach(s=>{const el=document.getElementById(s);if(el)el.classList.toggle('active',s===id);});document.getElementById('app').classList.remove('active');}
 function showModules(){['s-loading','s-setup','s-unlock'].forEach(s=>document.getElementById(s)?.classList.remove('active'));document.getElementById('s-modules').classList.add('active');document.getElementById('app').classList.remove('active');}
-function showApp(){['s-loading','s-setup','s-unlock','s-modules'].forEach(s=>document.getElementById(s)?.classList.remove('active'));document.getElementById('app').classList.add('active');}
-function enterEngine(name){if(name==='spending'){document.getElementById('s-modules').classList.remove('active');showApp();sw('overview');loadSubmissions();resetActivityTimer();}};
+function showApp(){
+  ['s-loading','s-setup','s-unlock','s-modules'].forEach(s=>document.getElementById(s)?.classList.remove('active'));
+  document.getElementById('app').classList.add('active');
+  // V10.5.0: apply the current engine to the body so the sidebar shows the right
+  // sections (CSS hides sections not matching data-current-engine).
+  const eng=(S.settings&&S.settings.currentEngine)||'cashflow';
+  document.body.setAttribute('data-current-engine',eng);
+  // Update the ribbon engine label.
+  const rEng=document.querySelector('.r-engine');
+  if(rEng)rEng.textContent=eng==='portfolio'?'Portfolio Engine':'Cash Flow Engine';
+}
+function enterEngine(name){
+  // V10.5.0: backward-compat alias — 'spending' was the historical name for Cash Flow.
+  if(name==='spending')name='cashflow';
+  if(name!=='cashflow'&&name!=='portfolio'){return;}
+  // Persist the active engine to vault settings so login restores it.
+  if(!S.settings)S.settings={};
+  S.settings.currentEngine=name;
+  if(!S.settings.engineLastTab)S.settings.engineLastTab={cashflow:'overview',portfolio:'portfolio_overview'};
+  // Apply engine class to body for CSS-based nav filtering.
+  document.body.setAttribute('data-current-engine',name);
+  // Update the ribbon engine label (live update without full re-render).
+  const rEng=document.querySelector('.r-engine');
+  if(rEng)rEng.textContent=name==='portfolio'?'Portfolio Engine':'Cash Flow Engine';
+  // Update Switch Engine overlay status badges (which card shows "Active" vs no marker).
+  const cashStat=document.getElementById('eng-card-cashflow-status');
+  const portStat=document.getElementById('eng-card-portfolio-status');
+  if(cashStat)cashStat.innerHTML=name==='cashflow'?'&#10003; Active':'Active';
+  if(cashStat)cashStat.style.color=name==='cashflow'?'var(--pos)':'var(--text3)';
+  if(portStat)portStat.innerHTML=name==='portfolio'?'&#10003; Active':'Active';
+  if(portStat)portStat.style.color=name==='portfolio'?'var(--pos)':'var(--text3)';
+  // Close overlay if it's open (user clicked from inside the modal).
+  document.getElementById('eng-overlay')?.classList.remove('active');
+  // Close landing if it's open (first-time landing or after lock).
+  document.getElementById('s-modules')?.classList.remove('active');
+  // Show the app, switch to the last-used tab for this engine.
+  showApp();
+  const lastTab=S.settings.engineLastTab[name]||(name==='portfolio'?'portfolio_overview':'overview');
+  sw(lastTab);
+  loadSubmissions();
+  resetActivityTimer();
+  sched();
+}
 function closeEngOverlay(){document.getElementById('eng-overlay').classList.remove('active');}
 function tpw(id,btn){const el=document.getElementById(id);if(!el)return;el.type=el.type==='password'?'text':'password';btn.innerHTML=el.type==='password'?'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>':'<svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M9.88 9.88a3 3 0 1 0 4.24 4.24\"/><path d=\"M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68\"/><path d=\"M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61\"/><line x1=\"2\" y1=\"2\" x2=\"22\" y2=\"22\"/></svg>';}
 function setLd(m){const e=document.getElementById('load-msg');if(e)e.textContent=m;}
@@ -6620,6 +6684,25 @@ function sw(tab){
   // keys (or a deep link / muscle memory) gets silently redirected.
   if(tab==='investments')tab='portfolio_accounts';
   else if(tab==='familyinv')tab='portfolio_family';
+  // V10.5.0: detect which engine this tab belongs to, persist last-tab per engine.
+  // Portfolio-engine tabs are prefixed 'portfolio_' or are the Investment Activity
+  // shortcut 'txinvestments' (when reached from inside Portfolio nav).
+  const isPortfolioTab=(t)=>t.startsWith('portfolio_');
+  const tabEngine=isPortfolioTab(tab)?'portfolio':'cashflow';
+  if(!S.settings)S.settings={};
+  if(!S.settings.engineLastTab)S.settings.engineLastTab={cashflow:'overview',portfolio:'portfolio_overview'};
+  // Settings tab is global — don't overwrite either engine's last-tab.
+  // Investment Activity ('txinvestments') is also global — accessible from both.
+  if(tab!=='settings'&&tab!=='txinvestments'){
+    S.settings.engineLastTab[tabEngine]=tab;
+    // Also update currentEngine if it's drifted (e.g., user clicked a sidebar
+    // section from the wrong engine via some bug — keep things consistent).
+    S.settings.currentEngine=tabEngine;
+    document.body.setAttribute('data-current-engine',tabEngine);
+    // Live-update the ribbon engine label.
+    const rEng=document.querySelector('.r-engine');
+    if(rEng)rEng.textContent=tabEngine==='portfolio'?'Portfolio Engine':'Cash Flow Engine';
+  }
   // Reset bulk selection when switching tabs
   if(BulkMode){BulkMode=false;BulkSelected.clear();}
   S.tab=tab;
@@ -6635,6 +6718,8 @@ function sw(tab){
   // (now under Finances chapter).
   const allLabels={overview:'Overview',txbank:'Bank Accounts',txcards:'Cards',txinvestments:'Investment Activity',income:'Income',bills:'Bills',subscriptions:'Subscriptions',staff:'Staff',accounts:'Accounts & Cards',debts:'Debts',goals:'Goals',uncat:'Uncategorized',transfers:'Pending Matches',reimbursements:'Reimbursements',reviewqueue:'Review Queue',rules:'Transaction Rules',sanity:'Sanity Check',insights:'Usage Insights',settings:'Settings',projections:'Projections',
     // V10.3.0 (Phase C+E): new Portfolio section labels
+    portfolio_overview:'Portfolio · Overview',
+    portfolio_inbox:'Portfolio · Inbox',
     portfolio_accounts:'Portfolio · Accounts',
     portfolio_holdings:'Portfolio · Holdings',
     portfolio_family:'Portfolio · Family',
@@ -6816,6 +6901,9 @@ async function render(){
   else if(t==='staff')el.innerHTML=safeTabRenderSync('staff',()=>rStaff());
   // V10.3.0 (Phase C+E): new Portfolio section routes. rInvestments and rFamilyInv
   // are reused (same data shape); new render functions added for the additional pages.
+  // V10.5.0: portfolio_overview (Pulse) and portfolio_inbox (placeholder for V10.5.1).
+  else if(t==='portfolio_overview')el.innerHTML=safeTabRenderSync('portfolio_overview',()=>rPortfolioOverview());
+  else if(t==='portfolio_inbox')el.innerHTML=safeTabRenderSync('portfolio_inbox',()=>rPortfolioInbox());
   else if(t==='portfolio_accounts'){el.innerHTML=safeTabRenderSync('portfolio_accounts',()=>rInvestments());setTimeout(triggerAutoRefreshIfStale,200);}
   else if(t==='portfolio_account_detail')el.innerHTML=safeTabRenderSync('portfolio_account_detail',()=>rPortfolioAccountDetail());
   else if(t==='portfolio_holdings')el.innerHTML=safeTabRenderSync('portfolio_holdings',()=>rPortfolioHoldings());
@@ -16476,7 +16564,7 @@ function rInvestments(){
   if(invAccsAll.length===0){
     return`<div class="pg-header-row">
       <div>
-        <div class="pg-eyebrow">04 PORTFOLIO</div>
+        <div class="pg-eyebrow">02 POSITIONS</div>
         <div class="pg-header-title">Accounts</div>
         <div class="pg-header-sub">Investment accounts with current valuations and deployed capital. Stale values are flagged for refresh.</div>
       </div>
@@ -16489,7 +16577,7 @@ function rInvestments(){
     // Filtered to nothing
     return`<div class="pg-header-row">
       <div>
-        <div class="pg-eyebrow">04 PORTFOLIO</div>
+        <div class="pg-eyebrow">02 POSITIONS</div>
         <div class="pg-header-title">Accounts</div>
         <div class="pg-header-sub">Investment accounts with current valuations and deployed capital. Stale values are flagged for refresh.</div>
       </div>
@@ -16636,7 +16724,7 @@ function rInvestments(){
 
   return`<div class="pg-header-row">
     <div>
-      <div class="pg-eyebrow">04 PORTFOLIO</div>
+      <div class="pg-eyebrow">02 POSITIONS</div>
       <div class="pg-header-title">Accounts</div>
       <div class="pg-header-sub">Investment accounts with current valuations and deployed capital. Stale values are flagged for refresh.</div>
     </div>
@@ -16853,7 +16941,7 @@ function rPortfolioAccountDetail(){
   const accId=_portfolioAccountDetailId;
   const a=accId?S.accounts.find(x=>x.id===accId):null;
   if(!a){
-    return`<div class="pg-header"><div class="pg-eyebrow">04 PORTFOLIO</div><div class="pg-header-title">Account not found</div></div>
+    return`<div class="pg-header"><div class="pg-eyebrow">02 POSITIONS</div><div class="pg-header-title">Account not found</div></div>
     <div class="card"><div class="empty">This account no longer exists. <button class="btn btn-sm" onclick="sw('portfolio_accounts')">Back to Portfolio Accounts</button></div></div>`;
   }
   const holdings=Array.isArray(a.holdings)?a.holdings:[];
@@ -16878,7 +16966,7 @@ function rPortfolioAccountDetail(){
   const taxJurLabel={us:'US only',saudi:'Saudi only',both:'Both (US + Saudi)'}[taxJur]||taxJur;
   return`<div class="pg-header-row">
     <div>
-      <div class="pg-eyebrow">04 PORTFOLIO &middot; ACCOUNT</div>
+      <div class="pg-eyebrow">02 POSITIONS &middot; ACCOUNT</div>
       <div class="pg-header-title">${h(a.name)}</div>
       <div class="pg-header-sub">${h(ATL[a.type]||a.type)} &middot; Owner: <strong>${h(ownerName)}</strong> &middot; Tax: ${h(taxJurLabel)}${a.openDate?' &middot; Open since '+h(toDD(a.openDate)):''}${a.purpose?' &middot; '+h(a.purpose):''}</div>
     </div>
@@ -17695,7 +17783,7 @@ function rPortfolioHoldings(){
   if(allHoldings.length===0){
     return`<div class="pg-header-row">
       <div>
-        <div class="pg-eyebrow">04 PORTFOLIO</div>
+        <div class="pg-eyebrow">02 POSITIONS</div>
         <div class="pg-header-title">Holdings</div>
         <div class="pg-header-sub">Every position across every investment account in one view, sortable and filterable.</div>
       </div>
@@ -17742,7 +17830,7 @@ function rPortfolioHoldings(){
   }).join('');
   return`<div class="pg-header-row">
     <div>
-      <div class="pg-eyebrow">04 PORTFOLIO</div>
+      <div class="pg-eyebrow">02 POSITIONS</div>
       <div class="pg-header-title">Holdings</div>
       <div class="pg-header-sub">Every position across every investment account in one view. Click a row to drill into the account.</div>
     </div>
@@ -17780,22 +17868,282 @@ function rPortfolioPlaceholder(eyebrow,title,sub,description,featureBullets){
 }
 
 function rPortfolioStrategy(){
-  return rPortfolioPlaceholder('04 PORTFOLIO','Strategy','Target asset allocation, drift monitoring, and rebalancing flags.',
+  return rPortfolioPlaceholder('04 INTELLIGENCE','Strategy','Target asset allocation, drift monitoring, and rebalancing flags.',
     'Define your strategic asset allocation (SAA) by asset class, region, and beneficiary. Lanki tracks drift between current and target weights, flags rebalancing opportunities, and versions every change so you can see how your strategy evolved.',
     ['Versioned SAA per beneficiary (Self, Mohammad, Turki, Lana)','Current vs target weight per asset class and region','Drift threshold alerts','Rebalancing simulation: "what if I sell X and buy Y"','Strategy change log']);
 }
 
 function rPortfolioResearch(){
-  return rPortfolioPlaceholder('04 PORTFOLIO','Research','AI-generated candidate ideas and watchlist.',
+  return rPortfolioPlaceholder('04 INTELLIGENCE','Research','AI-generated candidate ideas and watchlist.',
     'Lanki suggests investment candidates that fit gaps in your strategy. You maintain a watchlist, save theses per candidate, and track which research converted into actual positions.',
     ['AI candidate search by asset class, region, theme','Watchlist with notes and target entry prices','Saved investment theses per candidate','Conversion tracking: which research became a holding','Comparison: candidate vs current holdings']);
 }
 
 function rPortfolioDecision(){
-  return rPortfolioPlaceholder('04 PORTFOLIO','Decision','Sell-to-buy pairing and weekly Action Brief.',
+  return rPortfolioPlaceholder('04 INTELLIGENCE','Decision','Sell-to-buy pairing and weekly Action Brief.',
     'When you want to make a move, Decision pairs the sell side with the buy side and previews the realized G/L, tax impact, and resulting allocation drift. Weekly Action Brief synthesizes Strategy, Research, and current holdings into prioritized actions.',
     ['Sell-to-buy pair editor with realized G/L preview','Weekly Action Brief: top 3-5 prioritized moves','Tax-aware FIFO/LIFO/specific-lot suggestion per pair','Allocation drift impact preview before executing','Decision log: every move recorded with rationale']);
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// V10.5.0 — PORTFOLIO ENGINE OVERVIEW (Pulse) + INBOX (placeholder)
+// ═══════════════════════════════════════════════════════════════════════════════
+// The Portfolio Overview is the engine's Pulse page — equivalent role to the
+// Cash Flow Overview but specific to investment data. Design language matches
+// Cash Flow Overview: pg-header-row, kpi-strip, card-bordered, composition
+// bars, top-N tables. Will evolve with each phase (Strategy/Research/Decision).
+
+function rPortfolioOverview(){
+  const invAccs=S.accounts.filter(a=>isInvestmentAccount(a)&&isLiveAccount(a));
+  if(invAccs.length===0){
+    return`<div class="pg-header-row">
+      <div>
+        <div class="pg-eyebrow">01 PULSE</div>
+        <div class="pg-header-title">Overview</div>
+        <div class="pg-header-sub">No investment accounts yet · Portfolio Engine</div>
+      </div>
+      <button class="btn btn-p btn-sm" onclick="sw('portfolio_accounts')">Add your first account &rarr;</button>
+    </div>
+    <div class="card"><div class="empty">Start by adding an investment account from <a href="javascript:sw('portfolio_accounts')" style="color:var(--action)">Portfolio &rarr; Accounts</a>. After that you'll record buy lots, track current values, and the Overview will populate.</div></div>`;
+  }
+  // Flatten all holdings across accounts
+  const allHoldings=[];
+  invAccs.forEach(a=>{(a.holdings||[]).forEach(hd=>allHoldings.push({hd,acc:a}));});
+  // Aggregate KPIs
+  const totalCV=allHoldings.reduce((s,{hd})=>{const v=holdingCurrentValue(hd);return v!=null?s+v:s;},0);
+  const totalCB=allHoldings.reduce((s,{hd})=>s+holdingCostBasis(hd),0);
+  const pricedCount=allHoldings.filter(({hd})=>hd.currentPrice!=null).length;
+  const totalUnreal=allHoldings.reduce((s,{hd})=>{const u=holdingUnrealizedGL(hd);return u!=null?s+u:s;},0);
+  const yearNow=new Date().getFullYear();
+  const totalRealYTD=allHoldings.reduce((s,{hd})=>s+holdingRealizedGLYTD(hd,yearNow),0);
+  const wPct=totalCB>0?((totalUnreal/totalCB)*100):null;
+  // Stale count — holdings priced >30 days ago
+  const staleCount=allHoldings.filter(({hd})=>{
+    if(!hd.currentPriceAsOf)return false;
+    const days=Math.floor((Date.now()-new Date(hd.currentPriceAsOf).getTime())/86400000);
+    return days>30;
+  }).length;
+  // Net deployed across all investment accounts (uses existing helper)
+  const netDeployed=invAccs.reduce((s,a)=>s+calcInvestmentNetDeployed(a.id),0);
+
+  // ─── Allocation by asset class (composition bar) ───
+  const byAssetClass={};
+  allHoldings.forEach(({hd})=>{
+    const cv=holdingCurrentValue(hd);
+    if(cv==null)return;
+    const cls=hd.assetClass||'mixed';
+    byAssetClass[cls]=(byAssetClass[cls]||0)+cv;
+  });
+  const assetClassMeta={
+    public_equity:{l:'Public Equity',c:'#0E40C5'},
+    fixed_income:{l:'Fixed Income',c:'#A3BCD7'},
+    real_estate:{l:'Real Estate',c:'#C9A87C'},
+    commodity:{l:'Commodity',c:'#D4AF37'},
+    crypto:{l:'Crypto',c:'#8B6F47'},
+    cash:{l:'Cash',c:'#7BA098'},
+    private_credit:{l:'Private Credit',c:'#9B7B9B'},
+    private_equity:{l:'Private Equity',c:'#704F70'},
+    mixed:{l:'Mixed',c:'#888888'},
+    alternative:{l:'Alternative',c:'#5B7C99'}
+  };
+  const acTotal=Object.values(byAssetClass).reduce((s,v)=>s+v,0);
+  const acSorted=Object.entries(byAssetClass).sort((a,b)=>b[1]-a[1]);
+  const acComposition=acSorted.map(([cls,v])=>{
+    const meta=assetClassMeta[cls]||{l:cls,c:'#888'};
+    const pct=acTotal>0?(v/acTotal)*100:0;
+    return{label:meta.l,color:meta.c,pct,value:v};
+  });
+
+  // ─── Allocation by owner ───
+  const byOwner={};
+  allHoldings.forEach(({hd,acc})=>{
+    const cv=holdingCurrentValue(hd);
+    if(cv==null)return;
+    const ownerKey=acc.ownerId||'self';
+    byOwner[ownerKey]=(byOwner[ownerKey]||0)+cv;
+  });
+  const ownerRows=Object.entries(byOwner).sort((a,b)=>b[1]-a[1]).map(([k,v])=>{
+    const lbl=k==='self'?'Self':ownerLabel(k);
+    const pct=acTotal>0?(v/acTotal)*100:0;
+    return`<div class="fg jb" style="padding:8px 0;border-bottom:1px solid var(--bg2);align-items:center;gap:10px">
+      <div style="flex:1;font-size:13px;font-weight:500">${h(lbl)}</div>
+      <div style="font-size:11px;color:var(--text3);font-variant-numeric:tabular-nums">${pct.toFixed(1)}%</div>
+      <div class="priv-mask" style="font-variant-numeric:tabular-nums;font-weight:500;min-width:120px;text-align:right">${fmtP(v)}</div>
+    </div>`;
+  }).join('');
+
+  // ─── Top 5 holdings by current value ───
+  const topHoldings=allHoldings
+    .filter(({hd})=>holdingCurrentValue(hd)!=null)
+    .sort((a,b)=>holdingCurrentValue(b.hd)-holdingCurrentValue(a.hd))
+    .slice(0,5);
+  const topRows=topHoldings.map(({hd,acc})=>{
+    const meta=holdingTypeMeta(hd.type);
+    const cv=holdingCurrentValue(hd);
+    const ugl=holdingUnrealizedGL(hd);
+    const cb=holdingCostBasis(hd);
+    const pct=(cb>0&&ugl!=null)?(ugl/cb)*100:null;
+    return`<tr style="cursor:pointer" onclick="openPortfolioAccountDetail('${acc.id}')">
+      <td>
+        <div style="font-weight:500">${h(hd.name||'(unnamed)')}</div>
+        <div style="font-size:10px;color:var(--text3)">${h(meta.l)} &middot; ${h(acc.name)}</div>
+      </td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums">${fmtP(cv)}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;font-weight:500;color:${ugl!=null?(ugl>=0?'var(--pos)':'var(--neg)'):'var(--text3)'}">${ugl!=null?(ugl>=0?'+':'')+fmtP(ugl):'—'}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;font-size:11px;color:${pct!=null?(pct>=0?'var(--pos)':'var(--neg)'):'var(--text3)'}">${pct!=null?(pct>=0?'+':'')+pct.toFixed(2)+'%':'—'}</td>
+    </tr>`;
+  }).join('');
+
+  // ─── Recent investment activity (last 5 transactions from investment accounts) ───
+  const recentInv=invAccs.flatMap(a=>(getInvestmentTxnsForAccount(a.id,3)||[]).map(t=>({t,a})))
+    .sort((x,y)=>(y.t.date||'').localeCompare(x.t.date||''))
+    .slice(0,5);
+  const recentRows=recentInv.length?recentInv.map(({t,a})=>{
+    const isOut=txDir(t)==='out';
+    return`<div class="fg jb" style="padding:8px 0;border-bottom:1px solid var(--bg2);font-size:12px;gap:10px">
+      <div style="color:var(--text3);flex-shrink:0;min-width:80px">${toDD(t.date)||'—'}</div>
+      <div style="flex:1;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(t.description||'—')}</div>
+      <div style="font-size:10px;color:var(--text3);min-width:100px;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(a.name)}</div>
+      <div class="priv-mask" style="font-variant-numeric:tabular-nums;font-weight:500;min-width:90px;text-align:right;color:${isOut?'var(--neg)':'var(--pos)'}">${isOut?'-':'+'}${fmtP(t.amount)}</div>
+    </div>`;
+  }).join(''):`<div style="font-size:11px;color:var(--text3);padding:8px 0">No recent investment transactions. Investment-tagged transactions appear here automatically.</div>`;
+
+  return`<div class="pg-header-row">
+    <div>
+      <div class="pg-eyebrow">01 PULSE</div>
+      <div class="pg-header-title">Overview</div>
+      <div class="pg-header-sub">${invAccs.length} investment account${invAccs.length===1?'':'s'} &middot; ${allHoldings.length} holding${allHoldings.length===1?'':'s'} &middot; Portfolio Engine</div>
+    </div>
+    <div class="fg" style="gap:8px;flex-wrap:wrap;align-items:center">
+      ${staleCount>0?`<span class="status-pill status-warn" title="${staleCount} holdings have prices older than 30 days">${staleCount} stale</span>`:''}
+      <button class="btn btn-sm btn-p" onclick="sw('portfolio_accounts')">Go to Accounts &rarr;</button>
+    </div>
+  </div>
+
+  <!-- HERO ZONE — Total Portfolio Value with composition breakdown -->
+  <div class="card card-bordered" style="margin-bottom:14px;padding:18px 22px;background:var(--bg2)">
+    <div class="fg jb" style="margin-bottom:8px;align-items:baseline;flex-wrap:wrap;gap:10px">
+      <div>
+        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Total Current Value</div>
+        <div class="priv-mask" style="font-size:36px;font-weight:600;color:${totalUnreal>=0?'var(--pos)':'var(--neg)'};font-variant-numeric:tabular-nums">${pricedCount?fmtP(totalCV):'—'}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">${pricedCount} of ${allHoldings.length} holdings priced${totalCB>0?' &middot; Cost basis: '+fmtP(totalCB):''}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Net Deployed</div>
+        <div class="priv-mask" style="font-size:16px;font-weight:500;font-variant-numeric:tabular-nums">${fmtP(netDeployed)}</div>
+      </div>
+    </div>
+    ${acComposition.length>0?`
+    <div style="margin-top:14px">
+      <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Allocation by asset class</div>
+      <div style="display:flex;height:12px;border-radius:6px;overflow:hidden;background:var(--bg3)">
+        ${acComposition.map(c=>`<div style="width:${c.pct}%;background:${c.color}" title="${h(c.label)}: ${c.pct.toFixed(1)}% (${fmtP(c.value)})"></div>`).join('')}
+      </div>
+      <div class="fg" style="gap:14px;flex-wrap:wrap;margin-top:10px;font-size:11px">
+        ${acComposition.map(c=>`<div class="fg" style="gap:6px;align-items:center"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${c.color}"></span><span style="color:var(--text2)">${h(c.label)}</span><span class="priv-mask" style="color:var(--text3);font-variant-numeric:tabular-nums">${fmtP(c.value)}</span></div>`).join('')}
+      </div>
+    </div>`:''}
+  </div>
+
+  <!-- KPI STRIP — Returns -->
+  <div class="kpi-strip">
+    <div class="kpi-cell"><div class="kpi-cell-label">Unrealized G/L</div><div class="kpi-cell-value priv-mask ${totalUnreal>=0?'c-ok':'c-bad'}">${pricedCount?(totalUnreal>=0?'+':'')+fmtP(totalUnreal):'—'}</div><div class="kpi-cell-sub">Where prices are recorded</div></div>
+    <div class="kpi-cell"><div class="kpi-cell-label">% Return (Weighted)</div><div class="kpi-cell-value ${wPct!=null&&wPct>=0?'c-ok':wPct!=null?'c-bad':''}">${wPct!=null?(wPct>=0?'+':'')+wPct.toFixed(2)+'%':'—'}</div><div class="kpi-cell-sub">Cost basis vs current value</div></div>
+    <div class="kpi-cell"><div class="kpi-cell-label">Realized G/L (YTD)</div><div class="kpi-cell-value priv-mask ${totalRealYTD>=0?'c-ok':'c-bad'}">${totalRealYTD>=0?'+':''}${fmtP(totalRealYTD)}</div><div class="kpi-cell-sub">${yearNow}</div></div>
+    <div class="kpi-cell"><div class="kpi-cell-label">Holdings</div><div class="kpi-cell-value">${allHoldings.length}</div><div class="kpi-cell-sub">across ${invAccs.length} account${invAccs.length===1?'':'s'}</div></div>
+  </div>
+
+  <!-- TWO-COLUMN ZONE: Top Holdings + Owner Allocation -->
+  <div class="fr" style="gap:14px;flex-wrap:wrap;margin-bottom:14px">
+    <div class="card card-bordered" style="flex:2;min-width:300px;padding:14px 18px">
+      <div class="fg jb" style="margin-bottom:10px;align-items:center">
+        <div style="font-size:13px;font-weight:600">Top Holdings</div>
+        <button class="btn btn-xs" onclick="sw('portfolio_holdings')">View all &rarr;</button>
+      </div>
+      ${topRows?`<div class="tbl-wrap"><table class="tx-tbl">
+        <thead><tr><th>Holding</th><th style="text-align:right">Current Value</th><th style="text-align:right">Unrealized G/L</th><th style="text-align:right">% Return</th></tr></thead>
+        <tbody>${topRows}</tbody>
+      </table></div>`:`<div class="empty">No priced holdings yet. Update prices on an account to see top performers.</div>`}
+    </div>
+
+    <div class="card card-bordered" style="flex:1;min-width:240px;padding:14px 18px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:10px">By Owner</div>
+      ${ownerRows||`<div class="empty">No priced holdings.</div>`}
+    </div>
+  </div>
+
+  <!-- RECENT ACTIVITY -->
+  <div class="card card-bordered" style="padding:14px 18px;margin-bottom:14px">
+    <div class="fg jb" style="margin-bottom:10px;align-items:center">
+      <div style="font-size:13px;font-weight:600">Recent Investment Activity</div>
+      <button class="btn btn-xs" onclick="sw('txinvestments')">View all &rarr;</button>
+    </div>
+    ${recentRows}
+  </div>`;
+}
+
+// ─── PORTFOLIO INBOX (V10.5.0 placeholder; full build in V10.5.1) ────────────
+function rPortfolioInbox(){
+  // V10.5.0 ships an empty-state placeholder. V10.5.1 implements three sections
+  // (Overdue / Due now / Coming soon) for P2P opportunities + stale prices.
+  // The schema (holding.opportunities[]) doesn't exist yet, so there's nothing
+  // to query against in V10.5.0.
+  const invAccs=S.accounts.filter(a=>isInvestmentAccount(a)&&isLiveAccount(a));
+  const allHoldings=[];
+  invAccs.forEach(a=>{(a.holdings||[]).forEach(hd=>allHoldings.push({hd,acc:a}));});
+  // Compute stale count now (this part WILL work in V10.5.0)
+  const stale=allHoldings.filter(({hd})=>{
+    if(!hd.currentPriceAsOf)return false;
+    const days=Math.floor((Date.now()-new Date(hd.currentPriceAsOf).getTime())/86400000);
+    return days>30;
+  });
+  return`<div class="pg-header-row">
+    <div>
+      <div class="pg-eyebrow">03 ACTIVITY</div>
+      <div class="pg-header-title">Inbox</div>
+      <div class="pg-header-sub">Action center for upcoming and overdue items &middot; Portfolio Engine</div>
+    </div>
+  </div>
+
+  <div class="card card-bordered" style="padding:20px;background:var(--bg2);margin-bottom:14px">
+    <div style="font-size:13px;font-weight:600;margin-bottom:8px">Coming in V10.5.1</div>
+    <div style="font-size:12px;color:var(--text2);line-height:1.6">
+      Three action sections will appear here once P2P opportunities are recorded (V10.5.1):
+      <ul style="margin:8px 0 0 0;padding-left:18px;line-height:1.8">
+        <li><strong>Overdue:</strong> P2P opportunities past their expected pay date by more than 3 days</li>
+        <li><strong>Due now:</strong> P2P opportunities within ±3 days of the expected pay date</li>
+        <li><strong>Coming soon:</strong> P2P opportunities with an expected pay date in the next 14 days</li>
+      </ul>
+      <div style="margin-top:10px">Stale prices and other action types will also be aggregated here.</div>
+    </div>
+  </div>
+
+  ${stale.length>0?`<div class="card card-bordered" style="padding:14px 18px">
+    <div class="fg jb" style="margin-bottom:10px;align-items:center">
+      <div style="font-size:13px;font-weight:600;color:var(--warn)">&#9888; Stale Prices (${stale.length})</div>
+      <button class="btn btn-xs btn-p" onclick="sw('portfolio_holdings')">View holdings &rarr;</button>
+    </div>
+    <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:10px">${stale.length} holding${stale.length===1?'':'s'} have prices older than 30 days. Refresh them via the "Update prices" button on each account.</div>
+    <div style="max-height:280px;overflow-y:auto">
+      ${stale.slice(0,10).map(({hd,acc})=>{
+        const days=Math.floor((Date.now()-new Date(hd.currentPriceAsOf).getTime())/86400000);
+        return`<div class="fg jb" style="padding:8px 0;border-bottom:1px solid var(--bg2);font-size:12px;gap:10px">
+          <div style="flex:1">
+            <div style="font-weight:500">${h(hd.name||'(unnamed)')}</div>
+            <div style="font-size:10px;color:var(--text3)">${h(acc.name)} &middot; price ${days}d old</div>
+          </div>
+          <button class="btn btn-xs" onclick="openPortfolioAccountDetail('${acc.id}')">Open account &rarr;</button>
+        </div>`;
+      }).join('')}
+      ${stale.length>10?`<div style="font-size:11px;color:var(--text3);padding:8px 0;text-align:center">+ ${stale.length-10} more</div>`:''}
+    </div>
+  </div>`:`<div class="card" style="padding:30px;text-align:center"><div style="font-size:32px;margin-bottom:10px">🎉</div><div style="font-size:14px;font-weight:600;margin-bottom:4px">No pending actions</div><div style="font-size:12px;color:var(--text3)">Your portfolio is up to date.</div></div>`}`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// END V10.5.0 — PORTFOLIO ENGINE OVERVIEW + INBOX
+// ═══════════════════════════════════════════════════════════════════════════════
+
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // END V10.3.0 PHASE C+E
@@ -18557,7 +18905,7 @@ function rFamilyInv(){
   </div>`:'';
 
   return`<div class="pg-header">
-    <div class="pg-eyebrow">04 PORTFOLIO</div>
+    <div class="pg-eyebrow">02 POSITIONS</div>
     <div class="pg-header-title">Family</div>
     <div class="pg-header-sub">Capital deployed per family member, with returns and last recorded values rolled up across all of their accounts.</div>
   </div>
