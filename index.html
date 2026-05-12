@@ -4908,7 +4908,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='10.5.2';
+const VERSION='10.5.3';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -5591,6 +5591,15 @@ let S={
   version:VERSION
 };
 function fmt(n){if(n===undefined||n===null)return'--';return S.settings.currency+'\u00a0'+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
+// V10.5.3: format an amount in a specified currency (not the user's display currency).
+// Used by holding lot/sale price columns where the price-per-unit is in the holding's
+// native currency, not necessarily SAR. fmt() always uses S.settings.currency which
+// is wrong for non-SAR holdings.
+function fmtCur(n,currency){
+  if(n===undefined||n===null)return'--';
+  return(currency||'SAR')+'\u00a0'+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function fmtPCur(n,currency){return`<span class="fmt-money">${fmtCur(n,currency)}</span>`;}
 function fmtS(n,sg=false){return(sg&&n>0?'+':'')+(n<0?'-':'')+S.settings.currency+'\u00a0'+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
 // Privacy-aware money formatters. Wrap in a class instead of inline blur so a
 // single body-level class controls all sensitive data, eliminating per-call gaps.
@@ -17644,30 +17653,38 @@ function rHoldingDetailsForm(a,hd,allowedTypes,currentType){
   // PFIC default: true for non-US funds, false otherwise
   const defaultPFIC=currentType==='fund';
   const pficVal=hd?(!!hd.isPFIC):defaultPFIC;
+  // V10.5.3: re-architected as deliberate 2-per-row to eliminate empty spaces.
+  // Notes is full-width because it's a textarea.
+  // PFIC is a checkbox — paired with the date field when no identifier; alone when identifier.
+  const fldType=`<div style="flex:1"><label class="lbl">Type</label><select id="hef-type" onchange="onHoldingTypeChange(this.value)">${typeOpts}</select></div>`;
+  const fldName=`<div style="flex:1"><label class="lbl">Display name</label><input type="text" id="hef-name" value="${hd?h(hd.name||''):''}" placeholder="e.g. Aramco, Tamra Local Equity Fund"></div>`;
+  const fldIdentifier=showIdentifier?`<div style="flex:1"><label class="lbl">${h(idLabel)}</label><input type="text" id="hef-identifier" value="${hd?h(hd.identifier||''):''}" placeholder="${currentType==='stock'?'TADAWUL:2222':currentType==='fund'?'SA1234567890':currentType==='crypto'?'BTC':''}"></div>`:'';
+  const fldUnit=`<div style="flex:1"><label class="lbl">Unit label</label><input type="text" id="hef-unit" value="${hd?h(hd.unitLabel||meta.unit):h(meta.unit)}" placeholder="${h(meta.unit)}"></div>`;
+  const fldCurrency=`<div style="flex:1"><label class="lbl">Currency</label><select id="hef-currency">${curOpts}</select></div>`;
+  const fldAssetClass=`<div style="flex:1"><label class="lbl">Asset class</label><select id="hef-assetclass">${acsOpts}</select></div>`;
+  const fldRegion=`<div style="flex:1"><label class="lbl">Region</label><select id="hef-region">${regOpts}</select></div>`;
+  const fldFetch=`<div style="flex:1"><label class="lbl">Fetch source</label><select id="hef-fetchsrc">${fetchOpts}</select></div>`;
+  const fldPrice=`<div style="flex:1"><label class="lbl">Current price (per unit, in holding currency)</label><input type="number" inputmode="decimal" id="hef-currentprice" value="${hd&&hd.currentPrice!=null?hd.currentPrice:''}" placeholder="optional"></div>`;
+  const fldPriceAsOf=`<div style="flex:1"><label class="lbl">Price as of (DD/MM/YYYY)</label><div class="date-inp-wrap"><input type="text" id="hef-priceasof" class="date-inp" value="${hd&&hd.currentPriceAsOf?toDD(hd.currentPriceAsOf):''}" maxlength="10"><button type="button" class="cal-btn" onclick="openCal('hef-priceasof')" title="Pick date">📅</button></div></div>`;
+  const fldPFIC=`<div style="flex:1;display:flex;align-items:flex-end;padding-bottom:6px"><label style="display:flex;gap:6px;align-items:center;font-size:12px;cursor:pointer;color:var(--text2)"><input type="checkbox" id="hef-pfic" ${pficVal?'checked':''} style="width:auto;margin:0"> Tag as PFIC (US tax form 8621)</label></div>`;
+  // Pack rows: with identifier = 5 rows of 2 + PFIC alone + Notes; without = 4 rows + PriceAsOf+PFIC + Notes.
+  const rows=showIdentifier?[
+    [fldType,fldName],
+    [fldIdentifier,fldUnit],
+    [fldCurrency,fldAssetClass],
+    [fldRegion,fldFetch],
+    [fldPrice,fldPriceAsOf],
+    [fldPFIC]
+  ]:[
+    [fldType,fldName],
+    [fldUnit,fldCurrency],
+    [fldAssetClass,fldRegion],
+    [fldFetch,fldPrice],
+    [fldPriceAsOf,fldPFIC]
+  ];
+  const formRows=rows.map(r=>`<div class="fr" style="gap:10px;margin-bottom:8px${r.length===1?';align-items:center':''}">${r.join('')}${r.length===1?'<div style="flex:1"></div>':''}</div>`).join('');
   return`<div>
-    <div class="fr" style="gap:10px;margin-bottom:8px">
-      <div style="flex:1"><label class="lbl">Type</label><select id="hef-type" onchange="onHoldingTypeChange(this.value)">${typeOpts}</select></div>
-      <div style="flex:2"><label class="lbl">Display name</label><input type="text" id="hef-name" value="${hd?h(hd.name||''):''}" placeholder="e.g. Aramco, Tamra Local Equity Fund"></div>
-    </div>
-    ${showIdentifier?`<div class="fr" style="gap:10px;margin-bottom:8px">
-      <div style="flex:1"><label class="lbl">${h(idLabel)}</label><input type="text" id="hef-identifier" value="${hd?h(hd.identifier||''):''}" placeholder="${currentType==='stock'?'TADAWUL:2222':currentType==='fund'?'SA1234567890':currentType==='crypto'?'BTC':''}"></div>
-      <div style="flex:1"><label class="lbl">Unit label</label><input type="text" id="hef-unit" value="${hd?h(hd.unitLabel||meta.unit):h(meta.unit)}" placeholder="${h(meta.unit)}"></div>
-    </div>`:`<div class="fr" style="gap:10px;margin-bottom:8px">
-      <div style="flex:1"><label class="lbl">Unit label</label><input type="text" id="hef-unit" value="${hd?h(hd.unitLabel||meta.unit):h(meta.unit)}" placeholder="${h(meta.unit)}"></div>
-    </div>`}
-    <div class="fr" style="gap:10px;margin-bottom:8px">
-      <div style="flex:1"><label class="lbl">Currency</label><select id="hef-currency">${curOpts}</select></div>
-      <div style="flex:1"><label class="lbl">Asset class</label><select id="hef-assetclass">${acsOpts}</select></div>
-      <div style="flex:1"><label class="lbl">Region</label><select id="hef-region">${regOpts}</select></div>
-    </div>
-    <div class="fr" style="gap:10px;margin-bottom:8px">
-      <div style="flex:1"><label class="lbl">Fetch source</label><select id="hef-fetchsrc">${fetchOpts}</select></div>
-      <div style="flex:1"><label class="lbl">Current price (per unit, in holding currency)</label><input type="number" inputmode="decimal" id="hef-currentprice" value="${hd&&hd.currentPrice!=null?hd.currentPrice:''}" placeholder="optional"></div>
-      <div style="flex:1"><label class="lbl">Price as of (DD/MM/YYYY)</label><div class="date-inp-wrap"><input type="text" id="hef-priceasof" class="date-inp" value="${hd&&hd.currentPriceAsOf?toDD(hd.currentPriceAsOf):''}" maxlength="10"><button type="button" class="cal-btn" onclick="openCal('hef-priceasof')" title="Pick date">📅</button></div></div>
-    </div>
-    <div class="fr" style="gap:10px;margin-bottom:8px;align-items:center">
-      <div><label style="display:flex;gap:6px;align-items:center;font-size:12px;cursor:pointer"><input type="checkbox" id="hef-pfic" ${pficVal?'checked':''} style="width:auto;margin:0"> Tag as PFIC (US tax form 8621 required annually)</label></div>
-    </div>
+    ${formRows}
     <div style="margin-bottom:8px"><label class="lbl">Notes (optional)</label><textarea id="hef-notes" rows="2" placeholder="Anything to remember about this holding">${hd?h(hd.notes||''):''}</textarea></div>
     ${!_holdingEditorId?`<div style="font-size:11px;color:var(--text3);line-height:1.6;background:var(--bg2);padding:8px 10px;border-radius:var(--rsm)">After you save these details, you can add buy lots, sales, and distributions on the next screen.</div>`:''}
   </div>`;
@@ -17771,6 +17788,8 @@ function rHoldingLotsTab(a,hd){
   }
   const totalQty=lots.reduce((s,l)=>s+(parseFloat(l.quantity)||0),0);
   const totalCB=holdingCostBasis(hd);
+  const isNonSAR=hd.currency&&hd.currency!=='SAR';
+  const unitShort=h(hd.unitLabel||'units');
   const rows=lots.map(l=>{
     const qty=parseFloat(l.quantity)||0;
     const price=parseFloat(l.pricePerUnit)||0;
@@ -17778,16 +17797,17 @@ function rHoldingLotsTab(a,hd){
     const fees=parseFloat(l.fees)||0;
     const cost=qty*price*fx+fees;
     const stale=l.notes&&l.notes.indexOf('Migrated')>=0;
+    // V10.5.3: notes as hover icon (not own column) to free table width
+    const noteIcon=l.notes?`<span title="${h(l.notes)}" style="cursor:help;color:${stale?'var(--warn)':'var(--text3)'};font-size:11px;margin-right:4px">📝</span>`:'';
     return`<tr${stale?' style="background:var(--bg2)"':''}>
-      <td style="white-space:nowrap">${toDD(l.date)||'—'}</td>
-      <td style="text-align:right;font-variant-numeric:tabular-nums">${qty} ${h(hd.unitLabel||'')}</td>
-      <td style="text-align:right;font-variant-numeric:tabular-nums">${fmtP(price)} ${h(hd.currency||'SAR')}</td>
-      <td style="text-align:right;font-variant-numeric:tabular-nums">${hd.currency!=='SAR'?fx.toFixed(4):'—'}</td>
+      <td style="white-space:nowrap;font-variant-numeric:tabular-nums">${toDD(l.date)||'—'}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap">${qty.toLocaleString('en-US',{maximumFractionDigits:6})}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap">${fmtPCur(price,hd.currency||'SAR')}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums">${isNonSAR?fx.toFixed(4):'—'}</td>
       <td style="text-align:right;font-variant-numeric:tabular-nums">${fees>0?fmtP(fees):'—'}</td>
-      <td style="text-align:right;font-variant-numeric:tabular-nums;font-weight:500">${fmtP(cost)}</td>
-      <td style="font-size:10px;color:var(--text3)">${l.notes?h(l.notes.substr(0,40)):''}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;font-weight:500;white-space:nowrap">${fmtP(cost)}</td>
       <td style="text-align:right;white-space:nowrap">
-        <button class="btn btn-xs" onclick="openLotEditor('${l.id}')" title="Edit">&#9998;</button>
+        ${noteIcon}<button class="btn btn-xs" onclick="openLotEditor('${l.id}')" title="Edit">&#9998;</button>
         <button class="btn btn-xs btn-d" onclick="if(confirm('Delete this lot? Sales that allocate from this lot will become invalid.')){deleteLot('${l.id}')}" title="Delete">&times;</button>
       </td>
     </tr>`;
@@ -17797,10 +17817,24 @@ function rHoldingLotsTab(a,hd){
       <div style="font-size:13px;font-weight:500">Buy lots</div>
       <button class="btn btn-p btn-sm" onclick="openLotEditor(null)">+ Add lot</button>
     </div>
-    <div class="card" style="padding:0;overflow:hidden"><div class="tbl-wrap"><table class="tx-tbl">
-      <thead><tr><th>Date</th><th style="text-align:right">Quantity</th><th style="text-align:right">Price</th><th style="text-align:right">FX</th><th style="text-align:right">Fees</th><th style="text-align:right">Cost (SAR)</th><th>Notes</th><th></th></tr></thead>
+    <div class="card" style="padding:0;overflow:hidden"><div class="tbl-wrap"><table class="tx-tbl" style="font-size:12px">
+      <thead><tr>
+        <th style="white-space:nowrap">Date</th>
+        <th style="text-align:right;white-space:nowrap">Quantity (${unitShort})</th>
+        <th style="text-align:right;white-space:nowrap">Price (${h(hd.currency||'SAR')})</th>
+        <th style="text-align:right">FX</th>
+        <th style="text-align:right">Fees</th>
+        <th style="text-align:right;white-space:nowrap">Cost (SAR)</th>
+        <th style="text-align:right;width:1%"></th>
+      </tr></thead>
       <tbody>${rows}</tbody>
-      <tfoot><tr style="background:var(--bg2);font-weight:500"><td>Total</td><td style="text-align:right;font-variant-numeric:tabular-nums">${totalQty}</td><td colspan="3"></td><td style="text-align:right;font-variant-numeric:tabular-nums">${fmtP(totalCB)}</td><td colspan="2" style="font-size:10px;color:var(--text3)">Cost basis (after sales)</td></tr></tfoot>
+      <tfoot><tr style="background:var(--bg2);font-weight:500">
+        <td>Total</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap">${totalQty.toLocaleString('en-US',{maximumFractionDigits:6})}</td>
+        <td colspan="3" style="text-align:right;font-size:10px;color:var(--text3);font-weight:400">Cost basis (after sales)</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap">${fmtP(totalCB)}</td>
+        <td></td>
+      </tr></tfoot>
     </table></div></div>
   </div>`;
 }
@@ -17893,16 +17927,17 @@ function rHoldingSalesTab(a,hd){
       <div class="card" style="padding:14px;background:var(--bg2);border:1px dashed var(--line)"><div class="empty">No sales yet. Sales record realized gain/loss using the lots you bought. ${qtyAvail<=0?'Add a buy lot first before recording a sale.':'Click + Add sale to record one.'}</div></div>
     </div>`;
   }
+  const unitShort=h(hd.unitLabel||'units');
   const rows=sales.map(s=>{
     const qty=parseFloat(s.quantity)||0;
     const price=parseFloat(s.pricePerUnit)||0;
     const rgl=parseFloat(s.realizedGL)||0;
     return`<tr>
-      <td style="white-space:nowrap">${toDD(s.date)||'—'}</td>
-      <td style="text-align:right;font-variant-numeric:tabular-nums">${qty} ${h(hd.unitLabel||'')}</td>
-      <td style="text-align:right;font-variant-numeric:tabular-nums">${fmtP(price)} ${h(hd.currency||'SAR')}</td>
+      <td style="white-space:nowrap;font-variant-numeric:tabular-nums">${toDD(s.date)||'—'}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap">${qty.toLocaleString('en-US',{maximumFractionDigits:6})}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap">${fmtPCur(price,hd.currency||'SAR')}</td>
       <td style="font-size:10px"><span class="status-pill status-info">${h(s.method||'FIFO')}</span></td>
-      <td style="text-align:right;font-variant-numeric:tabular-nums;font-weight:500;color:${rgl>=0?'var(--pos)':'var(--neg)'}">${rgl>=0?'+':''}${fmtP(rgl)}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;font-weight:500;white-space:nowrap;color:${rgl>=0?'var(--pos)':'var(--neg)'}">${rgl>=0?'+':''}${fmtP(rgl)}</td>
       <td style="text-align:right;font-variant-numeric:tabular-nums;font-size:10px;color:var(--text3)">${s.holdingPeriodDays||0}d</td>
       <td style="text-align:right;white-space:nowrap">
         <button class="btn btn-xs btn-d" onclick="if(confirm('Delete this sale? The shares return to the holding and the realized G/L is reversed.')){deleteSale('${s.id}')}" title="Delete">&times;</button>
@@ -17914,8 +17949,16 @@ function rHoldingSalesTab(a,hd){
       <div style="font-size:13px;font-weight:500">Sales (realized)</div>
       <button class="btn btn-p btn-sm" onclick="openSaleEditor(null)" ${qtyAvail<=0?'disabled':''}>+ Add sale</button>
     </div>
-    <div class="card" style="padding:0;overflow:hidden"><div class="tbl-wrap"><table class="tx-tbl">
-      <thead><tr><th>Date</th><th style="text-align:right">Quantity</th><th style="text-align:right">Price</th><th>Method</th><th style="text-align:right">Realized G/L</th><th style="text-align:right">Hold</th><th></th></tr></thead>
+    <div class="card" style="padding:0;overflow:hidden"><div class="tbl-wrap"><table class="tx-tbl" style="font-size:12px">
+      <thead><tr>
+        <th style="white-space:nowrap">Date</th>
+        <th style="text-align:right;white-space:nowrap">Quantity (${unitShort})</th>
+        <th style="text-align:right;white-space:nowrap">Price (${h(hd.currency||'SAR')})</th>
+        <th>Method</th>
+        <th style="text-align:right;white-space:nowrap">Realized G/L</th>
+        <th style="text-align:right">Hold</th>
+        <th style="width:1%"></th>
+      </tr></thead>
       <tbody>${rows}</tbody>
     </table></div></div>
   </div>`;
@@ -18140,11 +18183,11 @@ function rHoldingDistributionsTab(a,hd){
     const fx=parseFloat(d.fxRate)||1;
     const sarAmt=amt*fx;
     return`<tr>
-      <td style="white-space:nowrap">${toDD(d.date)||'—'}</td>
+      <td style="white-space:nowrap;font-variant-numeric:tabular-nums">${toDD(d.date)||'—'}</td>
       <td style="font-size:11px"><span class="status-pill status-info">${h(d.type||'other')}</span></td>
-      <td style="text-align:right;font-variant-numeric:tabular-nums">${fmtP(amt)} ${h(d.currency||'SAR')}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap">${fmtPCur(amt,d.currency||'SAR')}</td>
       <td style="text-align:right;font-variant-numeric:tabular-nums">${d.currency!=='SAR'?fx.toFixed(4):'—'}</td>
-      <td style="text-align:right;font-variant-numeric:tabular-nums;font-weight:500;color:var(--pos)">+${fmtP(sarAmt)}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;font-weight:500;white-space:nowrap;color:var(--pos)">+${fmtP(sarAmt)}</td>
       <td style="font-size:10px;color:var(--text3)">${d.reinvested?'<span class="status-pill" style="font-size:9px">Reinvested</span>':'—'}</td>
       <td style="text-align:right;white-space:nowrap">
         <button class="btn btn-xs btn-d" onclick="if(confirm('Delete this distribution?')){deleteDist('${d.id}')}" title="Delete">&times;</button>
@@ -18156,10 +18199,18 @@ function rHoldingDistributionsTab(a,hd){
       <div style="font-size:13px;font-weight:500">Distributions (income)</div>
       <button class="btn btn-p btn-sm" onclick="openDistEditor(null)">+ Add distribution</button>
     </div>
-    <div class="card" style="padding:0;overflow:hidden"><div class="tbl-wrap"><table class="tx-tbl">
-      <thead><tr><th>Date</th><th>Type</th><th style="text-align:right">Amount</th><th style="text-align:right">FX</th><th style="text-align:right">SAR</th><th>Reinvested</th><th></th></tr></thead>
+    <div class="card" style="padding:0;overflow:hidden"><div class="tbl-wrap"><table class="tx-tbl" style="font-size:12px">
+      <thead><tr>
+        <th style="white-space:nowrap">Date</th>
+        <th>Type</th>
+        <th style="text-align:right;white-space:nowrap">Amount</th>
+        <th style="text-align:right">FX</th>
+        <th style="text-align:right;white-space:nowrap">SAR equivalent</th>
+        <th>Reinvested</th>
+        <th style="width:1%"></th>
+      </tr></thead>
       <tbody>${rows}</tbody>
-      <tfoot><tr style="background:var(--bg2);font-weight:500"><td colspan="4">Total received</td><td style="text-align:right;font-variant-numeric:tabular-nums">${fmtP(totalAmt)}</td><td colspan="2"></td></tr></tfoot>
+      <tfoot><tr style="background:var(--bg2);font-weight:500"><td colspan="4">Total received</td><td style="text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap">${fmtP(totalAmt)}</td><td colspan="2"></td></tr></tfoot>
     </table></div></div>
   </div>`;
 }
