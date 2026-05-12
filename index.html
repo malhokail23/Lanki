@@ -4908,7 +4908,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='10.5.3';
+const VERSION='10.5.4';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -15398,12 +15398,19 @@ function isInvestmentAccount(a){return a&&INV.has(a.type);}
 // Current value: user-set, last recorded. Returns null if never recorded.
 function getInvestmentValue(a){
   if(!isInvestmentAccount(a))return null;
-  // V10.5.2: P2P direct accounts compute from opportunities.
-  if(accountIsP2PDirect(a)){
-    const opps=accountOpportunities(a);
-    if(opps.length===0)return null;
-    return opps.reduce((s,o)=>s+opportunityOutstanding(o),0);
-  }
+  // V10.5.4 fix: delegate to accountCurrentValueComputed which correctly uses
+  // holdings data when at least one holding has a recorded price. The previous
+  // implementation returned a.currentValue directly, which is a stale legacy
+  // field set before the holdings system existed. This caused the Accounts list
+  // page to show a different value than the Account Detail page for the same
+  // account.
+  return accountCurrentValueComputed(a);
+}
+// Legacy reader — kept for the rare case where downstream code needs the raw
+// stored currentValue (e.g. the edit form, where the user is editing that
+// specific field). Use getInvestmentValue() everywhere else.
+function getInvestmentValueLegacy(a){
+  if(!isInvestmentAccount(a))return null;
   return typeof a.currentValue==='number'?a.currentValue:null;
 }
 // Cumulative deposits (capital deployed) into this investment account.
@@ -15443,7 +15450,31 @@ function calcInvestmentNetDeployed(accountId){
 }
 // Unrealized gain/loss: current value minus net deployed. Null if no current value recorded.
 function calcInvestmentUnrealized(a){
-  const cv=getInvestmentValue(a);if(cv===null)return null;
+  if(!isInvestmentAccount(a))return null;
+  // V10.5.4 fix: when priced holdings exist, unrealized G/L = sum of per-holding
+  // (current value - cost basis), NOT (account current value - net deployed).
+  // The legacy formula treated uninvested cash as a loss (e.g. user deposits 10k
+  // but only 8k is invested → legacy formula counts 2k as a loss against
+  // unrealized G/L). The holdings-based formula is correct because it compares
+  // each position's market value against what was actually paid for it.
+  // P2P direct: sum of expected profit remaining across active opportunities.
+  if(accountIsP2PDirect(a)){
+    const opps=accountOpportunities(a);
+    if(opps.length===0)return null;
+    return opps.reduce((s,o)=>s+opportunityExpectedProfitRemaining(o),0);
+  }
+  // Holdings path: prefer sum of holding-level unrealized G/L when any priced.
+  const hs=Array.isArray(a.holdings)?a.holdings:[];
+  const priced=hs.filter(h=>h.currentPrice!=null);
+  if(priced.length>0){
+    return hs.reduce((s,h)=>{
+      const u=holdingUnrealizedGL(h);
+      return u!=null?s+u:s;
+    },0);
+  }
+  // Legacy fallback: accounts without holdings (only the raw currentValue field).
+  const cv=getInvestmentValueLegacy(a);
+  if(cv===null)return null;
   return cv-calcInvestmentNetDeployed(a.id);
 }
 // Days since last value recording. Returns Infinity if never recorded.
