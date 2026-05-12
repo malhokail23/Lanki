@@ -4908,7 +4908,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='10.5.1';
+const VERSION='10.5.2';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -6097,6 +6097,9 @@ function restoreS(d){
   // V10.5.1 (Phase F.1.1): ensure holding.opportunities[] exists for p2p_loan
   // holdings. Idempotent via _v10_5_opps_migrated tag.
   if(typeof runOpportunitiesMigrations==='function')runOpportunitiesMigrations();
+  // V10.5.2: hoist opportunities from p2p_loan holdings up to account level for
+  // p2p_lending accounts (Option B model). Idempotent via _v10_5_2_p2p_migrated.
+  if(typeof runP2PDirectMigrations==='function')runP2PDirectMigrations();
 }
 // ─── CATEGORY TIER DEFINITIONS ───
 // Tier C — locked from deletion because hardcoded business logic depends on these IDs.
@@ -14955,7 +14958,7 @@ const PHB_ACCOUNT_HOLDING_MAP={
   crypto_wallet:        ['crypto','cash'],
   real_estate_fund:     ['real_estate_unit','cash'],
   real_estate_direct:   ['real_estate_property'],
-  p2p_lending:          ['p2p_loan','cash'],
+  p2p_lending:          [], // V10.5.2: P2P accounts use Option B (opportunities directly on account). No holdings allowed.
   sukuk:                ['sukuk'],
   direct_investment:    ['direct_equity'],
   vc_fund_account:      ['vc_fund'],
@@ -15016,11 +15019,26 @@ function opportunityOutstanding(o){
   // We model outstanding as principal minus payments received so far, clamped >=0.
   return Math.max(0,(parseFloat(o.principal)||0)-opportunitySumPayments(o));
 }
+// Gross full remaining payback (principal + profit). Used when showing "still owed to me"
+// in raw cash terms.
 function opportunityExpectedReturnRemaining(o){
   if(!o)return 0;
   const status=o.status||'active';
   if(status==='paid'||status==='defaulted')return 0;
   return Math.max(0,(parseFloat(o.expectedAmount)||0)-opportunitySumPayments(o));
+}
+// V10.5.2 (math fix): Profit-only portion of remaining payback. This is the correct
+// quantity for "unrealized G/L" semantics (gain over cost basis).
+// Total expected profit = expectedAmount - principal.
+// Profit already received = max(0, sumPayments - principal).
+// So profit remaining = (expectedAmount - principal) - max(0, sumPayments - principal).
+function opportunityExpectedProfitRemaining(o){
+  if(!o)return 0;
+  const status=o.status||'active';
+  if(status==='paid'||status==='defaulted')return 0;
+  const totalProfit=(parseFloat(o.expectedAmount)||0)-(parseFloat(o.principal)||0);
+  const profitReceived=Math.max(0,opportunitySumPayments(o)-(parseFloat(o.principal)||0));
+  return Math.max(0,totalProfit-profitReceived);
 }
 function opportunityRealizedGL(o){
   if(!o)return 0;
@@ -15048,11 +15066,21 @@ function opportunityInboxBucket(o){
   if(days>3&&days<=14)return 'coming_soon';
   return null;
 }
-// All opportunity inbox entries across all P2P holdings, with context.
+// All opportunity inbox entries across all accounts (P2P direct + legacy holdings).
 function getAllOpportunityInboxEntries(){
   const out=[];
   (S.accounts||[]).forEach(acc=>{
     if(!isInvestmentAccount(acc)||!isLiveAccount(acc))return;
+    // V10.5.2: P2P direct accounts — opportunities live on account
+    if(accountIsP2PDirect(acc)){
+      (acc.opportunities||[]).forEach(o=>{
+        const bucket=opportunityInboxBucket(o);
+        if(!bucket)return;
+        out.push({opportunity:o,holding:null,account:acc,bucket,days:opportunityDaysToExpectedPay(o)});
+      });
+      return;
+    }
+    // Other accounts — opportunities live on p2p_loan holdings (legacy support)
     (acc.holdings||[]).forEach(hd=>{
       if(hd.type!=='p2p_loan')return;
       (hd.opportunities||[]).forEach(o=>{
@@ -15137,11 +15165,12 @@ function holdingCurrentValue(h){
 
 function holdingUnrealizedGL(h){
   if(!h)return null;
-  // V10.5.1: P2P — unrealized G/L = expected return remaining across active opportunities.
+  // V10.5.2 fix: P2P — unrealized G/L = expected PROFIT remaining (not gross payback).
+  // The previous version mixed gross payback into G/L, double-counting principal.
   if(h.type==='p2p_loan'){
     const opps=Array.isArray(h.opportunities)?h.opportunities:[];
     if(opps.length===0)return null;
-    return opps.reduce((s,o)=>s+opportunityExpectedReturnRemaining(o),0);
+    return opps.reduce((s,o)=>s+opportunityExpectedProfitRemaining(o),0);
   }
   const cv=holdingCurrentValue(h);
   if(cv==null)return null;
@@ -15181,6 +15210,12 @@ function holdingRealizedGLYTD(h,year){
 // behavior for legacy accounts during the migration window.
 function accountCurrentValueComputed(a){
   if(!a)return null;
+  // V10.5.2: P2P Lending accounts hold opportunities directly. No holdings layer.
+  if(accountIsP2PDirect(a)){
+    const opps=accountOpportunities(a);
+    if(opps.length===0)return null;
+    return opps.reduce((s,o)=>s+opportunityOutstanding(o),0);
+  }
   const hs=Array.isArray(a.holdings)?a.holdings:[];
   const priced=hs.filter(h=>h.currentPrice!=null);
   if(priced.length===0){
@@ -15192,6 +15227,92 @@ function accountCurrentValueComputed(a){
     return s+(cv||0);
   },0);
 }
+
+// V10.5.2: P2P LENDING ACCOUNTS HOLD OPPORTUNITIES DIRECTLY
+// Rationale: a P2P platform like Tameed IS the holding container — there's no
+// meaningful inner level. Skipping the holding layer matches the mental model
+// and removes redundant naming (account "Tameed" → holding "Tameed").
+function accountIsP2PDirect(a){
+  return !!(a&&a.type==='p2p_lending');
+}
+function accountOpportunities(a){
+  if(!a)return [];
+  if(accountIsP2PDirect(a)){
+    return Array.isArray(a.opportunities)?a.opportunities:[];
+  }
+  return [];
+}
+// Aggregate KPIs for P2P-direct accounts. Used by Account Detail page and
+// Portfolio Overview. All values in SAR (account currency).
+function accountP2PSummary(a){
+  const opps=accountOpportunities(a);
+  const yearNow=new Date().getFullYear();
+  const summary={
+    count:opps.length,
+    counts:{active:0,paid:0,partial:0,late:0,defaulted:0,restructured:0},
+    totalPrincipalDeployed:0,
+    totalExpectedReturnRemaining:0,   // V10.5.2: gross — principal + profit still owed
+    totalExpectedProfitRemaining:0,   // V10.5.2 fix: profit-only — correct for G/L
+    totalRealizedYTD:0,
+    weightedAvgNetRate:null,
+    avgRiskGrade:null
+  };
+  let netRateNumerator=0,netRateDenominator=0;
+  opps.forEach(o=>{
+    const st=o.status||'active';
+    summary.counts[st]=(summary.counts[st]||0)+1;
+    if(st!=='paid'&&st!=='defaulted'){
+      const p=parseFloat(o.principal)||0;
+      summary.totalPrincipalDeployed+=p;
+      summary.totalExpectedReturnRemaining+=opportunityExpectedReturnRemaining(o);
+      summary.totalExpectedProfitRemaining+=opportunityExpectedProfitRemaining(o);
+      // Weighted net rate (by principal) — only over active/partial/late/restructured
+      const rate=parseFloat(o.netRate);
+      if(isFinite(rate)&&p>0){
+        netRateNumerator+=rate*p;
+        netRateDenominator+=p;
+      }
+    }
+    if(st==='paid'||st==='defaulted'){
+      const payments=Array.isArray(o.payments)?o.payments:[];
+      if(payments.length>0){
+        const last=payments.map(p=>p.date?new Date(p.date):null).filter(d=>d!=null).sort((x,y)=>y-x)[0];
+        if(last&&last.getFullYear()===yearNow){
+          summary.totalRealizedYTD+=opportunityRealizedGL(o);
+        }
+      }
+    }
+  });
+  if(netRateDenominator>0)summary.weightedAvgNetRate=netRateNumerator/netRateDenominator;
+  return summary;
+}
+
+// V10.5.2 migration: hoist opportunities from p2p_loan holdings to account level
+// for p2p_lending accounts. Idempotent via _v10_5_2_p2p_migrated tag.
+function migrateP2PAccountsToAccountLevel(){
+  if(!Array.isArray(S.accounts))return 0;
+  let count=0;
+  S.accounts.forEach(a=>{
+    if(a.type!=='p2p_lending')return;
+    if(a._v10_5_2_p2p_migrated)return;
+    if(!Array.isArray(a.opportunities))a.opportunities=[];
+    if(Array.isArray(a.holdings)){
+      a.holdings.forEach(hd=>{
+        if(hd&&hd.type==='p2p_loan'&&Array.isArray(hd.opportunities)){
+          hd.opportunities.forEach(o=>{
+            a.opportunities.push(o);
+            count++;
+          });
+        }
+      });
+      // Clear holdings array entirely for P2P accounts — opportunities are the unit now.
+      a.holdings=[];
+    }
+    a._v10_5_2_p2p_migrated=true;
+  });
+  return count;
+}
+function runP2PDirectMigrations(){return migrateP2PAccountsToAccountLevel();}
 
 // ─── MIGRATION ────────────────────────────────────────────────────────────────
 // Idempotent. Tagged with _v10_2_migrated so it never re-runs. Purely additive:
@@ -15268,6 +15389,12 @@ function isInvestmentAccount(a){return a&&INV.has(a.type);}
 // Current value: user-set, last recorded. Returns null if never recorded.
 function getInvestmentValue(a){
   if(!isInvestmentAccount(a))return null;
+  // V10.5.2: P2P direct accounts compute from opportunities.
+  if(accountIsP2PDirect(a)){
+    const opps=accountOpportunities(a);
+    if(opps.length===0)return null;
+    return opps.reduce((s,o)=>s+opportunityOutstanding(o),0);
+  }
   return typeof a.currentValue==='number'?a.currentValue:null;
 }
 // Cumulative deposits (capital deployed) into this investment account.
@@ -17061,6 +17188,44 @@ function openPortfolioAccountDetail(accId){
   sw('portfolio_account_detail');
 }
 
+// V10.5.2: Entry point for adding an opportunity directly to a P2P Lending account.
+// Sets the holding-editor context to P2P direct mode (accId set, holdingId null),
+// then opens the opportunity editor. getOppContext() detects this and routes to
+// account.opportunities[].
+function openP2PAccountOpportunityAdd(accId){
+  _holdingEditorAccId=accId;
+  _holdingEditorId=null; // signals P2P direct mode
+  openOpportunityEditor(null,'add');
+}
+// Same pattern for in-place edit/delete/settle/payment actions from the P2P detail page.
+function openP2PAccountOpportunityEdit(accId,oppId,mode){
+  _holdingEditorAccId=accId;
+  _holdingEditorId=null;
+  openOpportunityEditor(oppId,mode||'edit');
+}
+function openP2PAccountOpportunitySettle(accId,oppId){
+  _holdingEditorAccId=accId;
+  _holdingEditorId=null;
+  openOpportunitySettle(oppId);
+}
+function openP2PAccountOpportunityPayment(accId,oppId){
+  _holdingEditorAccId=accId;
+  _holdingEditorId=null;
+  openOpportunityPayment(oppId);
+}
+function openP2PAccountOpportunityMarkPaid(accId,oppId){
+  _holdingEditorAccId=accId;
+  _holdingEditorId=null;
+  markOpportunityPaidAsExpected(oppId);
+}
+function openP2PAccountOpportunityDelete(accId,oppId){
+  _holdingEditorAccId=accId;
+  _holdingEditorId=null;
+  if(confirm('Delete this opportunity? Payments will also be lost.')){
+    deleteOpportunity(oppId);
+  }
+}
+
 function rPortfolioAccountDetail(){
   const accId=_portfolioAccountDetailId;
   const a=accId?S.accounts.find(x=>x.id===accId):null;
@@ -17068,6 +17233,181 @@ function rPortfolioAccountDetail(){
     return`<div class="pg-header"><div class="pg-eyebrow">02 POSITIONS</div><div class="pg-header-title">Account not found</div></div>
     <div class="card"><div class="empty">This account no longer exists. <button class="btn btn-sm" onclick="sw('portfolio_accounts')">Back to Portfolio Accounts</button></div></div>`;
   }
+  // V10.5.2: branch by account type. P2P Lending accounts use Option B model:
+  // opportunities live directly on the account, no holdings layer.
+  if(accountIsP2PDirect(a)){
+    return rPortfolioAccountDetail_P2PDirect(a);
+  }
+  return rPortfolioAccountDetail_Standard(a);
+}
+
+// V10.5.2: P2P Direct render — opportunities live on account, no holdings step.
+function rPortfolioAccountDetail_P2PDirect(a){
+  const summary=accountP2PSummary(a);
+  const opps=accountOpportunities(a);
+  const ownerName=ownerLabel(a.ownerId);
+  const taxJur=a.taxJurisdiction||'both';
+  const taxJurLabel={us:'US only',saudi:'Saudi only',both:'Both (US + Saudi)'}[taxJur]||taxJur;
+  // Inbox-bucket counts for at-a-glance urgency indicator on this account
+  let overdueN=0,dueN=0,soonN=0;
+  opps.forEach(o=>{
+    const bucket=opportunityInboxBucket(o);
+    if(bucket==='overdue')overdueN++;
+    else if(bucket==='due_now')dueN++;
+    else if(bucket==='coming_soon')soonN++;
+  });
+  // Order opportunities: active/late/partial first (by expected pay date asc),
+  // then restructured, then paid/defaulted (by last payment desc).
+  const ordered=[...opps].sort((x,y)=>{
+    const order={active:0,partial:1,late:2,restructured:3,paid:4,defaulted:5};
+    const sa=order[x.status||'active']??0;
+    const sb=order[y.status||'active']??0;
+    if(sa!==sb)return sa-sb;
+    const da=x.expectedPayDate?new Date(x.expectedPayDate).getTime():0;
+    const db=y.expectedPayDate?new Date(y.expectedPayDate).getTime():0;
+    return da-db;
+  });
+
+  // Render each opportunity card with P2P-direct-aware action bindings.
+  const cards=ordered.length===0
+    ? `<div class="card"><div class="empty">No opportunities yet. Click <strong>+ Add opportunity</strong> above to record your first funded position on this platform.</div></div>`
+    : ordered.map(o=>rOpportunityCardP2PDirect(a,o)).join('');
+
+  return`<div class="pg-header-row">
+    <div>
+      <div class="pg-eyebrow">02 POSITIONS &middot; ACCOUNT</div>
+      <div class="pg-header-title">${h(a.name)}</div>
+      <div class="pg-header-sub">${h(ATL[a.type]||a.type)} &middot; Owner: <strong>${h(ownerName)}</strong> &middot; Tax: ${h(taxJurLabel)}${a.openDate?' &middot; Open since '+h(toDD(a.openDate)):''}${a.purpose?' &middot; '+h(a.purpose):''}</div>
+    </div>
+    <div class="fg" style="gap:6px;flex-wrap:wrap">
+      <button class="btn btn-sm" onclick="sw('portfolio_accounts')" title="Back to all accounts">&larr; Back</button>
+      <button class="btn btn-sm" onclick="openEditInvAccFromDetail('${a.id}')" title="Edit account">&#9998; Edit</button>
+      <button class="btn btn-p btn-sm" onclick="openP2PAccountOpportunityAdd('${a.id}')">+ Add opportunity</button>
+    </div>
+  </div>
+
+  ${rInvAcctFormPanel()}
+
+  <div class="kpi-strip">
+    <div class="kpi-cell"><div class="kpi-cell-label">Total Deployed</div><div class="kpi-cell-value priv-mask">${fmtP(summary.totalPrincipalDeployed)}</div><div class="kpi-cell-sub">Principal across active</div></div>
+    <div class="kpi-cell"><div class="kpi-cell-label">Expected Profit Remaining</div><div class="kpi-cell-value priv-mask c-ok">${fmtP(summary.totalExpectedProfitRemaining)}</div><div class="kpi-cell-sub">Gross payback: ${fmtP(summary.totalExpectedReturnRemaining)}</div></div>
+    <div class="kpi-cell"><div class="kpi-cell-label">Realized G/L (YTD)</div><div class="kpi-cell-value priv-mask ${summary.totalRealizedYTD>=0?'c-ok':'c-bad'}">${summary.totalRealizedYTD>=0?'+':''}${fmtP(summary.totalRealizedYTD)}</div><div class="kpi-cell-sub">${new Date().getFullYear()}</div></div>
+    <div class="kpi-cell"><div class="kpi-cell-label">Weighted Net Rate</div><div class="kpi-cell-value">${summary.weightedAvgNetRate!=null?summary.weightedAvgNetRate.toFixed(2)+'%':'—'}</div><div class="kpi-cell-sub">By principal, active only</div></div>
+    <div class="kpi-cell"><div class="kpi-cell-label">Opportunities</div><div class="kpi-cell-value">${summary.count}</div><div class="kpi-cell-sub">${summary.counts.active||0} active${(overdueN+dueN+soonN)>0?' &middot; <span style="color:var(--warn)">'+(overdueN+dueN+soonN)+' need action</span>':''}</div></div>
+  </div>
+
+  ${summary.count>0?`<div class="card card-bordered" style="padding:10px 14px;margin-bottom:14px;font-size:11px;color:var(--text2);background:var(--bg2)">
+    <div class="fg" style="gap:14px;flex-wrap:wrap">
+      ${Object.entries(summary.counts).filter(([,n])=>n>0).map(([st,n])=>{
+        const m=OPP_STATUS_META[st]||{label:st,color:'#888'};
+        return`<span><span style="color:${m.color}">●</span> ${h(m.label)}: <strong>${n}</strong></span>`;
+      }).join('')}
+    </div>
+  </div>`:''}
+
+  <div style="margin-bottom:10px">
+    <div style="font-size:13px;font-weight:600">Opportunities</div>
+  </div>
+  ${cards}
+
+  ${_oppEditorOpen?rOpportunityEditorModal(a,null):''}
+  ${_oppSettleOpen?rOpportunitySettleModal(a,null):''}
+  ${_oppPaymentOpen?rOpportunityPaymentModal(a,null):''}`;
+}
+
+// V10.5.2: Opportunity card variant for P2P-direct accounts. Same visual as the
+// holding-tab version, but action buttons bind to openP2PAccountOpportunity*
+// wrappers that set _holdingEditorId=null before invoking the underlying modal.
+function rOpportunityCardP2PDirect(a,o){
+  const meta=OPP_STATUS_META[o.status||'active']||{label:'Active',color:'#0E40C5'};
+  const principal=parseFloat(o.principal)||0;
+  const expected=parseFloat(o.expectedAmount)||0;
+  const paid=opportunitySumPayments(o);
+  const expectedReturn=expected-principal;
+  const daysToPay=opportunityDaysToExpectedPay(o);
+  const status=o.status||'active';
+  let returnRateStr='';
+  if(o.netRate!=null&&isFinite(parseFloat(o.netRate))){
+    returnRateStr=` (${parseFloat(o.netRate).toFixed(2)}% net rate)`;
+  }else if(o.fundedDate&&o.expectedPayDate&&principal>0&&expectedReturn>0){
+    const days=Math.round((new Date(o.expectedPayDate)-new Date(o.fundedDate))/86400000);
+    if(days>0){
+      const annualized=(expectedReturn/principal)*(365/days)*100;
+      returnRateStr=` (${annualized.toFixed(1)}% annualized)`;
+    }
+  }
+  let dateLabel='';
+  if(status==='paid'||status==='defaulted'){
+    const last=Array.isArray(o.payments)?o.payments.map(p=>p.date).filter(Boolean).sort().pop():null;
+    dateLabel=last?`Settled ${toDD(last)}`:`Settled`;
+  }else if(daysToPay!=null){
+    if(daysToPay<0)dateLabel=`Was due ${toDD(o.expectedPayDate)} (${Math.abs(daysToPay)}d late)`;
+    else if(daysToPay===0)dateLabel=`Due today`;
+    else dateLabel=`Expected ${toDD(o.expectedPayDate)} (in ${daysToPay}d)`;
+  }
+  let actionBtns='';
+  if(status==='active'||status==='late'||status==='partial'||status==='restructured'){
+    const canMarkPaid=status==='active'||status==='late';
+    actionBtns=`
+      ${canMarkPaid?`<button class="btn btn-xs btn-p" onclick="openP2PAccountOpportunityMarkPaid('${a.id}','${o.id}')" title="Mark as paid using expected amount and date">Mark paid</button>`:''}
+      <button class="btn btn-xs" onclick="openP2PAccountOpportunitySettle('${a.id}','${o.id}')" title="Settle with different amount or date">Settle</button>
+      <button class="btn btn-xs" onclick="openP2PAccountOpportunityPayment('${a.id}','${o.id}')" title="Record an installment">+ Payment</button>
+      <button class="btn btn-xs" onclick="openP2PAccountOpportunityEdit('${a.id}','${o.id}','edit')" title="Edit opportunity">&#9998;</button>
+      <button class="btn btn-xs" onclick="openP2PAccountOpportunityEdit('${a.id}','${o.id}','restructure')" title="Restructure terms">&#x21bb;</button>
+      <button class="btn btn-xs btn-d" onclick="openP2PAccountOpportunityDelete('${a.id}','${o.id}')" title="Delete">&times;</button>
+    `;
+  }else{
+    actionBtns=`
+      <button class="btn btn-xs" onclick="openP2PAccountOpportunityEdit('${a.id}','${o.id}','edit')" title="Edit">&#9998;</button>
+      <button class="btn btn-xs btn-d" onclick="openP2PAccountOpportunityDelete('${a.id}','${o.id}')" title="Delete">&times;</button>
+    `;
+  }
+  const paymentList=(Array.isArray(o.payments)?o.payments:[]).slice().sort((x,y)=>(y.date||'').localeCompare(x.date||''));
+  return`<div class="card card-bordered" style="padding:12px 14px;margin-bottom:10px">
+    <div class="fg jb" style="margin-bottom:6px;align-items:flex-start;gap:10px;flex-wrap:wrap">
+      <div style="flex:1;min-width:0">
+        <div class="fg" style="gap:8px;align-items:center;flex-wrap:wrap">
+          <span style="color:${meta.color};font-size:13px">●</span>
+          <div style="font-weight:500;font-size:14px">${h(o.name||'(unnamed)')}</div>
+          <span class="status-pill" style="font-size:9px;background:color-mix(in srgb,${meta.color} 15%,transparent);color:${meta.color}">${h(meta.label)}</span>
+          ${o.riskGrade?`<span class="status-pill status-info" style="font-size:9px" title="Platform-disclosed risk grade">${h(o.riskGrade)}</span>`:''}
+          ${o.restructuredFrom?'<span class="status-pill status-info" style="font-size:9px" title="Restructured from original terms">Restructured</span>':''}
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:3px">${h(dateLabel)}</div>
+      </div>
+      <div class="fg" style="gap:4px;flex-shrink:0;flex-wrap:wrap">${actionBtns}</div>
+    </div>
+    <div class="fg" style="gap:18px;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--bg3);font-size:11px;font-variant-numeric:tabular-nums">
+      <div>
+        <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Principal</div>
+        <div class="priv-mask" style="font-size:13px;font-weight:500">${fmtP(principal)}</div>
+      </div>
+      <div>
+        <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Expected payback</div>
+        <div class="priv-mask" style="font-size:13px;font-weight:500">${fmtP(expected)}${returnRateStr?` <span style="font-size:10px;color:var(--text3);font-weight:400">${returnRateStr}</span>`:''}</div>
+      </div>
+      ${paid>0?`<div>
+        <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Received</div>
+        <div class="priv-mask" style="font-size:13px;font-weight:500;color:var(--pos)">${fmtP(paid)}${paid<expected?` <span style="font-size:10px;color:var(--text3);font-weight:400">of ${fmtP(expected)}</span>`:''}</div>
+      </div>`:''}
+      ${status==='paid'||status==='defaulted'?`<div>
+        <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Realized G/L</div>
+        <div class="priv-mask" style="font-size:13px;font-weight:600;color:${opportunityRealizedGL(o)>=0?'var(--pos)':'var(--neg)'}">${opportunityRealizedGL(o)>=0?'+':''}${fmtP(opportunityRealizedGL(o))}</div>
+      </div>`:''}
+    </div>
+    ${paymentList.length>0?`<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--bg3)">
+      <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Payment history</div>
+      ${paymentList.map(p=>`<div class="fg jb" style="font-size:11px;padding:2px 0">
+        <span style="color:var(--text3)">${toDD(p.date)||'—'}${p.notes?' &middot; '+h(p.notes):''}</span>
+        <span class="priv-mask" style="font-variant-numeric:tabular-nums">+${fmtP(parseFloat(p.amount)||0)}</span>
+      </div>`).join('')}
+    </div>`:''}
+  </div>`;
+}
+
+// V10.5.2: Standard render — non-P2P accounts (brokerage, fund, gold, etc.).
+// This is the original rPortfolioAccountDetail body, unchanged.
+function rPortfolioAccountDetail_Standard(a){
   const holdings=Array.isArray(a.holdings)?a.holdings:[];
   // Aggregate from holdings
   const sumCV=holdings.reduce((s,h)=>{const v=holdingCurrentValue(h);return v!=null?s+v:s;},0);
@@ -17920,10 +18260,15 @@ function deleteDist(distId){
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // V10.5.1 — OPPORTUNITIES TAB (P2P holdings only)
+// V10.5.2 — Extended for account-level opportunities (P2P Lending accounts)
 // ═══════════════════════════════════════════════════════════════════════════════
 // Replaces Lots/Sales/Distributions for p2p_loan holdings. Each opportunity is
 // one funded position on a platform (e.g. one funded loan on Tameed). Lifecycle:
 // active → paid (or partial → paid, or late, or defaulted, or restructured).
+//
+// V10.5.2: For p2p_lending account TYPE, opportunities live DIRECTLY on the
+// account (Option B). The holding layer is skipped entirely. Context is signaled
+// by _holdingEditorId === null while _holdingEditorAccId is set.
 
 let _oppEditorOpen=false;     // Add/Edit (also handles Restructure mode)
 let _oppEditorId=null;        // opportunity id being edited
@@ -17941,6 +18286,25 @@ const OPP_STATUS_META={
   defaulted:    {label:'Defaulted',    color:'var(--neg)', dot:'🔴'},
   restructured: {label:'Restructured', color:'#9B7B9B', dot:'🟣'}
 };
+
+// V10.5.2: Risk grades dropdown values (platform-disclosed grading).
+const OPP_RISK_GRADES=['','A+','A','A-','B+','B','B-','C+','C','C-','D','Unrated'];
+
+// V10.5.2: Resolve current opportunity context. Returns:
+//   {account, holding?, opportunities[], currency, isAccountLevel}
+// or null if context is invalid.
+function getOppContext(){
+  const a=S.accounts.find(x=>x.id===_holdingEditorAccId);
+  if(!a)return null;
+  if(accountIsP2PDirect(a)){
+    if(!Array.isArray(a.opportunities))a.opportunities=[];
+    return {account:a,holding:null,opportunities:a.opportunities,currency:'SAR',isAccountLevel:true};
+  }
+  const hd=(a.holdings||[]).find(x=>x.id===_holdingEditorId);
+  if(!hd)return null;
+  if(!Array.isArray(hd.opportunities))hd.opportunities=[];
+  return {account:a,holding:hd,opportunities:hd.opportunities,currency:hd.currency||'SAR',isAccountLevel:false};
+}
 
 function rHoldingOpportunitiesTab(a,hd){
   const opps=Array.isArray(hd.opportunities)?hd.opportunities:[];
@@ -17963,6 +18327,7 @@ function rHoldingOpportunitiesTab(a,hd){
     return s+(parseFloat(o.principal)||0);
   },0);
   const totalExpectedReturnRem=opps.reduce((s,o)=>s+opportunityExpectedReturnRemaining(o),0);
+  const totalExpectedProfitRem=opps.reduce((s,o)=>s+opportunityExpectedProfitRemaining(o),0);
   const yearNow=new Date().getFullYear();
   const realizedYTD=opps.reduce((s,o)=>{
     const st=o.status||'active';
@@ -17998,7 +18363,7 @@ function rHoldingOpportunitiesTab(a,hd){
       </div>
       <div class="fg" style="gap:14px;flex-wrap:wrap;margin-top:6px;color:var(--text3)">
         <span>Total deployed: <strong class="priv-mask" style="color:var(--text1)">${fmtP(totalPrincipal)}</strong></span>
-        <span>Expected return remaining: <strong class="priv-mask" style="color:var(--text1)">${fmtP(totalExpectedReturnRem)}</strong></span>
+        <span>Expected profit remaining: <strong class="priv-mask" style="color:var(--text1)">${fmtP(totalExpectedProfitRem)}</strong> <span style="color:var(--text3)">(gross payback: ${fmtP(totalExpectedReturnRem)})</span></span>
         ${realizedYTD!==0?`<span>Realized ${yearNow}: <strong class="priv-mask" style="color:${realizedYTD>=0?'var(--pos)':'var(--neg)'}">${realizedYTD>=0?'+':''}${fmtP(realizedYTD)}</strong></span>`:''}
       </div>
     </div>
@@ -18014,9 +18379,11 @@ function rOpportunityCard(a,hd,o){
   const expectedReturn=expected-principal;
   const daysToPay=opportunityDaysToExpectedPay(o);
   const status=o.status||'active';
-  // Compute annualized rate as info display: (expectedReturn/principal) × (12/tenorMonths)
+  // V10.5.2: prefer platform-disclosed netRate over computed annualized.
   let returnRateStr='';
-  if(o.fundedDate&&o.expectedPayDate&&principal>0&&expectedReturn>0){
+  if(o.netRate!=null&&isFinite(parseFloat(o.netRate))){
+    returnRateStr=` (${parseFloat(o.netRate).toFixed(2)}% net rate)`;
+  }else if(o.fundedDate&&o.expectedPayDate&&principal>0&&expectedReturn>0){
     const days=Math.round((new Date(o.expectedPayDate)-new Date(o.fundedDate))/86400000);
     if(days>0){
       const annualized=(expectedReturn/principal)*(365/days)*100;
@@ -18060,6 +18427,7 @@ function rOpportunityCard(a,hd,o){
           <span style="color:${meta.color};font-size:13px">●</span>
           <div style="font-weight:500;font-size:14px">${h(o.name||'(unnamed)')}</div>
           <span class="status-pill" style="font-size:9px;background:color-mix(in srgb,${meta.color} 15%,transparent);color:${meta.color}">${h(meta.label)}</span>
+          ${o.riskGrade?`<span class="status-pill status-info" style="font-size:9px" title="Platform-disclosed risk grade">${h(o.riskGrade)}</span>`:''}
           ${o.restructuredFrom?'<span class="status-pill status-info" style="font-size:9px" title="Restructured from original terms">Restructured</span>':''}
         </div>
         <div style="font-size:11px;color:var(--text3);margin-top:3px">${h(dateLabel)}</div>
@@ -18109,34 +18477,48 @@ function closeOpportunityEditor(){
 function rOpportunityEditorModal(a,hd){
   const editing=!!_oppEditorId;
   const restructuring=_oppEditorMode==='restructure';
-  const o=editing?(hd.opportunities||[]).find(x=>x.id===_oppEditorId):null;
+  // V10.5.2: resolve context (works for both account-level and holding-level)
+  const ctx=getOppContext();
+  if(!ctx){closeOpportunityEditor();return '';}
+  const o=editing?ctx.opportunities.find(x=>x.id===_oppEditorId):null;
   if(editing&&!o){closeOpportunityEditor();return '';}
   const today=toDD(localISO(new Date()));
-  const cur=hd.currency||'SAR';
+  const cur=ctx.currency;
   const statusOpts=Object.entries(OPP_STATUS_META).map(([k,m])=>`<option value="${k}" ${o&&o.status===k?'selected':(!o&&k==='active'?'selected':'')}>${h(m.label)}</option>`).join('');
+  // V10.5.2: risk grade dropdown
+  const riskOpts=OPP_RISK_GRADES.map(g=>`<option value="${g}" ${o&&o.riskGrade===g?'selected':''}>${g||'—'}</option>`).join('');
   // For restructure mode, lock the principal and show original-vs-new comparison
   const title=restructuring?'Restructure opportunity':(editing?'Edit opportunity':'Add opportunity');
   const saveBtnLabel=restructuring?'Save restructure':(editing?'Save changes':'Add opportunity');
   return`<div class="modal-backdrop" onclick="if(event.target===this)closeOpportunityEditor()" style="position:fixed;inset:0;background:rgba(2,23,81,0.55);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px">
-    <div class="card" style="background:var(--card);width:100%;max-width:560px;padding:18px;border-radius:var(--r);box-shadow:0 12px 60px rgba(0,0,0,0.4);max-height:85vh;overflow-y:auto" onclick="event.stopPropagation()">
+    <div class="card" style="background:var(--card);width:100%;max-width:600px;padding:18px;border-radius:var(--r);box-shadow:0 12px 60px rgba(0,0,0,0.4);max-height:85vh;overflow-y:auto" onclick="event.stopPropagation()">
       <div class="fg jb" style="margin-bottom:14px;align-items:center">
         <div style="font-size:14px;font-weight:600">${title}</div>
         <button class="btn btn-xs" onclick="closeOpportunityEditor()">&times;</button>
       </div>
       ${restructuring&&o?`<div style="font-size:11px;color:var(--text3);margin-bottom:12px;padding:8px 10px;background:var(--bg2);border-radius:var(--rsm);line-height:1.6">Restructuring will save the original expected amount and date to history (visible on the opportunity card as a "Restructured" badge). The principal cannot be changed — only the new terms.</div>`:''}
+      <!-- Row 1: Name | Status -->
       <div class="fr" style="gap:10px;margin-bottom:8px">
-        <div style="flex:2"><label class="lbl">Opportunity name / ID</label><input type="text" id="oef-name" value="${o?h(o.name||''):''}" placeholder="e.g. OPP-1234, Acme Trading"></div>
+        <div style="flex:2"><label class="lbl">Opportunity name / ID</label><input type="text" id="oef-name" value="${o?h(o.name||''):''}" placeholder="e.g. BSZS410 — هيئة الزكاة و الضريبة"></div>
         <div style="flex:1"><label class="lbl">Status</label><select id="oef-status" ${restructuring?'disabled':''}>${statusOpts}</select></div>
       </div>
+      <!-- Row 2: Principal | Expected payback -->
       <div class="fr" style="gap:10px;margin-bottom:8px">
-        <div style="flex:1"><label class="lbl">Principal (${h(cur)})</label><input type="number" inputmode="decimal" id="oef-principal" min="0" step="0.01" value="${o?o.principal:''}" placeholder="10000" ${restructuring?'disabled':''}></div>
-        <div style="flex:1"><label class="lbl">Expected payback (${h(cur)})</label><input type="number" inputmode="decimal" id="oef-expected" min="0" step="0.01" value="${o?o.expectedAmount:''}" placeholder="11250"></div>
+        <div style="flex:1"><label class="lbl">Principal (${h(cur)})</label><input type="number" inputmode="decimal" id="oef-principal" min="0" step="0.01" value="${o?o.principal:''}" placeholder="2500" ${restructuring?'disabled':''}></div>
+        <div style="flex:1"><label class="lbl">Expected payback (${h(cur)})</label><input type="number" inputmode="decimal" id="oef-expected" min="0" step="0.01" value="${o?o.expectedAmount:''}" placeholder="2669.20"></div>
       </div>
+      <!-- Row 3: Funded date | Expected pay date -->
       <div class="fr" style="gap:10px;margin-bottom:8px">
         <div style="flex:1"><label class="lbl">Funded date</label><div class="date-inp-wrap"><input type="text" id="oef-funded" class="date-inp" value="${o&&o.fundedDate?toDD(o.fundedDate):today}" maxlength="10" ${restructuring?'disabled':''}><button type="button" class="cal-btn" onclick="openCal('oef-funded')">📅</button></div></div>
         <div style="flex:1"><label class="lbl">Expected pay date</label><div class="date-inp-wrap"><input type="text" id="oef-expdate" class="date-inp" value="${o&&o.expectedPayDate?toDD(o.expectedPayDate):''}" maxlength="10" placeholder="DD/MM/YYYY"><button type="button" class="cal-btn" onclick="openCal('oef-expdate')">📅</button></div></div>
       </div>
-      <div style="margin-bottom:14px"><label class="lbl">Notes (optional)</label><input type="text" id="oef-notes" value="${o?h(o.notes||''):''}" placeholder="Borrower, industry, risk grade, anything"></div>
+      <!-- V10.5.2: Row 4: Net rate % | Risk grade -->
+      <div class="fr" style="gap:10px;margin-bottom:8px">
+        <div style="flex:1"><label class="lbl">Net rate % (platform-disclosed, optional)</label><input type="number" inputmode="decimal" id="oef-netrate" min="0" step="0.001" value="${o&&o.netRate!=null?o.netRate:''}" placeholder="13.536"></div>
+        <div style="flex:1"><label class="lbl">Risk grade (platform-disclosed, optional)</label><select id="oef-riskgrade">${riskOpts}</select></div>
+      </div>
+      <!-- Row 5: Notes full width -->
+      <div style="margin-bottom:14px"><label class="lbl">Notes (optional)</label><input type="text" id="oef-notes" value="${o?h(o.notes||''):''}" placeholder="Project type, collateral, anything else"></div>
       ${restructuring&&o?`<div style="font-size:11px;color:var(--text3);margin-bottom:14px;padding:8px 10px;background:var(--bg2);border-radius:var(--rsm)">
         <div style="font-weight:600;margin-bottom:4px">Original terms (will be preserved in history):</div>
         <div>Expected payback: <strong>${fmtP(o.expectedAmount||0)}</strong></div>
@@ -18151,10 +18533,9 @@ function rOpportunityEditorModal(a,hd){
 }
 
 function saveOpportunity(){
-  const a=S.accounts.find(x=>x.id===_holdingEditorAccId);
-  const hd=a?(a.holdings||[]).find(x=>x.id===_holdingEditorId):null;
-  if(!hd){toast('Holding not found',false);return;}
-  if(!Array.isArray(hd.opportunities))hd.opportunities=[];
+  const ctx=getOppContext();
+  if(!ctx){toast('Context not found',false);return;}
+  const opps=ctx.opportunities;
   const name=(document.getElementById('oef-name')?.value||'').trim();
   if(!name){toast('Name required',false);return;}
   const principal=parseFloat(document.getElementById('oef-principal')?.value);
@@ -18169,8 +18550,12 @@ function saveOpportunity(){
   if(!expectedPayDate){toast('Expected pay date required',false);return;}
   const status=document.getElementById('oef-status')?.value||'active';
   const notes=(document.getElementById('oef-notes')?.value||'').trim();
+  // V10.5.2: capture optional netRate and riskGrade
+  const netRateRaw=(document.getElementById('oef-netrate')?.value||'').trim();
+  const netRate=netRateRaw?parseFloat(netRateRaw):null;
+  const riskGrade=(document.getElementById('oef-riskgrade')?.value||'').trim()||null;
   if(_oppEditorId){
-    const o=hd.opportunities.find(x=>x.id===_oppEditorId);
+    const o=opps.find(x=>x.id===_oppEditorId);
     if(!o){toast('Opportunity not found',false);return;}
     if(_oppEditorMode==='restructure'){
       // Preserve original terms before overwriting
@@ -18183,11 +18568,13 @@ function saveOpportunity(){
       o.expectedPayDate=expectedPayDate;
       o.status='restructured';
       o.notes=notes;
+      if(netRate!=null)o.netRate=netRate;
+      if(riskGrade!=null)o.riskGrade=riskGrade;
     }else{
-      Object.assign(o,{name,principal,expectedAmount:expected,fundedDate,expectedPayDate,status,notes});
+      Object.assign(o,{name,principal,expectedAmount:expected,fundedDate,expectedPayDate,status,notes,netRate,riskGrade});
     }
   }else{
-    hd.opportunities.push({
+    opps.push({
       id:'opp_'+randSuffix(10),
       name,
       principal,
@@ -18197,6 +18584,8 @@ function saveOpportunity(){
       status,
       payments:[],
       notes,
+      netRate,
+      riskGrade,
       restructuredFrom:null
     });
   }
@@ -18204,22 +18593,24 @@ function saveOpportunity(){
 }
 
 function deleteOpportunity(oppId){
-  const a=S.accounts.find(x=>x.id===_holdingEditorAccId);
-  const hd=a?(a.holdings||[]).find(x=>x.id===_holdingEditorId):null;
-  if(!hd||!Array.isArray(hd.opportunities))return;
-  hd.opportunities=hd.opportunities.filter(o=>o.id!==oppId);
-  sched();render();toast('Opportunity removed');
+  const ctx=getOppContext();
+  if(!ctx)return;
+  const before=ctx.opportunities.length;
+  const filtered=ctx.opportunities.filter(o=>o.id!==oppId);
+  // Mutate in place to preserve array reference
+  ctx.opportunities.length=0;
+  filtered.forEach(o=>ctx.opportunities.push(o));
+  if(ctx.opportunities.length<before){sched();render();toast('Opportunity removed');}
 }
 
 // ─── MARK PAID SHORTCUT ──────────────────────────────────────────────────────
 
 function markOpportunityPaidAsExpected(oppId){
-  const a=S.accounts.find(x=>x.id===_holdingEditorAccId);
-  const hd=a?(a.holdings||[]).find(x=>x.id===_holdingEditorId):null;
-  if(!hd||!Array.isArray(hd.opportunities))return;
-  const o=hd.opportunities.find(x=>x.id===oppId);
+  const ctx=getOppContext();
+  if(!ctx)return;
+  const o=ctx.opportunities.find(x=>x.id===oppId);
   if(!o)return;
-  if(!confirm(`Mark "${o.name}" as paid?\n\nExpected payback: ${fmtP(o.expectedAmount||0)} ${hd.currency||'SAR'}\nExpected pay date: ${toDD(o.expectedPayDate)||'—'}\n\nA payment record will be created with these values.`))return;
+  if(!confirm(`Mark "${o.name}" as paid?\n\nExpected payback: ${fmtP(o.expectedAmount||0)} ${ctx.currency}\nExpected pay date: ${toDD(o.expectedPayDate)||'—'}\n\nA payment record will be created with these values.`))return;
   // Subtract already-received payments so the new record fills the gap
   const alreadyPaid=opportunitySumPayments(o);
   const remainingToPay=(parseFloat(o.expectedAmount)||0)-alreadyPaid;
@@ -18246,7 +18637,9 @@ function closeOpportunitySettle(){
 }
 
 function rOpportunitySettleModal(a,hd){
-  const o=(hd.opportunities||[]).find(x=>x.id===_oppSettleId);
+  const ctx=getOppContext();
+  if(!ctx){closeOpportunitySettle();return '';}
+  const o=ctx.opportunities.find(x=>x.id===_oppSettleId);
   if(!o){closeOpportunitySettle();return '';}
   const alreadyPaid=opportunitySumPayments(o);
   const expectedAmt=parseFloat(o.expectedAmount)||0;
@@ -18272,10 +18665,9 @@ function rOpportunitySettleModal(a,hd){
 }
 
 function saveOpportunitySettle(){
-  const a=S.accounts.find(x=>x.id===_holdingEditorAccId);
-  const hd=a?(a.holdings||[]).find(x=>x.id===_holdingEditorId):null;
-  if(!hd)return;
-  const o=(hd.opportunities||[]).find(x=>x.id===_oppSettleId);
+  const ctx=getOppContext();
+  if(!ctx)return;
+  const o=ctx.opportunities.find(x=>x.id===_oppSettleId);
   if(!o){toast('Opportunity not found',false);return;}
   const amount=parseFloat(document.getElementById('osf-amount')?.value);
   const dateRaw=(document.getElementById('osf-date')?.value||'').trim();
@@ -18301,7 +18693,9 @@ function closeOpportunityPayment(){
 }
 
 function rOpportunityPaymentModal(a,hd){
-  const o=(hd.opportunities||[]).find(x=>x.id===_oppPaymentId);
+  const ctx=getOppContext();
+  if(!ctx){closeOpportunityPayment();return '';}
+  const o=ctx.opportunities.find(x=>x.id===_oppPaymentId);
   if(!o){closeOpportunityPayment();return '';}
   const alreadyPaid=opportunitySumPayments(o);
   const expectedAmt=parseFloat(o.expectedAmount)||0;
@@ -18327,10 +18721,9 @@ function rOpportunityPaymentModal(a,hd){
 }
 
 function saveOpportunityPayment(){
-  const a=S.accounts.find(x=>x.id===_holdingEditorAccId);
-  const hd=a?(a.holdings||[]).find(x=>x.id===_holdingEditorId):null;
-  if(!hd)return;
-  const o=(hd.opportunities||[]).find(x=>x.id===_oppPaymentId);
+  const ctx=getOppContext();
+  if(!ctx)return;
+  const o=ctx.opportunities.find(x=>x.id===_oppPaymentId);
   if(!o){toast('Opportunity not found',false);return;}
   const amount=parseFloat(document.getElementById('opf-amount')?.value);
   const dateRaw=(document.getElementById('opf-date')?.value||'').trim();
@@ -18362,7 +18755,8 @@ function saveOpportunityPayment(){
 // then delegate to the modal flows above.
 function inboxOpenOpportunityAction(oppId,holdingId,accId,action){
   _holdingEditorAccId=accId;
-  _holdingEditorId=holdingId;
+  // V10.5.2: holdingId is null for P2P direct accounts; getOppContext handles both.
+  _holdingEditorId=holdingId||null;
   if(action==='mark_paid'){
     markOpportunityPaidAsExpected(oppId);
   }else if(action==='settle'){
@@ -18511,19 +18905,57 @@ function rPortfolioOverview(){
     </div>
     <div class="card"><div class="empty">Start by adding an investment account from <a href="javascript:sw('portfolio_accounts')" style="color:var(--action)">Portfolio &rarr; Accounts</a>. After that you'll record buy lots, track current values, and the Overview will populate.</div></div>`;
   }
-  // Flatten all holdings across accounts
+  // V10.5.2: Flatten holdings AND synthesize one virtual holding per P2P direct
+  // account so it participates in aggregations. Virtual holdings expose the
+  // fields the aggregator reads (assetClass, currentPrice not-null, currency,
+  // name) sourced from accountP2PSummary().
   const allHoldings=[];
-  invAccs.forEach(a=>{(a.holdings||[]).forEach(hd=>allHoldings.push({hd,acc:a}));});
-  // Aggregate KPIs
-  const totalCV=allHoldings.reduce((s,{hd})=>{const v=holdingCurrentValue(hd);return v!=null?s+v:s;},0);
-  const totalCB=allHoldings.reduce((s,{hd})=>s+holdingCostBasis(hd),0);
-  const pricedCount=allHoldings.filter(({hd})=>hd.currentPrice!=null).length;
-  const totalUnreal=allHoldings.reduce((s,{hd})=>{const u=holdingUnrealizedGL(hd);return u!=null?s+u:s;},0);
+  invAccs.forEach(a=>{
+    if(accountIsP2PDirect(a)){
+      const summary=accountP2PSummary(a);
+      if(summary.count===0)return; // empty P2P account contributes nothing
+      // Synthetic holding for aggregation purposes
+      const synthHd={
+        _synthetic:true,
+        _synthSource:'p2p_account',
+        id:'synth_'+a.id,
+        type:'p2p_loan',
+        name:a.name+' · P2P',
+        assetClass:'private_credit',
+        region:'saudi',
+        currency:'SAR',
+        // currentPrice present so it counts as "priced" in aggregations
+        currentPrice:1,
+        currentPriceAsOf:null,
+        // V10.5.2 fix: cost basis = deployed; current value = outstanding (= deployed
+        // since principal hasn't been received yet); unrealized = expected PROFIT
+        // remaining (not gross — gross would double-count principal); realized YTD
+        // from summary.
+        _synthCV:summary.totalPrincipalDeployed,
+        _synthCB:summary.totalPrincipalDeployed,
+        _synthUnreal:summary.totalExpectedProfitRemaining,
+        _synthRealYTD:summary.totalRealizedYTD
+      };
+      allHoldings.push({hd:synthHd,acc:a,isSynthetic:true});
+      return;
+    }
+    (a.holdings||[]).forEach(hd=>allHoldings.push({hd,acc:a,isSynthetic:false}));
+  });
+  // Aggregate KPIs (synthetic holdings short-circuit holding* helpers via _synthCV etc.)
+  const hCV=(entry)=>entry.isSynthetic?entry.hd._synthCV:holdingCurrentValue(entry.hd);
+  const hCB=(entry)=>entry.isSynthetic?entry.hd._synthCB:holdingCostBasis(entry.hd);
+  const hUnreal=(entry)=>entry.isSynthetic?entry.hd._synthUnreal:holdingUnrealizedGL(entry.hd);
+  const hRealYTD=(entry,year)=>entry.isSynthetic?entry.hd._synthRealYTD:holdingRealizedGLYTD(entry.hd,year);
+  const totalCV=allHoldings.reduce((s,e)=>{const v=hCV(e);return v!=null?s+v:s;},0);
+  const totalCB=allHoldings.reduce((s,e)=>s+(hCB(e)||0),0);
+  const pricedCount=allHoldings.filter(e=>hCV(e)!=null).length;
+  const totalUnreal=allHoldings.reduce((s,e)=>{const u=hUnreal(e);return u!=null?s+u:s;},0);
   const yearNow=new Date().getFullYear();
-  const totalRealYTD=allHoldings.reduce((s,{hd})=>s+holdingRealizedGLYTD(hd,yearNow),0);
+  const totalRealYTD=allHoldings.reduce((s,e)=>s+(hRealYTD(e,yearNow)||0),0);
   const wPct=totalCB>0?((totalUnreal/totalCB)*100):null;
-  // Stale count — holdings priced >30 days ago
-  const staleCount=allHoldings.filter(({hd})=>{
+  // Stale count — holdings priced >30 days ago (synthetics never stale)
+  const staleCount=allHoldings.filter(({hd,isSynthetic})=>{
+    if(isSynthetic)return false;
     if(!hd.currentPriceAsOf)return false;
     const days=Math.floor((Date.now()-new Date(hd.currentPriceAsOf).getTime())/86400000);
     return days>30;
@@ -18533,10 +18965,10 @@ function rPortfolioOverview(){
 
   // ─── Allocation by asset class (composition bar) ───
   const byAssetClass={};
-  allHoldings.forEach(({hd})=>{
-    const cv=holdingCurrentValue(hd);
+  allHoldings.forEach(e=>{
+    const cv=hCV(e);
     if(cv==null)return;
-    const cls=hd.assetClass||'mixed';
+    const cls=e.hd.assetClass||'mixed';
     byAssetClass[cls]=(byAssetClass[cls]||0)+cv;
   });
   const assetClassMeta={
@@ -18561,10 +18993,10 @@ function rPortfolioOverview(){
 
   // ─── Allocation by owner ───
   const byOwner={};
-  allHoldings.forEach(({hd,acc})=>{
-    const cv=holdingCurrentValue(hd);
+  allHoldings.forEach(e=>{
+    const cv=hCV(e);
     if(cv==null)return;
-    const ownerKey=acc.ownerId||'self';
+    const ownerKey=e.acc.ownerId||'self';
     byOwner[ownerKey]=(byOwner[ownerKey]||0)+cv;
   });
   const ownerRows=Object.entries(byOwner).sort((a,b)=>b[1]-a[1]).map(([k,v])=>{
@@ -18579,14 +19011,15 @@ function rPortfolioOverview(){
 
   // ─── Top 5 holdings by current value ───
   const topHoldings=allHoldings
-    .filter(({hd})=>holdingCurrentValue(hd)!=null)
-    .sort((a,b)=>holdingCurrentValue(b.hd)-holdingCurrentValue(a.hd))
+    .filter(e=>hCV(e)!=null)
+    .sort((a,b)=>hCV(b)-hCV(a))
     .slice(0,5);
-  const topRows=topHoldings.map(({hd,acc})=>{
+  const topRows=topHoldings.map(e=>{
+    const hd=e.hd, acc=e.acc;
     const meta=holdingTypeMeta(hd.type);
-    const cv=holdingCurrentValue(hd);
-    const ugl=holdingUnrealizedGL(hd);
-    const cb=holdingCostBasis(hd);
+    const cv=hCV(e);
+    const ugl=hUnreal(e);
+    const cb=hCB(e);
     const pct=(cb>0&&ugl!=null)?(ugl/cb)*100:null;
     return`<tr style="cursor:pointer" onclick="openPortfolioAccountDetail('${acc.id}')">
       <td>
@@ -18734,7 +19167,7 @@ function rPortfolioInbox(){
         <div class="fg jb" style="margin-bottom:6px;align-items:flex-start;gap:10px;flex-wrap:wrap">
           <div style="flex:1;min-width:0">
             <div style="font-weight:500;font-size:13px">${h(o.name||'(unnamed)')}</div>
-            <div style="font-size:11px;color:var(--text3);margin-top:2px">${h(hd.name)} &middot; ${h(acc.name)} &middot; ${h(ownerName)}</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">${hd?h(hd.name)+' &middot; ':''}${h(acc.name)} &middot; ${h(ownerName)}</div>
           </div>
           <div style="text-align:right;flex-shrink:0">
             <div class="priv-mask" style="font-size:13px;font-weight:600;font-variant-numeric:tabular-nums">${fmtP(remaining)}</div>
@@ -18742,10 +19175,10 @@ function rPortfolioInbox(){
           </div>
         </div>
         <div class="fg" style="gap:4px;flex-wrap:wrap;padding-top:6px;border-top:1px solid var(--bg3)">
-          ${canMarkPaid?`<button class="btn btn-xs btn-p" onclick="inboxOpenOpportunityAction('${o.id}','${hd.id}','${acc.id}','mark_paid')" title="Mark as paid using expected values">Mark paid</button>`:''}
-          <button class="btn btn-xs" onclick="inboxOpenOpportunityAction('${o.id}','${hd.id}','${acc.id}','settle')">Settle (different amount)</button>
-          <button class="btn btn-xs" onclick="inboxOpenOpportunityAction('${o.id}','${hd.id}','${acc.id}','payment')">+ Payment</button>
-          <button class="btn btn-xs" onclick="openHoldingEditor('${acc.id}','${hd.id}')" style="margin-left:auto">Open holding &rarr;</button>
+          ${canMarkPaid?`<button class="btn btn-xs btn-p" onclick="inboxOpenOpportunityAction('${o.id}','${hd?hd.id:''}','${acc.id}','mark_paid')" title="Mark as paid using expected values">Mark paid</button>`:''}
+          <button class="btn btn-xs" onclick="inboxOpenOpportunityAction('${o.id}','${hd?hd.id:''}','${acc.id}','settle')">Settle (different amount)</button>
+          <button class="btn btn-xs" onclick="inboxOpenOpportunityAction('${o.id}','${hd?hd.id:''}','${acc.id}','payment')">+ Payment</button>
+          <button class="btn btn-xs" onclick="${hd?`openHoldingEditor('${acc.id}','${hd.id}')`:`openPortfolioAccountDetail('${acc.id}')`}" style="margin-left:auto">${hd?'Open holding':'Open account'} &rarr;</button>
         </div>
       </div>`;
     }).join('');
