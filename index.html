@@ -4429,7 +4429,37 @@ body:not([data-current-engine]) .index-section[data-engine="portfolio"]{display:
   </div>
 </div>
 
-<!-- MODULE SELECTOR -->
+<!-- V10.5.12: vault corruption screen. Shown when loadS encounters Mode B (AES decrypt
+     failure) or Mode C (JSON.parse failure on decrypted plaintext). Mode A (network)
+     stays on the existing transient retry path and never reaches this screen.
+     The app intentionally cannot mount past this screen — corruption is a persistent
+     server-side condition that requires explicit user action to resolve. -->
+<div id="s-vault-corrupt" class="auth-screen lanki-legacy">
+  <div class="auth-brand" style="margin-bottom:2rem">
+    <svg width="36" height="30" viewBox="0 0 40 33" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect y="0" width="40" height="8" rx="2" fill="#021751"/>
+      <rect y="12.5" width="26" height="8" rx="2" fill="#021751"/>
+      <rect y="25" width="34" height="8" rx="2" fill="#021751"/>
+    </svg>
+    <div class="auth-wordmark">lanki</div>
+    <div class="auth-tagline">Intelligence for the family that builds.</div>
+    <div class="auth-version" id="ver-s-vault-corrupt"></div>
+  </div>
+  <div class="auth-form" style="max-width:480px">
+    <div style="margin-bottom:1.5rem;padding:14px 16px;background:color-mix(in srgb,var(--neg) 8%,transparent);border:1px solid color-mix(in srgb,var(--neg) 35%,transparent);border-radius:var(--rsm);text-align:left">
+      <div style="font-size:13px;font-weight:600;color:var(--neg);margin-bottom:6px">⚠ Vault could not be read</div>
+      <div id="vc-msg" style="font-size:12px;color:var(--text1);line-height:1.5">The vault data was reached, but could not be decoded into a usable state. Your data on the server has not been changed by this error. You can retry, restore from a local snapshot, or sign out and try again later.</div>
+    </div>
+    <button class="auth-btn" id="vc-retry-btn" onclick="vcRetry()">Retry loading vault</button>
+    <button onclick="document.getElementById('vc-snapshot-file')?.click()" style="margin-top:10px;width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:var(--rsm);padding:12px;font-size:13px;color:var(--text1);cursor:pointer;font-family:var(--font);font-weight:500">Restore from local snapshot</button>
+    <input type="file" id="vc-snapshot-file" accept=".json" style="display:none" onchange="vcRestoreSnapshot(this)">
+    <button onclick="vcSignOut()" style="margin-top:10px;width:100%;background:none;border:1px solid var(--border);border-radius:var(--rsm);padding:10px;font-size:12px;color:var(--text3);cursor:pointer;font-family:var(--font);font-weight:500">Sign out</button>
+    <details style="margin-top:1.25rem;font-size:11px;color:var(--text3)">
+      <summary style="cursor:pointer;padding:4px 0">Technical details</summary>
+      <div id="vc-details" style="margin-top:6px;padding:8px 10px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--rsm);font-family:monospace;font-size:10.5px;color:var(--text2);line-height:1.5;word-break:break-all"></div>
+    </details>
+  </div>
+</div>
 <div id="s-modules" class="mod-screen lanki-legacy">
   <div class="mod-screen-inner">
 
@@ -4908,7 +4938,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='10.5.11';
+const VERSION='10.5.12';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -4928,7 +4958,7 @@ let sKey=null,saveTimer=null,pinCb=null,catCb=null,activeGroup=null;
 
 // Populate version labels on all auth screens (login, unlock, setup) as soon as DOM is ready.
 (function(){
-  const fill=()=>{['ver-s-loading','ver-s-unlock','ver-s-setup'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent='v'+VERSION;});};
+  const fill=()=>{['ver-s-loading','ver-s-unlock','ver-s-setup','ver-s-vault-corrupt'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent='v'+VERSION;});};
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',fill);
   else fill();
 })();
@@ -4995,18 +5025,40 @@ async function sbGet(id){
   try{return JSON.parse(d[0].payload);}catch{throw new Error('Vault data corrupted');}
 }
 async function sbPut(id,payload){
-  const r=await fetch(`${SB}/rest/v1/dashboard_data`,{method:'POST',headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({id,payload:JSON.stringify(payload),updated_at:new Date().toISOString()})});
-  if(!r.ok){const t=await r.text();throw new Error(`${r.status}: ${t}`);}
+  // V10.5.12: 15-second timeout. Pre-V10.5.12 had no timeout, so a hung POST
+  // held the await indefinitely, blocking saveState forever and silently
+  // preventing further saves until network recovery. 15s is generous enough for
+  // a 5MB encrypted payload over slow networks but bounded enough to surface
+  // network issues quickly. AbortError propagates to caller via throw.
+  const ctrl=new AbortController();
+  const t=setTimeout(()=>ctrl.abort(),15000);
+  try{
+    const r=await fetch(`${SB}/rest/v1/dashboard_data`,{method:'POST',headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({id,payload:JSON.stringify(payload),updated_at:new Date().toISOString()}),signal:ctrl.signal});
+    if(!r.ok){const t2=await r.text();throw new Error(`${r.status}: ${t2}`);}
+  }finally{
+    clearTimeout(t);
+  }
 }
 async function sbDel(id){
-  await fetch(`${SB}/rest/v1/dashboard_data?id=eq.${id}`,{method:'DELETE',headers:{'apikey':SK,'Authorization':'Bearer '+SK}});
+  // V10.5.12: check r.ok and throw on failure. Pre-V10.5.12 had no error check,
+  // so a failed DELETE returned silently. Callers (execClear wipe path) could
+  // partially succeed and leave orphan rows on the server while telling the
+  // user the wipe completed.
+  const ctrl=new AbortController();
+  const t=setTimeout(()=>ctrl.abort(),15000);
+  try{
+    const r=await fetch(`${SB}/rest/v1/dashboard_data?id=eq.${id}`,{method:'DELETE',headers:{'apikey':SK,'Authorization':'Bearer '+SK},signal:ctrl.signal});
+    if(!r.ok){const t2=await r.text();throw new Error(`sbDel ${r.status}: ${t2}`);}
+  }finally{
+    clearTimeout(t);
+  }
 }
 
 // ─── AUTH SCREENS ───
-function showAuth(id){['s-loading','s-setup','s-unlock','s-modules'].forEach(s=>{const el=document.getElementById(s);if(el)el.classList.toggle('active',s===id);});document.getElementById('app').classList.remove('active');}
-function showModules(){['s-loading','s-setup','s-unlock'].forEach(s=>document.getElementById(s)?.classList.remove('active'));document.getElementById('s-modules').classList.add('active');document.getElementById('app').classList.remove('active');}
+function showAuth(id){['s-loading','s-setup','s-unlock','s-vault-corrupt','s-modules'].forEach(s=>{const el=document.getElementById(s);if(el)el.classList.toggle('active',s===id);});document.getElementById('app').classList.remove('active');}
+function showModules(){['s-loading','s-setup','s-unlock','s-vault-corrupt'].forEach(s=>document.getElementById(s)?.classList.remove('active'));document.getElementById('s-modules').classList.add('active');document.getElementById('app').classList.remove('active');}
 function showApp(){
-  ['s-loading','s-setup','s-unlock','s-modules'].forEach(s=>document.getElementById(s)?.classList.remove('active'));
+  ['s-loading','s-setup','s-unlock','s-vault-corrupt','s-modules'].forEach(s=>document.getElementById(s)?.classList.remove('active'));
   document.getElementById('app').classList.add('active');
   // V10.5.0: apply the current engine to the body so the sidebar shows the right
   // sections (CSS hides sections not matching data-current-engine).
@@ -5198,15 +5250,50 @@ async function doUnlock(){
   const mins=isLockedOut();
   if(mins>0){err.textContent=`Too many failed attempts. Try again in ${mins} minute${mins!==1?'s':''}.`;return;}
   btn.disabled=true;btn.textContent='Unlocking...';err.textContent='';
+  // V10.5.12: split the unlock try into two phases.
+  // Phase 1 (auth gate): sbGet phase1 + dk + dec(ver) — only these failures count
+  // toward the lockout counter. A failure here is genuinely "wrong passphrase" or
+  // "vault not found" or network failure on the auth fetch.
+  // Phase 2 (data load): loadS — failures here are vault corruption / partial-load
+  // issues that should NOT count as auth failures and should NOT lock out the user.
+  let key;
+  let d;
   try{
-    const d=await sbGet('phase1');
+    d=await sbGet('phase1');
     if(!d?.salt){err.textContent='No vault found.';btn.disabled=false;btn.textContent='Unlock →';return;}
-    const key=await dk(p,d.salt);
+    key=await dk(p,d.salt);
     await dec(key,d.ver);
-    // Success — clear fail state and start activity timer
-    clearFailState();
-    resetActivityTimer();
-    sKey=key;await loadS(d);
+  }catch(e){
+    // Phase 1 failure: authentication-class. Counter increments. sKey is NOT set,
+    // so no later timer can fire a save.
+    const state=recordFailedAttempt();
+    const remaining=_MAX_ATTEMPTS-state.count;
+    if(state.lockedUntil){
+      err.textContent=`Too many failed attempts. Locked for 15 minutes.`;
+    }else{
+      err.textContent=`Incorrect passphrase.${remaining>0?' '+remaining+' attempt'+(remaining!==1?'s':'')+' remaining.':''}`;
+    }
+    btn.disabled=false;btn.textContent='Unlock →';
+    return;
+  }
+  // Phase 1 succeeded: passphrase is correct. Clear fail state and start activity timer.
+  clearFailState();
+  resetActivityTimer();
+  sKey=key;
+  // Phase 2: load the vault data. Distinguished failure modes determine UX.
+  try{
+    await loadS(d);
+    // V10.5.12: check the post-load failure mode. loadS may have populated S
+    // partially (e.g. main row failed, txnCache untouched) and we need to route
+    // to the right screen.
+    if(_loadFailMode===LOAD_FAIL_DECRYPT||_loadFailMode===LOAD_FAIL_PARSE){
+      // Mode B or C: persistent vault corruption. Clear sKey to prevent any
+      // timer-driven save from firing against the corrupted in-memory state.
+      sKey=null;
+      btn.disabled=false;btn.textContent='Unlock →';
+      showVaultCorrupt(_loadFailMode,_loadFailError);
+      return;
+    }
     // D Build A: if email/username configured, validate identifier field
     // Passphrase alone still works (Build B will make this mandatory)
     const idVal=(document.getElementById('ul-id')?.value||'').trim().toLowerCase();
@@ -5221,16 +5308,21 @@ async function doUnlock(){
         btn.disabled=false;btn.textContent='Unlock →';return;
       }
     }
-showModules();
+    showModules();
   }catch(e){
-    const state=recordFailedAttempt();
-    const remaining=_MAX_ATTEMPTS-state.count;
-    if(state.lockedUntil){
-      err.textContent=`Too many failed attempts. Locked for 15 minutes.`;
-    }else{
-      err.textContent=`Incorrect passphrase.${remaining>0?' '+remaining+' attempt'+(remaining!==1?'s':'')+' remaining.':''}`;
-    }
+    // V10.5.12: loadS threw. Inspect _loadFailMode to decide routing.
+    // - Mode A (network): show transient retry UX on the unlock screen
+    // - Mode B/C: show strict vault-corrupt UX
+    // Either way: clear sKey (no timer should fire against incomplete state)
+    // and do NOT call recordFailedAttempt (this is not an auth failure).
+    sKey=null;
     btn.disabled=false;btn.textContent='Unlock →';
+    if(_loadFailMode===LOAD_FAIL_NETWORK){
+      err.textContent='Connection failed. Check network and retry.';
+    }else{
+      // Mode B or C reached here via throw rather than mode-set. Show strict UX.
+      showVaultCorrupt(_loadFailMode||LOAD_FAIL_DECRYPT,_loadFailError||e);
+    }
   }
 }
 function lockApp(){
@@ -5247,6 +5339,82 @@ function lockApp(){
   // M7: restore category colors for next unlock
   Object.keys(CAT_COLORS).forEach(k=>{if(!MAIN_CATS.find(m=>m.id===k))delete CAT_COLORS[k];});
   showAuth('s-unlock');const p=document.getElementById('ul-p');if(p){p.value='';p.focus();}const e=document.getElementById('ul-err');if(e)e.textContent='';const b=document.getElementById('ul-btn');if(b){b.disabled=false;b.textContent='Unlock \u2192';}}
+
+// V10.5.12: vault-corrupt screen handlers. Surfaced when loadS reports Mode B
+// (AES decrypt failed) or Mode C (JSON.parse on decrypted plaintext failed).
+// Mode A (network) stays on its own transient retry path and never reaches this.
+function showVaultCorrupt(mode,err){
+  const msgEl=document.getElementById('vc-msg');
+  const detailsEl=document.getElementById('vc-details');
+  // Mode-specific copy explains the failure class to the user without exposing
+  // raw crypto detail. The expandable Technical details disclosure shows the
+  // underlying error message verbatim for diagnostic value.
+  let intro;
+  if(mode===LOAD_FAIL_DECRYPT){
+    intro='The vault data on the server could not be decrypted. This usually means the encrypted data is corrupted or the encryption key in this session does not match what was used to write the vault. Your data on the server has not been changed by this error.';
+  }else if(mode===LOAD_FAIL_PARSE){
+    intro='The vault data was decrypted, but the decrypted content could not be parsed as valid data. This indicates the stored data is malformed, not that the encryption key is wrong. Your data on the server has not been changed by this error.';
+  }else{
+    intro='The vault could not be loaded. Your data on the server has not been changed by this error.';
+  }
+  if(msgEl)msgEl.innerHTML=intro+'<br><br>You can retry, restore from a local snapshot you saved earlier, or sign out and try again later.';
+  if(detailsEl){
+    const errMsg=(err&&err.message)||String(err||'(no message)');
+    const errName=(err&&err.name)||'Error';
+    detailsEl.textContent='Mode: '+mode+' · Error: '+errName+': '+errMsg+' · Rev observed: '+_vaultRev;
+  }
+  showAuth('s-vault-corrupt');
+}
+async function vcRetry(){
+  const btn=document.getElementById('vc-retry-btn');
+  if(btn){btn.disabled=true;btn.textContent='Retrying…';}
+  try{
+    await loadS();
+    if(_loadFailMode===LOAD_FAIL_NONE){
+      // Recovery succeeded. Mount the app.
+      showModules();
+    }else{
+      // Same or different failure mode. Re-display with updated details.
+      if(btn){btn.disabled=false;btn.textContent='Retry loading vault';}
+      showVaultCorrupt(_loadFailMode,_loadFailError);
+    }
+  }catch(e){
+    // Likely transient network (Mode A) — surface as toast and stay on screen.
+    if(btn){btn.disabled=false;btn.textContent='Retry loading vault';}
+    if(_loadFailMode===LOAD_FAIL_NETWORK){
+      if(typeof toast==='function')toast('Connection failed. Check network and retry.',false);
+    }else{
+      showVaultCorrupt(_loadFailMode||LOAD_FAIL_DECRYPT,_loadFailError||e);
+    }
+  }
+}
+async function vcRestoreSnapshot(input){
+  // Reuses doRestoreSnapshot but routes the post-restore flow through the
+  // module screen rather than re-rendering the corrupted state. The restore
+  // overwrites server state with the snapshot contents, so a successful restore
+  // means the user is fully recovered.
+  if(!input?.files?.[0])return;
+  try{
+    await doRestoreSnapshot(input);
+    // After successful restore the vault is healthy; reload state to be safe.
+    _loadFailMode=LOAD_FAIL_NONE;
+    _loadFailError=null;
+    showModules();
+  }catch(e){
+    if(typeof toast==='function')toast('Snapshot restore failed: '+(e.message||'unknown'),false);
+  }
+}
+function vcSignOut(){
+  // Clear sKey and return to unlock screen.
+  sKey=null;
+  _loadFailMode=LOAD_FAIL_NONE;
+  _loadFailError=null;
+  _vaultLoadDegraded=false;
+  showAuth('s-unlock');
+  const p=document.getElementById('ul-p');if(p){p.value='';p.focus();}
+  const e=document.getElementById('ul-err');if(e)e.textContent='';
+  const b=document.getElementById('ul-btn');if(b){b.disabled=false;b.textContent='Unlock \u2192';}
+}
 
 // ─── PIN MODAL ───
 function reqPin(title,desc,cb){
@@ -5316,8 +5484,19 @@ async function execClear(){
     const cachedMonths=Object.keys(S.txnCache||{});
     const now=getYM(new Date());
     const allMonths=new Set([...cachedMonths,...mRange(addM(now,-60),addM(now,1))]);
-    for(const ym of allMonths){try{await sbDel('phase1_txn_'+ym);}catch{}}
-  }catch(e){console.error('Wipe error:',e);}
+    // V10.5.12: surface partial-wipe failures instead of swallowing silently.
+    // Pre-V10.5.12 used catch{} (empty), so a failed DELETE for some months left
+    // orphan rows on the server while telling the user the wipe completed.
+    const wipeFailures=[];
+    for(const ym of allMonths){
+      try{await sbDel('phase1_txn_'+ym);}
+      catch(e){wipeFailures.push(ym);console.warn('wipe failed for',ym,e);}
+    }
+    if(wipeFailures.length>0){
+      toast(`Wipe partially failed: ${wipeFailures.length} month${wipeFailures.length===1?'':'s'} could not be deleted. The vault is in an inconsistent state. Check Supabase manually.`,false);
+      console.error('wipe partial failure for months:',wipeFailures);
+    }
+  }catch(e){console.error('Wipe error:',e);toast('Wipe error: '+(e.message||'unknown'),false);}
   sKey=null;
   showAuth('s-setup');
   toast('All data deleted. Please create a new vault.');
@@ -6223,13 +6402,18 @@ function clearStoredBalancesForAccountMonth(accId,ym){
 function migrateBalanceAnchorsV10_5_5(){
   if(S._v10_5_5_balance_recompute_migrated)return 0;
   let updated=0;
+  // V10.5.12: set the migrated flag ONLY on success. Pre-V10.5.12 set the flag
+  // unconditionally inside the catch — meaning a transient throw (e.g. a stale
+  // account reference at the time of first load) permanently marked the migration
+  // complete and prevented retry on subsequent loads. Setting the flag only on
+  // success lets the next load retry if conditions have changed.
   try{
     const r=recomputeAllBalances();
     updated=r.updated;
+    S._v10_5_5_balance_recompute_migrated=true;
   }catch(e){
-    console.warn('V10.5.5 balance anchor migration failed:',e);
+    console.warn('V10.5.5 balance anchor migration failed (will retry on next load):',e);
   }
-  S._v10_5_5_balance_recompute_migrated=true;
   return updated;
 }
 
@@ -6416,6 +6600,23 @@ function restoreS(d){
   // effective-dated salary comparisons and archive workflow. Idempotent via
   // S._v10_5_6_staff_migrated. Conservative: only writes missing fields.
   if(typeof migrateStaffV10_5_6==='function')migrateStaffV10_5_6();
+  // V10.5.12: direction-count diagnostic. Counts how many transactions lack an
+  // explicit `direction` field, which triggers the txDir() fallback at line ~5773.
+  // The fallback infers direction from `type` and description text — a Standard 1
+  // invariant violation per the V10.5.11 audit (H-12). This diagnostic gives real
+  // data on the size of the legacy population so Phase 3 can decide whether to ship
+  // a one-time migration that normalizes direction across all transactions and then
+  // removes the fallback. No state mutation; console output only.
+  try{
+    let total=0,missing=0;
+    Object.values(S.txnCache||{}).forEach(arr=>{
+      if(!Array.isArray(arr))return;
+      arr.forEach(t=>{total++;if(!t.direction)missing++;});
+    });
+    if(missing>0){
+      console.warn('[V10.5.12 H-12 diagnostic] '+missing+' of '+total+' transactions lack explicit direction; txDir() fallback in use. See audit H-12.');
+    }
+  }catch(e){/* diagnostic only — never break load on counting failure */}
 }
 // ─── CATEGORY TIER DEFINITIONS ───
 // Tier C — locked from deletion because hardcoded business logic depends on these IDs.
@@ -6518,39 +6719,80 @@ function applyDeletions(){
 //      user via a banner (M9 fix below), and CRUCIALLY block saveState from
 //      writing back until the user resolves it. S keeps whatever it loaded;
 //      no auto-empty.
+// V10.5.12: failure mode markers. loadS distinguishes three classes of failure
+// in the main-row try block; callers (doUnlock, refreshData) inspect the mode
+// to decide whether to show transient retry UX (Mode A) or strict vault-corruption
+// UX (Modes B and C). Pre-V10.5.12 conflated all failures into the same catch
+// and called restoreS({}) unconditionally — the path that produced the 15 May
+// in-memory orphan state.
+const LOAD_FAIL_NONE='none';
+const LOAD_FAIL_NETWORK='network';     // Mode A: sbGet threw (network failure, timeout, Supabase unavailable)
+const LOAD_FAIL_DECRYPT='decrypt';     // Mode B: AES-GCM decrypt step rejected (genuinely wrong key — defensive)
+const LOAD_FAIL_PARSE='parse';         // Mode C: AES decrypt succeeded but JSON.parse on the plaintext threw
+let _loadFailMode=LOAD_FAIL_NONE;       // set by loadS, read by callers
+let _loadFailError=null;                // raw Error object for diagnostic disclosure
 let _vaultLoadDegraded=false; // set when transaction loading fails partially
 async function loadS(sbData){
-  // Step 1: main row decrypt — controlled errors
+  // V10.5.12: reset failure mode at start of each load attempt
+  _loadFailMode=LOAD_FAIL_NONE;
+  _loadFailError=null;
+  // Step 1: fetch the main row. Network failures (Mode A) propagate WITHOUT
+  // touching S — caller decides how to surface (transient retry UX).
+  let d;
   try{
-    const d=sbData||await sbGet('phase1');
-    if(d?.encData){
-      // V9.0.2 (audit H4): record observed rev for optimistic concurrency on save
-      _vaultRev=(d&&typeof d.rev==='number')?d.rev:0;
-      const raw=await dec(sKey,d.encData);
-      // Migration: old format had txns inside encData
-      if(raw.txns&&Object.keys(raw.txns).length>0){
-        for(const[ym,txns] of Object.entries(raw.txns)){
-          await saveTxnRow(ym,txns);
-        }
-        delete raw.txns;
-        const newEnc=await enc(sKey,{...raw,version:VERSION});
-        await sbPut('phase1',{...d,encData:newEnc});
-        toast('Data migrated to v1.2 format');
-      }
-      restoreS(raw);
-    }else{
-      // No encData — fresh vault. Empty restore is correct here.
-      _vaultRev=0;
-      restoreS({});
-    }
+    d=sbData||await sbGet('phase1');
   }catch(e){
-    // Main row decrypt failed. This is a hard error — could mean wrong key
-    // (already prevented by ver check upstream) or genuine corruption.
-    // Empty restore matches previous behaviour for this specific path.
-    console.error('loadS main row error:',e);
-    restoreS({});
+    // Mode A: network-class failure. Do NOT mutate S. Do NOT restoreS({}).
+    // Propagate the throw so caller (doUnlock / refreshData) handles transient retry.
+    _loadFailMode=LOAD_FAIL_NETWORK;
+    _loadFailError=e;
+    console.error('loadS network error:',e);
+    throw e;
   }
-  // Step 2: monthly txn rows — failures must NOT empty S
+  // Step 2: handle the encData payload. If missing entirely, the vault is fresh
+  // (no prior data) — restoreS({}) is correct here because the user has nothing
+  // to lose. This is the ONLY legitimate restoreS({}) path in loadS.
+  if(!d?.encData){
+    _vaultRev=0;
+    restoreS({});
+  }else{
+    // V9.0.2 (audit H4): record observed rev for optimistic concurrency on save
+    _vaultRev=(d&&typeof d.rev==='number')?d.rev:0;
+    let raw;
+    // Step 3: AES-GCM decrypt. A rejection here means the ciphertext failed
+    // authentication — wrong key or tampered payload. Upstream ver check at
+    // doUnlock line ~5205 typically prevents this from reaching loadS, but
+    // defensive handling: surface as Mode B without touching S.
+    try{
+      raw=await dec(sKey,d.encData);
+    }catch(e){
+      // Distinguish decrypt failure (B) from parse failure (C). The dec()
+      // helper performs decrypt THEN JSON.parse; either can throw. Inspect the
+      // error to tell them apart.
+      const msg=String(e&&e.message||e||'').toLowerCase();
+      const isParseFail=msg.includes('json')||msg.includes('unexpected')||msg.includes('parse');
+      _loadFailMode=isParseFail?LOAD_FAIL_PARSE:LOAD_FAIL_DECRYPT;
+      _loadFailError=e;
+      _vaultLoadDegraded=true; // freeze further saves; reload required
+      console.error('loadS '+_loadFailMode+' failure:',e);
+      // Do NOT call restoreS({}) — that was the 15 May ingress path.
+      // Do NOT mutate S.accounts, S.txnCache, or any collection.
+      // The caller is responsible for showing the strict corruption UX.
+      throw e;
+    }
+    // Migration: old format had txns inside encData
+    if(raw.txns&&Object.keys(raw.txns).length>0){
+      for(const[ym,txns] of Object.entries(raw.txns)){
+        await saveTxnRow(ym,txns);
+      }
+      delete raw.txns;
+      const newEnc=await enc(sKey,{...raw,version:VERSION});
+      await sbPut('phase1',{...d,encData:newEnc});
+      toast('Data migrated to v1.2 format');
+    }
+    restoreS(raw);
+  }
+  // Step 4: monthly txn rows — failures must NOT empty S
   try{
     await loadAllTxnRows();
     _vaultLoadDegraded=false;
@@ -7147,10 +7389,30 @@ async function refreshData(){
   setSS('Refreshing...');
   try{
     await loadS();
+    // V10.5.12: check post-load failure mode. Modes B/C signal persistent
+    // vault corruption — escalate to the strict UX. Mode A (network) is handled
+    // by the catch below with the existing toast pattern.
+    if(_loadFailMode===LOAD_FAIL_DECRYPT||_loadFailMode===LOAD_FAIL_PARSE){
+      sKey=null; // freeze any pending saves against the unloaded state
+      setSS('');
+      if(btn){btn.style.animation='';btn.disabled=false;}
+      showVaultCorrupt(_loadFailMode,_loadFailError);
+      return;
+    }
     render();
     setSS('Refreshed ✓');setTimeout(()=>setSS(''),2500);
     toast('Data refreshed');
   }catch(e){
+    // V10.5.12: route by failure mode.
+    // Mode A (network): existing transient retry pattern — toast and stay on app.
+    // Mode B/C: strict UX — corruption screen replaces app.
+    if(_loadFailMode===LOAD_FAIL_DECRYPT||_loadFailMode===LOAD_FAIL_PARSE){
+      sKey=null;
+      setSS('');
+      if(btn){btn.style.animation='';btn.disabled=false;}
+      showVaultCorrupt(_loadFailMode,_loadFailError);
+      return;
+    }
     setSS('Refresh failed');
     toast('Refresh failed',false);
     console.error(e);
@@ -17359,7 +17621,44 @@ function saveAcc(){
   }
   editAccId=null;sched();tp('acc-panel');render();
 }
-function delAcc(id){S.accounts=S.accounts.filter(a=>a.id!==id);sched();render();}
+// V10.5.12: type-to-confirm gate for account deletion. Pre-V10.5.12 was a
+// one-line function with no confirmation, no cascade, no orphan warning. A
+// single click silently orphaned every transaction tied to the account. The
+// new flow shows the orphan count before delete and requires the user to type
+// the account name exactly to proceed. Refuses outright if this would leave
+// zero accounts (use Reset vault for that case instead).
+function delAcc(id){
+  const a=S.accounts.find(x=>x.id===id);
+  if(!a){toast('Account not found',false);return;}
+  // Refuse to delete the last account — that path is a vault wipe, not a delete
+  if(S.accounts.length<=1){
+    toast('Cannot delete the last account. Use Settings → Reset vault if you want to start over.',false);
+    return;
+  }
+  // Count transactions that would be orphaned
+  let orphanCount=0;
+  Object.values(S.txnCache||{}).forEach(arr=>{
+    if(!Array.isArray(arr))return;
+    orphanCount+=arr.filter(t=>t.accountId===id).length;
+  });
+  const accName=(a.name||'').trim()||'this account';
+  const orphanLine=orphanCount>0
+    ?`\n\nThis will ORPHAN ${orphanCount} transaction${orphanCount===1?'':'s'} tied to this account. Orphans are hidden from Bank Accounts and Cards views and surfaced via the orphan banner for manual re-assignment or deletion.`
+    :'\n\nThis account has no linked transactions.';
+  const typed=prompt(`Delete account "${accName}"?${orphanLine}\n\nTo confirm, type exactly: ${accName}`);
+  if(typed===null)return; // user cancelled
+  if(typed.trim()!==accName){
+    toast('Name did not match. Account not deleted.',false);
+    return;
+  }
+  S.accounts=S.accounts.filter(x=>x.id!==id);
+  sched();render();
+  if(orphanCount>0){
+    toast(`Account "${accName}" deleted. ${orphanCount} transaction${orphanCount===1?'':'s'} are now orphaned — review via the orphan banner.`);
+  }else{
+    toast(`Account "${accName}" deleted.`);
+  }
+}
 
 
 // --- DEBTS ---
@@ -21613,7 +21912,9 @@ function saveDebt(){
       remainingAtStart:enteredRem,
       remaining:enteredRem,
       installment:parseFloat(document.getElementById('db-inst').value)||0,
-      profitRate:parseFloat(document.getElementById('db-rate').value)||null,
+      // V10.5.12: parseFloat(...)||null coerces a legitimate 0% rate (interest-free
+      // family loan) to null. Use explicit isNaN check so 0 is preserved.
+      profitRate:(()=>{const v=parseFloat(document.getElementById('db-rate').value);return isNaN(v)?null:v;})(),
       durationMonths:parseInt(document.getElementById('db-dur').value)||null,
       contractStart:fromDD(document.getElementById('db-start').value),
       endDate:fromDD(document.getElementById('db-end').value),
@@ -26328,7 +26629,14 @@ function autoFixTypeCategoryDrift(){
   affectedYms.forEach(ym=>schedTxn(ym));
   sched();
   // Re-sync debt payments since type changes affect debt linkage logic
-  try{syncDebtsFromTxns();}catch(e){}
+  // V10.5.12: surface debt-sync failures instead of swallowing silently.
+  // Pre-V10.5.12 had catch(e){} (empty), so a failed sync rendered the dashboard
+  // with stale debt totals and no signal that sync failed.
+  try{syncDebtsFromTxns();}
+  catch(e){
+    console.error('syncDebtsFromTxns failed during type-drift auto-fix:',e);
+    toast('Debt totals may be out of sync. Refresh to retry, or check debt rows manually.',false);
+  }
   render();
   toast(`Auto-fixed ${fixed.length} transaction${fixed.length===1?'':'s'} · types now match categories`);
   console.log('[V8.9] Type/category drift auto-fix:',fixed);
@@ -27173,8 +27481,12 @@ function rAIUpload(){
     </div>`:''}
 
     ${(()=>{
-      const op=parseFloat(_aiState.openingBal)||null;
-      const cl=parseFloat(_aiState.closingBal)||null;
+      // V10.5.12: parseFloat(...)||null coerces a legitimate 0 (new card, zero
+      // opening balance) to null. Replace with explicit isNaN check so 0 is preserved.
+      const opRaw=parseFloat(_aiState.openingBal);
+      const clRaw=parseFloat(_aiState.closingBal);
+      const op=isNaN(opRaw)?null:opRaw;
+      const cl=isNaN(clRaw)?null:clRaw;
       const netFlow=totalInc-totalExp;
       const calcClose=op!==null?(op+netFlow):null;
       const guardOk=op===null||cl===null?null:Math.abs((calcClose||0)-cl)<1;
