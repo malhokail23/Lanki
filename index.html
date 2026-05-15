@@ -4908,7 +4908,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='10.5.7';
+const VERSION='10.5.8';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -14058,7 +14058,15 @@ function staffSalaryForMonth(st,ym){
     if(!e||!e.effectiveFrom)continue;
     if(e.effectiveFrom<=lastDay&&(!best||e.effectiveFrom>best.effectiveFrom))best=e;
   }
-  return best?(best.salary||0):(st.salary||0);
+  if(best)return best.salary||0;
+  // V10.5.8: when the requested month is BEFORE the earliest history entry,
+  // fall back to the EARLIEST entry's salary — not st.salary (which is the
+  // latest/current denormalized value). Treats the first known salary as
+  // having been in effect indefinitely before any explicit change. Fixes the
+  // bug where a salary change retroactively flagged pre-change payments as
+  // "Lower by X" against the new salary.
+  const sorted=history.filter(e=>e&&e.effectiveFrom).slice().sort((a,b)=>a.effectiveFrom.localeCompare(b.effectiveFrom));
+  return sorted.length?(sorted[0].salary||0):(st.salary||0);
 }
 
 // One-time migration: seed salaryHistory and status for existing staff.
@@ -14529,7 +14537,8 @@ function rStaff(){
       <div><label class="lbl">Role</label><select id="sf-role"><option>Maid &amp; Cleaner</option><option>Driver</option><option>Nanny &amp; Babysitter</option><option>Cook &amp; Chef</option><option>Gardener</option><option>Security Guard</option><option>Other</option></select></div>
     </div>
     <div class="fr3" style="margin-top:8px">
-      <div><label class="lbl">Monthly salary (SAR)</label><input type="number" inputmode="decimal" id="sf-sal" placeholder="0.00" min="0" step="0.01"></div>
+      <div id="sf-sal-cell"><label class="lbl">Monthly salary (SAR)</label><input type="number" inputmode="decimal" id="sf-sal" placeholder="0.00" min="0" step="0.01"></div>
+      <div id="sf-sal-hint" style="display:none"><label class="lbl">Monthly salary</label><div style="padding:8px 10px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--rsm);font-size:11px;color:var(--text2);line-height:1.5">Salary is managed via <strong>Change salary</strong> on the staff card. Edit only updates other fields.</div></div>
       <div><label class="lbl">Payment due day</label><input type="number" id="sf-due" placeholder="25" min="1" max="31" value="25"></div>
       <div><label class="lbl">Weekend rule</label><select id="sf-wend"><option value="">None</option><option value="shift">Shift to Thursday</option></select></div>
     </div>
@@ -14834,6 +14843,9 @@ function openAddStaff(){
   document.getElementById('sf-due').value='25';
   document.getElementById('sf-role').value='Maid & Cleaner';
   document.getElementById('sf-wend').value='';
+  // V10.5.8: in Add mode, the salary field is shown (it's the staff's initial salary).
+  const salCell=document.getElementById('sf-sal-cell');if(salCell)salCell.style.display='';
+  const salHint=document.getElementById('sf-sal-hint');if(salHint)salHint.style.display='none';
   document.getElementById('stf-ptitle').textContent='Add staff member';
   document.getElementById('stf-sbtn').textContent='Add';
   // Restore panel to top anchor when adding fresh
@@ -14848,6 +14860,10 @@ function openEditStaff(id){
   document.getElementById('sf-name').value=st.name||'';
   document.getElementById('sf-role').value=st.role||'Maid & Cleaner';
   document.getElementById('sf-sal').value=st.salary||'';
+  // V10.5.8: in Edit mode, salary is managed exclusively via Change salary (which creates
+  // history entries). Hide the salary field and show a hint pointing the user to Change salary.
+  const salCell=document.getElementById('sf-sal-cell');if(salCell)salCell.style.display='none';
+  const salHint=document.getElementById('sf-sal-hint');if(salHint)salHint.style.display='';
   document.getElementById('sf-due').value=st.dueDay||25;
   document.getElementById('sf-wend').value=st.weekendRule?'shift':'';
   document.getElementById('sf-start').value=st.contractStart?toDD(st.contractStart):'';
@@ -14865,26 +14881,28 @@ function openEditStaff(id){
 }
 function addStaff(){
   const name=document.getElementById('sf-name').value.trim();if(!name){toast('Name required',false);return;}
-  const data={name,role:document.getElementById('sf-role').value,salary:parseFloat(document.getElementById('sf-sal').value)||0,dueDay:parseInt(document.getElementById('sf-due').value)||25,weekendRule:document.getElementById('sf-wend').value==='shift',contractStart:fromDD(document.getElementById('sf-start').value),contractEnd:fromDD(document.getElementById('sf-end').value),notes:document.getElementById('sf-notes').value.trim()};
   if(editStaffId){
+    // V10.5.8: in Edit mode, salary and salaryHistory are managed exclusively by the
+    // Change salary action. The Edit form only updates other fields (name, role, due
+    // day, weekend rule, contract dates, notes). This prevents Edit from retroactively
+    // mutating the latest salaryHistory entry and breaking historical variance comparisons.
     const existing=S.staff.find(x=>x.id===editStaffId);
     if(existing){
-      // V10.5.6: salary edits via the main form update the LATEST salaryHistory entry rather than
-      // creating a new one. Use the dedicated Change salary action to add a new effective-dated entry.
-      const newSal=data.salary;
-      if(Array.isArray(existing.salaryHistory)&&existing.salaryHistory.length>0){
-        // Sort ascending and replace the latest entry's salary in place
-        existing.salaryHistory.sort((a,b)=>(a.effectiveFrom||'').localeCompare(b.effectiveFrom||''));
-        const latest=existing.salaryHistory[existing.salaryHistory.length-1];
-        latest.salary=newSal;
-      }else{
-        existing.salaryHistory=[{effectiveFrom:data.contractStart||existing.contractStart||'1970-01-01',salary:newSal,note:'Initial'}];
-      }
+      const data={
+        name,
+        role:document.getElementById('sf-role').value,
+        dueDay:parseInt(document.getElementById('sf-due').value)||25,
+        weekendRule:document.getElementById('sf-wend').value==='shift',
+        contractStart:fromDD(document.getElementById('sf-start').value),
+        contractEnd:fromDD(document.getElementById('sf-end').value),
+        notes:document.getElementById('sf-notes').value.trim()
+      };
       Object.assign(existing,data);
     }
     editStaffId=null;
     toast('Staff member updated');
   }else{
+    const data={name,role:document.getElementById('sf-role').value,salary:parseFloat(document.getElementById('sf-sal').value)||0,dueDay:parseInt(document.getElementById('sf-due').value)||25,weekendRule:document.getElementById('sf-wend').value==='shift',contractStart:fromDD(document.getElementById('sf-start').value),contractEnd:fromDD(document.getElementById('sf-end').value),notes:document.getElementById('sf-notes').value.trim()};
     data.id=uid();data.advances=[];
     // V10.5.6: new staff get status:'active' and a seeded salaryHistory entry.
     data.status='active';
