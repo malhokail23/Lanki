@@ -4908,7 +4908,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='10.5.5';
+const VERSION='10.5.6';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -6284,6 +6284,10 @@ function restoreS(d){
   // single ym slot. Idempotent via S._v10_5_5_balance_recompute_migrated.
   // Conservative: preserves entries tagged manual/confirmed/openingInferred.
   if(typeof migrateBalanceAnchorsV10_5_5==='function')migrateBalanceAnchorsV10_5_5();
+  // V10.5.6: seed salaryHistory and status='active' for existing staff. Enables
+  // effective-dated salary comparisons and archive workflow. Idempotent via
+  // S._v10_5_6_staff_migrated. Conservative: only writes missing fields.
+  if(typeof migrateStaffV10_5_6==='function')migrateStaffV10_5_6();
 }
 // ─── CATEGORY TIER DEFINITIONS ───
 // Tier C — locked from deletion because hardcoded business logic depends on these IDs.
@@ -7257,7 +7261,7 @@ async function rOv(){
   const pTx=prevT;
   const fDebts=S.debts;
   const fGoals=S.goals;
-  const fStaff=S.staff; // staff has no owner field yet — shows all owners
+  const fStaff=S.staff.filter(s=>s.status!=='archived'); // V10.5.6: exclude archived from forward-looking projections
   const fIncome=S.income; // income has no owner field yet — shows all owners
   const n=months.length;
 
@@ -8409,7 +8413,7 @@ async function rOv(){
             <span style="font-size:12px;font-weight:500;color:var(--text1)">Household Staff</span>
             <span class="priv-mask" style="font-size:13px;font-weight:600;color:var(--text1);font-variant-numeric:tabular-nums">${fmtP(mStaff30)}<span style="font-size:10px;color:var(--text3);font-weight:400">/mo</span></span>
           </div>
-          <div style="font-size:10px;color:var(--text3)">${fStaff.filter(s=>s.status!=='inactive').length} active staff · after advance deductions</div>
+          <div style="font-size:10px;color:var(--text3)">${fStaff.filter(s=>s.status!=='archived').length} active staff · after advance deductions</div>
         </div>
         `;
       })()}
@@ -8622,7 +8626,8 @@ function buildProjections(){
   });
 
   // ===== STAFF =====
-  const baseStaff=S.staff.reduce((s,st)=>s+(st.salary||0),0);
+  // V10.5.6: exclude archived staff from forward-looking projection base.
+  const baseStaff=S.staff.filter(s=>s.status!=='archived').reduce((s,st)=>s+(st.salary||0),0);
 
   // ===== DEBT — V8.26: handle payoff over time =====
   // Each debt has a balance and either an installment (loan) or minPayment (CC).
@@ -9978,6 +9983,31 @@ function openEditTxn(id,ym){
   // V8.27: populate the needs-review checkbox from the transaction state.
   const reviewBox=document.getElementById('etxn-needsReview');
   if(reviewBox)reviewBox.checked=!!t.needsReview;
+}
+// V10.5.6: when the user picks a staff member in the Edit Transaction modal, auto-set
+// the sub-category to the role-mapped staff sub (sub_staff_driver, sub_staff_maid, etc.)
+// via STAFF_ROLE_TO_SUBCAT. Also ensures the main category is cat_main_staff. If the
+// user later overrides sub manually via the category picker, that wins (this handler only
+// fires on staff dropdown change, not on category modal close).
+function onEditTxnStaffChange(){
+  const sel=document.getElementById('etxn-staff');
+  if(!sel)return;
+  const sid=sel.value;
+  if(!sid)return; // "-- None --" picked: leave category untouched
+  const st=(S.staff||[]).find(x=>x.id===sid);
+  if(!st)return;
+  const newSub=typeof staffSubCat==='function'?staffSubCat(st):null;
+  if(!newSub)return;
+  const mcEl=document.getElementById('etxn-mc');
+  const scEl=document.getElementById('etxn-sc');
+  const labelEl=document.getElementById('etxn-cat-label');
+  if(mcEl)mcEl.value='cat_main_staff';
+  if(scEl)scEl.value=newSub;
+  if(labelEl){
+    const mc=getMC('cat_main_staff');
+    const sc=getSC(newSub);
+    labelEl.textContent=(mc?.name||'--')+(sc?' / '+sc.name:'');
+  }
 }
 function openCPEditTxn(){
   const curM=document.getElementById('etxn-mc').value;
@@ -13934,6 +13964,48 @@ function advDelete(sid,ai){
 // is the truth, regardless of the advance's current status. Only falls back to "planned" for active advances
 // when no ledger entry exists for the month (covers future months not yet deducted).
 // Deferred entries contribute 0 (the deduction didn't happen that month).
+// ─── V10.5.6 STAFF SALARY HISTORY ──────────────────────────────────────────────
+// Salary as a series of effective-dated entries. Replaces the single st.salary
+// number as the source of truth for historical variance comparisons. st.salary
+// is kept as the latest denormalized value for fast reads in aggregations.
+// Migration seeds salaryHistory from existing data (contractStart + salary).
+//
+// staffSalaryForMonth(st, ym) returns the salary in effect during YYYY-MM by
+// finding the latest history entry whose effectiveFrom <= last day of ym.
+// Falls back to st.salary if no history is present (defensive for legacy data).
+function staffSalaryForMonth(st,ym){
+  if(!st||!ym)return st?.salary||0;
+  const history=Array.isArray(st.salaryHistory)?st.salaryHistory:null;
+  if(!history||!history.length)return st.salary||0;
+  // Compare against last day of ym so a change effective 2026-03-25 counts for March
+  const lastDay=ym+'-31';
+  let best=null;
+  for(const e of history){
+    if(!e||!e.effectiveFrom)continue;
+    if(e.effectiveFrom<=lastDay&&(!best||e.effectiveFrom>best.effectiveFrom))best=e;
+  }
+  return best?(best.salary||0):(st.salary||0);
+}
+
+// One-time migration: seed salaryHistory and status for existing staff.
+// Idempotent via S._v10_5_6_staff_migrated. Conservative: only writes fields
+// that are missing, never overwrites existing data.
+function migrateStaffV10_5_6(){
+  if(S._v10_5_6_staff_migrated)return 0;
+  let count=0;
+  (S.staff||[]).forEach(st=>{
+    if(!st)return;
+    if(!st.status){st.status='active';count++;}
+    if(!Array.isArray(st.salaryHistory)||st.salaryHistory.length===0){
+      const effectiveFrom=st.contractStart||'1970-01-01';
+      st.salaryHistory=[{effectiveFrom,salary:st.salary||0,note:'Initial (migrated)'}];
+      count++;
+    }
+  });
+  S._v10_5_6_staff_migrated=true;
+  return count;
+}
+
 function advAdjustmentForMonth(st,ym){
   if(!st||!ym)return 0;
   let total=0;
@@ -13983,7 +14055,11 @@ function maybeAutoRecordDeduction(t,st){
     return true;
   });
   if(!activeAdvances.length)return null;
-  const salary=st.salary||0;
+  // V10.5.6: use the salary in effect during this transaction's month, not the current st.salary.
+  // Without this, a salary increase causes pre-increase advance auto-records to compute the
+  // wrong implied deduction (e.g. paid 1,600 against current salary 1,850 wrongly looks
+  // like a 250 deduction when actually it was the full salary at that time).
+  const salary=staffSalaryForMonth(st,ym);
   const paid=t.amount||0;
   const implied=+(salary-paid).toFixed(2);
   // Overpayment: paid more than salary — flag, don't record
@@ -14047,7 +14123,14 @@ function backfillAdvanceFromTaggedTxns(st,a){
 
 function rStaff(){
   const now=getYM(new Date());
-  const cards=S.staff.map(st=>{
+  const todayISO=localISO(new Date());
+  // V10.5.6: split active vs archived. Card render function is shared via a closure.
+  const allStaff=S.staff||[];
+  const activeStaffList=allStaff.filter(s=>s.status!=='archived');
+  const archivedStaffList=allStaff.filter(s=>s.status==='archived');
+  const renderStaffCard=(st,opts)=>{
+    opts=opts||{};
+    const isArchivedRender=opts.archived===true;
     // Migrate all advances on render
     (st.advances||[]).forEach(advMigrate);
     const ded=advThisMonth(st);
@@ -14063,6 +14146,25 @@ function rStaff(){
       const statusColors={active:'var(--bg2)',pending:'color-mix(in srgb,var(--action) 8%,var(--bg))',settled:'color-mix(in srgb,var(--pos) 8%,var(--bg))',forgiven:'color-mix(in srgb,var(--text3) 8%,var(--bg))'};
       const statusBadge={active:'<span class="status-pill status-warn">ACTIVE</span>',pending:'<span class="status-pill status-info">PENDING</span>',settled:'<span class="status-pill status-pos">SETTLED</span>',forgiven:'<span class="status-pill status-stale">FORGIVEN</span>'};
       const pct=a.amount>0?Math.min(100,Math.round((a.amount-remaining)/a.amount*100)):100;
+
+      // V10.5.6: compact view for settled/forgiven advances. Collapsed by default.
+      // Reduces visual noise — settled rows are reference data, not action items.
+      const isCompactType=(st2==='settled'||st2==='forgiven');
+      if(isCompactType&&!a._compactOpen){
+        const lastPaid=(a.ledger||[]).filter(l=>l.amount>0&&!l._rateChange).sort((x,y)=>(y.month||'').localeCompare(x.month||''))[0];
+        const closeLabel=lastPaid?`${st2==='settled'?'Settled':'Forgiven'} ${fmtYM(lastPaid.month)}`:(st2==='settled'?'Settled':'Forgiven');
+        return`<div style="border:1px solid var(--border);border-radius:var(--rmd);overflow:hidden;margin-top:10px;background:${statusColors[st2]||'var(--bg2)'}" id="adv-card-${st.id}-${ai}">
+          <button onclick="advToggleCompact('${st.id}',${ai})" style="width:100%;display:flex;align-items:center;gap:10px;padding:10px 14px;background:none;border:none;cursor:pointer;font-family:var(--font);text-align:left">
+            <div style="flex-shrink:0">${statusBadge[st2]||''}</div>
+            <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
+              <div style="font-size:12px;font-weight:600;color:var(--text1)">Advance of ${fmtP(a.amount)}</div>
+              <div style="font-size:10px;color:var(--text3)">Given ${toDD(a.dateGiven)||'--'} · ${closeLabel}</div>
+            </div>
+            <div style="flex-shrink:0;font-size:11px;color:var(--pos);font-weight:600">${fmtP(0)} remaining</div>
+            <div style="flex-shrink:0;color:var(--text3);font-size:11px">▼</div>
+          </button>
+        </div>`;
+      }
 
       // This-month status indicator
       let thisMonthBadge='';
@@ -14143,10 +14245,11 @@ function rStaff(){
           <button class="btn btn-xs btn-d" onclick="advDelete('${st.id}',${ai})" title="Permanently delete this advance">Delete</button>
         </div>`}
         <!-- Schedule toggle -->
-        <div style="padding:8px 14px">
+        <div style="padding:8px 14px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
           <button onclick="advToggleLedger('${st.id}',${ai})" style="font-size:11px;color:var(--action);background:none;border:none;cursor:pointer;padding:0;font-family:var(--font)">Full schedule (${plan.length} month${plan.length===1?'':'s'}) ${a._schedOpen?'▲':'▼'}</button>
-          <div id="adv-ledger-${st.id}-${ai}" style="display:${schedOpen};margin-top:8px">${scheduleHtml}</div>
+          ${isCompactType?`<button onclick="advToggleCompact('${st.id}',${ai})" style="font-size:11px;color:var(--text3);background:none;border:none;cursor:pointer;padding:0;font-family:var(--font);margin-left:auto" title="Collapse this settled advance back to a one-line summary">Collapse ▲</button>`:''}
         </div>
+        <div id="adv-ledger-${st.id}-${ai}" style="display:${schedOpen};margin:0 14px 8px;padding:0">${scheduleHtml}</div>
       </div>`;
     }).join('');
 
@@ -14158,12 +14261,15 @@ function rStaff(){
     // Staff variance: baseline = salary - historical adjustment for that payment's month.
     // Uses advAdjustmentForMonth so settled advances keep their historical deduction on record —
     // a salary paid in a month where 100 was deducted is correctly baselined at salary-100, not salary.
+    // V10.5.6: salary is sourced from staffSalaryForMonth(st, ym) so a salary increase does not
+    // retroactively flag pre-increase payments as "Lower by X". Each month is compared against
+    // the salary that was actually in effect during that month.
     // Only applies to salary payments — advance payments are a separate type and are excluded.
     const stfVariance=(t)=>{
       if(t.advanceId)return{baseline:null,variance:0,tag:null,isAdvance:true};
       const ym=(t.date||'').substr(0,7);
       const planned=advAdjustmentForMonth(st,ym);
-      const baseline=Math.max(0,(st.salary||0)-planned);
+      const baseline=Math.max(0,staffSalaryForMonth(st,ym)-planned);
       if(baseline<=0)return{baseline:null,variance:0,tag:null};
       const diff=t.amount-baseline;
       const tolerance=Math.max(1,baseline*0.02);
@@ -14171,13 +14277,14 @@ function rStaff(){
       if(Math.abs(diff)>tolerance)tag=diff>0?'higher':'lower';
       return{baseline,variance:diff,tag};
     };
+    const paymentsExpanded=_paymentsOpen.get(st.id)===true;
     const paymentsHtml=payments.length?`
       <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
-        <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px">
-          <div class="section-eyebrow" style="margin-top:0;margin-bottom:0;font-size:10px;letter-spacing:.06em">Payments (${payments.length})</div>
-          <div style="font-size:11px;color:var(--text3)">Total paid: <span style="font-weight:600;color:var(--text1)">${fmtP(totalPaid)}</span>${lastPayment?` · Last: ${toDD(lastPayment.date)}`:''}</div>
-        </div>
-        <div style="border:1px solid var(--border);border-radius:var(--rsm);overflow:hidden">
+        <button onclick="toggleStaffPayments('${st.id}')" style="width:100%;display:flex;align-items:baseline;justify-content:space-between;margin-bottom:${paymentsExpanded?'8px':'0'};background:none;border:none;cursor:pointer;padding:0;font-family:var(--font);text-align:left">
+          <div class="section-eyebrow" style="margin-top:0;margin-bottom:0;font-size:10px;letter-spacing:.06em;color:var(--text3)">Payments (${payments.length}) ${paymentsExpanded?'▲':'▼'}</div>
+          <div style="font-size:11px;color:var(--text3)">Total paid: <span class="priv-mask" style="font-weight:600;color:var(--text1)">${fmtP(totalPaid)}</span>${lastPayment?` · Last: ${toDD(lastPayment.date)}`:''}</div>
+        </button>
+        ${paymentsExpanded?`<div style="border:1px solid var(--border);border-radius:var(--rsm);overflow:hidden">
           ${paymentsToShow.map((t,i)=>{
             const v=stfVariance(t);
             let tagHtml='';
@@ -14198,7 +14305,7 @@ function rStaff(){
             </div>`;
           }).join('')}
           ${payments.length>6?`<div style="padding:6px 12px;font-size:10px;color:var(--text3);text-align:center;border-top:1px solid var(--border)">+ ${payments.length-6} earlier payment${payments.length-6===1?'':'s'}</div>`:''}
-        </div>
+        </div>`:''}
       </div>`:`
       <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
         <div class="section-eyebrow" style="margin-top:0;margin-bottom:6px;font-size:10px;letter-spacing:.06em">Payments</div>
@@ -14214,22 +14321,120 @@ function rStaff(){
           ${st.iqamaNumber?`<div style="font-size:var(--fs-xxs);color:var(--text3)">Iqama Number: ${h(st.iqamaNumber)}</div>`:''}
         </div>
         <div style="text-align:right">
-          <div style="font-size:18px;font-weight:500">${fmtP(st.salary)}<span style="font-size:var(--fs-xs);color:var(--text3)">/mo</span></div>
+          <div style="display:flex;align-items:baseline;justify-content:flex-end;gap:8px">
+            <div style="font-size:18px;font-weight:500">${fmtP(st.salary)}<span style="font-size:var(--fs-xs);color:var(--text3)">/mo</span></div>
+            <button class="btn btn-xs" onclick="openSalaryChange('${st.id}')" title="Apply a salary change effective from a specific date">Change salary</button>
+          </div>
           ${ded>0?`<div style="font-size:var(--fs-sm);color:var(--warn);font-weight:500">Net this month: ${fmtP(net)}</div><div style="font-size:var(--fs-xxs);color:var(--text3)">Advance deduction: −${fmtP(ded)}</div>`:''}
           <div style="font-size:var(--fs-xxs);color:var(--text3)">Due: day ${st.dueDay}${st.weekendRule?' (Thu if Fri/Sat)':''}</div>
         </div>
       </div>
+      ${_salaryChangeStaffId===st.id?`
+      <div id="salary-change-form-${st.id}" style="margin-top:12px;padding:14px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--rsm)">
+        <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);margin-bottom:10px">Change salary for ${h(st.name.split(' ')[0])}</div>
+        <div class="fr3" style="margin-bottom:8px">
+          <div><label class="lbl">New monthly salary (SAR)</label><input type="number" inputmode="decimal" id="sc-new-salary" placeholder="${st.salary||''}" min="0" step="0.01" style="font-weight:600"></div>
+          <div><label class="lbl">Effective from (DD/MM/YYYY)</label><div class="date-inp-wrap"><input type="text" id="sc-effective-from" class="date-inp" value="${toDD(localISO(new Date()))}" maxlength="10"><button type="button" class="cal-btn" onclick="openCal('sc-effective-from')" title="Pick date">📅</button></div></div>
+          <div style="display:flex;align-items:flex-end;padding-bottom:2px;font-size:10px;color:var(--text3);line-height:1.4">Past payments compared against the salary in effect for each month.</div>
+        </div>
+        <div style="margin-bottom:8px"><label class="lbl">Note (optional)</label><input type="text" id="sc-note" placeholder="e.g. Annual increase, role expansion"></div>
+        <div class="fg" style="gap:6px"><button class="btn btn-p btn-sm" onclick="saveSalaryChange('${st.id}')">Save change</button><button class="btn btn-sm" onclick="closeSalaryChange()">Cancel</button></div>
+      </div>`:''}
+      ${(Array.isArray(st.salaryHistory)&&st.salaryHistory.length>1)?`
+      <details style="margin-top:10px;font-size:11px">
+        <summary style="cursor:pointer;color:var(--text2);padding:4px 0;list-style:none"><span style="color:var(--action)">Salary history (${st.salaryHistory.length} changes)</span></summary>
+        <div style="margin-top:6px;border:1px solid var(--border);border-radius:var(--rsm);overflow:hidden">
+          ${[...st.salaryHistory].sort((a,b)=>(b.effectiveFrom||'').localeCompare(a.effectiveFrom||'')).map((e,idx,arr)=>`<div style="display:flex;align-items:center;gap:10px;padding:7px 12px;${idx<arr.length-1?'border-bottom:1px solid var(--border);':''}">
+            <div style="flex-shrink:0;min-width:90px;color:var(--text2)">From ${toDD(e.effectiveFrom)||'--'}</div>
+            <div class="priv-mask" style="flex-shrink:0;min-width:90px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--text1)">${fmtP(e.salary||0)}</div>
+            <div style="flex:1;min-width:0;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.note?h(e.note):''}</div>
+            ${arr.length>1?`<button class="btn btn-xs btn-d" style="padding:1px 6px;font-size:10px" onclick="deleteSalaryEntry('${st.id}','${e.effectiveFrom}')" title="Remove this salary entry">×</button>`:''}
+          </div>`).join('')}
+        </div>
+      </details>`:''}
       ${advHtml}
       ${paymentsHtml}
       ${st.notes?`<div style="font-size:var(--fs-xs);color:var(--text3);margin-top:8px">${h(st.notes)}</div>`:''}
+      ${st.archivedAt?`<div style="font-size:var(--fs-xxs);color:var(--text3);margin-top:6px">Archived ${toDD(st.archivedAt)}${st.archivedReason?' · '+h(st.archivedReason):''}</div>`:''}
       <div class="div" style="margin:10px 0 8px"></div>
       <div class="fg" style="flex-wrap:wrap;gap:6px">
         <button class="btn btn-xs btn-p" onclick="logAdv('${st.id}')">+ Log advance</button>
         <button class="btn btn-xs" onclick="openEditStaff('${st.id}')">Edit</button>
-        <button class="btn btn-xs btn-d" onclick="delStaff('${st.id}')">Remove staff</button>
+        <div style="flex:1"></div>
+        ${isArchivedRender?`<button class="btn btn-xs" onclick="unarchiveStaff('${st.id}')" title="Restore this staff member to active.">Unarchive</button>`:`<button class="btn btn-xs" onclick="archiveStaff('${st.id}')" title="Archive this staff member. Keeps their history, hides them from active lists and projections.">Archive</button>`}
+        <button class="btn btn-xs btn-d" onclick="confirmDeleteStaff('${st.id}')" title="Permanently delete this staff member and all their advance history. Requires typing their name to confirm.">Delete permanently</button>
       </div>
     </div>`;
-  }).join('')||'<div class="empty">No household staff profiles yet.</div>';
+  };
+
+  // V10.5.6: render the active staff cards.
+  const activeCardsHtml=activeStaffList.map(st=>renderStaffCard(st,{archived:false})).join('')
+    ||`<div class="empty">${archivedStaffList.length?'No active staff. All staff are archived.':'No household staff profiles yet.'}</div>`;
+
+  // V10.5.6: archived staff render as compact one-liners with expand-to-full.
+  const renderArchivedCompact=(st)=>{
+    const isOpen=_archivedCardOpen.get(st.id)===true;
+    if(isOpen){
+      return renderStaffCard(st,{archived:true})+`
+        <div style="text-align:center;margin-top:-6px;margin-bottom:14px">
+          <button onclick="toggleArchivedCard('${st.id}')" style="font-size:11px;color:var(--text3);background:none;border:none;cursor:pointer;padding:4px 10px;font-family:var(--font)">Collapse ▲</button>
+        </div>`;
+    }
+    const totalPaidLifetime=staffTxns(st.id).reduce((s,t)=>s+(txDir(t)==='out'?t.amount:0),0);
+    return`<div class="card" style="margin-top:10px;padding:12px 14px">
+      <button onclick="toggleArchivedCard('${st.id}')" style="width:100%;display:flex;align-items:center;gap:12px;background:none;border:none;cursor:pointer;font-family:var(--font);text-align:left;padding:0">
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
+          <div style="font-size:14px;font-weight:500;color:var(--text1)">${h(st.name)} <span style="font-size:11px;color:var(--text3);font-weight:400">· ${h(st.role||'')}</span></div>
+          <div style="font-size:11px;color:var(--text3)">${st.contractStart?toDD(st.contractStart):'--'} → ${st.contractEnd?toDD(st.contractEnd):'--'} · Salary ${fmtP(st.salary)} · Archived ${toDD(st.archivedAt)||'--'}${st.archivedReason?' · '+h(st.archivedReason):''}</div>
+        </div>
+        <div class="priv-mask" style="flex-shrink:0;font-size:12px;color:var(--text2);text-align:right">
+          <div style="font-weight:600">${fmtP(totalPaidLifetime)}</div>
+          <div style="font-size:10px;color:var(--text3)">total paid</div>
+        </div>
+        <div style="flex-shrink:0;color:var(--text3);font-size:11px">▼</div>
+      </button>
+    </div>`;
+  };
+  const archivedCardsHtml=archivedStaffList.map(renderArchivedCompact).join('');
+
+  // V10.5.6: summary strip — active staff, monthly payroll, net this month, active advances, outstanding
+  const summaryActiveCount=activeStaffList.length;
+  const summaryPayroll=activeStaffList.reduce((s,st)=>s+(st.salary||0),0);
+  const summaryDeductions=activeStaffList.reduce((s,st)=>s+advThisMonth(st),0);
+  const summaryNetMonth=summaryPayroll-summaryDeductions;
+  const summaryActiveAdvances=activeStaffList.reduce((s,st)=>s+(st.advances||[]).filter(a=>['active','pending'].includes(advStatus(a))).length,0);
+  const summaryOutstanding=activeStaffList.reduce((s,st)=>s+(st.advances||[]).filter(a=>['active','pending'].includes(advStatus(a))).reduce((ss,a)=>ss+advRemaining(a),0),0);
+  const summaryStrip=activeStaffList.length>0?`<div class="kpi-row" style="display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r);margin-bottom:1.25rem;overflow:hidden">
+    <div style="padding:.75rem 1rem;background:var(--bg1)"><div class="lbl" style="margin-bottom:4px">Active staff</div><div style="font-size:15px;font-weight:500;color:var(--text1)">${summaryActiveCount}</div></div>
+    <div style="padding:.75rem 1rem;background:var(--bg1)"><div class="lbl" style="margin-bottom:4px">Monthly payroll</div><div class="priv-mask" style="font-size:15px;font-weight:500;color:var(--text1);font-variant-numeric:tabular-nums">${fmtP(summaryPayroll)}</div></div>
+    <div style="padding:.75rem 1rem;background:var(--bg1)"><div class="lbl" style="margin-bottom:4px">Net this month</div><div class="priv-mask" style="font-size:15px;font-weight:500;color:${summaryDeductions>0?'var(--warn)':'var(--text1)'};font-variant-numeric:tabular-nums">${fmtP(summaryNetMonth)}</div>${summaryDeductions>0?`<div style="font-size:10px;color:var(--text3);margin-top:2px">After −${fmtP(summaryDeductions)} deductions</div>`:''}</div>
+    <div style="padding:.75rem 1rem;background:var(--bg1)"><div class="lbl" style="margin-bottom:4px">Active advances</div><div style="font-size:15px;font-weight:500;color:var(--text1)">${summaryActiveAdvances}</div></div>
+    <div style="padding:.75rem 1rem;background:var(--bg1)"><div class="lbl" style="margin-bottom:4px">Outstanding</div><div class="priv-mask" style="font-size:15px;font-weight:500;color:${summaryOutstanding>0?'var(--warn)':'var(--text1)'};font-variant-numeric:tabular-nums">${fmtP(summaryOutstanding)}</div></div>
+  </div>`:'';
+
+  // V10.5.6: auto-archive nudge — gentle prompt when an active staff's contract end date has passed
+  const expiredActive=activeStaffList.filter(s=>s.contractEnd&&s.contractEnd<todayISO&&!s._archiveNudgeDismissed);
+  const archiveNudge=expiredActive.map(s=>`<div class="lanki-banner banner-info">
+    <div class="lanki-banner-icon">ℹ️</div>
+    <div class="lanki-banner-content">
+      <div class="lanki-banner-title banner-info-title">Contract ended — ${h(s.name)}</div>
+      <div class="lanki-banner-body">
+        ${h(s.name)}'s contract ended on ${toDD(s.contractEnd)}. Archive to keep their history while hiding them from active lists and projections.<br>
+        <button onclick="archiveStaff('${s.id}')" class="btn btn-xs btn-p" style="margin-top:6px;margin-right:6px">Archive</button>
+        <button onclick="dismissArchiveNudge('${s.id}')" class="btn btn-xs" style="margin-top:6px">Not yet</button>
+      </div>
+    </div>
+  </div>`).join('');
+
+  // V10.5.6: archived section (collapsed by default)
+  const archivedSection=archivedStaffList.length?`<div style="margin-top:28px">
+    <button id="archived-staff-toggle" onclick="toggleArchivedSection()" style="font-size:12px;color:var(--text2);background:none;border:none;cursor:pointer;padding:0;font-family:var(--font);font-weight:500;display:flex;align-items:center;gap:6px">
+      <span class="section-eyebrow" style="margin:0;font-size:11px;letter-spacing:.06em">Archived staff (${archivedStaffList.length})</span>
+      <span style="font-size:11px;color:var(--text3)">${_archivedSectionOpen?'▲':'▼'}</span>
+    </button>
+    <div style="font-size:11px;color:var(--text3);margin-top:4px;line-height:1.5">Kept for historical reference. Excluded from forward-looking projections and the summary strip above.</div>
+    <div id="archived-staff-list" style="display:${_archivedSectionOpen?'block':'none'};margin-top:12px">${archivedCardsHtml}</div>
+  </div>`:'';
 
   return`
   <div class="pg-header-row">
@@ -14241,6 +14446,7 @@ function rStaff(){
     <button class="btn btn-p btn-sm" onclick="openAddStaff()">+ Add staff</button>
   </div>
   ${advBackfillBanner()}
+  ${archiveNudge}
   <div id="addstf-panel-anchor">
   <div id="addstf-panel" class="panel">
     <div class="chdr" id="stf-ptitle">Add staff member</div>
@@ -14261,7 +14467,9 @@ function rStaff(){
     <div class="fg" style="margin-top:10px"><button class="btn btn-p" id="stf-sbtn" onclick="addStaff()">Add</button><button class="btn" onclick="closeStaffForm()">Cancel</button></div>
   </div>
   </div>
-  ${cards}`;
+  ${summaryStrip}
+  ${activeCardsHtml}
+  ${archivedSection}`;
 }
 function closeStaffForm(){
   const panel=document.getElementById('addstf-panel');
@@ -14586,17 +14794,162 @@ function addStaff(){
   const data={name,role:document.getElementById('sf-role').value,salary:parseFloat(document.getElementById('sf-sal').value)||0,dueDay:parseInt(document.getElementById('sf-due').value)||25,weekendRule:document.getElementById('sf-wend').value==='shift',contractStart:fromDD(document.getElementById('sf-start').value),contractEnd:fromDD(document.getElementById('sf-end').value),notes:document.getElementById('sf-notes').value.trim()};
   if(editStaffId){
     const existing=S.staff.find(x=>x.id===editStaffId);
-    if(existing)Object.assign(existing,data);
+    if(existing){
+      // V10.5.6: salary edits via the main form update the LATEST salaryHistory entry rather than
+      // creating a new one. Use the dedicated Change salary action to add a new effective-dated entry.
+      const newSal=data.salary;
+      if(Array.isArray(existing.salaryHistory)&&existing.salaryHistory.length>0){
+        // Sort ascending and replace the latest entry's salary in place
+        existing.salaryHistory.sort((a,b)=>(a.effectiveFrom||'').localeCompare(b.effectiveFrom||''));
+        const latest=existing.salaryHistory[existing.salaryHistory.length-1];
+        latest.salary=newSal;
+      }else{
+        existing.salaryHistory=[{effectiveFrom:data.contractStart||existing.contractStart||'1970-01-01',salary:newSal,note:'Initial'}];
+      }
+      Object.assign(existing,data);
+    }
     editStaffId=null;
     toast('Staff member updated');
   }else{
     data.id=uid();data.advances=[];
+    // V10.5.6: new staff get status:'active' and a seeded salaryHistory entry.
+    data.status='active';
+    data.salaryHistory=[{effectiveFrom:data.contractStart||localISO(new Date()),salary:data.salary,note:'Initial'}];
     S.staff.push(data);
     toast('Staff member added');
   }
   sched();closeStaffForm();render();
 }
-function delStaff(id){S.staff=S.staff.filter(x=>x.id!==id);sched();render();}
+// V10.5.6: archive workflow. Non-destructive. Archived staff are kept in S.staff
+// but excluded from forward-looking aggregations (projections, "monthly payroll",
+// overview). They render in a separate collapsible section below active staff.
+function archiveStaff(id){
+  const st=S.staff.find(x=>x.id===id);if(!st)return;
+  const activeAdv=(st.advances||[]).filter(a=>['active','pending'].includes(advStatus(a)));
+  let reason='';
+  if(activeAdv.length>0){
+    if(!confirm(`${st.name} has ${activeAdv.length} active advance${activeAdv.length===1?'':'s'} (SAR ${activeAdv.reduce((s,a)=>s+advRemaining(a),0).toFixed(2)} outstanding). Archive anyway?\n\nTip: Settle or forgive open advances first if they should be closed out.`))return;
+  }
+  reason=prompt('Optional: reason for archiving (e.g. "Contract ended, returned home"). Leave blank to skip:','')||'';
+  st.status='archived';
+  st.archivedAt=localISO(new Date());
+  if(reason)st.archivedReason=reason;
+  sched();render();
+  toast(`${st.name} archived. Still visible under Archived staff.`);
+}
+function unarchiveStaff(id){
+  const st=S.staff.find(x=>x.id===id);if(!st)return;
+  st.status='active';
+  delete st.archivedAt;
+  delete st.archivedReason;
+  delete st._archiveNudgeDismissed;
+  sched();render();
+  toast(`${st.name} restored to active staff.`);
+}
+// V10.5.6: archived section + per-card expand state. Module-level (UI only, not vault-persisted).
+let _archivedSectionOpen=false;
+const _archivedCardOpen=new Map();
+const _paymentsOpen=new Map();
+function toggleArchivedSection(){
+  _archivedSectionOpen=!_archivedSectionOpen;
+  const el=document.getElementById('archived-staff-list');
+  if(el)el.style.display=_archivedSectionOpen?'block':'none';
+  const btn=document.getElementById('archived-staff-toggle');
+  if(btn)btn.textContent=btn.textContent.replace(/[▼▲]/, _archivedSectionOpen?'▲':'▼');
+}
+function toggleArchivedCard(id){
+  _archivedCardOpen.set(id, !_archivedCardOpen.get(id));
+  render();
+}
+function toggleStaffPayments(sid){
+  _paymentsOpen.set(sid, !_paymentsOpen.get(sid));
+  render();
+}
+// V10.5.6: compact advance card toggle (settled/forgiven only). Mirrors _schedOpen pattern.
+function advToggleCompact(sid,ai){
+  const st=S.staff.find(x=>x.id===sid);if(!st)return;
+  const a=st.advances[ai];if(!a)return;
+  a._compactOpen=!a._compactOpen;
+  render();
+}
+// V10.5.6: type-to-confirm delete gate. Prevents accidental destruction of staff
+// records (which carry advance history, salary history, and linked transactions).
+function confirmDeleteStaff(id){
+  const st=S.staff.find(x=>x.id===id);if(!st)return;
+  const firstName=((st.name||'').trim().split(/\s+/)[0])||'this staff member';
+  const typed=prompt(`This permanently deletes ${st.name} along with ALL advance and salary history.\n\nLinked transactions on the Transactions page will lose their staff tag but stay in your records.\n\nTo confirm, type exactly: ${firstName}`);
+  if(typed===null)return; // user cancelled
+  if(typed.trim()!==firstName){
+    toast('Name did not match. Staff not deleted.',false);
+    return;
+  }
+  S.staff=S.staff.filter(x=>x.id!==id);
+  sched();render();
+  toast(`${st.name} permanently deleted.`);
+}
+// V10.5.6: salary change workflow. Adds a new effective-dated entry to salaryHistory.
+// Backward compatible — st.salary is updated to the latest value for fast reads.
+let _salaryChangeStaffId=null;
+function openSalaryChange(id){
+  _salaryChangeStaffId=id;
+  render();
+  // Scroll the inline form into view after render
+  setTimeout(()=>{
+    const el=document.getElementById('salary-change-form-'+id);
+    if(el)el.scrollIntoView({behavior:'smooth',block:'center'});
+    const inp=document.getElementById('sc-new-salary');
+    if(inp)inp.focus();
+  },80);
+}
+function closeSalaryChange(){
+  _salaryChangeStaffId=null;
+  render();
+}
+function saveSalaryChange(id){
+  const st=S.staff.find(x=>x.id===id);if(!st)return;
+  const newSal=parseFloat(document.getElementById('sc-new-salary')?.value);
+  const dateStr=document.getElementById('sc-effective-from')?.value||'';
+  const note=(document.getElementById('sc-note')?.value||'').trim();
+  if(!isFinite(newSal)||newSal<=0){toast('Enter a valid salary amount',false);return;}
+  const effectiveFrom=fromDD(dateStr);
+  if(!effectiveFrom){toast('Enter a valid effective date (DD/MM/YYYY)',false);return;}
+  if(st.contractStart&&effectiveFrom<st.contractStart){toast('Effective date cannot be before contract start ('+toDD(st.contractStart)+')',false);return;}
+  if(!Array.isArray(st.salaryHistory))st.salaryHistory=[];
+  // Replace entry with same effectiveFrom if exists; otherwise insert.
+  st.salaryHistory=st.salaryHistory.filter(e=>e.effectiveFrom!==effectiveFrom);
+  st.salaryHistory.push({effectiveFrom,salary:newSal,note:note||undefined});
+  st.salaryHistory.sort((a,b)=>(a.effectiveFrom||'').localeCompare(b.effectiveFrom||''));
+  // Denormalize st.salary to the latest effective entry (covering today)
+  const todayYm=getYM(new Date());
+  st.salary=staffSalaryForMonth(st,todayYm);
+  _salaryChangeStaffId=null;
+  sched();render();
+  toast(`Salary changed to ${fmtP(newSal)} effective ${toDD(effectiveFrom)}.`);
+}
+function deleteSalaryEntry(id,effectiveFrom){
+  const st=S.staff.find(x=>x.id===id);if(!st)return;
+  if(!Array.isArray(st.salaryHistory)||st.salaryHistory.length<=1){
+    toast('Cannot remove the only salary entry',false);return;
+  }
+  if(!confirm('Remove this salary entry? Past variance comparisons may shift.'))return;
+  st.salaryHistory=st.salaryHistory.filter(e=>e.effectiveFrom!==effectiveFrom);
+  st.salary=staffSalaryForMonth(st,getYM(new Date()));
+  sched();render();
+  toast('Salary entry removed.');
+}
+// V10.5.6: auto-archive nudge dismissal (per-staff, vault-persisted)
+function dismissArchiveNudge(id){
+  const st=S.staff.find(x=>x.id===id);if(!st)return;
+  st._archiveNudgeDismissed=true;
+  sched();render();
+}
+
+function delStaff(id){
+  // V10.5.6: delStaff is preserved for backward compat but the user-facing entry
+  // point is now confirmDeleteStaff (type-to-confirm gate). Direct callers from
+  // older sessions are unlikely; if any exist, they will skip the gate intentionally.
+  S.staff=S.staff.filter(x=>x.id!==id);sched();render();
+}
 // ─── ADVANCE TRANSACTION HELPERS ───
 // Map human-readable staff role to sub-category ID for staff advance expense transactions
 const STAFF_ROLE_TO_SUBCAT={
@@ -22622,8 +22975,8 @@ function buildFinancialSnapshot(){
     });
   });
 
-  // Staff cost
-  const staffCost=S.staff.reduce((s,st)=>s+st.salary,0);
+  // Staff cost (V10.5.6: exclude archived)
+  const staffCost=S.staff.filter(s=>s.status!=='archived').reduce((s,st)=>s+st.salary,0);
 
   return{
     currency:'SAR',
@@ -28005,7 +28358,7 @@ initAuth();
     </div>
     <div id="etxn-inv-acc-row" style="margin-bottom:8px;display:none"><label class="lbl">Investment Account (link this txn to a specific investment)</label><select id="etxn-inv-acc"><option value="">-- None --</option></select></div>
     <div id="etxn-beneficiary-row" style="margin-bottom:8px;display:none"><label class="lbl">Beneficiary (Family Member)</label><select id="etxn-beneficiary"><option value="">Self</option></select></div>
-    <div id="etxn-staff-row" style="margin-bottom:8px;display:none"><label class="lbl">Staff member</label><select id="etxn-staff"><option value="">-- None --</option></select><div style="font-size:var(--fs-xxs);color:var(--text3);margin-top:3px;line-height:1.5">Tagging a salary payment auto-records an advance deduction for that month if an active advance exists.</div></div>
+    <div id="etxn-staff-row" style="margin-bottom:8px;display:none"><label class="lbl">Staff member</label><select id="etxn-staff" onchange="onEditTxnStaffChange()"><option value="">-- None --</option></select><div style="font-size:var(--fs-xxs);color:var(--text3);margin-top:3px;line-height:1.5">Tagging a salary payment auto-records an advance deduction for that month if an active advance exists. Selecting a staff member sets the sub-category to their role automatically.</div></div>
     <div id="etxn-bill-row" style="margin-bottom:8px;display:none"><label class="lbl">Link to bill</label><select id="etxn-bill"><option value="">-- None --</option></select><div style="font-size:var(--fs-xxs);color:var(--text3);margin-top:3px;line-height:1.5">Only available for Housing &amp; Utilities or Subscriptions &amp; Digital categories.</div></div>
     <input type="hidden" id="etxn-mc">
     <input type="hidden" id="etxn-sc">
