@@ -4938,7 +4938,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='10.5.12';
+const VERSION='10.5.13';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -6789,6 +6789,13 @@ async function loadS(sbData){
       const newEnc=await enc(sKey,{...raw,version:VERSION});
       await sbPut('phase1',{...d,encData:newEnc});
       toast('Data migrated to v1.2 format');
+      // V10.5.13 (C-3): after the migration write, the new encData IS the known-good
+      // state. Capture it instead of the pre-migration encData.
+      captureKnownGoodSnapshot(newEnc,_vaultRev);
+    }else{
+      // V10.5.13 (C-3): no migration path — the encData we just decrypted+restored
+      // cleanly IS the known-good state. Capture for potential Guard 4 rollback.
+      captureKnownGoodSnapshot(d.encData,_vaultRev);
     }
     restoreS(raw);
   }
@@ -6921,6 +6928,90 @@ let _loadedMonths=new Set(); // V9.0.2 (audit H3): months that completed load su
 // V9.0.3 cleanup: removed orphan function loadTxnRow() (audit §10.x cleanup pass)
 
 let _vaultRev=0; // V9.0.2 (audit H4): main vault rev counter
+
+// V10.5.13 (C-3): per-tab last-known-good encData snapshot.
+// Captured after every successful load (when we know the row we just read decrypted
+// and parsed cleanly) and after every successful save with passing Guard 4 verify.
+// Used as a rollback target when Guard 4 detects post-write corruption. Format:
+//   { encData: {iv, data}, rev: number, capturedAt: ISO timestamp }
+// Never persisted; lives in tab memory only. A tab with no snapshot (e.g. opened
+// directly into a corrupted vault) cannot roll back — Guard 4 still alerts.
+let _lastKnownGoodEncData=null;
+function captureKnownGoodSnapshot(encData,rev){
+  if(!encData||typeof encData!=='object'||!encData.data)return; // defensive
+  _lastKnownGoodEncData={encData:{iv:encData.iv,data:encData.data},rev,capturedAt:new Date().toISOString()};
+}
+
+// V10.5.13 (C-7): tab ID for cross-tab save signaling. Generated once per tab load.
+// Used in the localStorage save signal so a tab can ignore its own writes.
+const _LANKI_TAB_ID='tab-'+Math.random().toString(36).slice(2,10)+'-'+Date.now().toString(36);
+const _LANKI_SAVE_SIGNAL_KEY='lanki_save_signal';
+const _LANKI_STALE_BANNER_ID='lanki-stale-tab-banner';
+let _staleTabDetected=false; // set when another tab has written since our last rev
+
+// V10.5.13 (C-7): cross-tab coordination. Two listeners:
+// 1. storage event — fired in OTHER tabs when this tab writes the sentinel key.
+//    Receiving tab inspects the rev; if different from its own _vaultRev, this
+//    tab is now stale relative to the writer. Surface a warning banner.
+// 2. visibilitychange event — fired when a tab returns to visible state. Trigger
+//    a lightweight sbGet to refresh _vaultRev. If remote rev > local, surface
+//    the same warning.
+// Both listeners are read-only signals; they never modify S. The user must
+// explicitly reload to merge.
+function showStaleTabBanner(remoteRev){
+  if(_staleTabDetected)return; // already shown
+  _staleTabDetected=true;
+  // Remove any existing instance defensively
+  const old=document.getElementById(_LANKI_STALE_BANNER_ID);
+  if(old)old.remove();
+  const banner=document.createElement('div');
+  banner.id=_LANKI_STALE_BANNER_ID;
+  banner.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99999;background:color-mix(in srgb,var(--warn) 12%,var(--bg));border-bottom:2px solid var(--warn);padding:10px 16px;font-family:var(--font);font-size:13px;display:flex;align-items:center;gap:12px;box-shadow:0 2px 8px rgba(0,0,0,.1)';
+  banner.innerHTML='<div style="flex-shrink:0;font-size:16px">⚠️</div>'+
+    '<div style="flex:1"><strong style="color:var(--warn)">Vault changed in another tab or device</strong> — this tab is now stale (remote rev '+remoteRev+', local rev '+_vaultRev+'). Saving here will be blocked to prevent overwriting. Reload to merge.</div>'+
+    '<button onclick="window.location.reload()" style="flex-shrink:0;padding:6px 12px;background:var(--warn);color:white;border:none;border-radius:var(--rsm);font-family:var(--font);font-size:12px;font-weight:500;cursor:pointer">Reload</button>'+
+    '<button onclick="document.getElementById(\''+_LANKI_STALE_BANNER_ID+'\').remove()" style="flex-shrink:0;background:none;border:none;color:var(--text2);cursor:pointer;font-size:18px;padding:0 4px" title="Dismiss (saves still blocked until reload)">✕</button>';
+  document.body.appendChild(banner);
+  // Also degrade the vault to prevent further writes — Guard 4 already does this
+  // for verify-fail cases, but the stale-tab case needs the same protection so
+  // saveState() refuses to overwrite the other tab's good write.
+  _vaultLoadDegraded=true;
+}
+
+(function initCrossTabListeners(){
+  if(typeof window==='undefined'||typeof localStorage==='undefined')return;
+  // Listener 1: storage event from other tabs
+  window.addEventListener('storage',function(ev){
+    if(ev.key!==_LANKI_SAVE_SIGNAL_KEY||!ev.newValue)return;
+    if(!sKey)return; // not in an authenticated session — ignore signals
+    try{
+      const signal=JSON.parse(ev.newValue);
+      if(!signal||signal.tabId===_LANKI_TAB_ID)return; // ignore our own writes
+      if(typeof signal.rev!=='number')return;
+      if(signal.rev>_vaultRev){
+        console.warn('[V10.5.13 cross-tab] Another tab wrote rev '+signal.rev+' (local '+_vaultRev+')');
+        showStaleTabBanner(signal.rev);
+      }
+    }catch(e){/* malformed signal — ignore */}
+  });
+  // Listener 2: visibility change — refresh rev when tab returns to foreground
+  document.addEventListener('visibilitychange',async function(){
+    if(document.visibilityState!=='visible')return;
+    if(!sKey)return; // not authenticated
+    if(_vaultLoadDegraded)return; // already degraded
+    if(_staleTabDetected)return; // banner already showing
+    if(_realS)return; // demo mode
+    try{
+      const d=await sbGet('phase1');
+      const remoteRev=(d&&typeof d.rev==='number')?d.rev:0;
+      if(remoteRev>_vaultRev){
+        console.warn('[V10.5.13 cross-tab] Visibility refresh detected remote rev '+remoteRev+' > local '+_vaultRev);
+        showStaleTabBanner(remoteRev);
+      }
+    }catch(e){/* network blip on refresh — non-fatal */}
+  });
+})();
+
 async function saveState(){
   if(IS_DEMO)return; // demo never persists
   if(!sKey)return;
@@ -6994,20 +7085,48 @@ async function saveState(){
       return;
     }
     await sbPut('phase1',{...d,encData:e,rev:newRev});
-    // V10.5.10 INTEGRITY GUARD 4: post-save read-back verification.
-    // Fetch what we just wrote, decrypt it, and confirm accounts count matches what we tried to save.
-    // If the read-back fails or shows a different count, alert the user immediately so they can
-    // recover before further damage accumulates. Skipped in any error path — only runs on success.
+    // V10.5.10 INTEGRITY GUARD 4 + V10.5.13 (C-3) rollback:
+    // Fetch what we just wrote, decrypt it, and confirm the account count matches.
+    // If verification fails AND we have a known-good snapshot from this session AND
+    // the rev we wrote is still the latest on the server, roll back the write to
+    // restore the prior known-good state. Without a snapshot, we still alert and
+    // degrade as before — rollback requires a verified prior good state.
+    let verifyFailed=false;
+    let rollbackPerformed=false;
     try{
       const verify=await sbGet('phase1');
       if(verify&&verify.encData){
         const decoded=await dec(sKey,verify.encData);
         const verifyAccCount=Array.isArray(decoded.accounts)?decoded.accounts.length:0;
         if(verifyAccCount!==accCount){
+          verifyFailed=true;
           console.error('saveState VERIFICATION FAILED — wrote '+accCount+' accounts, read back '+verifyAccCount);
-          if(typeof toast==='function'){toast('Save verification failed: wrote '+accCount+' accounts, read back '+verifyAccCount+'. Reload immediately and check data integrity.',false);}
-          // Mark degraded but do not roll back — the bad state is already written and
-          // the user needs to know to act, not have it silently retried
+          // V10.5.13 rollback attempt
+          if(_lastKnownGoodEncData&&_lastKnownGoodEncData.encData){
+            // Only roll back if WE are still the latest writer — if rev has moved
+            // past newRev, another tab wrote after us and rolling back would clobber
+            // their legitimate work.
+            const currentRemoteRev=(verify&&typeof verify.rev==='number')?verify.rev:0;
+            if(currentRemoteRev===newRev){
+              try{
+                const rollbackRev=newRev+1;
+                await sbPut('phase1',{...verify,encData:_lastKnownGoodEncData.encData,rev:rollbackRev});
+                rollbackPerformed=true;
+                _vaultRev=rollbackRev;
+                console.warn('saveState rolled back to known-good snapshot rev '+_lastKnownGoodEncData.rev+' (rewritten at rev '+rollbackRev+')');
+                if(typeof toast==='function'){toast('Save verification failed. Server was rolled back to the prior known-good state. Reload the page and try again — the previous save did not persist.',false);}
+              }catch(rollbackErr){
+                console.error('saveState rollback ALSO failed:',rollbackErr);
+                if(typeof toast==='function'){toast('Save verification AND rollback failed. The server may be in an inconsistent state. Do not save further; restore from your latest local snapshot via Settings → Backup & Restore.',false);}
+              }
+            }else{
+              console.warn('saveState rollback skipped — remote rev '+currentRemoteRev+' has moved past our write rev '+newRev+'; another writer is active. Will not clobber.');
+              if(typeof toast==='function'){toast('Save verification failed and another tab has written since. Reload to merge — do not save in this tab again.',false);}
+            }
+          }else{
+            // No snapshot available — alert only (V10.5.10 behavior)
+            if(typeof toast==='function'){toast('Save verification failed: wrote '+accCount+' accounts, read back '+verifyAccCount+'. Reload immediately. No rollback available (no prior good state captured this session).',false);}
+          }
           _vaultLoadDegraded=true;
         }
       }
@@ -7015,8 +7134,19 @@ async function saveState(){
       // Verification failure is logged but does not block — the save itself succeeded
       console.warn('saveState verification could not complete:',verifyErr);
     }
-    _vaultRev=newRev;
-    setSS('Saved ✓','ok');setTimeout(()=>setSS(''),2500);
+    // V10.5.13 (C-3): on successful verify (no failure detected), update the
+    // known-good snapshot to the encData we just wrote. This becomes the next
+    // rollback target.
+    if(!verifyFailed){
+      captureKnownGoodSnapshot(e,newRev);
+      // V10.5.13 (C-7): broadcast successful save to other tabs via localStorage.
+      // Other tabs see the storage event, compare rev, and warn if stale.
+      try{
+        localStorage.setItem(_LANKI_SAVE_SIGNAL_KEY,JSON.stringify({tabId:_LANKI_TAB_ID,rev:newRev,at:Date.now()}));
+      }catch(e2){/* localStorage may be unavailable — non-fatal */}
+    }
+    _vaultRev=rollbackPerformed?_vaultRev:newRev;
+    setSS(verifyFailed?(rollbackPerformed?'Rolled back':'Verify failed'):'Saved ✓',verifyFailed?'err':'ok');setTimeout(()=>setSS(''),2500);
     // V8.16 (M15): only re-publish submitters_public when the public-facing slice actually changes.
     // submitters_public is publicly readable (anon key); minimizing writes reduces exposure surface
     // and avoids unnecessary write traffic on every unrelated save.
