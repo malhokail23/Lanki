@@ -4908,7 +4908,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='10.5.10';
+const VERSION='10.5.11';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -27901,7 +27901,30 @@ async function runAIPrescan(){
     }
     if(meta.account_number&&!_aiState.accountId){
       const clean=meta.account_number.replace(/\s/g,'');
-      const match=S.accounts.find(a=>a.accountNumber&&a.accountNumber.replace(/\s/g,'')===clean);
+      // V10.5.11: layered account match.
+      // Layer 1: exact match on full account number (whitespace stripped). Highest precision.
+      // Layer 2: last-4 digit fallback, scoped to the currently selected account-type filter.
+      //   Skipped if multiple accounts share the same last 4 digits (ambiguous).
+      // Mirrors the Excel-path matcher at line ~27473 which has used last-4 since V8.x.
+      // Fix for the case where a statement reports "495066******5908" but the user named
+      // their account "Subscriptions ****5908" (or anything else not equal to the scan output).
+      let match=S.accounts.find(a=>a.accountNumber&&a.accountNumber.replace(/\s/g,'')===clean);
+      if(!match){
+        const last4=clean.replace(/[^0-9]/g,'').slice(-4);
+        if(last4&&last4.length===4){
+          const filter=_aiState.acctTypeFilter||'bank';
+          const candidates=S.accounts.filter(a=>{
+            if(!isLiveAccount(a))return false;
+            if(!a.accountNumber)return false;
+            if(filter==='bank'&&!BANK_ACC_TYPES.has(a.type))return false;
+            if(filter==='card'&&!CARD_ACC_TYPES.has(a.type))return false;
+            return a.accountNumber.replace(/[^0-9]/g,'').endsWith(last4);
+          });
+          // Auto-select only when exactly one account matches — multiple matches stay unselected
+          // so the user can disambiguate manually.
+          if(candidates.length===1)match=candidates[0];
+        }
+      }
       if(match)_aiState.accountId=match.id;
     }
   }catch(e){
