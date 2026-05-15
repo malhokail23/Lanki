@@ -4908,7 +4908,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='10.5.4';
+const VERSION='10.5.5';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -5936,6 +5936,175 @@ function getAccountOpeningBal(accId,ym,_depth=0){
   }
   return null;
 }
+// ─── V10.5.5 BALANCE RECONCILIATION ───────────────────────────────────────────
+// Multi-month statements ship with a per-transaction running balance (statementBal,
+// captured at import line ~10791 from V10.5.6 extract-statement.ts). Each anchor
+// pins the balance to a specific txn date. Per-month opening and closing are
+// derived from these anchors: closing = last txn's statementBal in that month;
+// opening = first txn's statementBal minus its signed delta. The statement's
+// _closingBal is treated as an anchor at the statement's actual end date, not as
+// a calendar month-end value. A pendingConfirmation flag is raised when the
+// closing anchor falls mid-month (e.g. statement ends 14 May), letting the user
+// either confirm the value as the month's closing or upload a newer statement.
+
+// Pure: derive opening/closing balances for one account-month from its txns.
+// Returns null fields when no statementBal anchor exists in that month.
+function deriveMonthBalancesFromTxns(accId,ym){
+  const result={closing:null,closingAsOf:null,opening:null,openingAsOf:null,derivedAny:false};
+  const txns=(S.txnCache[ym]||[]).filter(t=>t.accountId===accId);
+  if(txns.length===0)return result;
+  const sorted=[...txns].sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  // Closing: scan from the end for the last txn carrying a non-null statementBal
+  for(let i=sorted.length-1;i>=0;i--){
+    if(sorted[i].statementBal!=null&&isFinite(parseFloat(sorted[i].statementBal))){
+      result.closing=parseFloat(sorted[i].statementBal);
+      result.closingAsOf=sorted[i].date;
+      result.derivedAny=true;
+      break;
+    }
+  }
+  // Opening: scan from the start for the first txn carrying a non-null statementBal
+  for(let i=0;i<sorted.length;i++){
+    if(sorted[i].statementBal!=null&&isFinite(parseFloat(sorted[i].statementBal))){
+      const delta=txDir(sorted[i])==='in'?sorted[i].amount:-sorted[i].amount;
+      result.opening=parseFloat(sorted[i].statementBal)-delta;
+      result.openingAsOf=sorted[i].date;
+      result.derivedAny=true;
+      break;
+    }
+  }
+  return result;
+}
+
+// Helper: last day of a given YYYY-MM month as a YYYY-MM-DD string.
+// Used to flag pendingConfirmation when the derived closingAsOf falls mid-month.
+function _lastDayOfMonthISO(ym){
+  const[y,m]=ym.split('-').map(Number);
+  const d=new Date(y,m,0); // day 0 of next month = last day of this month, local TZ
+  return ym+'-'+String(d.getDate()).padStart(2,'0');
+}
+
+// Walk every month containing txns for one account and write derived
+// opening/closing values into S.monthlyBal. Conservative by default: preserves
+// entries tagged closingSource: 'manual' or 'confirmed', and openings tagged
+// 'manual'/'confirmed' or openingInferred:true (legacy V4.2 flag from the
+// existing "Use SAR X" confirmation flow). Pass {override:true} to bypass the
+// lock check — used by the import path because uploading new data is itself an
+// implicit intent to refresh anchors.
+function recomputeAccountBalances(accId,opts){
+  opts=opts||{};
+  const override=opts.override===true;
+  const scopeMonths=opts.scope;
+  const stats={updated:0,preserved:0,derived:0};
+  if(!accId)return stats;
+  const inScope=(ym)=>{
+    if(!scopeMonths)return true;
+    if(Array.isArray(scopeMonths))return scopeMonths.includes(ym);
+    if(scopeMonths instanceof Set)return scopeMonths.has(ym);
+    return false;
+  };
+  const allMonths=Object.keys(S.txnCache||{}).filter(ym=>{
+    if(!inScope(ym))return false;
+    return(S.txnCache[ym]||[]).some(t=>t.accountId===accId);
+  }).sort();
+  for(const ym of allMonths){
+    const mk=accId+'_'+ym;
+    const derived=deriveMonthBalancesFromTxns(accId,ym);
+    if(!derived.derivedAny){
+      stats.preserved++;
+      continue;
+    }
+    stats.derived++;
+    if(!S.monthlyBal[mk])S.monthlyBal[mk]={};
+    const mb=S.monthlyBal[mk];
+    let updatedThisMonth=false;
+    // Closing
+    if(derived.closing!=null){
+      const closingLocked=!override&&(mb.closingSource==='manual'||mb.closingSource==='confirmed');
+      const isSame=mb.closing!=null
+        &&Math.abs(mb.closing-derived.closing)<0.015
+        &&mb.closingAsOf===derived.closingAsOf
+        &&mb.closingSource==='derived';
+      if(!closingLocked&&!isSame){
+        mb.closing=derived.closing;
+        mb.closingAsOf=derived.closingAsOf;
+        mb.closingSource='derived';
+        mb.pendingConfirmation=derived.closingAsOf<_lastDayOfMonthISO(ym);
+        delete mb.guardFail;delete mb.guardDiff;delete mb.guardCalc;
+        updatedThisMonth=true;
+      }
+    }
+    // Opening (only write derivation; chain-from-prev is handled at read time by getAccountOpeningBal)
+    if(derived.opening!=null){
+      const openingLocked=!override&&(mb.openingSource==='manual'||mb.openingSource==='confirmed'||mb.openingInferred===true);
+      const isSameOpen=mb.opening!=null
+        &&Math.abs(mb.opening-derived.opening)<0.015
+        &&mb.openingSource==='derived';
+      if(!openingLocked&&!isSameOpen){
+        mb.opening=derived.opening;
+        mb.openingSource='derived';
+        updatedThisMonth=true;
+      }
+    }
+    if(updatedThisMonth)stats.updated++;
+  }
+  return stats;
+}
+
+// Wrapper: recompute every account. Used by the V10.5.5 migration.
+function recomputeAllBalances(opts){
+  const all={accounts:0,updated:0,derived:0,preserved:0};
+  (S.accounts||[]).forEach(a=>{
+    if(!a||!a.id)return;
+    const r=recomputeAccountBalances(a.id,opts||{});
+    all.accounts++;
+    all.updated+=r.updated;
+    all.derived+=r.derived;
+    all.preserved+=r.preserved;
+  });
+  return all;
+}
+
+// User-facing: lock a pending closing balance as the month closing. Called from
+// the pending-confirmation banner's Confirm button.
+function confirmPendingClosing(mk){
+  if(!S.monthlyBal[mk])return;
+  const mb=S.monthlyBal[mk];
+  mb.pendingConfirmation=false;
+  mb.closingSource='confirmed';
+  delete mb.guardFail;delete mb.guardDiff;delete mb.guardCalc;
+  saveState().then(()=>{render();toast('Closing balance confirmed for this month');});
+}
+
+// User-facing: manual recompute trigger for one account, with confirm dialog.
+// Exposed in the Bank Accounts kebab menu. Respects user-set locks (override:false).
+function recomputeBalancesForAccount(accId){
+  const a=S.accounts.find(x=>x.id===accId);
+  const label=a?a.name:'this account';
+  if(!confirm('Recompute balances for '+label+' from transactions?\n\nThis may change opening and closing values for months where statement running balances are available. Values you have confirmed or manually set will be preserved.'))return;
+  const r=recomputeAccountBalances(accId);
+  saveState().then(()=>{
+    render();
+    toast('Balances recomputed: '+r.updated+' month(s) updated, '+r.preserved+' preserved');
+  });
+}
+
+// V10.5.5 one-time migration: recompute every account's monthlyBal entries from
+// existing statementBal data. Idempotent via S._v10_5_5_balance_recompute_migrated.
+// Conservative: respects locks. Manual confirmation/override still possible via UI.
+function migrateBalanceAnchorsV10_5_5(){
+  if(S._v10_5_5_balance_recompute_migrated)return 0;
+  let updated=0;
+  try{
+    const r=recomputeAllBalances();
+    updated=r.updated;
+  }catch(e){
+    console.warn('V10.5.5 balance anchor migration failed:',e);
+  }
+  S._v10_5_5_balance_recompute_migrated=true;
+  return updated;
+}
+
 function tbadge(t){const m={income:'<span class="badge b-in">Income</span>',expense:'<span class="badge b-out">Expense</span>',transfer:'<span class="badge b-tr">Transfer</span>',investment:'<span class="badge b-inv">Investment</span>',external_transfer:'<span class="badge b-ext">External Transfer</span>'};return m[t]||`<span class="badge b-grey">${t}</span>`;}
 // V10.1 — Compass plain-text type label for the transactions table.
 // Replaces tbadge() pill chrome on the Type column in buildTxTable. Same semantic colors via tx-t-* classes.
@@ -6109,6 +6278,12 @@ function restoreS(d){
   // V10.5.2: hoist opportunities from p2p_loan holdings up to account level for
   // p2p_lending accounts (Option B model). Idempotent via _v10_5_2_p2p_migrated.
   if(typeof runP2PDirectMigrations==='function')runP2PDirectMigrations();
+  // V10.5.5: recompute monthlyBal opening/closing values from per-txn statementBal
+  // anchors (captured by V10.5.6 extract-statement.ts). Fixes the multi-month
+  // statement misattribution bug where the statement-end balance was pinned to a
+  // single ym slot. Idempotent via S._v10_5_5_balance_recompute_migrated.
+  // Conservative: preserves entries tagged manual/confirmed/openingInferred.
+  if(typeof migrateBalanceAnchorsV10_5_5==='function')migrateBalanceAnchorsV10_5_5();
 }
 // ─── CATEGORY TIER DEFINITIONS ───
 // Tier C — locked from deletion because hardcoded business logic depends on these IDs.
@@ -10820,25 +10995,88 @@ async function doImport(directPayload){
   const touchedMonths=new Set(items.map(t=>t.date?t.date.substr(0,7):ym));
   touchedMonths.forEach(m=>{if(S.txnCache[m])S.txnCache[m].sort((a,b)=>a.date.localeCompare(b.date));});
 
-  if(rId&&openingForGuardVal!==null){
-    const mk=rId+'_'+ym;
-    if(!S.monthlyBal[mk])S.monthlyBal[mk]={};
-    S.monthlyBal[mk].opening=openingForGuardVal;
-  }
-  if(closingBalVal!==null&&rId){
-    const allAccTx=txns.filter(t=>t.accountId===rId);
-    const calcBal=(openingForGuardVal||0)+allAccTx.reduce((s,t)=>{return s+(txDir(t)==='in'?t.amount:-t.amount);},0);
-    const diff=Math.abs(closingBalVal-calcBal);
-    if(diff>1){
-      if(rId){const mk=rId+'_'+ym;if(!S.monthlyBal[mk])S.monthlyBal[mk]={};S.monthlyBal[mk].closing=closingBalVal;}
-      const inTxns=allAccTx.filter(t=>txDir(t)==='in');
-      const outTxns=allAccTx.filter(t=>txDir(t)!=='in');
-      const totalIn=inTxns.reduce((s,t)=>s+t.amount,0);
-      const totalOut=outTxns.reduce((s,t)=>s+t.amount,0);
-      const guardMsg=`Balance guard: SAR ${diff.toFixed(2)} discrepancy. Opening ${fmt(openingForGuardVal)} + In ${fmt(totalIn)} (${inTxns.length} txns) − Out ${fmt(totalOut)} (${outTxns.length} txns) = ${fmt(calcBal)}. Statement says ${fmt(closingBalVal)}.`;
-      toast(guardMsg,false);
-      if(rId){const mk=rId+'_'+ym;if(!S.monthlyBal[mk])S.monthlyBal[mk]={};S.monthlyBal[mk].guardFail=true;S.monthlyBal[mk].guardDiff=diff;S.monthlyBal[mk].guardCalc=calcBal;S.monthlyBal[mk].closing=closingBalVal;sched();}
-    }else{const crossNote2=crossMonthCount>0?` · ${crossMonthCount} routed to other months`:'';toast(`Imported ${added} transaction${added!==1?'s':''}. Balance guard passed ✓${crossNote2}`);if(rId){const mk=rId+'_'+ym;if(!S.monthlyBal[mk])S.monthlyBal[mk]={};S.monthlyBal[mk].closing=closingBalVal;}}
+  // V10.5.5 BALANCE RECONCILIATION
+  // -------------------------------
+  // Prior versions pinned both openingForGuardVal and closingBalVal to S.monthlyBal[rId+'_'+ym]
+  // — even when the statement spanned multiple months. That caused the statement-end balance
+  // (e.g. SAR 0 as of 14 May) to be misattributed to the wrong month's closing.
+  //
+  // V10.5.5: the per-transaction statementBal field captured at line 10791 above is the
+  // authoritative source. For each touched month, derived closing = last txn's statementBal;
+  // derived opening = first txn's statementBal minus its signed delta. The statement-supplied
+  // _closingBal / _openingBal are used only as fallback anchors when no statementBal data
+  // is present (e.g. prepaid card statements without per-line running balances).
+  //
+  // The user-supplied _closingBal is placed at the actual statement-end month (derived from
+  // the latest txn date in the batch) with pendingConfirmation=true if it falls mid-month.
+  // The user can then either Confirm it as the month closing or Upload a newer statement.
+  if(rId){
+    // Determine statement period from the actual transaction dates in this batch
+    const batchDates=items.map(t=>t.date).filter(Boolean).sort();
+    const stmtStartYm=batchDates.length?batchDates[0].substr(0,7):ym;
+    const stmtEndDate=batchDates.length?batchDates[batchDates.length-1]:null;
+    const stmtEndYm=stmtEndDate?stmtEndDate.substr(0,7):ym;
+    // Fallback anchor: opening of the statement-start month, only set when no derived
+    // value exists for that month yet. Tagged 'statement-meta' so recompute can override.
+    if(openingForGuardVal!==null){
+      const mk=rId+'_'+stmtStartYm;
+      if(!S.monthlyBal[mk])S.monthlyBal[mk]={};
+      const existing=S.monthlyBal[mk];
+      const userLocked=existing.openingSource==='manual'||existing.openingSource==='confirmed'||existing.openingInferred===true;
+      if(!userLocked&&(existing.opening==null||existing.openingSource==null||existing.openingSource==='legacy'||existing.openingSource==='statement-meta')){
+        existing.opening=openingForGuardVal;
+        existing.openingSource='statement-meta';
+      }
+    }
+    // Fallback anchor: closing of the statement-end month, set at the actual statement end
+    // date. pendingConfirmation flagged when that date precedes the last day of the month.
+    // Tagged 'statement-end' so recompute can override with derived statementBal data.
+    if(closingBalVal!==null&&stmtEndDate){
+      const mk=rId+'_'+stmtEndYm;
+      if(!S.monthlyBal[mk])S.monthlyBal[mk]={};
+      const existing=S.monthlyBal[mk];
+      const userLocked=existing.closingSource==='manual'||existing.closingSource==='confirmed';
+      if(!userLocked&&(existing.closing==null||existing.closingSource==null||existing.closingSource==='legacy'||existing.closingSource==='statement-end')){
+        existing.closing=closingBalVal;
+        existing.closingAsOf=stmtEndDate;
+        existing.closingSource='statement-end';
+        existing.pendingConfirmation=stmtEndDate<_lastDayOfMonthISO(stmtEndYm);
+        // Clear any stale guard fields — they will re-fire if still inconsistent post-recompute
+        delete existing.guardFail;delete existing.guardDiff;delete existing.guardCalc;
+      }
+    }
+    // Authoritative pass: recompute derived opening/closing for every touched month from
+    // per-txn statementBal anchors. override:true because this is a fresh import — newer
+    // data supersedes earlier confirmations per the V10.5.5 brief (auto-replace on upload).
+    const touchedMonthsArr=[...new Set(items.map(t=>t.date?t.date.substr(0,7):null).filter(Boolean))];
+    recomputeAccountBalances(rId,{scope:touchedMonthsArr,override:true});
+    // Toast: report the full-statement guard check to the user (independent of monthly banners)
+    if(closingBalVal!==null){
+      const allAccTx=txns.filter(t=>t.accountId===rId);
+      // include cross-month txns from items that landed in other buckets
+      const otherMonthTxns=[];
+      touchedMonthsArr.forEach(m=>{
+        if(m===ym)return;
+        (S.txnCache[m]||[]).forEach(t=>{
+          if(t.accountId===rId&&!allAccTx.find(x=>x.id===t.id))otherMonthTxns.push(t);
+        });
+      });
+      const fullBatch=allAccTx.concat(otherMonthTxns);
+      const calcBal=(openingForGuardVal||0)+fullBatch.reduce((s,t)=>s+(txDir(t)==='in'?t.amount:-t.amount),0);
+      const diff=Math.abs(closingBalVal-calcBal);
+      if(diff>1){
+        const inTxns=fullBatch.filter(t=>txDir(t)==='in');
+        const outTxns=fullBatch.filter(t=>txDir(t)!=='in');
+        const totalIn=inTxns.reduce((s,t)=>s+t.amount,0);
+        const totalOut=outTxns.reduce((s,t)=>s+t.amount,0);
+        const guardMsg=`Balance guard: SAR ${diff.toFixed(2)} discrepancy on statement totals. Opening ${fmt(openingForGuardVal||0)} + In ${fmt(totalIn)} (${inTxns.length} txns) − Out ${fmt(totalOut)} (${outTxns.length} txns) = ${fmt(calcBal)}. Statement end balance ${fmt(closingBalVal)}.`;
+        toast(guardMsg,false);
+        sched();
+      }else{
+        const crossNote2=crossMonthCount>0?` · ${crossMonthCount} routed to other months`:'';
+        toast(`Imported ${added} transaction${added!==1?'s':''}. Balance guard passed ✓${crossNote2}`);
+      }
+    }
   }
 
   runTransferMatching(txns,preImportIds);
@@ -22863,6 +23101,7 @@ function buildTxHeader(fl, scopedAcc, accountPills, tabLabel, groupPillRow){
         <summary class="btn btn-sm" style="list-style:none;cursor:pointer">&#8943;</summary>
         <div style="position:absolute;right:0;top:calc(100% + 4px);background:var(--bg1);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 4px 16px rgba(2,23,81,0.08);padding:4px;min-width:200px;z-index:50;display:flex;flex-direction:column;gap:2px">
           <button class="btn btn-sm" style="justify-content:flex-start;text-align:left;background:transparent;border:none" onclick="this.closest('details').open=false;tp('imp-panel');setTimeout(prefillOpeningBal,50)">Import JSON</button>
+          ${scopedAcc?`<button class="btn btn-sm" style="justify-content:flex-start;text-align:left;background:transparent;border:none" onclick="this.closest('details').open=false;recomputeBalancesForAccount('${scopedAcc}')" title="Re-derive opening and closing balances from statement running balances">Recompute balances</button>`:''}
           <button class="btn btn-sm btn-d" style="justify-content:flex-start;text-align:left;background:transparent;border:none;color:var(--neg)" onclick="this.closest('details').open=false;clearMonthTxns()">Clear this month</button>
         </div>
       </details>
@@ -22908,6 +23147,13 @@ function buildTxHeader(fl, scopedAcc, accountPills, tabLabel, groupPillRow){
       const calcBal=opening+inAmt-outAmt;
       const diff=Math.abs(mb.closing-calcBal);
       const acc=S.accounts.find(a=>a.id===id);
+      // V10.5.5: pending-confirmation banner — statement ended mid-month. Shown instead of
+      // both the inference and discrepancy banners. User can confirm the closing as the
+      // month closing, or upload a newer statement (handled by the Statement Parser flow).
+      if(mb.pendingConfirmation===true){
+        if(mb.guardFail){delete mb.guardFail;delete mb.guardDiff;delete mb.guardCalc;sched();}
+        return{kind:'pending',name:acc?.name||id,mk,closing:mb.closing,closingAsOf:mb.closingAsOf||null,count:accTxns.length};
+      }
       // V4.2: Inference banner — opening missing, but transactions + closing back into a clean number
       if(diff>1&&mb.opening==null){
         const inferredOpening=Math.round((mb.closing-inAmt+outAmt)*100)/100;
@@ -22932,6 +23178,18 @@ function buildTxHeader(fl, scopedAcc, accountPills, tabLabel, groupPillRow){
 
     if(!loadErrBanner&&!banners.length)return '';
     return loadErrBanner+banners.map(f=>{
+      if(f.kind==='pending')return `
+      <div class="lanki-banner banner-info">
+        <div class="lanki-banner-icon">ℹ️</div>
+        <div class="lanki-banner-content">
+          <div class="lanki-banner-title banner-info-title">Balance not confirmed — ${h(f.name)}, ${fmtYM(S.month)}</div>
+          <div class="lanki-banner-body">
+            Statement ended ${f.closingAsOf?toDD(f.closingAsOf):''} with balance <span class="priv-mask">${fmtP(f.closing)}</span>. End-of-month balance not yet confirmed. The system is using this value until you confirm or import a newer statement.<br>
+            <button onclick="confirmPendingClosing('${f.mk}')" class="btn btn-xs btn-p" style="margin-top:6px;margin-right:6px">Confirm this balance</button>
+            <button onclick="sw('aiupload')" class="btn btn-xs" style="margin-top:6px">Upload newer statement</button>
+          </div>
+        </div>
+      </div>`;
       if(f.kind==='infer')return `
       <div class="lanki-banner banner-info">
         <div class="lanki-banner-icon">ℹ️</div>
