@@ -4908,7 +4908,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='10.5.8';
+const VERSION='10.5.9';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -6116,39 +6116,66 @@ function recomputeBalancesForAccountMonth(accId,ym){
   const a=S.accounts.find(x=>x.id===accId);
   const label=a?a.name:'this account';
   const ymLabel=fmtYM(ym);
+  // V10.5.9: detect zero-txn month upfront — branches the confirm copy and the action.
+  const txnsInMonth=(S.txnCache[ym]||[]).filter(t=>t.accountId===accId);
+  const mk=accId+'_'+ym;
+  const mb=S.monthlyBal[mk]||null;
+  const hasStoredAnchors=!!(mb&&(mb.opening!=null||mb.closing!=null));
+  if(txnsInMonth.length===0){
+    if(!hasStoredAnchors){
+      toast('No transactions or stored balances for '+label+' in '+ymLabel+'. Nothing to recompute.',false);
+      return;
+    }
+    // Zero txns + stored anchors = stale data. Offer to clear so the chain takes over.
+    if(!confirm('No transactions exist for '+label+' in '+ymLabel+', but stored opening/closing values are present. Clear the stored values?\n\nAfter clearing, the opening will chain from the prior month and the closing will equal the opening (since there are no transactions).'))return;
+    delete S.monthlyBal[mk].opening;
+    delete S.monthlyBal[mk].openingSource;
+    delete S.monthlyBal[mk].openingInferred;
+    delete S.monthlyBal[mk].closing;
+    delete S.monthlyBal[mk].closingAsOf;
+    delete S.monthlyBal[mk].closingSource;
+    delete S.monthlyBal[mk].pendingConfirmation;
+    delete S.monthlyBal[mk].guardFail;
+    delete S.monthlyBal[mk].guardDiff;
+    delete S.monthlyBal[mk].guardCalc;
+    saveState().then(()=>{
+      render();
+      toast('Stored balances cleared for '+label+' '+ymLabel+'.');
+    });
+    return;
+  }
   if(!confirm('Recompute balances for '+label+' for '+ymLabel+'?\n\nThis recomputes the opening and closing for this month only, from current transaction data. Any previously stored value (including manually set or statement-derived) will be overwritten.'))return;
   // Step 1: attempt statement-anchor derivation
   const anchor=deriveMonthBalancesFromTxns(accId,ym);
   // Step 2: fall back to math when no anchor was found
   const math=anchor.derivedAny?null:deriveMonthClosingFromMath(accId,ym);
-  const mk=accId+'_'+ym;
   if(!S.monthlyBal[mk])S.monthlyBal[mk]={};
-  const mb=S.monthlyBal[mk];
+  const mb2=S.monthlyBal[mk];
   let didUpdate=false;
   let sourceUsed='none';
   if(anchor.derivedAny){
     if(anchor.closing!=null){
-      mb.closing=anchor.closing;
-      mb.closingAsOf=anchor.closingAsOf;
-      mb.closingSource='derived';
-      mb.pendingConfirmation=anchor.closingAsOf<_lastDayOfMonthISO(ym);
-      delete mb.guardFail;delete mb.guardDiff;delete mb.guardCalc;
+      mb2.closing=anchor.closing;
+      mb2.closingAsOf=anchor.closingAsOf;
+      mb2.closingSource='derived';
+      mb2.pendingConfirmation=anchor.closingAsOf<_lastDayOfMonthISO(ym);
+      delete mb2.guardFail;delete mb2.guardDiff;delete mb2.guardCalc;
       didUpdate=true;
     }
     if(anchor.opening!=null){
-      mb.opening=anchor.opening;
-      mb.openingSource='derived';
+      mb2.opening=anchor.opening;
+      mb2.openingSource='derived';
       didUpdate=true;
     }
     sourceUsed='statement-anchor';
   }else if(math&&math.closing!=null){
     // Math fallback: store closing only. Opening is derived dynamically by getAccountOpeningBal
     // (it chains from prior months or account-level openingBalance).
-    mb.closing=math.closing;
-    mb.closingAsOf=math.closingAsOf;
-    mb.closingSource='derived';
-    mb.pendingConfirmation=false; // math gives us a value valid through last txn date
-    delete mb.guardFail;delete mb.guardDiff;delete mb.guardCalc;
+    mb2.closing=math.closing;
+    mb2.closingAsOf=math.closingAsOf;
+    mb2.closingSource='derived';
+    mb2.pendingConfirmation=false; // math gives us a value valid through last txn date
+    delete mb2.guardFail;delete mb2.guardDiff;delete mb2.guardCalc;
     didUpdate=true;
     sourceUsed='math';
   }
@@ -6156,10 +6183,37 @@ function recomputeBalancesForAccountMonth(accId,ym){
     render();
     if(didUpdate){
       const sourceLabel=sourceUsed==='statement-anchor'?'from statement anchors':'from transaction math (no statement anchors available)';
-      toast(label+' '+ymLabel+' recomputed '+sourceLabel+': closing now '+fmtP(mb.closing||0));
+      toast(label+' '+ymLabel+' recomputed '+sourceLabel+': closing now '+fmtP(mb2.closing||0));
     }else{
       toast('No transactions to derive from for '+label+' in '+ymLabel,false);
     }
+  });
+}
+
+// V10.5.9: targeted action for the inconsistency banner. Clears stored opening/closing
+// anchors for one account-month without touching transactions. Used when zero txns exist
+// but stale anchors persist. Distinct from recomputeBalancesForAccountMonth so the banner
+// CTA can act with a single confirm and clear copy.
+function clearStoredBalancesForAccountMonth(accId,ym){
+  const a=S.accounts.find(x=>x.id===accId);
+  const label=a?a.name:'this account';
+  const ymLabel=fmtYM(ym);
+  const mk=accId+'_'+ym;
+  if(!S.monthlyBal[mk]){toast('Nothing to clear for '+label+' in '+ymLabel,false);return;}
+  if(!confirm('Clear stored opening and closing balances for '+label+' in '+ymLabel+'?\n\nThis removes the stale anchor only. Transactions are not touched. The opening will chain from the prior month going forward.'))return;
+  delete S.monthlyBal[mk].opening;
+  delete S.monthlyBal[mk].openingSource;
+  delete S.monthlyBal[mk].openingInferred;
+  delete S.monthlyBal[mk].closing;
+  delete S.monthlyBal[mk].closingAsOf;
+  delete S.monthlyBal[mk].closingSource;
+  delete S.monthlyBal[mk].pendingConfirmation;
+  delete S.monthlyBal[mk].guardFail;
+  delete S.monthlyBal[mk].guardDiff;
+  delete S.monthlyBal[mk].guardCalc;
+  saveState().then(()=>{
+    render();
+    toast('Stored balances cleared for '+label+' '+ymLabel+'.');
   });
 }
 
@@ -10828,12 +10882,39 @@ function clearMonthTxns(){
     if(d.payments.length!==before)recalcDebtRemaining(d);
   });
   if(accOverride){
+    // V10.5.9: clear ALL balance anchors for this account-month, not just guard flags.
+    // Pre-V10.5.9 only deleted guardFail/guardDiff/guardCalc, leaving opening/closing
+    // orphaned. Stale anchors then propagated into subsequent months via
+    // getAccountOpeningBal priority 2 chain — causing the May 2026 17,108.29 ghost.
     const mk=accOverride+'_'+ym;
-    if(S.monthlyBal[mk]){delete S.monthlyBal[mk].guardFail;delete S.monthlyBal[mk].guardDiff;delete S.monthlyBal[mk].guardCalc;}
+    if(S.monthlyBal[mk]){
+      delete S.monthlyBal[mk].opening;
+      delete S.monthlyBal[mk].openingSource;
+      delete S.monthlyBal[mk].openingInferred;
+      delete S.monthlyBal[mk].closing;
+      delete S.monthlyBal[mk].closingAsOf;
+      delete S.monthlyBal[mk].closingSource;
+      delete S.monthlyBal[mk].pendingConfirmation;
+      delete S.monthlyBal[mk].guardFail;
+      delete S.monthlyBal[mk].guardDiff;
+      delete S.monthlyBal[mk].guardCalc;
+    }
   }else{
+    // V10.5.9: same reset for every account when clearing the entire month.
     S.accounts.forEach(a=>{
       const mk=a.id+'_'+ym;
-      if(S.monthlyBal[mk]){delete S.monthlyBal[mk].guardFail;delete S.monthlyBal[mk].guardDiff;delete S.monthlyBal[mk].guardCalc;}
+      if(S.monthlyBal[mk]){
+        delete S.monthlyBal[mk].opening;
+        delete S.monthlyBal[mk].openingSource;
+        delete S.monthlyBal[mk].openingInferred;
+        delete S.monthlyBal[mk].closing;
+        delete S.monthlyBal[mk].closingAsOf;
+        delete S.monthlyBal[mk].closingSource;
+        delete S.monthlyBal[mk].pendingConfirmation;
+        delete S.monthlyBal[mk].guardFail;
+        delete S.monthlyBal[mk].guardDiff;
+        delete S.monthlyBal[mk].guardCalc;
+      }
     });
   }
   // Flush immediately — destructive operation must not be lost on tab close
@@ -23660,6 +23741,40 @@ function buildTxHeader(fl, scopedAcc, accountPills, tabLabel, groupPillRow){
         </div>
         <div class="lanki-banner-actions"><button onclick="clearGuardFail('${f.mk}')" style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--neg);padding:0" title="Dismiss">✕</button></div>
       </div>`;}).join('');
+  })()}
+  ${(()=>{
+    // V10.5.9: stale anchor banner. Shown when scoped to one account, single month, and
+    // that account-month has stored opening or closing anchors despite zero transactions.
+    // Catches the orphan state that produced the May 2026 Shopping 17,108.29 ghost.
+    if(!scopedAcc||TF.allMonths)return '';
+    const mb=S.monthlyBal[scopedAcc+'_'+S.month];
+    if(!mb)return '';
+    const hasStoredAnchor=mb.opening!=null||mb.closing!=null;
+    if(!hasStoredAnchor)return '';
+    const accTxns=(S.txnCache[S.month]||[]).filter(t=>t.accountId===scopedAcc);
+    if(accTxns.length>0)return ''; // only trigger on zero-txn months
+    // Suppress for harmless zero-stored states: opening and closing both 0 (or null).
+    // A non-zero stored value with no transactions is the real anomaly; same for opening != closing.
+    const op=mb.opening==null?0:mb.opening;
+    const cl=mb.closing==null?0:mb.closing;
+    const isHarmlessZero=Math.abs(op)<0.005&&Math.abs(cl)<0.005;
+    if(isHarmlessZero)return '';
+    const acc=S.accounts.find(x=>x.id===scopedAcc);
+    const accName=acc?acc.name:'this account';
+    const lines=[];
+    if(mb.opening!=null)lines.push('Stored opening: '+fmtP(mb.opening));
+    if(mb.closing!=null)lines.push('Stored closing: '+fmtP(mb.closing));
+    return `
+    <div class="lanki-banner banner-warn">
+      <div class="lanki-banner-icon">⚠️</div>
+      <div class="lanki-banner-content">
+        <div class="lanki-banner-title banner-warn-title">Stale stored balances — ${h(accName)}, ${fmtYM(S.month)}</div>
+        <div class="lanki-banner-body">
+          This account has zero transactions for this month, but stored balance anchors are present. ${lines.join(' · ')}. These values likely persist from deleted transactions or a prior import and may show as the opening for subsequent months.<br>
+          <button onclick="clearStoredBalancesForAccountMonth('${scopedAcc}','${S.month}')" class="btn btn-xs btn-p" style="margin-top:6px">Clear stored balances</button>
+        </div>
+      </div>
+    </div>`;
   })()}
   <div class="kpi-row" style="display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r);margin-bottom:1.25rem;overflow:hidden">
     <div style="padding:.75rem 1rem;background:var(--bg1)"><div class="lbl" style="margin-bottom:4px">Opening</div><div style="font-size:15px;font-weight:500;color:var(--text1)">${openingStr}</div></div>
