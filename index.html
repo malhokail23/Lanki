@@ -4908,7 +4908,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='10.5.9';
+const VERSION='10.5.10';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -6686,6 +6686,45 @@ async function saveState(){
   if(_realS){console.warn('saveState blocked — toggle-mode demo active');return;}
   // V9.0.2 (audit C3): vault degraded — refuse to write
   if(_vaultLoadDegraded){console.warn('saveState blocked — vault load degraded');return;}
+  // V10.5.10 INTEGRITY GUARD 1: refuse to save when S.accounts is empty but transactions exist.
+  // This is the corruption pattern that wiped accounts on 15 May 2026 — txnCache had 1,300
+  // entries while S.accounts.length was 0. Any save in this state writes a vault row where
+  // every transaction is orphaned. The condition should be unreachable in normal use; if it
+  // ever triggers, it means something else has already corrupted in-memory state and saving
+  // would persist that corruption to the server.
+  const accCount=Array.isArray(S.accounts)?S.accounts.length:0;
+  const txnCount=Object.values(S.txnCache||{}).reduce((s,arr)=>s+(Array.isArray(arr)?arr.length:0),0);
+  if(accCount===0&&txnCount>0){
+    console.error('saveState BLOCKED — integrity guard: S.accounts empty but txnCache has '+txnCount+' transactions. Refusing to write corrupted state to server.');
+    setSS('Save blocked: in-memory state corrupted','err');
+    setTimeout(()=>setSS(''),8000);
+    if(typeof toast==='function'){toast('Save blocked: accounts missing from memory while transactions exist. Reload the page to recover. Do not close this tab without reloading.',false);}
+    _vaultLoadDegraded=true; // freeze further saves until reload
+    return;
+  }
+  // V10.5.10 INTEGRITY GUARD 2: refuse to save when getMainP() returns a suspiciously small payload.
+  // A healthy main payload contains accounts, settings, staff, etc. and serializes to at least
+  // a few KB. A serialized size under 500 bytes implies the object is essentially empty —
+  // another corruption signal. The threshold is conservative; empty defaults serialize to ~200 bytes,
+  // any real Lanki state serializes to 5KB+.
+  let mainP;
+  try{mainP=getMainP();}catch(e){
+    console.error('saveState BLOCKED — getMainP threw:',e);
+    if(typeof toast==='function'){toast('Save blocked: state could not be assembled. Reload the page.',false);}
+    return;
+  }
+  const mainSize=JSON.stringify(mainP).length;
+  // Real getMainP() always serializes to 1KB+ because it includes ~30 keyed collections.
+  // A serialized size under 300 chars while txns exist means the object is essentially
+  // empty — only the keys would not even fit. Conservative threshold.
+  if(mainSize<300&&txnCount>0){
+    console.error('saveState BLOCKED — integrity guard: main payload is only '+mainSize+' chars but txnCache has '+txnCount+' transactions. Refusing to write corrupted state.');
+    setSS('Save blocked: state too small','err');
+    setTimeout(()=>setSS(''),8000);
+    if(typeof toast==='function'){toast('Save blocked: state appears empty. Reload the page to recover.',false);}
+    _vaultLoadDegraded=true;
+    return;
+  }
   setSS('Saving…');
   try{
     // V9.0.2 (audit H4): optimistic concurrency
@@ -6700,8 +6739,40 @@ async function saveState(){
       return;
     }
     const newRev=remoteRev+1;
-    const e=await enc(sKey,getMainP());
+    const e=await enc(sKey,mainP);
+    // V10.5.10 INTEGRITY GUARD 3: refuse to send empty encrypted output.
+    // enc() should always return {iv, data} with non-empty data. If data is empty or missing,
+    // something went wrong in encryption and saving would write garbage.
+    if(!e||!e.data||e.data.length<100){
+      console.error('saveState BLOCKED — encryption produced suspect output:',e);
+      setSS('Save blocked: encryption failed','err');
+      setTimeout(()=>setSS(''),8000);
+      if(typeof toast==='function'){toast('Save blocked: encryption produced empty output. Reload the page.',false);}
+      _vaultLoadDegraded=true;
+      return;
+    }
     await sbPut('phase1',{...d,encData:e,rev:newRev});
+    // V10.5.10 INTEGRITY GUARD 4: post-save read-back verification.
+    // Fetch what we just wrote, decrypt it, and confirm accounts count matches what we tried to save.
+    // If the read-back fails or shows a different count, alert the user immediately so they can
+    // recover before further damage accumulates. Skipped in any error path — only runs on success.
+    try{
+      const verify=await sbGet('phase1');
+      if(verify&&verify.encData){
+        const decoded=await dec(sKey,verify.encData);
+        const verifyAccCount=Array.isArray(decoded.accounts)?decoded.accounts.length:0;
+        if(verifyAccCount!==accCount){
+          console.error('saveState VERIFICATION FAILED — wrote '+accCount+' accounts, read back '+verifyAccCount);
+          if(typeof toast==='function'){toast('Save verification failed: wrote '+accCount+' accounts, read back '+verifyAccCount+'. Reload immediately and check data integrity.',false);}
+          // Mark degraded but do not roll back — the bad state is already written and
+          // the user needs to know to act, not have it silently retried
+          _vaultLoadDegraded=true;
+        }
+      }
+    }catch(verifyErr){
+      // Verification failure is logged but does not block — the save itself succeeded
+      console.warn('saveState verification could not complete:',verifyErr);
+    }
     _vaultRev=newRev;
     setSS('Saved ✓','ok');setTimeout(()=>setSS(''),2500);
     // V8.16 (M15): only re-publish submitters_public when the public-facing slice actually changes.
@@ -21824,6 +21895,8 @@ function rSettings(){
       <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Export reference file</div><div class="settings-row-sub">Downloads a .txt file with your accounts, debts, and categories — use this when starting an extraction session</div></div><div class="settings-row-ctrl"><button class="btn btn-sm" onclick="doRefExport()">Export</button></div></div>
       <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Export backup</div><div class="settings-row-sub">Downloads an AES-256 encrypted backup. You'll choose a passphrase — keep it safe; the file is unreadable without it.</div></div><div class="settings-row-ctrl"><button class="btn btn-sm btn-p" onclick="doExport()">Export</button></div></div>
       <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Import backup</div><div class="settings-row-sub">Restore from a Lanki backup file. You'll be prompted for the passphrase used to create it.</div></div><div class="settings-row-ctrl"><button class="btn btn-sm" onclick="document.getElementById('imp-backup-file')?.click()">Import</button><input type="file" id="imp-backup-file" accept=".json" style="display:none" onchange="doImportBackup(this)"></div></div>
+      <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Quick local snapshot</div><div class="settings-row-sub">Downloads an unencrypted JSON snapshot to your computer. Use this before risky operations or as a daily local backup. Keep the file safe — it contains your full financial data in plaintext.</div></div><div class="settings-row-ctrl"><button class="btn btn-sm" onclick="doQuickSnapshot()">Snapshot</button></div></div>
+      <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Restore from snapshot</div><div class="settings-row-sub">Restores accounts, transactions, and settings from a plaintext snapshot file created by Quick local snapshot. Overwrites current vault state.</div></div><div class="settings-row-ctrl"><button class="btn btn-sm" onclick="document.getElementById('imp-snapshot-file')?.click()">Restore</button><input type="file" id="imp-snapshot-file" accept=".json" style="display:none" onchange="doRestoreSnapshot(this)"></div></div>
     </div>
     <div class="settings-section">
       <div class="settings-section-head head-neg"><h3>Danger Zone</h3></div>
@@ -23055,6 +23128,79 @@ async function doImportBackup(input){
   }catch(e){
     console.error('Restore failed:',e);
     toast('Restore failed after decrypt: '+(e.message||'unknown error'),false);
+  }
+}
+
+// V10.5.10: quick local snapshot — unencrypted plaintext JSON for fast local backup.
+// Trades encryption for speed and simplicity: one click, immediate file download, instant
+// recovery via the matching Restore button. Intended for local-only storage by users
+// who maintain physical control of their devices. The encrypted Export backup above
+// remains the recommended path for any file that leaves the user's machine.
+function doQuickSnapshot(){
+  try{
+    const snapshot={
+      _snapshotMeta:{
+        version:VERSION,
+        capturedAt:new Date().toISOString(),
+        accountCount:Array.isArray(S.accounts)?S.accounts.length:0,
+        txnCount:Object.values(S.txnCache||{}).reduce((s,arr)=>s+(Array.isArray(arr)?arr.length:0),0)
+      },
+      ...getMainP(),
+      txnCache:S.txnCache,
+      matchedPairs:S.matchedPairs
+    };
+    const blob=new Blob([JSON.stringify(snapshot,null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;
+    const ts=new Date().toISOString().replace(/[:.]/g,'-').substring(0,19);
+    a.download='lanki-snapshot-'+ts+'.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast('Snapshot downloaded ('+snapshot._snapshotMeta.accountCount+' accounts, '+snapshot._snapshotMeta.txnCount+' transactions). Store the file safely — it is unencrypted.');
+  }catch(e){
+    console.error('Quick snapshot failed:',e);
+    toast('Snapshot failed: '+(e.message||'unknown error'),false);
+  }
+}
+async function doRestoreSnapshot(input){
+  if(!input?.files?.[0])return;
+  const file=input.files[0];
+  input.value='';
+  let payload;
+  try{
+    const text=await file.text();
+    payload=JSON.parse(text);
+  }catch(e){
+    toast('Snapshot file is not valid JSON: '+(e.message||'unknown'),false);
+    return;
+  }
+  // Validate shape — must have at least accounts array
+  if(!payload||typeof payload!=='object'||!Array.isArray(payload.accounts)){
+    toast('Snapshot file is missing accounts array — cannot restore',false);
+    return;
+  }
+  const accCount=payload.accounts.length;
+  const txnCount=payload.txnCache?Object.values(payload.txnCache).reduce((s,arr)=>s+(Array.isArray(arr)?arr.length:0),0):0;
+  const meta=payload._snapshotMeta;
+  const metaLine=meta?'\nCaptured: '+meta.capturedAt+(meta.version?' (V'+meta.version+')':''):'';
+  if(!confirm('Restore snapshot? This OVERWRITES your current vault state with:\n\n'+accCount+' accounts, '+txnCount+' transactions'+metaLine+'\n\nA save will run immediately after. Make sure no other tab or device is open before continuing.'))return;
+  try{
+    restoreS(payload);
+    if(payload.txnCache&&typeof payload.txnCache==='object'){
+      S.txnCache=payload.txnCache;
+      const months=Object.keys(S.txnCache);
+      for(const ym of months){if(S.txnCache[ym]?.length)schedTxn(ym);}
+    }
+    if(Array.isArray(payload.matchedPairs))S.matchedPairs=payload.matchedPairs;
+    await saveState();
+    render();
+    toast('Snapshot restored: '+accCount+' accounts, '+txnCount+' transactions.');
+  }catch(e){
+    console.error('Snapshot restore failed:',e);
+    toast('Restore failed: '+(e.message||'unknown error'),false);
   }
 }
 
