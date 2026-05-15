@@ -4908,7 +4908,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='10.5.6';
+const VERSION='10.5.7';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -6086,6 +6086,80 @@ function recomputeBalancesForAccount(accId){
   saveState().then(()=>{
     render();
     toast('Balances recomputed: '+r.updated+' month(s) updated, '+r.preserved+' preserved');
+  });
+}
+
+// V10.5.7: math-based closing derivation. Falls back to opening + sum(in-out) when no
+// per-txn statementBal anchors are available. Mirrors the discrepancy banner math
+// (rTxns line ~23440) so the recompute result matches the calculated value the user
+// already sees. Returns {closing, closingAsOf} or null fields when opening is unknown.
+function deriveMonthClosingFromMath(accId,ym){
+  const result={closing:null,closingAsOf:null};
+  const op=getAccountOpeningBal(accId,ym);
+  if(op==null)return result; // can't math without an opening anchor anywhere in the chain
+  const txns=(S.txnCache[ym]||[]).filter(t=>t.accountId===accId);
+  const delta=txns.reduce((s,t)=>s+(txDir(t)==='in'?t.amount:-t.amount),0);
+  result.closing=+(op+delta).toFixed(2);
+  // Closing as of last txn date in the month, or last day of month if no txns
+  const sorted=[...txns].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  result.closingAsOf=sorted.length?sorted[0].date:_lastDayOfMonthISO(ym);
+  return result;
+}
+
+// V10.5.7: user-facing recompute scoped to one account, one month. Replaces the
+// account-wide recompute on the kebab menu. Explicit user intent → override:true
+// (manual/confirmed values get overwritten because the user is asking for them to be).
+// Tries statement-anchor derivation first; falls back to math derivation when no
+// anchors exist. This handles accounts whose transactions were added manually or
+// imported without running-balance data (the V10.5.5 gap).
+function recomputeBalancesForAccountMonth(accId,ym){
+  const a=S.accounts.find(x=>x.id===accId);
+  const label=a?a.name:'this account';
+  const ymLabel=fmtYM(ym);
+  if(!confirm('Recompute balances for '+label+' for '+ymLabel+'?\n\nThis recomputes the opening and closing for this month only, from current transaction data. Any previously stored value (including manually set or statement-derived) will be overwritten.'))return;
+  // Step 1: attempt statement-anchor derivation
+  const anchor=deriveMonthBalancesFromTxns(accId,ym);
+  // Step 2: fall back to math when no anchor was found
+  const math=anchor.derivedAny?null:deriveMonthClosingFromMath(accId,ym);
+  const mk=accId+'_'+ym;
+  if(!S.monthlyBal[mk])S.monthlyBal[mk]={};
+  const mb=S.monthlyBal[mk];
+  let didUpdate=false;
+  let sourceUsed='none';
+  if(anchor.derivedAny){
+    if(anchor.closing!=null){
+      mb.closing=anchor.closing;
+      mb.closingAsOf=anchor.closingAsOf;
+      mb.closingSource='derived';
+      mb.pendingConfirmation=anchor.closingAsOf<_lastDayOfMonthISO(ym);
+      delete mb.guardFail;delete mb.guardDiff;delete mb.guardCalc;
+      didUpdate=true;
+    }
+    if(anchor.opening!=null){
+      mb.opening=anchor.opening;
+      mb.openingSource='derived';
+      didUpdate=true;
+    }
+    sourceUsed='statement-anchor';
+  }else if(math&&math.closing!=null){
+    // Math fallback: store closing only. Opening is derived dynamically by getAccountOpeningBal
+    // (it chains from prior months or account-level openingBalance).
+    mb.closing=math.closing;
+    mb.closingAsOf=math.closingAsOf;
+    mb.closingSource='derived';
+    mb.pendingConfirmation=false; // math gives us a value valid through last txn date
+    delete mb.guardFail;delete mb.guardDiff;delete mb.guardCalc;
+    didUpdate=true;
+    sourceUsed='math';
+  }
+  saveState().then(()=>{
+    render();
+    if(didUpdate){
+      const sourceLabel=sourceUsed==='statement-anchor'?'from statement anchors':'from transaction math (no statement anchors available)';
+      toast(label+' '+ymLabel+' recomputed '+sourceLabel+': closing now '+fmtP(mb.closing||0));
+    }else{
+      toast('No transactions to derive from for '+label+' in '+ymLabel,false);
+    }
   });
 }
 
@@ -23454,7 +23528,7 @@ function buildTxHeader(fl, scopedAcc, accountPills, tabLabel, groupPillRow){
         <summary class="btn btn-sm" style="list-style:none;cursor:pointer">&#8943;</summary>
         <div style="position:absolute;right:0;top:calc(100% + 4px);background:var(--bg1);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 4px 16px rgba(2,23,81,0.08);padding:4px;min-width:200px;z-index:50;display:flex;flex-direction:column;gap:2px">
           <button class="btn btn-sm" style="justify-content:flex-start;text-align:left;background:transparent;border:none" onclick="this.closest('details').open=false;tp('imp-panel');setTimeout(prefillOpeningBal,50)">Import JSON</button>
-          ${scopedAcc?`<button class="btn btn-sm" style="justify-content:flex-start;text-align:left;background:transparent;border:none" onclick="this.closest('details').open=false;recomputeBalancesForAccount('${scopedAcc}')" title="Re-derive opening and closing balances from statement running balances">Recompute balances</button>`:''}
+          ${scopedAcc?`<button class="btn btn-sm" style="justify-content:flex-start;text-align:left;background:transparent;border:none" onclick="this.closest('details').open=false;recomputeBalancesForAccountMonth('${scopedAcc}','${S.month}')" title="Recompute the opening and closing for this month from current transaction data. Overrides any stored value.">Recompute balances</button>`:''}
           <button class="btn btn-sm btn-d" style="justify-content:flex-start;text-align:left;background:transparent;border:none;color:var(--neg)" onclick="this.closest('details').open=false;clearMonthTxns()">Clear this month</button>
         </div>
       </details>
