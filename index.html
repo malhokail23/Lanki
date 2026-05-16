@@ -34,8 +34,14 @@
    Neutral:    Charcoal Fog  #707070
    See lanki-brand-README.md and lankibrandguidelines.pdf for full spec.
    ────── */
-/* V3.0: Global +10% scaling per brief #3 */
-html{zoom:1.1}
+/* V10.5.18 (A.2 Path 1, audit H-15): removed html{zoom:1.1}.
+   The V3.0 directive globally scaled the platform by +10% via CSS zoom property.
+   It produced inflated rendered sizes (14px tokens rendered at 15.4px effective),
+   forced compensation calcs in zoom-sensitive layouts, and interacted unpredictably
+   with browser/iOS pinch-zoom. V10.5.18 removes the directive; visual sizing is now
+   what the design tokens declare (10% smaller than pre-V10.5.18 render). The
+   compensating /1.1 division in the .index-foot calc was removed in the same change.
+   See V10.5.11 audit H-15 for rationale. */
 
 :root{
   /* ============================================================
@@ -579,13 +585,16 @@ tbody tr:hover td{background:var(--bg2)}
 }
 .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
 /* Phase A polish: dropped min-width:1200px which caused horizontal overflow
-   inside the page container (on viewports below ~1500px effective px after
-   the html{zoom:1.1} factor). The thead <th> elements set explicit column
+   inside the page container. The thead <th> elements set explicit column
    widths via the `widths` map in the JS render — the table layout (fixed)
    honors those widths and distributes any remaining space to the desc
    column (set to auto). With min-width:0, the table now shrinks to fit
    its container without forcing a horizontal scrollbar. The content stays
-   readable because the thead-defined widths are still respected. */
+   readable because the thead-defined widths are still respected.
+   V10.5.18 (A.2 Path 1): the prior comment referenced html{zoom:1.1}
+   factor inflating effective viewport. With that directive removed (audit
+   H-15), the original 1500px threshold reasoning is moot; the rule keeps
+   the responsive behavior it already had. */
 .tx-tbl{table-layout:fixed;width:100%;min-width:0}
 .tx-tbl td,.tx-tbl th{overflow:hidden;text-overflow:ellipsis}
 .tx-tbl td>div{overflow:hidden;text-overflow:ellipsis}
@@ -3097,30 +3106,20 @@ body:not([data-current-engine]) .index-section[data-engine="portfolio"]{display:
    bottom of the long page rather than the bottom of the viewport.
    Sticky desktop-only — mobile uses position:fixed drawer pattern.
 
-   Phase A polish: zoom-aware height. Line 26 declares html{zoom:1.1}
-   for global +10% scaling. Chrome's `100vh` resolves to the unzoomed
-   viewport in CSS pixels, but the entire page is then inflated 1.1x
-   at paint time. So `calc(100vh - 52px)` gave the Index ~1028 CSS px
-   on a 1080px viewport, which rendered at 1028 × 1.1 = 1131 device
-   pixels — overflowing the available space (1080 − 57.2 = 1022.8 dev
-   px below the rendered Ribbon) by ~108 dev px. That overflow pushed
-   the .index-foot (Switch Engine + Demo Mode) below the visible fold;
-   user had to scroll to see them.
-
-   Fix: height = (100vh − rendered_ribbon_height) / zoom_factor.
-   - rendered Ribbon = 52 × 1.1 = 57.2 device px
-   - dividing the remaining space by 1.1 reverses the page-level zoom
-     inflation, so the rendered height matches the available space exactly.
-   `top:52px` stays as-is — 52 in CSS px gets zoom-inflated to 57.2 dev
-   px, which is exactly where the Index should start (below the Ribbon).
-   Verified across 720/900/1080/1440 viewports: the foot now sits at
-   the bottom of the visible Index column, no scroll required. */
+   Phase A polish: index height = 100vh − Ribbon height.
+   - Ribbon is 52px tall.
+   - top:52px positions the Index just below the Ribbon.
+   - height fills the remaining viewport precisely.
+   V10.5.18 (A.2 Path 1): the prior version of this rule divided the height
+   by 1.1 to reverse the inflation introduced by html{zoom:1.1} on :root. With
+   that directive removed (audit H-15), the compensation is no longer needed.
+   Rendered height now matches CSS height directly. */
 @media (min-width:769px){
   #compass-shell > .body > .index{
     position:sticky;
-    top:52px;                                    /* below Ribbon (52px CSS, 57.2 dev) */
+    top:52px;                                    /* below Ribbon */
     align-self:flex-start;                       /* required for sticky inside flex */
-    height:calc((100vh - 57.2px) / 1.1);         /* zoom-corrected fill of remaining viewport */
+    height:calc(100vh - 52px);                   /* fill remaining viewport below Ribbon */
     overflow-y:auto;                             /* scroll only if Index content exceeds viewport */
   }
 }
@@ -4952,7 +4951,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='10.5.17';
+const VERSION='10.5.18';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
