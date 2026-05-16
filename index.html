@@ -119,7 +119,7 @@ html{zoom:1.1}
 .lanki-legacy{
   /* Shadowed tokens — V9.0 values restored inside legacy scope */
   --text2:#707070;          /* V9.0 Charcoal Fog (Compass: #4A5774) */
-  --text3:#9CA0A8;          /* V9.0 light gray (Compass: #7E89A3) */
+  --text3:#6A7693;          /* V10.5.14 (H-16): darkened from #9CA0A8 to match V9.0.5.2 root --text3 for AA contrast on white card backgrounds */
   --warn:var(--warn);           /* V9.0 darker gold (Compass: #9C6A0E mustard) */
   --warn-bg:#D6C88F;        /* V9.0 mellow gold (Compass: #FBEFD7 light yellow) */
   --font:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","Segoe UI","Helvetica Neue",Helvetica,Arial,sans-serif;
@@ -4938,7 +4938,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='10.5.13';
+const VERSION='10.5.14';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -24025,7 +24025,9 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps, scopedAcc){
   // Other cols tightened slightly so total still fits common viewports without horizontal scroll:
   // cat 230→210 (still readable for two-line "Category / Sub-Category" labels), date 110→95 (DD/MM/YY fits),
   // type 90→80, acc 130→110, amount 140/170→130/160. Total saved ≈ 80px, donated to actions + desc breathing room.
-  const widths={date:'95px',desc:'auto',cat:'210px',acc:'110px',amount:showAcc?'130px':'160px',balance:'130px',outstanding:'130px',type:'80px','':'180px'};
+  // V10.5.14 (A.1b/A.1c): date 95→115 (toDD outputs DD/MM/YYYY = 10 chars, was truncating to "30/04/20..."),
+  // type 80→105 (was truncating "Investment" to "Investment..."). The extra ~45px is absorbed by desc:'auto'.
+  const widths={date:'115px',desc:'auto',cat:'210px',acc:'110px',amount:showAcc?'130px':'160px',balance:'130px',outstanding:'130px',type:'105px','':'180px'};
 
   const bulkCol=`<th style="width:32px;padding:8px 6px">${BulkMode?'<input type="checkbox" title="Select all displayed" onclick="if(this.checked)selectAllDisplayed();else clearBulkSelection()" style="cursor:pointer;width:15px;height:15px">':''}</th>`;
   const reconTh=hasRecon?`<th style="text-align:right;white-space:nowrap;font-size:var(--fs-xxs);color:var(--warn);width:110px">Stmt Bal</th>`:'';
