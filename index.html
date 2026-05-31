@@ -4951,7 +4951,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='10.5.20';
+const VERSION='10.5.21';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -24445,16 +24445,16 @@ function buildTxHeader(fl, scopedAcc, accountPills, tabLabel, groupPillRow){
       if(mb.txnsChangedSinceLock===true){
         return{kind:'changed-since-lock',name:acc?.name||id,mk,closing:mb.closing,closingSource:mb.closingSource||'confirmed',count:accTxns.length};
       }
-      // V10.5.19 (Option 1): "balance not confirmed" shows whenever the closing is
-      // derived and the user has not confirmed it — not only when the statement ended
-      // mid-month. A balance is either confirmed by the user or it is not; editing
-      // transactions updates the number but never hides this prompt. It clears only on
-      // Confirm. closingSource 'confirmed' suppresses it. Legacy entries with no source
-      // tag but a raised pendingConfirmation flag still show (back-compat).
-      const notConfirmed=mb.closingSource!=='confirmed'&&(mb.closingSource==='derived'||mb.pendingConfirmation===true||mb.closingSource==null);
-      if(notConfirmed){
+      // V10.5.21 (Option A): "balance not confirmed" shows ONLY when the statement
+      // coverage ends before month-end — i.e. the closing is not a true month-end
+      // figure yet (pendingConfirmation flag, set where closingAsOf < last day of the
+      // month). This reverts V10.5.20 Option 1, which nagged on every derived-but-
+      // unconfirmed balance across every account and month. Confirmation stays
+      // available (the Confirm button) but is no longer demanded for clean full-month
+      // statements. A confirmed closing always suppresses the banner.
+      if(mb.pendingConfirmation===true&&mb.closingSource!=='confirmed'){
         if(mb.guardFail){delete mb.guardFail;delete mb.guardDiff;delete mb.guardCalc;sched();}
-        return{kind:'pending',name:acc?.name||id,mk,closing:mb.closing,closingAsOf:mb.closingAsOf||null,count:accTxns.length,midMonth:mb.pendingConfirmation===true};
+        return{kind:'pending',name:acc?.name||id,mk,closing:mb.closing,closingAsOf:mb.closingAsOf||null,count:accTxns.length,midMonth:true};
       }
       // V4.2: Inference banner — opening missing, but transactions + closing back into a clean number
       if(diff>1&&mb.opening==null){
