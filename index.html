@@ -6275,15 +6275,15 @@ function _lastDayOfMonthISO(ym){
 
 // V10.5.19 (Fix 5): refresh a month's stored balances after a transaction is added
 // or removed, but ONLY when the closing is unlocked (derived). When the closing is
-// locked (confirmed/manual), the stored value is left untouched and a flag is set so
-// the UI can prompt "transactions changed since you confirmed — recompute?". This
-// never silently overwrites a balance the user deliberately confirmed or typed.
+// locked (confirmed), the stored value is left untouched and a flag is set so the UI
+// can prompt "transactions changed since you confirmed — recompute?". This never
+// silently overwrites a balance the user deliberately confirmed.
 // Returns: 'refreshed' | 'locked-flagged' | 'noop'.
 function refreshMonthBalanceAfterTxnChange(accId,ym){
   if(!accId||!ym)return 'noop';
   const mk=accId+'_'+ym;
   const mb=S.monthlyBal[mk];
-  const locked=mb&&(mb.closingSource==='confirmed'||mb.closingSource==='manual');
+  const locked=mb&&mb.closingSource==='confirmed';
   if(locked){
     // Mark that transactions changed after the lock so the banner can offer recompute.
     if(!mb.txnsChangedSinceLock){mb.txnsChangedSinceLock=true;}
@@ -6418,56 +6418,9 @@ function confirmPendingClosing(mk){
 function dismissTxnsChangedFlag(mk){
   if(!S.monthlyBal[mk])return;
   delete S.monthlyBal[mk].txnsChangedSinceLock;
-  saveState().then(()=>{render();toast('Keeping the locked balance.');});
+  saveState().then(()=>{render();toast('Keeping the confirmed balance.');});
 }
 
-// V10.5.19 (Fix 6): manual opening/closing edit. Opens a small prompt-based editor,
-// writes the values with source 'manual' (locked), and recomputes the running-balance
-// guard. Manual values survive recompute unless the user explicitly overrides. The
-// opening, if set, is consumed by getAccountOpeningBal Priority 1 for this month and
-// chains forward to the next month's opening. Validation rejects non-numeric input.
-function openManualBalanceEdit(mk){
-  const mb=S.monthlyBal[mk]||{};
-  const parts=mk.split('_');const ym=parts.slice(-1)[0];const accId=parts.slice(0,-1).join('_');
-  const acc=S.accounts.find(a=>a.id===accId);
-  const label=(acc?acc.name:'account')+' · '+fmtYM(ym);
-  const curOpen=mb.opening!=null?mb.opening:'';
-  const curClose=mb.closing!=null?mb.closing:'';
-  const openStr=prompt('Set OPENING balance for '+label+' (SAR).\nLeave blank to chain from the prior month.\n\nCurrent: '+(curOpen===''?'(not set)':curOpen),curOpen);
-  if(openStr===null)return; // cancelled
-  const closeStr=prompt('Set CLOSING balance for '+label+' (SAR).\nLeave blank to keep current.\n\nCurrent: '+(curClose===''?'(not set)':curClose),curClose);
-  if(closeStr===null)return; // cancelled
-  // Validate
-  let openVal=null,closeVal=null;
-  if(openStr.trim()!==''){
-    openVal=parseFloat(openStr);
-    if(isNaN(openVal)){toast('Opening must be a number. No changes made.',false);return;}
-  }
-  if(closeStr.trim()!==''){
-    closeVal=parseFloat(closeStr);
-    if(isNaN(closeVal)){toast('Closing must be a number. No changes made.',false);return;}
-  }
-  saveManualBalance(accId,ym,openVal,closeVal);
-}
-function saveManualBalance(accId,ym,openVal,closeVal){
-  const mk=accId+'_'+ym;
-  if(!S.monthlyBal[mk])S.monthlyBal[mk]={};
-  const mb=S.monthlyBal[mk];
-  if(openVal!=null){
-    mb.opening=openVal;
-    mb.openingSource='manual';
-  }
-  if(closeVal!=null){
-    mb.closing=closeVal;
-    mb.closingSource='manual';
-    mb.closingAsOf=_lastDayOfMonthISO(ym);
-    mb.pendingConfirmation=false;
-  }
-  // Clear stale/guard flags — the user has set authoritative values.
-  delete mb.txnsChangedSinceLock;
-  delete mb.guardFail;delete mb.guardDiff;delete mb.guardCalc;
-  saveState().then(()=>{render();toast('Balances set manually and locked for this month.');});
-}
 
 // User-facing: manual recompute trigger for one account, with confirm dialog.
 // Exposed in the Bank Accounts kebab menu. Respects user-set locks (override:false).
@@ -6537,7 +6490,7 @@ function recomputeBalancesForAccountMonth(accId,ym){
     });
     return;
   }
-  if(!confirm('Recompute balances for '+label+' for '+ymLabel+'?\n\nThis recomputes the opening and closing for this month only, from current transaction data. Any previously stored value (including manually set or statement-derived) will be overwritten.'))return;
+  if(!confirm('Recompute balances for '+label+' for '+ymLabel+'?\n\nThis recomputes the opening and closing for this month only, from current transaction data. Any previously stored value (including a confirmed or statement-derived value) will be overwritten, and you will be asked to confirm the new closing.'))return;
   // Step 1: attempt statement-anchor derivation
   const anchor=deriveMonthBalancesFromTxns(accId,ym);
   // Step 2: fall back to math when no anchor was found
@@ -11686,9 +11639,11 @@ function addTxnM(){
   S.txnCache[ym].sort((a,b)=>a.date.localeCompare(b.date));
   if(t.debtId)syncDebtsFromTxns();
   // V10.5.19 (Fix 5): refresh the stored closing for this account-month after the add.
-  // Locked (confirmed/manual) balances are only flagged, never silently overwritten.
+  // refreshMonthBalanceAfterTxnChange mutates S.monthlyBal (main vault), so we must
+  // persist via saveState — schedTxn only queues the transaction-row save and would
+  // leave the monthlyBal change in memory only (lost on reload).
   if(t.accountId)refreshMonthBalanceAfterTxnChange(t.accountId,ym);
-  tp('atxn-panel');schedTxn(ym);render();toast('Transaction added');
+  tp('atxn-panel');schedTxn(ym);sched();render();toast('Transaction added');
 }
 
 // ─── IMPORT ───
@@ -24484,19 +24439,22 @@ function buildTxHeader(fl, scopedAcc, accountPills, tabLabel, groupPillRow){
       const calcBal=opening+inAmt-outAmt;
       const diff=Math.abs(mb.closing-calcBal);
       const acc=S.accounts.find(a=>a.id===id);
-      // V10.5.19 (Fix 5): transactions changed after the closing was locked
-      // (confirmed/manual). Offer recompute rather than silently updating. Shown
-      // ahead of the other banners because it represents a known staleness the user
-      // should resolve explicitly.
+      // V10.5.19 (Fix 5): transactions changed after the closing was confirmed.
+      // Offer recompute rather than silently updating. Shown ahead of the other
+      // banners because it represents a known staleness the user should resolve.
       if(mb.txnsChangedSinceLock===true){
         return{kind:'changed-since-lock',name:acc?.name||id,mk,closing:mb.closing,closingSource:mb.closingSource||'confirmed',count:accTxns.length};
       }
-      // V10.5.5: pending-confirmation banner — statement ended mid-month. Shown instead of
-      // both the inference and discrepancy banners. User can confirm the closing as the
-      // month closing, or upload a newer statement (handled by the Statement Parser flow).
-      if(mb.pendingConfirmation===true){
+      // V10.5.19 (Option 1): "balance not confirmed" shows whenever the closing is
+      // derived and the user has not confirmed it — not only when the statement ended
+      // mid-month. A balance is either confirmed by the user or it is not; editing
+      // transactions updates the number but never hides this prompt. It clears only on
+      // Confirm. closingSource 'confirmed' suppresses it. Legacy entries with no source
+      // tag but a raised pendingConfirmation flag still show (back-compat).
+      const notConfirmed=mb.closingSource!=='confirmed'&&(mb.closingSource==='derived'||mb.pendingConfirmation===true||mb.closingSource==null);
+      if(notConfirmed){
         if(mb.guardFail){delete mb.guardFail;delete mb.guardDiff;delete mb.guardCalc;sched();}
-        return{kind:'pending',name:acc?.name||id,mk,closing:mb.closing,closingAsOf:mb.closingAsOf||null,count:accTxns.length};
+        return{kind:'pending',name:acc?.name||id,mk,closing:mb.closing,closingAsOf:mb.closingAsOf||null,count:accTxns.length,midMonth:mb.pendingConfirmation===true};
       }
       // V4.2: Inference banner — opening missing, but transactions + closing back into a clean number
       if(diff>1&&mb.opening==null){
@@ -24527,11 +24485,11 @@ function buildTxHeader(fl, scopedAcc, accountPills, tabLabel, groupPillRow){
       <div class="lanki-banner banner-warn">
         <div class="lanki-banner-icon">⚠️</div>
         <div class="lanki-banner-content">
-          <div class="lanki-banner-title banner-warn-title">Transactions changed since balance was ${f.closingSource==='manual'?'set manually':'confirmed'} — ${h(f.name)}, ${fmtYM(S.month)}</div>
+          <div class="lanki-banner-title banner-warn-title">Transactions changed since balance was confirmed — ${h(f.name)}, ${fmtYM(S.month)}</div>
           <div class="lanki-banner-body">
-            You added or removed transactions after locking the closing balance at <span class="priv-mask">${fmtP(f.closing)}</span>. The locked value has not changed. Recompute to update it from the current transactions, or keep the locked value.<br>
+            You added or removed transactions after confirming the closing balance at <span class="priv-mask">${fmtP(f.closing)}</span>. The confirmed value has not changed. Recompute to update it from the current transactions, or keep the confirmed value.<br>
             <button onclick="recomputeBalancesForAccountMonth('${f.mk.split('_').slice(0,-1).join('_')}','${f.mk.split('_').slice(-1)[0]}')" class="btn btn-xs btn-p" style="margin-top:6px;margin-right:6px">Recompute now</button>
-            <button onclick="dismissTxnsChangedFlag('${f.mk}')" class="btn btn-xs" style="margin-top:6px">Keep locked value</button>
+            <button onclick="dismissTxnsChangedFlag('${f.mk}')" class="btn btn-xs" style="margin-top:6px">Keep confirmed value</button>
           </div>
         </div>
       </div>`;
@@ -24541,9 +24499,9 @@ function buildTxHeader(fl, scopedAcc, accountPills, tabLabel, groupPillRow){
         <div class="lanki-banner-content">
           <div class="lanki-banner-title banner-info-title">Balance not confirmed — ${h(f.name)}, ${fmtYM(S.month)}</div>
           <div class="lanki-banner-body">
-            Statement ended ${f.closingAsOf?toDD(f.closingAsOf):''} with balance <span class="priv-mask">${fmtP(f.closing)}</span>. End-of-month balance not yet confirmed. The system is using this value until you confirm or import a newer statement.<br>
+            ${f.midMonth&&f.closingAsOf?`Statement ended ${toDD(f.closingAsOf)} with balance <span class="priv-mask">${fmtP(f.closing)}</span>. `:`Closing balance is <span class="priv-mask">${fmtP(f.closing)}</span>, derived from this month's transactions. `}Not yet confirmed. Recompute reflects your current transactions; confirm when the opening and closing look right.<br>
             <button onclick="confirmPendingClosing('${f.mk}')" class="btn btn-xs btn-p" style="margin-top:6px;margin-right:6px">Confirm this balance</button>
-            <button onclick="openManualBalanceEdit('${f.mk}')" class="btn btn-xs" style="margin-top:6px;margin-right:6px">Set manually</button>
+            <button onclick="recomputeBalancesForAccountMonth('${f.mk.split('_').slice(0,-1).join('_')}','${f.mk.split('_').slice(-1)[0]}')" class="btn btn-xs" style="margin-top:6px;margin-right:6px">Recompute</button>
             <button onclick="sw('aiupload')" class="btn btn-xs" style="margin-top:6px">Upload newer statement</button>
           </div>
         </div>
@@ -24570,7 +24528,6 @@ function buildTxHeader(fl, scopedAcc, accountPills, tabLabel, groupPillRow){
             Opening ${fmtP(f.opening)} + In ${fmtP(f.inAmt)} − Out ${fmtP(f.outAmt)} = ${fmtP(f.calc)} &nbsp;(${f.count} transactions)
             ${f.firstBreak?`<br><strong>First divergence: ${toDD(f.firstBreak.date)} — ${h(f.firstBreak.description)}</strong> · Select this account to see row-by-row markers`:''}
             <br><button onclick="recomputeBalancesForAccountMonth('${f.mk.split('_').slice(0,-1).join('_')}','${f.mk.split('_').slice(-1)[0]}')" class="btn btn-xs btn-p" style="margin-top:6px;margin-right:6px">Recompute from transactions</button>
-            <button onclick="openManualBalanceEdit('${f.mk}')" class="btn btn-xs" style="margin-top:6px">Set opening/closing manually</button>
           </div>
         </div>
         <div class="lanki-banner-actions"><button onclick="clearGuardFail('${f.mk}')" style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--neg);padding:0" title="Dismiss">✕</button></div>
