@@ -4951,7 +4951,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='10.5.18';
+const VERSION='10.5.19';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -6087,9 +6087,84 @@ function findRefundCandidates(refund){
     return b.date.localeCompare(a.date);
   });
 }
+// V10.5.19 (Fix 1+2): canonical transaction ordering for balance reconstruction.
+// Replaces the date-only sort that left same-day transactions in array (import)
+// order, which produced negative-dip running balances when a statement listed
+// same-day debits before the credit that funded them (D360 23 Apr case).
+//
+// Ordering rules, in priority:
+//   1. Different dates -> date ascending. The statement balance chain NEVER
+//      overrides the transaction date (cross-day flips like the D360 10/11 quirk
+//      stay date-ordered and surface as a recoverable divergence — owner decision).
+//   2. Same date, transactions carrying statementBal -> order by the statement's
+//      own running-balance chain: each row's balance-before (statementBal minus its
+//      signed delta) must equal the prior row's balance-after. Seeded by the running
+//      cursor coming into the day. This recovers the true intra-day sequence.
+//   3. Same date, chain ambiguous/broken (repeated balances, missing link) -> detect
+//      the chain head (the row whose balance-before is not any sibling's balance-after)
+//      then fall back to stable insertion order. Deterministic in all cases.
+//   4. Same date, transactions WITHOUT statementBal (manual adds, prepaid statements
+//      with no running balance) -> credits-first, then stable insertion order. Credits
+//      first avoids artificial negative dips for the common "fund then spend" case.
+//   5. Same date mixed -> anchored rows ordered by chain first, then unanchored rows
+//      by rule 4.
+// Returns a new array; does not mutate the input.
+function _txHasAnchor(t){return t.statementBal!=null&&isFinite(parseFloat(t.statementBal));}
+function _txSignedDelta(t){return txDir(t)==='in'?(t.amount||0):-(t.amount||0);}
+function _txBalBefore(t){return Math.round((parseFloat(t.statementBal)-_txSignedDelta(t))*100)/100;}
+function orderTxnsForBalance(txns){
+  if(!Array.isArray(txns)||txns.length<=1)return (txns||[]).slice();
+  // Stable insertion index for deterministic fallback
+  const idx=new Map();txns.forEach((t,i)=>idx.set(t,i));
+  const byDate={};
+  txns.forEach(t=>{const d=t.date||'';(byDate[d]=byDate[d]||[]).push(t);});
+  const dates=Object.keys(byDate).sort((a,b)=>a.localeCompare(b));
+  const ordered=[];
+  let cursor=null; // running balance coming into the current day (null = unknown)
+  for(const date of dates){
+    const day=byDate[date];
+    if(day.length===1){
+      ordered.push(day[0]);
+      if(_txHasAnchor(day[0]))cursor=parseFloat(day[0].statementBal);
+      continue;
+    }
+    const anchored=day.filter(_txHasAnchor);
+    const unanchored=day.filter(t=>!_txHasAnchor(t));
+    const dayOrdered=[];
+    // Chain-walk the anchored set
+    const remaining=anchored.slice();
+    let c=cursor;
+    while(remaining.length){
+      let i=-1;
+      if(c!=null)i=remaining.findIndex(t=>Math.abs(_txBalBefore(t)-c)<0.015);
+      if(i===-1){
+        // Chain head: a row nothing else flows into
+        const afters=new Set(remaining.map(t=>Math.round(parseFloat(t.statementBal)*100)));
+        i=remaining.findIndex(t=>!afters.has(Math.round(_txBalBefore(t)*100)));
+        if(i===-1){
+          // Genuine tie — stable insertion order
+          i=0;let best=idx.get(remaining[0]);
+          remaining.forEach((t,k)=>{const v=idx.get(t);if(v<best){best=v;i=k;}});
+        }
+      }
+      const t=remaining.splice(i,1)[0];
+      dayOrdered.push(t);
+      c=parseFloat(t.statementBal);
+    }
+    // Unanchored: credits-first, then stable insertion order within each group
+    const credits=unanchored.filter(t=>txDir(t)==='in').sort((a,b)=>idx.get(a)-idx.get(b));
+    const debits=unanchored.filter(t=>txDir(t)!=='in').sort((a,b)=>idx.get(a)-idx.get(b));
+    dayOrdered.push(...credits,...debits);
+    ordered.push(...dayOrdered);
+    // Update cursor from the last anchored row of the day (unanchored rows have no balance)
+    for(let k=dayOrdered.length-1;k>=0;k--){if(_txHasAnchor(dayOrdered[k])){cursor=parseFloat(dayOrdered[k].statementBal);break;}}
+  }
+  return ordered;
+}
 function calcRunningBalance(txns,openingBal){
   // Returns a Map: txn.id -> running balance after that txn
-  const sorted=[...txns].sort((a,b)=>a.date.localeCompare(b.date)||0);
+  // V10.5.19 (Fix 1): use the canonical ordering instead of date-only sort.
+  const sorted=orderTxnsForBalance(txns);
   let bal=openingBal||0;
   const map=new Map();
   sorted.forEach(t=>{
@@ -6145,17 +6220,39 @@ function deriveMonthBalancesFromTxns(accId,ym){
   const result={closing:null,closingAsOf:null,opening:null,openingAsOf:null,derivedAny:false};
   const txns=(S.txnCache[ym]||[]).filter(t=>t.accountId===accId);
   if(txns.length===0)return result;
-  const sorted=[...txns].sort((a,b)=>(a.date||'').localeCompare(b.date||''));
-  // Closing: scan from the end for the last txn carrying a non-null statementBal
+  // V10.5.19 (Fix 1): canonical ordering, not date-only.
+  const sorted=orderTxnsForBalance(txns);
+  // Find the last txn carrying a statementBal anchor (scan from end)
+  let lastAnchorIdx=-1;
   for(let i=sorted.length-1;i>=0;i--){
     if(sorted[i].statementBal!=null&&isFinite(parseFloat(sorted[i].statementBal))){
-      result.closing=parseFloat(sorted[i].statementBal);
-      result.closingAsOf=sorted[i].date;
-      result.derivedAny=true;
-      break;
+      lastAnchorIdx=i;break;
     }
   }
-  // Opening: scan from the start for the first txn carrying a non-null statementBal
+  if(lastAnchorIdx>=0){
+    // V10.5.19 (Fix 3): closing = last anchor's statementBal PLUS the signed deltas
+    // of any transactions ordered AFTER that anchor which carry no anchor of their own
+    // (e.g. a transaction the bank omitted from this statement that the user added by
+    // hand, or one that landed in a later statement). Without this, a manually-added
+    // post-anchor transaction was silently ignored and the closing stayed at the stale
+    // statement value. closingAsOf advances to the last such transaction's date.
+    let closing=parseFloat(sorted[lastAnchorIdx].statementBal);
+    let closingAsOf=sorted[lastAnchorIdx].date;
+    for(let i=lastAnchorIdx+1;i<sorted.length;i++){
+      const t=sorted[i];
+      if(t.statementBal!=null&&isFinite(parseFloat(t.statementBal))){
+        // A later anchor exists (ordering edge case) — trust it directly
+        closing=parseFloat(t.statementBal);
+      }else{
+        closing=Math.round((closing+(txDir(t)==='in'?(t.amount||0):-(t.amount||0)))*100)/100;
+      }
+      closingAsOf=t.date;
+    }
+    result.closing=closing;
+    result.closingAsOf=closingAsOf;
+    result.derivedAny=true;
+  }
+  // Opening: first txn carrying a non-null statementBal, minus its signed delta
   for(let i=0;i<sorted.length;i++){
     if(sorted[i].statementBal!=null&&isFinite(parseFloat(sorted[i].statementBal))){
       const delta=txDir(sorted[i])==='in'?sorted[i].amount:-sorted[i].amount;
@@ -6174,6 +6271,53 @@ function _lastDayOfMonthISO(ym){
   const[y,m]=ym.split('-').map(Number);
   const d=new Date(y,m,0); // day 0 of next month = last day of this month, local TZ
   return ym+'-'+String(d.getDate()).padStart(2,'0');
+}
+
+// V10.5.19 (Fix 5): refresh a month's stored balances after a transaction is added
+// or removed, but ONLY when the closing is unlocked (derived). When the closing is
+// locked (confirmed/manual), the stored value is left untouched and a flag is set so
+// the UI can prompt "transactions changed since you confirmed — recompute?". This
+// never silently overwrites a balance the user deliberately confirmed or typed.
+// Returns: 'refreshed' | 'locked-flagged' | 'noop'.
+function refreshMonthBalanceAfterTxnChange(accId,ym){
+  if(!accId||!ym)return 'noop';
+  const mk=accId+'_'+ym;
+  const mb=S.monthlyBal[mk];
+  const locked=mb&&(mb.closingSource==='confirmed'||mb.closingSource==='manual');
+  if(locked){
+    // Mark that transactions changed after the lock so the banner can offer recompute.
+    if(!mb.txnsChangedSinceLock){mb.txnsChangedSinceLock=true;}
+    return 'locked-flagged';
+  }
+  // Derived (or no stored anchor yet): recompute from current transactions.
+  const anchor=deriveMonthBalancesFromTxns(accId,ym);
+  if(!anchor.derivedAny){
+    // No statement anchors — fall back to math (opening chain + signed deltas).
+    const math=deriveMonthClosingFromMath(accId,ym);
+    if(math&&math.closing!=null){
+      if(!S.monthlyBal[mk])S.monthlyBal[mk]={};
+      S.monthlyBal[mk].closing=math.closing;
+      S.monthlyBal[mk].closingAsOf=math.closingAsOf;
+      S.monthlyBal[mk].closingSource='derived';
+      delete S.monthlyBal[mk].guardFail;delete S.monthlyBal[mk].guardDiff;delete S.monthlyBal[mk].guardCalc;
+      return 'refreshed';
+    }
+    return 'noop';
+  }
+  if(!S.monthlyBal[mk])S.monthlyBal[mk]={};
+  const m=S.monthlyBal[mk];
+  if(anchor.closing!=null){
+    m.closing=anchor.closing;
+    m.closingAsOf=anchor.closingAsOf;
+    m.closingSource='derived';
+    m.pendingConfirmation=anchor.closingAsOf<_lastDayOfMonthISO(ym);
+    delete m.guardFail;delete m.guardDiff;delete m.guardCalc;
+  }
+  if(anchor.opening!=null&&m.openingSource!=='manual'&&m.openingSource!=='confirmed'){
+    m.opening=anchor.opening;
+    m.openingSource='derived';
+  }
+  return 'refreshed';
 }
 
 // Walk every month containing txns for one account and write derived
@@ -6264,8 +6408,65 @@ function confirmPendingClosing(mk){
   const mb=S.monthlyBal[mk];
   mb.pendingConfirmation=false;
   mb.closingSource='confirmed';
+  delete mb.txnsChangedSinceLock; // V10.5.19: confirming clears any stale-since-lock flag
   delete mb.guardFail;delete mb.guardDiff;delete mb.guardCalc;
   saveState().then(()=>{render();toast('Closing balance confirmed for this month');});
+}
+
+// V10.5.19 (Fix 5): user chose to keep the locked balance despite transaction changes.
+// Clears the "changed since lock" flag without altering the stored value.
+function dismissTxnsChangedFlag(mk){
+  if(!S.monthlyBal[mk])return;
+  delete S.monthlyBal[mk].txnsChangedSinceLock;
+  saveState().then(()=>{render();toast('Keeping the locked balance.');});
+}
+
+// V10.5.19 (Fix 6): manual opening/closing edit. Opens a small prompt-based editor,
+// writes the values with source 'manual' (locked), and recomputes the running-balance
+// guard. Manual values survive recompute unless the user explicitly overrides. The
+// opening, if set, is consumed by getAccountOpeningBal Priority 1 for this month and
+// chains forward to the next month's opening. Validation rejects non-numeric input.
+function openManualBalanceEdit(mk){
+  const mb=S.monthlyBal[mk]||{};
+  const parts=mk.split('_');const ym=parts.slice(-1)[0];const accId=parts.slice(0,-1).join('_');
+  const acc=S.accounts.find(a=>a.id===accId);
+  const label=(acc?acc.name:'account')+' · '+fmtYM(ym);
+  const curOpen=mb.opening!=null?mb.opening:'';
+  const curClose=mb.closing!=null?mb.closing:'';
+  const openStr=prompt('Set OPENING balance for '+label+' (SAR).\nLeave blank to chain from the prior month.\n\nCurrent: '+(curOpen===''?'(not set)':curOpen),curOpen);
+  if(openStr===null)return; // cancelled
+  const closeStr=prompt('Set CLOSING balance for '+label+' (SAR).\nLeave blank to keep current.\n\nCurrent: '+(curClose===''?'(not set)':curClose),curClose);
+  if(closeStr===null)return; // cancelled
+  // Validate
+  let openVal=null,closeVal=null;
+  if(openStr.trim()!==''){
+    openVal=parseFloat(openStr);
+    if(isNaN(openVal)){toast('Opening must be a number. No changes made.',false);return;}
+  }
+  if(closeStr.trim()!==''){
+    closeVal=parseFloat(closeStr);
+    if(isNaN(closeVal)){toast('Closing must be a number. No changes made.',false);return;}
+  }
+  saveManualBalance(accId,ym,openVal,closeVal);
+}
+function saveManualBalance(accId,ym,openVal,closeVal){
+  const mk=accId+'_'+ym;
+  if(!S.monthlyBal[mk])S.monthlyBal[mk]={};
+  const mb=S.monthlyBal[mk];
+  if(openVal!=null){
+    mb.opening=openVal;
+    mb.openingSource='manual';
+  }
+  if(closeVal!=null){
+    mb.closing=closeVal;
+    mb.closingSource='manual';
+    mb.closingAsOf=_lastDayOfMonthISO(ym);
+    mb.pendingConfirmation=false;
+  }
+  // Clear stale/guard flags — the user has set authoritative values.
+  delete mb.txnsChangedSinceLock;
+  delete mb.guardFail;delete mb.guardDiff;delete mb.guardCalc;
+  saveState().then(()=>{render();toast('Balances set manually and locked for this month.');});
 }
 
 // User-facing: manual recompute trigger for one account, with confirm dialog.
@@ -6371,6 +6572,8 @@ function recomputeBalancesForAccountMonth(accId,ym){
     didUpdate=true;
     sourceUsed='math';
   }
+  // V10.5.19 (Fix 5): explicit recompute resolves any "changed since lock" flag.
+  if(S.monthlyBal[mk])delete S.monthlyBal[mk].txnsChangedSinceLock;
   saveState().then(()=>{
     render();
     if(didUpdate){
@@ -9787,10 +9990,17 @@ async function delTxn(id,ym){
   if(!S.txnCache[ymk])return;
   // Find and clean up any refund link before deletion
   const t=S.txnCache[ymk].find(x=>x.id===id);
+  // V10.5.19 (Fix 5): capture the account before removing the row so we can refresh
+  // that account-month's stored closing balance after deletion.
+  const affectedAccId=t?t.accountId:null;
   if(t&&isRefundLinked(t)){await unlinkRefundInternal(t,ymk,false);}
   S.txnCache[ymk]=S.txnCache[ymk].filter(t=>t.id!==id);
   // Remove dangling matched pairs referencing the deleted transaction
   S.matchedPairs=(S.matchedPairs||[]).filter(p=>p.outId!==id&&p.inId!==id);
+  // V10.5.19 (Fix 5): refresh the stored closing for this account-month. If the closing
+  // is locked (confirmed/manual), this only flags that txns changed — it never silently
+  // overwrites a confirmed balance. If derived, the closing recomputes from current txns.
+  if(affectedAccId)refreshMonthBalanceAfterTxnChange(affectedAccId,ymk);
   // Flush immediately — destructive operation must not be lost on tab close
   clearTimeout(txnSaveTimer);
   txnSaveQueue[ymk]=true;
@@ -11475,6 +11685,9 @@ function addTxnM(){
   S.txnCache[ym].push(t);
   S.txnCache[ym].sort((a,b)=>a.date.localeCompare(b.date));
   if(t.debtId)syncDebtsFromTxns();
+  // V10.5.19 (Fix 5): refresh the stored closing for this account-month after the add.
+  // Locked (confirmed/manual) balances are only flagged, never silently overwritten.
+  if(t.accountId)refreshMonthBalanceAfterTxnChange(t.accountId,ym);
   tp('atxn-panel');schedTxn(ym);render();toast('Transaction added');
 }
 
@@ -24002,11 +24215,17 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps, scopedAcc){
   // Detect if any transaction in this view has statementBal — enables recon column
   const hasRecon=showBalance&&fl.some(t=>t.statementBal!=null);
 
-  // Find first divergence point: walk sorted list, compare computed rb vs statementBal
+  // V10.5.19 (Fix 4): per-row divergence with recovery. A row is marked diverged ONLY
+  // when its computed running balance disagrees with its own statementBal. Rows that
+  // reconcile show the green check even if an earlier row diverged — so a cross-day
+  // flip (e.g. D360 10/11) shows red on just those rows and returns to green once the
+  // chain re-reconciles, rather than painting everything after the first break red.
+  // The '_first' tag marks only the earliest diverged row for the "FIRST BREAK" label.
   const reconDivergenceIds=new Set();
   if(hasRecon){
     let foundFirst=false;
-    const sorted=[...fl].sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+    // V10.5.19 (Fix 1): canonical ordering, not date-only.
+    const sorted=orderTxnsForBalance(fl);
     for(const t of sorted){
       if(t.statementBal==null)continue;
       const rb=t.accountId&&rbMaps[t.accountId]?rbMaps[t.accountId].get(t.id):null;
@@ -24265,6 +24484,13 @@ function buildTxHeader(fl, scopedAcc, accountPills, tabLabel, groupPillRow){
       const calcBal=opening+inAmt-outAmt;
       const diff=Math.abs(mb.closing-calcBal);
       const acc=S.accounts.find(a=>a.id===id);
+      // V10.5.19 (Fix 5): transactions changed after the closing was locked
+      // (confirmed/manual). Offer recompute rather than silently updating. Shown
+      // ahead of the other banners because it represents a known staleness the user
+      // should resolve explicitly.
+      if(mb.txnsChangedSinceLock===true){
+        return{kind:'changed-since-lock',name:acc?.name||id,mk,closing:mb.closing,closingSource:mb.closingSource||'confirmed',count:accTxns.length};
+      }
       // V10.5.5: pending-confirmation banner — statement ended mid-month. Shown instead of
       // both the inference and discrepancy banners. User can confirm the closing as the
       // month closing, or upload a newer statement (handled by the Statement Parser flow).
@@ -24284,7 +24510,8 @@ function buildTxHeader(fl, scopedAcc, accountPills, tabLabel, groupPillRow){
         return null;
       }
       mb.guardFail=true;mb.guardDiff=diff;mb.guardCalc=calcBal;
-      const accTxnsSorted=[...accTxns].sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+      // V10.5.19 (Fix 1): canonical ordering for the first-divergence locator.
+      const accTxnsSorted=orderTxnsForBalance(accTxns);
       let firstBreak=null;
       for(const t of accTxnsSorted){
         if(t.statementBal==null)continue;
@@ -24296,6 +24523,18 @@ function buildTxHeader(fl, scopedAcc, accountPills, tabLabel, groupPillRow){
 
     if(!loadErrBanner&&!banners.length)return '';
     return loadErrBanner+banners.map(f=>{
+      if(f.kind==='changed-since-lock')return `
+      <div class="lanki-banner banner-warn">
+        <div class="lanki-banner-icon">⚠️</div>
+        <div class="lanki-banner-content">
+          <div class="lanki-banner-title banner-warn-title">Transactions changed since balance was ${f.closingSource==='manual'?'set manually':'confirmed'} — ${h(f.name)}, ${fmtYM(S.month)}</div>
+          <div class="lanki-banner-body">
+            You added or removed transactions after locking the closing balance at <span class="priv-mask">${fmtP(f.closing)}</span>. The locked value has not changed. Recompute to update it from the current transactions, or keep the locked value.<br>
+            <button onclick="recomputeBalancesForAccountMonth('${f.mk.split('_').slice(0,-1).join('_')}','${f.mk.split('_').slice(-1)[0]}')" class="btn btn-xs btn-p" style="margin-top:6px;margin-right:6px">Recompute now</button>
+            <button onclick="dismissTxnsChangedFlag('${f.mk}')" class="btn btn-xs" style="margin-top:6px">Keep locked value</button>
+          </div>
+        </div>
+      </div>`;
       if(f.kind==='pending')return `
       <div class="lanki-banner banner-info">
         <div class="lanki-banner-icon">ℹ️</div>
@@ -24304,6 +24543,7 @@ function buildTxHeader(fl, scopedAcc, accountPills, tabLabel, groupPillRow){
           <div class="lanki-banner-body">
             Statement ended ${f.closingAsOf?toDD(f.closingAsOf):''} with balance <span class="priv-mask">${fmtP(f.closing)}</span>. End-of-month balance not yet confirmed. The system is using this value until you confirm or import a newer statement.<br>
             <button onclick="confirmPendingClosing('${f.mk}')" class="btn btn-xs btn-p" style="margin-top:6px;margin-right:6px">Confirm this balance</button>
+            <button onclick="openManualBalanceEdit('${f.mk}')" class="btn btn-xs" style="margin-top:6px;margin-right:6px">Set manually</button>
             <button onclick="sw('aiupload')" class="btn btn-xs" style="margin-top:6px">Upload newer statement</button>
           </div>
         </div>
@@ -24329,6 +24569,8 @@ function buildTxHeader(fl, scopedAcc, accountPills, tabLabel, groupPillRow){
             Calculated: ${fmtP(f.calc)} &nbsp;·&nbsp; Statement says: ${fmtP(f.closing)} &nbsp;·&nbsp; Gap: SAR ${f.diff.toFixed(2)}<br>
             Opening ${fmtP(f.opening)} + In ${fmtP(f.inAmt)} − Out ${fmtP(f.outAmt)} = ${fmtP(f.calc)} &nbsp;(${f.count} transactions)
             ${f.firstBreak?`<br><strong>First divergence: ${toDD(f.firstBreak.date)} — ${h(f.firstBreak.description)}</strong> · Select this account to see row-by-row markers`:''}
+            <br><button onclick="recomputeBalancesForAccountMonth('${f.mk.split('_').slice(0,-1).join('_')}','${f.mk.split('_').slice(-1)[0]}')" class="btn btn-xs btn-p" style="margin-top:6px;margin-right:6px">Recompute from transactions</button>
+            <button onclick="openManualBalanceEdit('${f.mk}')" class="btn btn-xs" style="margin-top:6px">Set opening/closing manually</button>
           </div>
         </div>
         <div class="lanki-banner-actions"><button onclick="clearGuardFail('${f.mk}')" style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--neg);padding:0" title="Dismiss">✕</button></div>
@@ -24416,16 +24658,34 @@ async function rTxBank(){
   // V9.0-rc1.6 Item 12: missing-sub filter — show only transactions with main but no sub
   if(TF.missingSubOnly)fl=fl.filter(t=>t.mainCatId&&getMC(t.mainCatId)&&!t.subCatId);
   // Sorting
-  if(TF.sortCol){fl.sort((a,b)=>{
-    let va,vb;
-    if(TF.sortCol==='date'){va=a.date||'';vb=b.date||'';}
-    else if(TF.sortCol==='desc'){va=(a.description||'').toLowerCase();vb=(b.description||'').toLowerCase();}
-    else if(TF.sortCol==='amount'){va=(txDir(a)==='out'?-1:1)*(a.amount||0);vb=(txDir(b)==='out'?-1:1)*(b.amount||0);}
-    else if(TF.sortCol==='cat'){va=(getMC(a.mainCatId)?.name||'').toLowerCase();vb=(getMC(b.mainCatId)?.name||'').toLowerCase();}
-    else if(TF.sortCol==='type'){va=a.type||'';vb=b.type||'';}
-    else if(TF.sortCol==='acc'){va=(S.accounts.find(x=>x.id===a.accountId)?.name||'').toLowerCase();vb=(S.accounts.find(x=>x.id===b.accountId)?.name||'').toLowerCase();}
-    if(va<vb)return -TF.sortDir;if(va>vb)return TF.sortDir;return 0;
-  });}
+  if(TF.sortCol){
+    // V10.5.19 (Fix 1): when sorting by date with running balance visible (account-scoped),
+    // resolve same-day ties using the canonical balance ordering so the displayed running
+    // balance reads in the statement's true intra-day sequence. Other sort columns and the
+    // unscoped view keep plain comparison.
+    if(TF.sortCol==='date'&&scopedAcc){
+      const canon=orderTxnsForBalance(fl);
+      const pos=new Map();canon.forEach((t,i)=>pos.set(t.id,i));
+      fl.sort((a,b)=>{
+        const d=(a.date||'').localeCompare(b.date||'');
+        if(d!==0)return TF.sortDir>0?d:-d;
+        // same day: canonical order (ascending in the chain) regardless of sortDir,
+        // so the running balance always reads top-to-bottom in chain sequence
+        return (pos.get(a.id)??0)-(pos.get(b.id)??0);
+      });
+    }else{
+      fl.sort((a,b)=>{
+        let va,vb;
+        if(TF.sortCol==='date'){va=a.date||'';vb=b.date||'';}
+        else if(TF.sortCol==='desc'){va=(a.description||'').toLowerCase();vb=(b.description||'').toLowerCase();}
+        else if(TF.sortCol==='amount'){va=(txDir(a)==='out'?-1:1)*(a.amount||0);vb=(txDir(b)==='out'?-1:1)*(b.amount||0);}
+        else if(TF.sortCol==='cat'){va=(getMC(a.mainCatId)?.name||'').toLowerCase();vb=(getMC(b.mainCatId)?.name||'').toLowerCase();}
+        else if(TF.sortCol==='type'){va=a.type||'';vb=b.type||'';}
+        else if(TF.sortCol==='acc'){va=(S.accounts.find(x=>x.id===a.accountId)?.name||'').toLowerCase();vb=(S.accounts.find(x=>x.id===b.accountId)?.name||'').toLowerCase();}
+        if(va<vb)return -TF.sortDir;if(va>vb)return TF.sortDir;return 0;
+      });
+    }
+  }
   // Running balance maps
   const rbMaps={};
   const accIds=scopedAcc?[scopedAcc]:[...new Set(fl.map(t=>t.accountId).filter(Boolean))];
