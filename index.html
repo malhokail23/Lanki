@@ -4951,7 +4951,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='10.5.21';
+const VERSION='10.5.22';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -6289,35 +6289,36 @@ function refreshMonthBalanceAfterTxnChange(accId,ym){
     if(!mb.txnsChangedSinceLock){mb.txnsChangedSinceLock=true;}
     return 'locked-flagged';
   }
-  // Derived (or no stored anchor yet): recompute from current transactions.
+  // V10.5.22: math-first, mirroring recomputeBalancesForAccountMonth. Anchors keep the
+  // opening derivation and serve as the closing fallback when no opening is derivable.
+  // The math branch now also sets pendingConfirmation by the mid-month rule, so an edit
+  // to an unconfirmed month re-raises the confirm prompt with the fresh number.
   const anchor=deriveMonthBalancesFromTxns(accId,ym);
-  if(!anchor.derivedAny){
-    // No statement anchors — fall back to math (opening chain + signed deltas).
-    const math=deriveMonthClosingFromMath(accId,ym);
-    if(math&&math.closing!=null){
-      if(!S.monthlyBal[mk])S.monthlyBal[mk]={};
-      S.monthlyBal[mk].closing=math.closing;
-      S.monthlyBal[mk].closingAsOf=math.closingAsOf;
-      S.monthlyBal[mk].closingSource='derived';
-      delete S.monthlyBal[mk].guardFail;delete S.monthlyBal[mk].guardDiff;delete S.monthlyBal[mk].guardCalc;
-      return 'refreshed';
-    }
-    return 'noop';
-  }
   if(!S.monthlyBal[mk])S.monthlyBal[mk]={};
   const m=S.monthlyBal[mk];
+  // Opening first (from anchors), so the math below uses the freshly derived opening.
+  if(anchor.opening!=null&&m.openingSource!=='manual'&&m.openingSource!=='confirmed'){
+    m.opening=anchor.opening;
+    m.openingSource='derived';
+  }
+  const math=deriveMonthClosingFromMath(accId,ym);
+  if(math&&math.closing!=null){
+    m.closing=math.closing;
+    m.closingAsOf=math.closingAsOf;
+    m.closingSource='derived';
+    m.pendingConfirmation=math.closingAsOf<_lastDayOfMonthISO(ym);
+    delete m.guardFail;delete m.guardDiff;delete m.guardCalc;
+    return 'refreshed';
+  }
   if(anchor.closing!=null){
     m.closing=anchor.closing;
     m.closingAsOf=anchor.closingAsOf;
     m.closingSource='derived';
     m.pendingConfirmation=anchor.closingAsOf<_lastDayOfMonthISO(ym);
     delete m.guardFail;delete m.guardDiff;delete m.guardCalc;
+    return 'refreshed';
   }
-  if(anchor.opening!=null&&m.openingSource!=='manual'&&m.openingSource!=='confirmed'){
-    m.opening=anchor.opening;
-    m.openingSource='derived';
-  }
-  return 'refreshed';
+  return anchor.opening!=null?'refreshed':'noop';
 }
 
 // Walk every month containing txns for one account and write derived
@@ -6345,32 +6346,15 @@ function recomputeAccountBalances(accId,opts){
   }).sort();
   for(const ym of allMonths){
     const mk=accId+'_'+ym;
+    // V10.5.22: math-first closing (see recomputeBalancesForAccountMonth rationale).
+    // Anchors still derive the opening and act as the closing fallback when no opening
+    // is derivable. This loop also runs at import (override:true), so a statement with
+    // scrambled posting order now stores the correct math closing at the source.
     const derived=deriveMonthBalancesFromTxns(accId,ym);
-    if(!derived.derivedAny){
-      stats.preserved++;
-      continue;
-    }
-    stats.derived++;
     if(!S.monthlyBal[mk])S.monthlyBal[mk]={};
     const mb=S.monthlyBal[mk];
     let updatedThisMonth=false;
-    // Closing
-    if(derived.closing!=null){
-      const closingLocked=!override&&(mb.closingSource==='manual'||mb.closingSource==='confirmed');
-      const isSame=mb.closing!=null
-        &&Math.abs(mb.closing-derived.closing)<0.015
-        &&mb.closingAsOf===derived.closingAsOf
-        &&mb.closingSource==='derived';
-      if(!closingLocked&&!isSame){
-        mb.closing=derived.closing;
-        mb.closingAsOf=derived.closingAsOf;
-        mb.closingSource='derived';
-        mb.pendingConfirmation=derived.closingAsOf<_lastDayOfMonthISO(ym);
-        delete mb.guardFail;delete mb.guardDiff;delete mb.guardCalc;
-        updatedThisMonth=true;
-      }
-    }
-    // Opening (only write derivation; chain-from-prev is handled at read time by getAccountOpeningBal)
+    // Opening first (from anchors), so the math below uses the freshly derived opening.
     if(derived.opening!=null){
       const openingLocked=!override&&(mb.openingSource==='manual'||mb.openingSource==='confirmed'||mb.openingInferred===true);
       const isSameOpen=mb.opening!=null
@@ -6381,6 +6365,29 @@ function recomputeAccountBalances(accId,opts){
         mb.openingSource='derived';
         updatedThisMonth=true;
       }
+    }
+    const math=deriveMonthClosingFromMath(accId,ym);
+    const chosen=(math&&math.closing!=null)
+      ?{closing:math.closing,closingAsOf:math.closingAsOf}
+      :(derived.closing!=null?{closing:derived.closing,closingAsOf:derived.closingAsOf}:null);
+    if(!chosen){
+      if(updatedThisMonth){stats.derived++;stats.updated++;}
+      else stats.preserved++;
+      continue;
+    }
+    stats.derived++;
+    const closingLocked=!override&&(mb.closingSource==='manual'||mb.closingSource==='confirmed');
+    const isSame=mb.closing!=null
+      &&Math.abs(mb.closing-chosen.closing)<0.015
+      &&mb.closingAsOf===chosen.closingAsOf
+      &&mb.closingSource==='derived';
+    if(!closingLocked&&!isSame){
+      mb.closing=chosen.closing;
+      mb.closingAsOf=chosen.closingAsOf;
+      mb.closingSource='derived';
+      mb.pendingConfirmation=chosen.closingAsOf<_lastDayOfMonthISO(ym);
+      delete mb.guardFail;delete mb.guardDiff;delete mb.guardCalc;
+      updatedThisMonth=true;
     }
     if(updatedThisMonth)stats.updated++;
   }
@@ -6427,7 +6434,7 @@ function dismissTxnsChangedFlag(mk){
 function recomputeBalancesForAccount(accId){
   const a=S.accounts.find(x=>x.id===accId);
   const label=a?a.name:'this account';
-  if(!confirm('Recompute balances for '+label+' from transactions?\n\nThis may change opening and closing values for months where statement running balances are available. Values you have confirmed or manually set will be preserved.'))return;
+  if(!confirm('Recompute balances for '+label+' from transactions?\n\nThis recomputes opening and closing values for every month with transactions, from current transaction data. Statement balances are used to derive openings and as a cross-reference. Values you have confirmed will be preserved.'))return;
   const r=recomputeAccountBalances(accId);
   saveState().then(()=>{
     render();
@@ -6455,9 +6462,11 @@ function deriveMonthClosingFromMath(accId,ym){
 // V10.5.7: user-facing recompute scoped to one account, one month. Replaces the
 // account-wide recompute on the kebab menu. Explicit user intent → override:true
 // (manual/confirmed values get overwritten because the user is asking for them to be).
-// Tries statement-anchor derivation first; falls back to math derivation when no
-// anchors exist. This handles accounts whose transactions were added manually or
-// imported without running-balance data (the V10.5.5 gap).
+// V10.5.22: math-first. Derives the closing from opening + signed transaction sum,
+// matching the BALANCE column the user verifies by eye. Statement anchors derive the
+// opening, act as the closing fallback when no opening is derivable anywhere in the
+// chain, and cross-check the math (a note is shown when they disagree, the signature
+// of a statement whose posting order is scrambled relative to transaction dates).
 function recomputeBalancesForAccountMonth(accId,ym){
   const a=S.accounts.find(x=>x.id===accId);
   const label=a?a.name:'this account';
@@ -6491,47 +6500,61 @@ function recomputeBalancesForAccountMonth(accId,ym){
     return;
   }
   if(!confirm('Recompute balances for '+label+' for '+ymLabel+'?\n\nThis recomputes the opening and closing for this month only, from current transaction data. Any previously stored value (including a confirmed or statement-derived value) will be overwritten, and you will be asked to confirm the new closing.'))return;
-  // Step 1: attempt statement-anchor derivation
+  // V10.5.22: math-first closing. The number the user verifies by eye is the BALANCE
+  // column's final value: opening + signed sum of this month's transactions. Statement
+  // anchors (STMT BAL) follow the bank's POSTING order, which can be scrambled relative
+  // to transaction dates (card settlements post days late, top-ups post instantly). On
+  // such statements the date-ordered last anchor is a mid-chain balance, not the month
+  // closing. Shopping Apr 2026: the anchor read 19,014.03 where the true closing is
+  // 405.26; the bank's own balance chain, walked in posting order, terminates at
+  // 405.26, equal to the math. Math is order-independent and always matches the
+  // visible column. Anchors remain for: (a) the opening derivation, (b) the closing
+  // fallback when no opening is derivable anywhere in the chain, (c) a cross-check
+  // note when anchors disagree with math. Disagreement signatures: scrambled posting
+  // order shows divergence amounts that bounce row to row; a missed transaction shows
+  // a constant offset that never recovers.
   const anchor=deriveMonthBalancesFromTxns(accId,ym);
-  // Step 2: fall back to math when no anchor was found
-  const math=anchor.derivedAny?null:deriveMonthClosingFromMath(accId,ym);
   if(!S.monthlyBal[mk])S.monthlyBal[mk]={};
   const mb2=S.monthlyBal[mk];
   let didUpdate=false;
   let sourceUsed='none';
-  if(anchor.derivedAny){
-    if(anchor.closing!=null){
-      mb2.closing=anchor.closing;
-      mb2.closingAsOf=anchor.closingAsOf;
-      mb2.closingSource='derived';
-      mb2.pendingConfirmation=anchor.closingAsOf<_lastDayOfMonthISO(ym);
-      delete mb2.guardFail;delete mb2.guardDiff;delete mb2.guardCalc;
-      didUpdate=true;
-    }
-    if(anchor.opening!=null){
-      mb2.opening=anchor.opening;
-      mb2.openingSource='derived';
-      didUpdate=true;
-    }
-    sourceUsed='statement-anchor';
-  }else if(math&&math.closing!=null){
-    // Math fallback: store closing only. Opening is derived dynamically by getAccountOpeningBal
-    // (it chains from prior months or account-level openingBalance).
+  let crossNote='';
+  // Opening first (from anchors), so the math below uses the freshly derived opening.
+  if(anchor.opening!=null){
+    mb2.opening=anchor.opening;
+    mb2.openingSource='derived';
+    didUpdate=true;
+  }
+  const math=deriveMonthClosingFromMath(accId,ym);
+  if(math&&math.closing!=null){
     mb2.closing=math.closing;
     mb2.closingAsOf=math.closingAsOf;
     mb2.closingSource='derived';
-    mb2.pendingConfirmation=false; // math gives us a value valid through last txn date
+    mb2.pendingConfirmation=math.closingAsOf<_lastDayOfMonthISO(ym);
     delete mb2.guardFail;delete mb2.guardDiff;delete mb2.guardCalc;
     didUpdate=true;
     sourceUsed='math';
+    if(anchor.closing!=null&&Math.abs(anchor.closing-math.closing)>0.015){
+      crossNote=' Note: statement balances end at '+fmtP(anchor.closing)+' in date order; the statement\'s posting order appears scrambled, so transaction math was used. If a transaction were missing instead, the STMT BAL column would show a constant offset that never recovers.';
+    }
+  }else if(anchor.closing!=null){
+    // No opening derivable anywhere in the chain: the statement anchor is the only
+    // authoritative closing available (V10.5.19 Fix 3 logic, unchanged).
+    mb2.closing=anchor.closing;
+    mb2.closingAsOf=anchor.closingAsOf;
+    mb2.closingSource='derived';
+    mb2.pendingConfirmation=anchor.closingAsOf<_lastDayOfMonthISO(ym);
+    delete mb2.guardFail;delete mb2.guardDiff;delete mb2.guardCalc;
+    didUpdate=true;
+    sourceUsed='statement-anchor';
   }
   // V10.5.19 (Fix 5): explicit recompute resolves any "changed since lock" flag.
   if(S.monthlyBal[mk])delete S.monthlyBal[mk].txnsChangedSinceLock;
   saveState().then(()=>{
     render();
     if(didUpdate){
-      const sourceLabel=sourceUsed==='statement-anchor'?'from statement anchors':'from transaction math (no statement anchors available)';
-      toast(label+' '+ymLabel+' recomputed '+sourceLabel+': closing now '+fmtP(mb2.closing||0));
+      const sourceLabel=sourceUsed==='math'?'from transaction math':'from statement anchors (opening unknown, math unavailable)';
+      toast(label+' '+ymLabel+' recomputed '+sourceLabel+': closing now '+fmtP(mb2.closing||0)+crossNote);
     }else{
       toast('No transactions to derive from for '+label+' in '+ymLabel,false);
     }
