@@ -4951,7 +4951,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='10.5.22';
+const VERSION='10.5.23';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -6535,7 +6535,7 @@ function recomputeBalancesForAccountMonth(accId,ym){
     didUpdate=true;
     sourceUsed='math';
     if(anchor.closing!=null&&Math.abs(anchor.closing-math.closing)>0.015){
-      crossNote=' Note: statement balances end at '+fmtP(anchor.closing)+' in date order; the statement\'s posting order appears scrambled, so transaction math was used. If a transaction were missing instead, the STMT BAL column would show a constant offset that never recovers.';
+      crossNote=' Note: statement balances end at '+fmt(anchor.closing)+' in date order; the statement\'s posting order appears scrambled, so transaction math was used. If a transaction were missing instead, the STMT BAL column would show a constant offset that never recovers.';
     }
   }else if(anchor.closing!=null){
     // No opening derivable anywhere in the chain: the statement anchor is the only
@@ -6554,7 +6554,7 @@ function recomputeBalancesForAccountMonth(accId,ym){
     render();
     if(didUpdate){
       const sourceLabel=sourceUsed==='math'?'from transaction math':'from statement anchors (opening unknown, math unavailable)';
-      toast(label+' '+ymLabel+' recomputed '+sourceLabel+': closing now '+fmtP(mb2.closing||0)+crossNote);
+      toast(label+' '+ymLabel+' recomputed '+sourceLabel+': closing now '+fmt(mb2.closing||0)+crossNote);
     }else{
       toast('No transactions to derive from for '+label+' in '+ymLabel,false);
     }
@@ -15368,7 +15368,7 @@ function advRecordSave(sid,ai){
   a.ledger=(a.ledger||[]).filter(l=>l.month!==month);
   a.ledger.push({id:uid(),month,type,amount:amt,notes,recordedAt:localISO(new Date())});
   if(type==='settlement')a.status='settled';
-  sched();render();toast(`${type==='settlement'?'Advance settled':'Deduction recorded'} — ${fmtP(amt)} for ${fmtYM(month)}`);
+  sched();render();toast(`${type==='settlement'?'Advance settled':'Deduction recorded'} — ${fmt(amt)} for ${fmtYM(month)}`);
 }
 
 function advDefer(sid,ai){
@@ -15447,7 +15447,7 @@ function confirmMarkDeducted(sid,ai,month,remaining){
   const a=st.advances[ai];if(!a)return;
   const amtVal=parseFloat(document.getElementById('md-amount').value)||0;
   if(amtVal<=0){toast('Enter a valid amount',false);return;}
-  if(amtVal>remaining+0.005){toast(`Cannot exceed remaining balance (${fmtP(remaining)})`,false);return;}
+  if(amtVal>remaining+0.005){toast(`Cannot exceed remaining balance (${fmt(remaining)})`,false);return;}
   const notes=document.getElementById('md-notes').value.trim();
   const type=amtVal>=remaining-0.01?'settlement':'deduction';
   a.ledger=(a.ledger||[]).filter(l=>l.month!==month);
@@ -15459,7 +15459,7 @@ function confirmMarkDeducted(sid,ai,month,remaining){
   if(type==='settlement')a.status='settled';
   document.getElementById('mark-ded-modal')?.remove();
   sched();render();
-  toast(`${fmtYM(month)} marked as deducted · ${fmtP(amtVal)}`);
+  toast(`${fmtYM(month)} marked as deducted · ${fmt(amtVal)}`);
 }
 // Defer any specific month (past, current, or future)
 function advDeferRow(sid,ai,month){
@@ -15530,7 +15530,7 @@ function advSettleSave(sid,ai){
   a.ledger=(a.ledger||[]).filter(l=>l.month!==month);
   a.ledger.push({id:uid(),month,type:'settlement',amount:amt,notes,recordedAt:localISO(new Date())});
   a.status='settled';
-  sched();render();toast(`Advance settled — ${fmtP(amt)} final payment recorded`);
+  sched();render();toast(`Advance settled — ${fmt(amt)} final payment recorded`);
 }
 
 function advChangeRate(sid,ai){
@@ -15559,7 +15559,7 @@ function advChangeRateSave(sid,ai){
   advMigrate(a);
   a.ledger.push({id:uid(),month:getYM(new Date()),type:'deduction',amount:0,notes:`Rate changed from ${fmtP(old)}/mo to ${fmtP(v)}/mo${notes?' — '+notes:''}`,recordedAt:localISO(new Date()),_rateChange:true});
   // Remove zero-amount rate-change entries from deduction totals
-  sched();render();toast(`Monthly deduction updated to ${fmtP(v)}/mo`);
+  sched();render();toast(`Monthly deduction updated to ${fmt(v)}/mo`);
 }
 
 function advForgive(sid,ai){
@@ -15764,7 +15764,7 @@ function saveSalaryChange(id){
   st.salary=staffSalaryForMonth(st,todayYm);
   _salaryChangeStaffId=null;
   sched();render();
-  toast(`Salary changed to ${fmtP(newSal)} effective ${toDD(effectiveFrom)}.`);
+  toast(`Salary changed to ${fmt(newSal)} effective ${toDD(effectiveFrom)}.`);
 }
 function deleteSalaryEntry(id,effectiveFrom){
   const st=S.staff.find(x=>x.id===id);if(!st)return;
@@ -16111,7 +16111,7 @@ async function advEditSave(sid,ai,panelId){
   // Can't shrink below already-deducted amount
   const deductedSoFar=(a.ledger||[]).filter(l=>l.type==='deducted'||l.type==='settlement').reduce((s,l)=>s+l.amount,0);
   if(newAmt<deductedSoFar-0.005){
-    toast(`Cannot reduce below already-deducted amount (${fmtP(deductedSoFar)})`,false);return;
+    toast(`Cannot reduce below already-deducted amount (${fmt(deductedSoFar)})`,false);return;
   }
 
   if(newIsHistorical&&a.txnId){
@@ -19652,7 +19652,7 @@ function saveSale(){
   }else{
     hd.sales.push({id:'sal_'+randSuffix(8),date,quantity:qty,pricePerUnit:price,fxRate:fx,fees,method,lotAllocations:allocs,realizedGL,holdingPeriodDays,notes});
   }
-  sched();closeSaleEditor();toast('Sale recorded — realized G/L: '+(realizedGL>=0?'+':'')+fmtP(realizedGL));
+  sched();closeSaleEditor();toast('Sale recorded — realized G/L: '+(realizedGL>=0?'+':'')+fmt(realizedGL));
 }
 
 function deleteSale(saleId){
@@ -27394,7 +27394,7 @@ async function confirmSettlement(name){
     await loadSubmissions();
 
     document.getElementById('settle-modal')?.remove();
-    toast(`Settled ${approved.length} item${approved.length===1?'':'s'} · ${fmtP(total)} paid to ${name}`);
+    toast(`Settled ${approved.length} item${approved.length===1?'':'s'} · ${fmt(total)} paid to ${name}`);
     render();
   };
 
@@ -27645,7 +27645,7 @@ function confirmInferredOpening(mk,value){
   S.monthlyBal[mk].opening=value;
   S.monthlyBal[mk].openingInferred=true;
   delete S.monthlyBal[mk].guardFail;delete S.monthlyBal[mk].guardDiff;delete S.monthlyBal[mk].guardCalc;
-  saveState().then(()=>{render();toast('Opening balance set to '+fmtP(value));});
+  saveState().then(()=>{render();toast('Opening balance set to '+fmt(value));});
 }
 
 
