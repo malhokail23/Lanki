@@ -4951,7 +4951,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='10.5.23';
+const VERSION='10.5.24';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -28596,6 +28596,9 @@ async function runAIPrescan(){
       const wit=parseInt(meta.withdrawal_count)||0;
       _aiState.transactionCount=(dep+wit)||null;
     }
+    // V10.5.24: page count from prescan. The extract edge function uses it to
+    // decide parallel page-chunked extraction for large statements.
+    _aiState.totalPages=(parseInt(meta.total_pages)>0)?parseInt(meta.total_pages):null;
     if(meta.account_number&&!_aiState.accountId){
       const clean=meta.account_number.replace(/\s/g,'');
       // V10.5.11: layered account match.
@@ -28666,6 +28669,7 @@ async function runAIExtract(){
         mainCats:undefined,  // hardcoded in edge function — not sent to save tokens
         subCats:undefined,   // hardcoded in edge function — not sent to save tokens
         transactionCount:_aiState.transactionCount||null,
+        pageCount:_aiState.totalPages||null,  // V10.5.24: enables parallel page-chunked extraction on large statements
         // V8.19: send format hint when a known format was matched at prescan time. The edge
         // function uses this as additive context (Decision 2c) — full prompt still applies, hint
         // anchors expected columns/date format.
@@ -28983,7 +28987,7 @@ async function commitAIImport(){
   }
 
   // Reset AI state and navigate to transactions
-  _aiState={file:null,fileName:'',fileData:'',fileType:'',_isExcel:false,accountId:'',month:'',openingBal:'',closingBal:'',transactionCount:null,extracted:[],loading:false,scanning:false,scanMeta:null,scanError:'',usage:null,error:'',step:1,_forceAll:false,status:'',_retryDone:false,_firstPassData:null,fingerprint:null,matchedFormat:null,prescanRetried:false,acctTypeFilter:'bank'};
+  _aiState={file:null,fileName:'',fileData:'',fileType:'',_isExcel:false,accountId:'',month:'',openingBal:'',closingBal:'',transactionCount:null,totalPages:null,extracted:[],loading:false,scanning:false,scanMeta:null,scanError:'',usage:null,error:'',step:1,_forceAll:false,status:'',_retryDone:false,_firstPassData:null,fingerprint:null,matchedFormat:null,prescanRetried:false,acctTypeFilter:'bank'};
   sw('txbank');
 }
 
