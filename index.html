@@ -4990,7 +4990,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='10.5.29';
+const VERSION='10.5.30';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -8600,6 +8600,20 @@ async function rOv(){
           </div>
           ${totalCC>0?`<span style="display:flex;align-items:center;gap:5px"><span style="display:inline-block;width:10px;height:10px;background:var(--neg);border-radius:2px"></span>CC Debt <strong class="priv-mask" style="color:var(--text2);font-weight:500;font-variant-numeric:tabular-nums;margin-left:2px">${fmtP(totalCC)}</strong></span>`:''}
         </div>
+        ${(()=>{
+          // V10.5.30 (Phase S3): Net invested capital = wallet fund − withdraw (SAR), fixed against
+          // market and intra-wallet activity. Read-only, additive; does NOT feed the balance pipeline.
+          const nic=netInvestedCapital();
+          if(nic.funded===0&&nic.withdrawn===0)return '';
+          const neg=nic.net<0;
+          return`<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bg3)">
+            <div class="fg jb" style="align-items:baseline;flex-wrap:wrap;gap:8px">
+              <span style="font-size:11px;color:var(--text3)">Net invested capital <span style="color:var(--text3)">(at cost, wallets)</span></span>
+              <strong class="priv-mask" style="font-variant-numeric:tabular-nums;font-size:14px;color:${neg?'var(--pos)':'var(--text1)'}">${neg?'-':''}${fmtP(Math.abs(nic.net))}</strong>
+            </div>
+            <div style="font-size:10px;color:var(--text3);margin-top:3px">${neg?`You have withdrawn ${fmtP(Math.abs(nic.net))} more than you deployed.`:`Funded ${fmtP(nic.funded)} · withdrawn ${fmtP(nic.withdrawn)}. Fixed until you fund or withdraw; market moves do not change it.`}</div>
+          </div>`;
+        })()}
       </div>`;
     })()}
     ${npgHasGroups?`
@@ -16720,6 +16734,70 @@ function walletAmountToSAR(amount,currency,fxRate){
   return fx>0?(parseFloat(amount)||0)*fx:null;
 }
 
+// ─── WALLET METRIC HELPERS (Phase S3) ─────────────────────────────────────────
+// Pure reads over wallet events. fund/withdraw are SAR-only (S1 invariant).
+// Verified against a Node harness (13 cases) before embedding.
+
+// Latest transfer_in implied rate (SAR per unit) for a non-SAR wallet, or null if none.
+function walletLatestInRate(wallet){
+  if(!wallet||wallet.currency==='SAR')return 1;
+  const ins=(wallet.events||[]).filter(e=>e.type==='transfer_in'&&e.sarEquiv!=null&&Math.abs(parseFloat(e.amount)||0)>0);
+  if(ins.length===0)return null;
+  ins.sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  const last=ins[ins.length-1];
+  return Math.round((last.sarEquiv/Math.abs(parseFloat(last.amount)||0))*1e6)/1e6;
+}
+
+// SAR value of a wallet's current cash balance, at-cost via the latest transfer_in rate.
+// Returns null for a non-SAR wallet with no known rate (caller shows a dash).
+function walletCashSAR(wallet){
+  const b=walletBalance(wallet);
+  if(wallet.currency==='SAR')return Math.round(b*100)/100;
+  const r=walletLatestInRate(wallet);
+  if(r==null)return null;
+  return Math.round(b*r*100)/100;
+}
+
+// Funded / withdrawn / net invested capital across all wallets (SAR), fixed against
+// intra-wallet activity. net can cross below zero (the milestone).
+function netInvestedCapital(){
+  let funded=0,withdrawn=0;
+  (S.accounts||[]).forEach(a=>{
+    accountWallets(a).forEach(w=>{
+      (w.events||[]).forEach(e=>{
+        if(e.type==='fund')funded+=Math.abs(parseFloat(e.amount)||0);
+        else if(e.type==='withdraw')withdrawn+=Math.abs(parseFloat(e.amount)||0);
+      });
+    });
+  });
+  funded=Math.round(funded*100)/100;withdrawn=Math.round(withdrawn*100)/100;
+  return {funded,withdrawn,net:Math.round((funded-withdrawn)*100)/100};
+}
+
+// Per-wallet capital round trip: SAR converted in vs SAR realized back out, from
+// transfer-leg sarEquiv. The FX-and-investment story for a foreign sleeve.
+function walletRoundTrip(wallet){
+  let sarIn=0,sarBack=0;
+  (wallet.events||[]).forEach(e=>{
+    if(e.type==='transfer_in'&&e.sarEquiv!=null)sarIn+=Math.abs(e.sarEquiv);
+    else if(e.type==='transfer_out'&&e.sarEquiv!=null)sarBack+=Math.abs(e.sarEquiv);
+  });
+  sarIn=Math.round(sarIn*100)/100;sarBack=Math.round(sarBack*100)/100;
+  return {sarIn,sarBack,net:Math.round((sarBack-sarIn)*100)/100};
+}
+
+// Sum of all wallet cash in SAR across providers; returns {sar, hasUnknown}.
+function totalWalletCashSAR(){
+  let sar=0,hasUnknown=false;
+  (S.accounts||[]).forEach(a=>{
+    accountWallets(a).forEach(w=>{
+      const v=walletCashSAR(w);
+      if(v==null)hasUnknown=true;else sar+=v;
+    });
+  });
+  return {sar:Math.round(sar*100)/100,hasUnknown};
+}
+
 // ─── HOLDING COMPUTED HELPERS ─────────────────────────────────────────────────
 // Derived from lots, sales, and current price. Never stored; computed on demand.
 // Currency conversion: lot.fxRate captures the SAR-equivalent rate at buy/sale
@@ -19342,10 +19420,20 @@ function rWalletsPanel(a){
     : wallets.map(w=>{
         const bal=walletBalance(w);
         const evCount=Array.isArray(w.events)?w.events.length:0;
+        // V10.5.30 (Phase S3): round-trip line for foreign wallets — SAR converted in vs realized back.
+        let rtLine='';
+        if(w.currency!=='SAR'){
+          const rt=walletRoundTrip(w);
+          if(rt.sarIn>0||rt.sarBack>0){
+            const neg=rt.net<0;
+            rtLine=`<div style="font-size:10px;color:var(--text3);margin-top:2px">SAR in ${fmtP(rt.sarIn)} &middot; back ${fmtP(rt.sarBack)} &middot; <span style="color:${neg?'var(--neg)':'var(--pos)'}">${neg?'':'+'}${fmtP(rt.net)}</span></div>`;
+          }
+        }
         return `<div class="fg jb" style="padding:10px 0;border-bottom:1px solid var(--bg2);align-items:center;gap:10px">
           <div style="flex:1;min-width:0">
             <div style="font-weight:500;font-size:13px">${h(w.label||w.currency)}</div>
             <div style="font-size:11px;color:var(--text3)">${h(w.currency)} &middot; ${evCount} event${evCount===1?'':'s'}</div>
+            ${rtLine}
           </div>
           <div class="priv-mask" style="font-variant-numeric:tabular-nums;font-weight:600;text-align:right;min-width:130px">${ccyFmt(bal,w.currency)}</div>
           <div class="fg" style="gap:4px;flex-shrink:0">
@@ -20511,6 +20599,7 @@ function rDistEditorModal(a,hd){
       <div style="margin-bottom:8px;background:var(--bg2);padding:10px;border-radius:var(--rsm)">
         <label style="display:flex;gap:6px;align-items:center;font-size:12px;cursor:pointer;margin-bottom:6px"><input type="checkbox" id="def-reinvest" style="width:auto;margin:0"> Reinvested (auto-creates a new buy lot for the same amount in units)</label>
         <div style="font-size:11px;color:var(--text3);line-height:1.5">If checked, you must also enter the price per unit at reinvestment time, so the new lot can be created with the right quantity.</div>
+        ${(hd.fundingWalletId&&(hd.type==='stock'||hd.type==='etf'))?`<label style="display:flex;gap:6px;align-items:center;font-size:12px;cursor:pointer;margin-top:8px"><input type="checkbox" id="def-credit-wallet" checked style="width:auto;margin:0"> Credit the funding wallet with this cash distribution</label><div style="font-size:11px;color:var(--text3);line-height:1.5">Adds the amount to ${h((walletById(hd.fundingWalletId)||{}).label||'the funding wallet')}. Ignored if reinvested.</div>`:''}
         <div class="fr" style="gap:10px;margin-top:8px">
           <div style="flex:1"><label class="lbl">Reinvest price per unit (in ${h(hd.currency||'SAR')})</label><input type="number" inputmode="decimal" id="def-reinvest-price" min="0" step="0.0001" placeholder="If reinvested"></div>
         </div>
@@ -20549,6 +20638,26 @@ function saveDist(){
     hd.lots.push({id:reinvestLotId,date,quantity:newQty,pricePerUnit:reinvestPrice,fxRate:fx,fees:0,notes:'Reinvested distribution'});
   }
   hd.distributions.push({id:'dis_'+randSuffix(8),date,type,amount,currency,fxRate:fx,reinvested,reinvestLotId,notes});
+  // V10.5.30 (Phase S3): credit the funding wallet for a CASH distribution (not reinvested),
+  // when the holding is wallet-funded and the user kept the credit box checked.
+  const distId=hd.distributions[hd.distributions.length-1].id;
+  const creditWallet=!!document.getElementById('def-credit-wallet')?.checked;
+  const isStockLike=(hd.type==='stock'||hd.type==='etf');
+  if(!reinvested&&creditWallet&&isStockLike&&hd.fundingWalletId){
+    const w=walletById(hd.fundingWalletId);
+    if(w){
+      // Distribution amount is in `currency` with fx to SAR. Credit in the WALLET currency:
+      // SAR wallet → SAR amount (amount*fx); else convert SAR to the wallet's latest in-rate.
+      let creditAmt;
+      if(w.currency==='SAR'){creditAmt=Math.round(amount*fx*100)/100;}
+      else if(currency===w.currency){creditAmt=Math.round(amount*100)/100;}
+      else{const r=walletLatestInRate(w);creditAmt=r?Math.round((amount*fx)/r*100)/100:null;}
+      if(creditAmt!=null&&creditAmt>0){
+        if(!Array.isArray(w.events))w.events=[];
+        w.events.push({id:'we_'+randSuffix(8),type:'distribution',date,amount:creditAmt,holdingId:hd.id,distId,note:'Distribution '+(hd.name||'')});
+      }
+    }
+  }
   sched();closeDistEditor();toast(reinvested?'Distribution recorded and reinvested as new lot':'Distribution recorded');
 }
 
@@ -20561,6 +20670,9 @@ function deleteDist(distId){
   if(d&&d.reinvestLotId&&Array.isArray(hd.lots)){
     hd.lots=hd.lots.filter(l=>l.id!==d.reinvestLotId);
   }
+  // V10.5.30 (Phase S3): remove the paired distribution wallet event, if any.
+  const w=hd.fundingWalletId?walletById(hd.fundingWalletId):null;
+  if(w&&Array.isArray(w.events))w.events=w.events.filter(ev=>!(ev.type==='distribution'&&ev.distId===distId));
   hd.distributions=hd.distributions.filter(x=>x.id!==distId);
   sched();render();toast('Distribution removed');
 }
@@ -21492,6 +21604,17 @@ function rPortfolioOverview(){
         <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Total Current Value</div>
         <div class="priv-mask" style="font-size:36px;font-weight:600;color:${totalUnreal>=0?'var(--pos)':'var(--neg)'};font-variant-numeric:tabular-nums">${pricedCount?fmtP(totalCV):'—'}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:4px">${pricedCount} of ${allHoldings.length} holdings priced${totalCB>0?' &middot; Cost basis: '+fmtP(totalCB):''}</div>
+        ${(()=>{
+          // V10.5.30 (Phase S3): uninvested wallet cash (SAR, at cost) as its own line,
+          // plus total = holdings current value + wallet cash. Separate from composition (Q3).
+          const wc=totalWalletCashSAR();
+          if(wc.sar===0&&!wc.hasUnknown)return '';
+          const totalWithCash=(pricedCount?totalCV:0)+wc.sar;
+          return`<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--bg3);font-size:12px">
+            <div class="fg" style="gap:8px;align-items:baseline"><span style="color:var(--text3)">Wallet cash (uninvested)</span><strong class="priv-mask" style="font-variant-numeric:tabular-nums;color:var(--text2)">${fmtP(wc.sar)}</strong>${wc.hasUnknown?'<span style="font-size:10px;color:var(--text3)">+ some at unknown FX</span>':''}</div>
+            <div class="fg" style="gap:8px;align-items:baseline;margin-top:2px"><span style="color:var(--text3)">Total value (holdings + cash)</span><strong class="priv-mask" style="font-variant-numeric:tabular-nums">${fmtP(totalWithCash)}</strong></div>
+          </div>`;
+        })()}
       </div>
       <div style="text-align:right">
         <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Net Deployed</div>
