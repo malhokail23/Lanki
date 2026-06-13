@@ -4,7 +4,24 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
 <title>Lanki Platform</title>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='4' y='4' width='24' height='6' rx='2' fill='%23021751'/%3E%3Crect x='4' y='13' width='16' height='6' rx='2' fill='%23021751'/%3E%3Crect x='4' y='22' width='20' height='6' rx='2' fill='%23021751'/%3E%3C/svg%3E">
+<!-- V10.5.25 (MOB-2): favicon + app-icon set wired from favicon-head-snippet.html (v3.0)
+     so Add-to-Home-Screen launches standalone with the branded icon. Adaptations, with
+     rationale: the snippet's own <title> is dropped (the existing title above stands) and
+     its two theme-color metas are dropped (V9.0.3.1 deliberately collapsed theme-color to
+     the single meta below; all point to Royal Midnight anyway). Deploy note: these hrefs
+     require the icon files and site.webmanifest at the repo root — see deploy checklist. -->
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="icon" type="image/png" sizes="48x48" href="/favicon-48.png">
+<link rel="icon" type="image/png" sizes="96x96" href="/favicon-96.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/lanki-app-icon-light-180-apple-touch.png">
+<link rel="manifest" href="/site.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Lanki">
 <meta name="application-name" content="Lanki Platform">
 <meta name="color-scheme" content="light">
 <!-- V9.0.3.1 (audit P0.1): collapsed two theme-color metas into one. Both pointed to
@@ -696,6 +713,15 @@ tbody tr:hover td{background:var(--bg2)}
   }
   /* Running balance cell: hide on mobile (clutters) */
   .tx-card .tx-tbl td.tx-balance-cell{display:none}
+  /* V10.5.25 (MOB-1): scoped single-account view shows the running balance as a meta
+     line under the amount. Unscoped multi-account stays hidden — a per-row running
+     balance across interleaved accounts is noise (audit recommendation). */
+  .tx-card .tx-tbl.tx-scoped td.tx-balance-cell{
+    display:block;order:4;flex:1 1 100%;
+    text-align:right;font-size:11px;
+    font-variant-numeric:tabular-nums;padding:0;
+  }
+  .tx-card .tx-tbl.tx-scoped td.tx-balance-cell:before{content:'Balance ';opacity:.65}
   /* Type badge: inline with meta */
   .tx-card .tx-tbl td.tx-type-cell{
     order:7;flex:0 1 auto;
@@ -715,10 +741,17 @@ tbody tr:hover td{background:var(--bg2)}
   }
   .tx-card .tx-tbl td.tx-actions-cell .btn-xs{
     flex:1 1 auto;font-size:11px;padding:7px 10px;
-    min-height:36px;white-space:nowrap;
+    min-height:44px;white-space:nowrap; /* V10.5.25 (MOB-3): 36px → 44px touch target */
   }
   /* Reconciliation cell hidden on mobile */
   .tx-card .tx-tbl td.tx-recon-cell{display:none}
+  /* V10.5.25 (Q3): surface the FIRST BREAK divergence flag on mobile in the scoped
+     view. Reconciled rows (green check) stay hidden; only diverged rows render,
+     compact, under the balance line. Full reconciliation remains a desktop task. */
+  .tx-card .tx-tbl.tx-scoped td.tx-recon-cell.recon-div{
+    display:block;order:4;flex:1 1 100%;
+    text-align:right;padding:2px 0 0;
+  }
   /* Selected row visual treatment */
   .tx-card.tx-select-mode .tx-tbl tbody tr.tx-row.tx-row-selected{
     background:color-mix(in srgb,var(--midnight) 7%,transparent);
@@ -4951,7 +4984,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='10.5.24';
+const VERSION='10.5.25';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -6136,7 +6169,28 @@ function orderTxnsForBalance(txns){
     let c=cursor;
     while(remaining.length){
       let i=-1;
-      if(c!=null)i=remaining.findIndex(t=>Math.abs(_txBalBefore(t)-c)<0.015);
+      if(c!=null){
+        const cands=[];
+        remaining.forEach((t,k)=>{if(Math.abs(_txBalBefore(t)-c)<0.015)cands.push(k);});
+        if(cands.length===1)i=cands[0];
+        else if(cands.length>1){
+          // V10.5.25 (AUD-H3): do not burn bridges. When several rows start from the
+          // current balance (a repeated-balance fork — e.g. a ±1 verification pair that
+          // returns the balance to a value another transaction also starts from), prefer
+          // a candidate whose resulting balance is some OTHER remaining row's
+          // balance-before, so the chain continues. First-match here picked dead ends:
+          // D360 Main 27 Apr 2026 took the +8,000 transfer before the ±1 pair, stranding
+          // both at false red +8,001.00. Insertion-stable within the surviving pool;
+          // when no candidate continues the chain, first-match fallback (no worse).
+          const alive=cands.filter(k=>{
+            const after=Math.round(parseFloat(remaining[k].statementBal)*100);
+            return remaining.some((o,j)=>j!==k&&Math.round(_txBalBefore(o)*100)===after);
+          });
+          const pool=alive.length?alive:cands;
+          i=pool[0];let best=idx.get(remaining[pool[0]]);
+          for(const k of pool){const v=idx.get(remaining[k]);if(v<best){best=v;i=k;}}
+        }
+      }
       if(i===-1){
         // Chain head: a row nothing else flows into
         const afters=new Set(remaining.map(t=>Math.round(parseFloat(t.statementBal)*100)));
@@ -8973,6 +9027,9 @@ async function rOv(){
       recipientMap[key].count++;
     });
     const top=Object.values(recipientMap).sort((a,b)=>b.total-a.total).slice(0,5);
+    // V10.5.25 (AUD-H1): display strings cached for ovRecipFilter — statement-derived
+    // text never enters an inline-JS attribute context.
+    window._ovTopRecip=top.map(r=>String(r.display||''));
     if(!top.length||top[0].total<=0)return '';
     const totalTop=top.reduce((s,r)=>s+r.total,0);
     return`<div class="card card-bordered" style="margin-bottom:1rem">
@@ -8983,11 +9040,11 @@ async function rOv(){
         </div>
         <div class="priv-mask" style="font-size:11px;color:var(--text3);font-variant-numeric:tabular-nums">${fmtP(totalTop)} across top 5</div>
       </div>
-      ${top.map(r=>{
+      ${top.map((r,i)=>{
         const pct=totalTop?Math.round(r.total/totalTop*100):0;
         const cat=getMC(r.catId);
         const catLabel=cat?h(cat.name):'<span style="color:var(--warn)">Uncategorized</span>';
-        return`<div class="fg jb" style="padding:8px 0;border-bottom:1px solid var(--bg3);cursor:pointer;align-items:center;gap:10px" onclick="TF.q='${r.display.replace(/'/g,'').substring(0,30)}';sw('txbank')" title="View transactions matching '${h(r.display.substring(0,40))}'">
+        return`<div class="fg jb" style="padding:8px 0;border-bottom:1px solid var(--bg3);cursor:pointer;align-items:center;gap:10px" onclick="ovRecipFilter(${i})" title="View transactions matching '${h(r.display.substring(0,40))}'">
           <div style="flex:1;min-width:0">
             <div style="font-size:13px;font-weight:500;color:var(--text1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h(r.display.length>50?r.display.substring(0,48)+'...':r.display)}</div>
             <div class="sub-meta">${catLabel} &middot; ${r.count} transaction${r.count!==1?'s':''}</div>
@@ -18000,6 +18057,10 @@ const DTS=[{v:'mortgage',l:'Mortgage'},{v:'bank_loan',l:'Bank Personal Loan'},{v
 const DTL=DTS.reduce((m,o)=>{m[o.v]=o.l;return m;},{});
 let editDebtId=null;
 // ─── CC BALANCE CALCULATION ───
+// V10.5.25 (audit Q5 invariant, owner-confirmed): a linked account (linkedAccountId) is
+// treated as card-dedicated — every transaction on that account adjusts the card balance.
+// This is intended. Do not link a card to a shared bank account; use the debt-tagged
+// model for shared accounts instead.
 function calcCCBalance(d){
   if(d.type!=='credit_card')return d.remaining||0;
   const asOf=d.balanceAsOf||'1900-01-01';
@@ -24189,6 +24250,16 @@ function isLiveCard(d){const s=ccStatus(d);return s==='active';} // active = app
 // V9.0.3 cleanup: removed orphan function isFrozenCard() (audit §10.x cleanup pass)
 
 // ─── SHARED TX TABLE BUILDER ───
+// V10.5.25 (AUD-H1): Top Recipients click handler. The row passes an opaque index and
+// the display string is resolved from the render-time cache at click time, removing the
+// prior injection surface (onclick interpolated r.display with only single-quote
+// stripping — XSS via crafted raw_description in an imported statement).
+function ovRecipFilter(i){
+  const d=(window._ovTopRecip||[])[i];
+  if(d==null)return;
+  TF.q=String(d).substring(0,30);
+  sw('txbank');
+}
 function buildTxTable(fl, accounts, showBalance, isCards, rbMaps, scopedAcc){
   // Detect if any transaction in this view has statementBal — enables recon column
   const hasRecon=showBalance&&fl.some(t=>t.statementBal!=null);
@@ -24308,7 +24379,7 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps, scopedAcc){
         const isFirst=reconDivergenceIds.has(t.id+'_first');
         if(isDiverged){
           const sign=rdiff>0?'+':'';
-          reconTd=`<td class="tx-recon-cell" style="text-align:right;white-space:nowrap">
+          reconTd=`<td class="tx-recon-cell recon-div" style="text-align:right;white-space:nowrap">
             ${isFirst?`<div style="font-size:9px;font-weight:700;color:var(--neg);letter-spacing:.04em">FIRST BREAK ▼</div>`:''}
             <div style="font-size:11px;font-weight:600;color:var(--neg)">${fmtP(t.statementBal)}</div>
             <div style="font-size:10px;color:var(--neg)">${sign}${fmtS(rdiff)}</div>
@@ -24357,7 +24428,7 @@ function buildTxTable(fl, accounts, showBalance, isCards, rbMaps, scopedAcc){
       ${reconTd}
     </tr>`;}).join(''):`<tr><td colspan="${(showBalance?8:7)+1+(hasRecon?1:0)}" class="empty">No transactions found</td></tr>`;
 
-  return`<div class="card tx-card${BulkMode?' tx-select-mode':''}" id="tx-card-main"><div class="tbl-wrap"><table class="tx-tbl">${thead}<tbody>${rows}</tbody></table></div></div>`;
+  return`<div class="card tx-card${BulkMode?' tx-select-mode':''}" id="tx-card-main"><div class="tbl-wrap"><table class="tx-tbl${showBalance?' tx-scoped':''}">${thead}<tbody>${rows}</tbody></table></div></div>`;
 }
 
 // ─── SHARED TX HEADER (month nav + import + summary) ───
@@ -24665,6 +24736,20 @@ async function rTxBank(){
         if(va<vb)return -TF.sortDir;if(va>vb)return TF.sortDir;return 0;
       });
     }
+  }else if(scopedAcc){
+    // V10.5.25 (AUD-M7): default scoped ordering. Without an explicit sort the table
+    // rendered stored order — date-asc with same-day rows in statement insertion order
+    // (newest-first for D360) — so the running balance read bottom-up within a day and
+    // a repeated-balance fork (AUD-H3) displayed before its true predecessors. Scoped
+    // single-account view now defaults to date-asc + canonical same-day chain order,
+    // matching the explicit date-sort branch above. Unscoped default unchanged.
+    const canon=orderTxnsForBalance(fl);
+    const pos=new Map();canon.forEach((t,i)=>pos.set(t.id,i));
+    fl.sort((a,b)=>{
+      const d=(a.date||'').localeCompare(b.date||'');
+      if(d!==0)return d;
+      return (pos.get(a.id)??0)-(pos.get(b.id)??0);
+    });
   }
   // Running balance maps
   const rbMaps={};
@@ -24783,15 +24868,39 @@ async function rTxCards(){
   if(TF.reviewOnly)fl=fl.filter(t=>t.needsReview===true);
   // V9.0-rc1.6 Item 12: missing-sub filter — show only transactions with main but no sub
   if(TF.missingSubOnly)fl=fl.filter(t=>t.mainCatId&&getMC(t.mainCatId)&&!t.subCatId);
-  if(TF.sortCol){fl.sort((a,b)=>{
-    let va,vb;
-    if(TF.sortCol==='date'){va=a.date||'';vb=b.date||'';}
-    else if(TF.sortCol==='desc'){va=(a.description||'').toLowerCase();vb=(b.description||'').toLowerCase();}
-    else if(TF.sortCol==='amount'){va=(txDir(a)==='out'?-1:1)*(a.amount||0);vb=(txDir(b)==='out'?-1:1)*(b.amount||0);}
-    else if(TF.sortCol==='cat'){va=(getMC(a.mainCatId)?.name||'').toLowerCase();vb=(getMC(b.mainCatId)?.name||'').toLowerCase();}
-    else if(TF.sortCol==='type'){va=a.type||'';vb=b.type||'';}
-    if(va<vb)return -TF.sortDir;if(va>vb)return TF.sortDir;return 0;
-  });}
+  if(TF.sortCol){
+    if(TF.sortCol==='date'&&scopedAcc){
+      // V10.5.25 (AUD-M7): canonical same-day tiebreaker on Cards, mirroring the Bank
+      // branch added in V10.5.19. Cards shows a scoped running balance too; without
+      // this, even an explicit date-sort rendered same-day rows in insertion order.
+      const canon=orderTxnsForBalance(fl);
+      const pos=new Map();canon.forEach((t,i)=>pos.set(t.id,i));
+      fl.sort((a,b)=>{
+        const d=(a.date||'').localeCompare(b.date||'');
+        if(d!==0)return TF.sortDir>0?d:-d;
+        return (pos.get(a.id)??0)-(pos.get(b.id)??0);
+      });
+    }else{
+      fl.sort((a,b)=>{
+        let va,vb;
+        if(TF.sortCol==='date'){va=a.date||'';vb=b.date||'';}
+        else if(TF.sortCol==='desc'){va=(a.description||'').toLowerCase();vb=(b.description||'').toLowerCase();}
+        else if(TF.sortCol==='amount'){va=(txDir(a)==='out'?-1:1)*(a.amount||0);vb=(txDir(b)==='out'?-1:1)*(b.amount||0);}
+        else if(TF.sortCol==='cat'){va=(getMC(a.mainCatId)?.name||'').toLowerCase();vb=(getMC(b.mainCatId)?.name||'').toLowerCase();}
+        else if(TF.sortCol==='type'){va=a.type||'';vb=b.type||'';}
+        if(va<vb)return -TF.sortDir;if(va>vb)return TF.sortDir;return 0;
+      });
+    }
+  }else if(scopedAcc){
+    // V10.5.25 (AUD-M7): default scoped ordering — same rationale as the Bank tab.
+    const canon=orderTxnsForBalance(fl);
+    const pos=new Map();canon.forEach((t,i)=>pos.set(t.id,i));
+    fl.sort((a,b)=>{
+      const d=(a.date||'').localeCompare(b.date||'');
+      if(d!==0)return d;
+      return (pos.get(a.id)??0)-(pos.get(b.id)??0);
+    });
+  }
   // Outstanding balance maps for cards
   const rbMaps={};
   const accIds=scopedAcc?[scopedAcc]:[...new Set(fl.map(t=>t.accountId).filter(Boolean))];
