@@ -4989,7 +4989,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='10.5.27';
+const VERSION='10.5.28';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -6782,7 +6782,9 @@ function getMainP(){
     // V8.27 CRITICAL FIX: groups and formatLibrary were silently lost on every reload from V8.20/V8.19.
     // These two fields were initialized in defaults but never persisted to vault. User-defined groups
     // and learned format library entries reset on every refresh. Adding to persistence is additive-only.
-    groups:S.groups,formatLibrary:S.formatLibrary
+    groups:S.groups,formatLibrary:S.formatLibrary,
+    // V10.5.28 (Phase S1): markets registry (seed + user-added). Additive-only.
+    markets:S.markets
   };
 }
 function restoreS(d){
@@ -6823,6 +6825,8 @@ function restoreS(d){
   // V8.27 CRITICAL FIX: restore groups and formatLibrary (paired with getMainP fix above).
   // Defaults to [] for vaults that predate the persistence fix.
   S.groups=Array.isArray(d.groups)?d.groups:[];
+  // V10.5.28 (Phase S1): markets registry. [] for vaults that predate S1; getMarkets() seeds on first use.
+  S.markets=Array.isArray(d.markets)?d.markets:[];
   S.formatLibrary=Array.isArray(d.formatLibrary)?d.formatLibrary:[];
   // txnCache stays separate - loaded in loadS
   applyDeletions();
@@ -10032,6 +10036,9 @@ async function delTxn(id,ym){
   // that account-month's stored closing balance after deletion.
   const affectedAccId=t?t.accountId:null;
   if(t&&isRefundLinked(t)){await unlinkRefundInternal(t,ymk,false);}
+  // V10.5.28 (Phase S1): if this transaction funded or withdrew from a wallet, remove
+  // the mirrored wallet event so the wallet ledger stays consistent.
+  if(t&&(t.walletFundingId||t.walletWithdrawalId)){removeTxnWalletEvents(t.id);}
   S.txnCache[ymk]=S.txnCache[ymk].filter(t=>t.id!==id);
   // Remove dangling matched pairs referencing the deleted transaction
   S.matchedPairs=(S.matchedPairs||[]).filter(p=>p.outId!==id&&p.inId!==id);
@@ -10815,6 +10822,9 @@ function openEditTxn(id,ym){
     invSel.innerHTML='<option value="">-- None --</option>'+invs.map(a=>`<option value="${a.id}">${h(a.name)}</option>`).join('');
     invSel.value=t.investmentAccountId||'';
   }
+  // V10.5.28 (Phase S1): wallet funding/withdrawal tag. An outflow can fund a wallet;
+  // an inflow can be a withdrawal from a wallet. Shows only for transfer-type transactions.
+  refreshEtxnWalletRow(t);
   // Staff dropdown — only visible when main category is Household Staff
   const staffRow=document.getElementById('etxn-staff-row');
   const staffSel=document.getElementById('etxn-staff');
@@ -10841,6 +10851,85 @@ function openEditTxn(id,ym){
 // via STAFF_ROLE_TO_SUBCAT. Also ensures the main category is cat_main_staff. If the
 // user later overrides sub manually via the category picker, that wins (this handler only
 // fires on staff dropdown change, not on category modal close).
+// V10.5.28 (Phase S1): show/populate the wallet funding/withdrawal tag row.
+// Funding = an outflow (out) on a bank account, tagged to fund a wallet.
+// Withdrawal = an inflow (in) on a bank account, tagged as coming from a wallet.
+// Restricted to transfer-type transactions to keep income/expense analysis clean.
+function refreshEtxnWalletRow(t){
+  const row=document.getElementById('etxn-wallet-row');
+  const sel=document.getElementById('etxn-wallet');
+  const lbl=document.getElementById('etxn-wallet-label');
+  const hint=document.getElementById('etxn-wallet-hint');
+  if(!row||!sel)return;
+  const type=document.getElementById('etxn-type')?.value||t.type||'';
+  const dir=document.getElementById('etxn-dir')?.value||t.direction||'';
+  const wallets=allWallets();
+  const isTransfer=(type==='transfer');
+  const show=isTransfer&&wallets.length>0&&(dir==='out'||dir==='in');
+  row.style.display=show?'block':'none';
+  if(!show){return;}
+  const mode=dir==='out'?'fund':'withdraw';
+  if(lbl)lbl.textContent=mode==='fund'?'Funds wallet (capital deployed)':'Withdrawal from wallet (return of capital)';
+  if(hint)hint.textContent=mode==='fund'
+    ? 'Tagging this outflow creates a funding event on the chosen wallet, dated and sized from this transaction.'
+    : 'Tagging this inflow creates a withdrawal event, reducing the chosen wallet.';
+  const curTag=mode==='fund'?(t.walletFundingId||''):(t.walletWithdrawalId||'');
+  sel.innerHTML='<option value="">-- None --</option>'+wallets.map(({wallet,provider})=>`<option value="${wallet.id}">${h(provider.name)} · ${h(wallet.label||wallet.currency)} (${h(wallet.currency)})</option>`).join('');
+  sel.value=curTag;
+}
+
+// V10.5.28 (Phase S1): create/remove the wallet event that mirrors a tagged transaction.
+// A transaction may fund a wallet (outflow) or be a withdrawal (inflow), never both.
+// Removes any prior event this transaction created, then creates the new one with
+// chronological reconciliation. On reconciliation failure, the tag is cleared and the
+// user is warned; the transaction itself is unaffected.
+function removeTxnWalletEvents(txnId){
+  (S.accounts||[]).forEach(a=>{
+    accountWallets(a).forEach(w=>{
+      if(!Array.isArray(w.events))return;
+      w.events=w.events.filter(ev=>ev.txnId!==txnId);
+    });
+  });
+}
+function syncTxnWalletTag(t){
+  const row=document.getElementById('etxn-wallet-row');
+  const sel=document.getElementById('etxn-wallet');
+  // Determine intended tag only if the row is visible (transfer + has wallets).
+  const visible=row&&row.style.display!=='none';
+  const walletId=visible?(sel?sel.value||'':''):'';
+  const dir=t.direction;
+  const mode=dir==='out'?'fund':(dir==='in'?'withdraw':null);
+
+  // Always clear prior state first (idempotent re-sync).
+  removeTxnWalletEvents(t.id);
+  delete t.walletFundingId;
+  delete t.walletWithdrawalId;
+
+  if(!visible||!walletId||!mode){return;} // untagged or not applicable
+
+  const w=walletById(walletId);
+  if(!w){toast('Tagged wallet not found',false);return;}
+  const amt=Math.abs(parseFloat(t.amount)||0);
+  if(!(amt>0)){toast('Tag ignored: transaction amount is zero',false);return;}
+  // Currency guard: wallet funding/withdrawal amount is in the wallet currency.
+  // Cash Flow amounts are SAR. For S1 we only auto-create when the wallet is SAR;
+  // non-SAR wallets are funded via an inter-wallet transfer from the SAR wallet.
+  if(w.currency!=='SAR'){
+    toast(`That wallet is ${w.currency}. Fund the SAR wallet from the bank, then transfer to ${w.currency}.`,false);
+    return;
+  }
+  const ev={id:'we_'+randSuffix(8),type:mode,date:t.date,amount:amt,txnId:t.id,sarEquiv:amt,
+    note:(mode==='fund'?'Funded from ':'Withdrawn to ')+(t.description||'bank')};
+  const rec=walletReconcile(w,ev);
+  if(!rec.ok){
+    toast(`Wallet tag rejected: ${w.label||w.currency} would go negative by ${ccyFmt(rec.shortfall,w.currency)} on ${toDD(rec.date)}.`,false);
+    return; // tag already cleared above
+  }
+  if(!Array.isArray(w.events))w.events=[];
+  w.events.push(ev);
+  if(mode==='fund')t.walletFundingId=walletId;else t.walletWithdrawalId=walletId;
+}
+
 function onEditTxnStaffChange(){
   const sel=document.getElementById('etxn-staff');
   if(!sel)return;
@@ -10926,6 +11015,8 @@ async function saveEditTxn(){
   const invAccId=document.getElementById('etxn-inv-acc')?.value||null;
   if(invAccId)t.investmentAccountId=invAccId;
   else delete t.investmentAccountId;
+  // V10.5.28 (Phase S1): wallet funding/withdrawal tag → wallet event sync.
+  syncTxnWalletTag(t);
   // V9.0 Item 10: read category form values up-front so the bill-link block can use the
   // post-edit mainCatId rather than the stale t.mainCatId. Also: when a bill is freshly
   // linked, adopt the bill's category to keep the txn aligned with bill metadata.
@@ -16496,6 +16587,137 @@ const PHB_REGIONS=[
 // Supported currencies for V1 (Decision 5 confirm-set).
 const PHB_CURRENCIES=['SAR','USD','AED','EUR','GBP'];
 
+// ─── V10.5.28 PHASE S1 — WALLET CASH SPINE (Stocks module foundation) ─────────
+// A wallet is a per-currency, per-owner cash ledger living on a provider
+// (brokerage_account). Balance is COMPUTED from events, never stored — mirrors
+// the holding/lot discipline. Five event types ship in S1; buy/sell/distribution
+// are reserved for S2/S3 so the ledger model stays stable across phases.
+const WALLET_EVENT_SIGN={
+  fund:         +1,   // bank → wallet (linked Cash Flow outflow)
+  transfer_in:  +1,   // paired leg of an inter-wallet transfer
+  withdraw:     -1,   // wallet → bank (linked Cash Flow inflow)
+  transfer_out: -1,   // paired leg of an inter-wallet transfer
+  adjust:        0,   // sign carried by the signed amount on the event
+  buy:          -1,   // reserved (S2) — draws wallet down on a lot purchase
+  sell:         +1,   // reserved (S2) — credits wallet on a sale
+  distribution: +1    // reserved (S3) — dividends/coupons
+};
+
+// Instrument types a brokerage provider can offer (Offerings, S1 seed set).
+const PHB_PROVIDER_INSTRUMENTS=[
+  {v:'stock', l:'Stocks'},
+  {v:'etf',   l:'ETFs'},
+  {v:'fund',  l:'Funds'}
+];
+
+// Markets registry seed (fixed list, custom:false). Extensible from Settings →
+// Markets (custom:true). symbolFormat + currency are captured now because a
+// later price-fetch feature needs them; S1 builds the registry, not the fetcher.
+const PHB_MARKETS_SEED=[
+  {code:'TADAWUL',name:'Saudi Exchange (Tadawul)',region:'saudi',    currency:'SAR',symbolFormat:'TADAWUL:NNNN',custom:false},
+  {code:'NASDAQ', name:'NASDAQ',                   region:'us',       currency:'USD',symbolFormat:'TICKER',     custom:false},
+  {code:'NYSE',   name:'New York Stock Exchange',  region:'us',       currency:'USD',symbolFormat:'TICKER',     custom:false},
+  {code:'LSE',    name:'London Stock Exchange',    region:'developed',currency:'GBP',symbolFormat:'TICKER.L',   custom:false}
+];
+
+// Returns the live markets list, seeding S.markets on first access if empty.
+function getMarkets(){
+  if(!Array.isArray(S.markets)||S.markets.length===0){
+    S.markets=PHB_MARKETS_SEED.map(m=>({...m}));
+  }
+  return S.markets;
+}
+function marketByCode(code){return getMarkets().find(m=>m.code===code)||null;}
+
+// ─── WALLET HELPERS (Phase S1) ────────────────────────────────────────────────
+// Balance is computed from events, never stored. Verified against a Node harness
+// (18 cases) before embedding: worked example, chronological reconciliation,
+// implied FX, signed adjust, floating point, edit-in-place.
+
+function isBrokerageProvider(a){return !!(a&&a.type==='brokerage_account');}
+function accountWallets(a){return (a&&Array.isArray(a.wallets))?a.wallets:[];}
+function walletById(walletId){
+  for(const a of (S.accounts||[])){
+    const w=accountWallets(a).find(x=>x.id===walletId);
+    if(w)return w;
+  }
+  return null;
+}
+function walletProvider(walletId){
+  for(const a of (S.accounts||[])){
+    if(accountWallets(a).some(x=>x.id===walletId))return a;
+  }
+  return null;
+}
+function allWallets(){
+  const out=[];
+  (S.accounts||[]).forEach(a=>accountWallets(a).forEach(w=>out.push({wallet:w,provider:a})));
+  return out;
+}
+
+// Signed effect of one event on the wallet balance.
+function walletSignedDelta(ev){
+  if(!ev)return 0;
+  if(ev.type==='adjust')return +(parseFloat(ev.amount)||0);   // adjust carries its own sign
+  const s=WALLET_EVENT_SIGN[ev.type];
+  if(s===undefined)return 0;
+  return s*Math.abs(parseFloat(ev.amount)||0);
+}
+
+// Deterministic same-day order: credits before debits, then insertion order.
+// Mirrors the Cash Flow balance pipeline's credits-first tiebreaker.
+function orderWalletEvents(events){
+  const idx=new Map();events.forEach((e,i)=>idx.set(e,i));
+  const creditFirst=(e)=>{
+    if(e.type==='adjust')return (+(parseFloat(e.amount)||0)>=0)?0:1;
+    return WALLET_EVENT_SIGN[e.type]>=0?0:1;
+  };
+  return events.slice().sort((a,b)=>{
+    const da=(a.date||''),db=(b.date||'');
+    if(da!==db)return da.localeCompare(db);
+    const ca=creditFirst(a),cb=creditFirst(b);
+    if(ca!==cb)return ca-cb;
+    return idx.get(a)-idx.get(b);
+  });
+}
+
+function walletBalance(wallet){
+  const evs=Array.isArray(wallet&&wallet.events)?wallet.events:[];
+  return Math.round(orderWalletEvents(evs).reduce((s,e)=>s+walletSignedDelta(e),0)*100)/100;
+}
+
+// Chronological reconciliation. Simulate inserting/replacing `candidate` and verify
+// the running balance never goes negative at ANY point in date order.
+// Returns {ok:true,finalBalance} or {ok:false,date,shortfall,offendingId}.
+function walletReconcile(wallet,candidate){
+  const evs=(Array.isArray(wallet&&wallet.events)?wallet.events.slice():[]);
+  const i=candidate.id?evs.findIndex(e=>e.id===candidate.id):-1;
+  if(i>=0)evs[i]=candidate;else evs.push(candidate);
+  const ordered=orderWalletEvents(evs);
+  let bal=0;
+  for(const e of ordered){
+    bal=Math.round((bal+walletSignedDelta(e))*100)/100;
+    if(bal<-0.005)return {ok:false,date:e.date,shortfall:Math.round(-bal*100)/100,offendingId:e.id};
+  }
+  return {ok:true,finalBalance:bal};
+}
+
+// Implied FX rate for a transfer: source units per 1 target unit (e.g. SAR per USD).
+function walletImpliedRate(amountOut,amountIn){
+  const out=parseFloat(amountOut),inn=parseFloat(amountIn);
+  if(!(inn>0))return null;
+  return Math.round((out/inn)*1e6)/1e6;
+}
+
+// SAR-equivalent of a wallet amount, using the wallet currency. SAR passes through.
+// Phase S1 uses a per-event recorded sarEquiv where present (transfers/funds carry it);
+// this helper is the fallback for display when no event-level rate exists.
+function walletAmountToSAR(amount,currency,fxRate){
+  if(!currency||currency==='SAR')return parseFloat(amount)||0;
+  const fx=parseFloat(fxRate)||0;
+  return fx>0?(parseFloat(amount)||0)*fx:null;
+}
+
 // ─── HOLDING COMPUTED HELPERS ─────────────────────────────────────────────────
 // Derived from lots, sales, and current price. Never stored; computed on demand.
 // Currency conversion: lot.fxRate captures the SAR-equivalent rate at buy/sale
@@ -18654,6 +18876,39 @@ function closeInvAcctForm(){
   render();
 }
 
+function rProviderOfferingsRow(a){
+  // Offerings apply to brokerage providers (the Stocks-module container). For other
+  // investment types the row is hidden; the save handler only persists offerings for brokerage.
+  const isBrokerage = a ? a.type==='brokerage_account' : true; // new accounts default to brokerage in the type dropdown order
+  const curMarkets = (a&&Array.isArray(a.offerings&&a.offerings.markets))?a.offerings.markets:[];
+  const curInstr   = (a&&Array.isArray(a.offerings&&a.offerings.instruments))?a.offerings.instruments:['stock'];
+  const mkBoxes = getMarkets().map(m=>{
+    const on=curMarkets.includes(m.code);
+    return `<label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:400;margin:0 12px 6px 0;cursor:pointer">
+      <input type="checkbox" class="iaf-offer-market" value="${h(m.code)}" ${on?'checked':''} style="width:auto;padding:0;margin:0;border:1px solid var(--border)">
+      ${h(m.code)}</label>`;
+  }).join('');
+  const inBoxes = PHB_PROVIDER_INSTRUMENTS.map(t=>{
+    const on=curInstr.includes(t.v);
+    return `<label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:400;margin:0 12px 6px 0;cursor:pointer">
+      <input type="checkbox" class="iaf-offer-instr" value="${h(t.v)}" ${on?'checked':''} style="width:auto;padding:0;margin:0;border:1px solid var(--border)">
+      ${h(t.l)}</label>`;
+  }).join('');
+  return `<div id="iaf-offerings-block" style="${isBrokerage?'':'display:none'};border-top:1px solid var(--bg3);margin:6px 0 10px;padding-top:10px">
+    <div style="font-size:12px;font-weight:600;margin-bottom:8px">Offerings <span style="font-weight:400;color:var(--text3)">— what this provider gives you access to</span></div>
+    <div style="margin-bottom:8px"><div class="lbl" style="margin-bottom:4px">Markets</div><div style="display:flex;flex-wrap:wrap">${mkBoxes||'<span style="font-size:12px;color:var(--text3)">No markets defined. Add them in Settings → Markets.</span>'}</div></div>
+    <div><div class="lbl" style="margin-bottom:4px">Instruments</div><div style="display:flex;flex-wrap:wrap">${inBoxes}</div></div>
+    <div style="font-size:11px;color:var(--text3);margin-top:6px;line-height:1.6">These become the selectable tags when you record a stock funded through this provider (arrives in the Stocks build). Manage the market list in Settings → Markets.</div>
+  </div>`;
+}
+
+// Collect offerings from the form checkboxes. Returns {markets:[],instruments:[]}.
+function collectProviderOfferings(){
+  const markets=Array.from(document.querySelectorAll('.iaf-offer-market:checked')).map(el=>el.value);
+  const instruments=Array.from(document.querySelectorAll('.iaf-offer-instr:checked')).map(el=>el.value);
+  return {markets,instruments};
+}
+
 function rInvAcctFormPanel(){
   if(!_invAcctFormOpen)return '';
   const editing=!!_invAcctEditId;
@@ -18685,7 +18940,7 @@ function rInvAcctFormPanel(){
     <!-- Row 1: Name | Type -->
     <div class="fr" style="gap:10px;margin-bottom:8px">
       <div style="flex:1"><label class="lbl">Name</label><input type="text" id="iaf-name" value="${a?h(a.name||''):''}" placeholder="e.g. Tameed, Derayah Mohammad"></div>
-      <div style="flex:1"><label class="lbl">Type</label><select id="iaf-type">${typeOpts}</select></div>
+      <div style="flex:1"><label class="lbl">Type</label><select id="iaf-type" onchange="(function(v){var b=document.getElementById('iaf-offerings-block');if(b)b.style.display=(v==='brokerage_account')?'':'none';})(this.value)">${typeOpts}</select></div>
     </div>
     <!-- Row 2: Owner | Tax Jurisdiction -->
     <div class="fr" style="gap:10px;margin-bottom:8px">
@@ -18702,6 +18957,7 @@ function rInvAcctFormPanel(){
       <div style="flex:1"><label class="lbl">Account Number (optional)</label><input type="text" id="iaf-accnum" value="${a?h(a.accountNumber||''):''}" placeholder="Reference only"></div>
       <div style="flex:1"><label class="lbl">Notes (optional)</label><input type="text" id="iaf-purpose" value="${a?h(a.purpose||''):''}" placeholder="e.g. Retirement savings, kids' education"></div>
     </div>
+    ${rProviderOfferingsRow(a)}
     <div style="font-size:11px;color:var(--text3);margin:6px 0 12px;line-height:1.6">Holdings (lots, sales, distributions) are managed inside the account once it is created. ${editing?'<strong>Tip:</strong> the underlying holdings are not lost when you change the account type — only the allowed holding types may change.':''}</div>
     <div class="fg" style="gap:8px">
       <button class="btn btn-p" onclick="saveInvAcct()">${editing?'Save changes':'Add account'}</button>
@@ -18729,6 +18985,7 @@ function saveInvAcct(){
     const ex=S.accounts.find(a=>a.id===_invAcctEditId);
     if(!ex){toast('Account not found',false);return;}
     Object.assign(ex,{name,type,ownerId,taxJurisdiction,openDate,linkedBankId,purpose,accountNumber:accNum||null,_v10_2_migrated:true});
+    if(type==='brokerage_account')ex.offerings=collectProviderOfferings();
     sched();toast('Account updated');
   }else{
     const newId='acc_'+randSuffix(10);
@@ -18744,6 +19001,7 @@ function saveInvAcct(){
       accountNumber:accNum||null,
       updateSource:'manual',
       holdings:[],
+      ...(type==='brokerage_account'?{offerings:collectProviderOfferings(),wallets:[]}:{}),
       _v10_2_migrated:true,
       sortIndex:S.accounts.length
     });
@@ -19023,10 +19281,15 @@ function rPortfolioAccountDetail_Standard(a){
     <div class="kpi-cell"><div class="kpi-cell-label">Holdings</div><div class="kpi-cell-value">${holdings.length}</div><div class="kpi-cell-sub">${staleCount} stale</div></div>
   </div>
 
+  ${rWalletsPanel(a)}
+
   ${holdingCards}
 
   ${rHoldingEditorPanel()}
-  ${rPriceUpdateModal()}`;
+  ${rPriceUpdateModal()}
+  ${rWalletLedgerModal()}
+  ${rWalletTransferModal()}
+  ${rWalletAdjustModal()}`;
 }
 
 function openEditInvAccFromDetail(accId){
@@ -19037,6 +19300,346 @@ function openEditInvAccFromDetail(accId){
     const el=document.getElementById('inv-acct-form-panel');
     if(el)el.scrollIntoView({behavior:'smooth',block:'start'});
   },50);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// V10.5.28 PHASE S1 — WALLETS UI (panel, ledger, transfer, adjust)
+// ═══════════════════════════════════════════════════════════════════════════════
+let _walletFormOpen=false;        // add/edit wallet inline form
+let _walletEditId=null;
+let _walletFormProviderId=null;
+let _walletLedgerId=null;         // wallet whose ledger modal is open
+let _walletTransferOpen=false;    // transfer modal open
+let _walletTransferProviderId=null;
+let _walletAdjustOpen=false;      // adjust modal open
+let _walletAdjustWalletId=null;
+
+function ccyFmt(amount,currency){
+  const n=Math.abs(parseFloat(amount)||0);
+  const s=(parseFloat(amount)||0)<0?'-':'';
+  return s+(currency||'SAR')+'\u00a0'+n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+
+const WALLET_EVENT_META={
+  fund:        {l:'Funding',     c:'var(--pos)'},
+  transfer_in: {l:'Transfer in', c:'var(--pos)'},
+  transfer_out:{l:'Transfer out',c:'var(--neg)'},
+  withdraw:    {l:'Withdrawal',  c:'var(--neg)'},
+  adjust:      {l:'Adjustment',  c:'var(--text2)'},
+  buy:         {l:'Buy',         c:'var(--neg)'},
+  sell:        {l:'Sell',        c:'var(--pos)'},
+  distribution:{l:'Distribution',c:'var(--pos)'}
+};
+
+function rWalletsPanel(a){
+  if(!isBrokerageProvider(a))return '';
+  const wallets=accountWallets(a);
+  const ownerName=ownerLabel(a.ownerId);
+  const rows=wallets.length===0
+    ? `<div class="empty" style="padding:14px">No wallets yet. A wallet is a funded cash balance in one currency. Add one, then fund it by tagging a bank transfer in Cash Flow.</div>`
+    : wallets.map(w=>{
+        const bal=walletBalance(w);
+        const evCount=Array.isArray(w.events)?w.events.length:0;
+        return `<div class="fg jb" style="padding:10px 0;border-bottom:1px solid var(--bg2);align-items:center;gap:10px">
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:500;font-size:13px">${h(w.label||w.currency)}</div>
+            <div style="font-size:11px;color:var(--text3)">${h(w.currency)} &middot; ${evCount} event${evCount===1?'':'s'}</div>
+          </div>
+          <div class="priv-mask" style="font-variant-numeric:tabular-nums;font-weight:600;text-align:right;min-width:130px">${ccyFmt(bal,w.currency)}</div>
+          <div class="fg" style="gap:4px;flex-shrink:0">
+            <button class="btn btn-xs" onclick="openWalletLedger('${w.id}')" title="Open ledger">Ledger</button>
+            <button class="btn btn-xs btn-d" onclick="deleteWallet('${w.id}')" title="Delete wallet">&times;</button>
+          </div>
+        </div>`;
+      }).join('');
+  const canTransfer=wallets.length>=2;
+  return `<div class="card card-bordered" style="margin-bottom:14px;padding:14px 18px;background:var(--bg2)">
+    <div class="fg jb" style="align-items:center;margin-bottom:8px">
+      <div style="font-size:13px;font-weight:600">Wallets <span style="font-weight:400;color:var(--text3)">— cash for ${h(ownerName)}</span></div>
+      <div class="fg" style="gap:6px">
+        ${canTransfer?`<button class="btn btn-xs" onclick="openWalletTransfer('${a.id}')" title="Move cash between wallets">Transfer</button>`:''}
+        <button class="btn btn-xs btn-p" onclick="openWalletForm('${a.id}',null)">+ Wallet</button>
+      </div>
+    </div>
+    ${_walletFormOpen&&_walletFormProviderId===a.id?rWalletForm(a):''}
+    ${rows}
+  </div>`;
+}
+
+function rWalletForm(a){
+  const editing=!!_walletEditId;
+  const w=editing?accountWallets(a).find(x=>x.id===_walletEditId):null;
+  const curCcy=w?w.currency:'SAR';
+  const ccyOpts=PHB_CURRENCIES.map(c=>`<option value="${c}" ${curCcy===c?'selected':''}>${c}</option>`).join('');
+  return `<div class="card" style="background:var(--card);padding:12px 14px;margin-bottom:10px;border:1px solid var(--border)">
+    <div class="fr" style="gap:10px;margin-bottom:8px">
+      <div style="flex:1"><label class="lbl">Label</label><input type="text" id="walf-label" value="${w?h(w.label||''):''}" placeholder="e.g. Al Rajhi Capital USD"></div>
+      <div style="width:120px"><label class="lbl">Currency</label><select id="walf-ccy" ${editing?'disabled':''}>${ccyOpts}</select></div>
+    </div>
+    ${editing?'<div style="font-size:11px;color:var(--text3);margin-bottom:8px">Currency cannot change once a wallet has events.</div>':''}
+    <div class="fg" style="gap:8px">
+      <button class="btn btn-p btn-sm" onclick="saveWallet()">${editing?'Save':'Add wallet'}</button>
+      <button class="btn btn-sm" onclick="closeWalletForm()">Cancel</button>
+    </div>
+  </div>`;
+}
+
+function openWalletForm(providerId,walletId){
+  _walletFormOpen=true;_walletFormProviderId=providerId;_walletEditId=walletId;render();
+}
+function closeWalletForm(){_walletFormOpen=false;_walletEditId=null;_walletFormProviderId=null;render();}
+
+function saveWallet(){
+  const a=S.accounts.find(x=>x.id===_walletFormProviderId);
+  if(!a){toast('Provider not found',false);return;}
+  const label=(document.getElementById('walf-label')?.value||'').trim();
+  const ccy=document.getElementById('walf-ccy')?.value||'SAR';
+  if(!label){toast('Label required',false);return;}
+  if(!PHB_CURRENCIES.includes(ccy)){toast('Pick a currency',false);return;}
+  if(!Array.isArray(a.wallets))a.wallets=[];
+  if(_walletEditId){
+    const w=a.wallets.find(x=>x.id===_walletEditId);
+    if(!w){toast('Wallet not found',false);return;}
+    w.label=label; // currency locked on edit
+  }else{
+    a.wallets.push({id:'wal_'+randSuffix(8),providerId:a.id,ownerId:a.ownerId||null,currency:ccy,label,events:[],createdAt:localISO(new Date())});
+  }
+  sched();closeWalletForm();toast(_walletEditId?'Wallet saved':'Wallet added');
+}
+
+function deleteWallet(walletId){
+  const a=walletProvider(walletId);
+  if(!a)return;
+  const w=accountWallets(a).find(x=>x.id===walletId);
+  if(!w)return;
+  const evCount=Array.isArray(w.events)?w.events.length:0;
+  if(evCount>0){
+    if(!confirm(`This wallet has ${evCount} event${evCount===1?'':'s'}. Deleting it also unlinks any tagged Cash Flow transactions. Delete anyway?`))return;
+    // Unlink any Cash Flow transactions that reference this wallet
+    unlinkWalletFromTransactions(walletId);
+  }else{
+    if(!confirm('Delete this wallet?'))return;
+  }
+  a.wallets=accountWallets(a).filter(x=>x.id!==walletId);
+  if(_walletLedgerId===walletId)_walletLedgerId=null;
+  sched();render();toast('Wallet deleted');
+}
+
+// ─── WALLET LEDGER MODAL ──────────────────────────────────────────────────────
+function openWalletLedger(walletId){_walletLedgerId=walletId;render();}
+function closeWalletLedger(){_walletLedgerId=null;render();}
+
+function rWalletLedgerModal(){
+  if(!_walletLedgerId)return '';
+  const w=walletById(_walletLedgerId);
+  if(!w){_walletLedgerId=null;return '';}
+  const prov=walletProvider(_walletLedgerId);
+  const ordered=orderWalletEvents(Array.isArray(w.events)?w.events:[]).slice().reverse(); // newest first for display
+  let runningMap=new Map();
+  // compute running balance in chronological order for display
+  {
+    let bal=0;
+    orderWalletEvents(Array.isArray(w.events)?w.events:[]).forEach(e=>{bal=Math.round((bal+walletSignedDelta(e))*100)/100;runningMap.set(e.id,bal);});
+  }
+  const bal=walletBalance(w);
+  const rows=ordered.length===0
+    ? `<div class="empty" style="padding:18px">No events yet. Fund this wallet by tagging a bank transfer in Cash Flow, or record an adjustment.</div>`
+    : ordered.map(e=>{
+        const meta=WALLET_EVENT_META[e.type]||{l:e.type,c:'var(--text2)'};
+        const signed=walletSignedDelta(e);
+        const linkNote=e.txnId?'<span style="font-size:10px;color:var(--text3)"> &middot; linked to Cash Flow</span>':(e.transferId?'<span style="font-size:10px;color:var(--text3)"> &middot; transfer</span>':'');
+        return `<div class="fg jb" style="padding:9px 0;border-bottom:1px solid var(--bg2);align-items:center;gap:10px">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12px;font-weight:500">${h(meta.l)}${linkNote}</div>
+            <div style="font-size:11px;color:var(--text3)">${e.date?toDD(e.date):'—'}${e.note?' &middot; '+h(e.note):''}</div>
+          </div>
+          <div style="text-align:right;font-variant-numeric:tabular-nums">
+            <div class="priv-mask" style="font-size:13px;font-weight:500;color:${signed>=0?'var(--pos)':'var(--neg)'}">${signed>=0?'+':''}${ccyFmt(signed,w.currency)}</div>
+            <div class="priv-mask" style="font-size:10px;color:var(--text3)">bal ${ccyFmt(runningMap.get(e.id),w.currency)}</div>
+          </div>
+        </div>`;
+      }).join('');
+  return `<div class="modal-backdrop" onclick="if(event.target===this)closeWalletLedger()" style="position:fixed;inset:0;background:rgba(2,23,81,0.55);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px">
+    <div class="card" style="background:var(--card);width:100%;max-width:560px;max-height:86vh;overflow:auto;padding:18px;border-radius:var(--r);box-shadow:0 12px 60px rgba(0,0,0,0.4)" onclick="event.stopPropagation()">
+      <div class="fg jb" style="margin-bottom:6px;align-items:center">
+        <div style="font-size:15px;font-weight:600">${h(w.label||w.currency)}</div>
+        <button class="btn btn-xs" onclick="closeWalletLedger()">&times;</button>
+      </div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:10px">${h(prov?prov.name:'')} &middot; ${h(w.currency)} &middot; Owner ${h(ownerLabel(w.ownerId))}</div>
+      <div class="kpi-strip" style="margin-bottom:12px"><div class="kpi-cell"><div class="kpi-cell-label">Balance</div><div class="kpi-cell-value priv-mask">${ccyFmt(bal,w.currency)}</div><div class="kpi-cell-sub">computed from ${ordered.length} event${ordered.length===1?'':'s'}</div></div></div>
+      <div class="fg" style="gap:6px;margin-bottom:10px">
+        <button class="btn btn-xs" onclick="openWalletAdjust('${w.id}')" title="Manual correction">+ Adjustment</button>
+        <div style="font-size:11px;color:var(--text3);align-self:center">Fund and withdraw are recorded by tagging a transaction in Cash Flow.</div>
+      </div>
+      ${rows}
+    </div>
+  </div>`;
+}
+
+// ─── WALLET TRANSFER MODAL ────────────────────────────────────────────────────
+function openWalletTransfer(providerId){_walletTransferOpen=true;_walletTransferProviderId=providerId;render();
+  setTimeout(()=>{const el=document.getElementById('wtf-out');if(el)el.focus();},60);}
+function closeWalletTransfer(){_walletTransferOpen=false;_walletTransferProviderId=null;render();}
+
+function rWalletTransferModal(){
+  if(!_walletTransferOpen)return '';
+  const a=S.accounts.find(x=>x.id===_walletTransferProviderId);
+  if(!a){_walletTransferOpen=false;return '';}
+  const wallets=accountWallets(a);
+  if(wallets.length<2){_walletTransferOpen=false;return '';}
+  const opts=wallets.map(w=>`<option value="${w.id}">${h(w.label||w.currency)} (${h(w.currency)})</option>`).join('');
+  const today=toDD(localISO(new Date()));
+  return `<div class="modal-backdrop" onclick="if(event.target===this)closeWalletTransfer()" style="position:fixed;inset:0;background:rgba(2,23,81,0.55);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px">
+    <div class="card" style="background:var(--card);width:100%;max-width:520px;padding:18px;border-radius:var(--r);box-shadow:0 12px 60px rgba(0,0,0,0.4)" onclick="event.stopPropagation()">
+      <div class="fg jb" style="margin-bottom:14px;align-items:center">
+        <div style="font-size:14px;font-weight:600">Transfer between wallets</div>
+        <button class="btn btn-xs" onclick="closeWalletTransfer()">&times;</button>
+      </div>
+      <div class="fr" style="gap:10px;margin-bottom:8px">
+        <div style="flex:1"><label class="lbl">From</label><select id="wtf-from" onchange="updateTransferRateLine()">${opts}</select></div>
+        <div style="flex:1"><label class="lbl">To</label><select id="wtf-to" onchange="updateTransferRateLine()">${opts}</select></div>
+      </div>
+      <div class="fr" style="gap:10px;margin-bottom:8px">
+        <div style="flex:1"><label class="lbl">Amount debited (from)</label><input type="number" inputmode="decimal" id="wtf-out" min="0" step="0.01" placeholder="76000" oninput="updateTransferRateLine()"></div>
+        <div style="flex:1"><label class="lbl">Amount credited (to)</label><input type="number" inputmode="decimal" id="wtf-in" min="0" step="0.01" placeholder="20000" oninput="updateTransferRateLine()"></div>
+      </div>
+      <div id="wtf-rate-line" style="font-size:12px;color:var(--text3);margin:2px 0 10px;min-height:16px"></div>
+      <div class="fr" style="gap:10px;margin-bottom:12px">
+        <div style="flex:1"><label class="lbl">Date</label><div class="date-inp-wrap"><input type="text" id="wtf-date" class="date-inp" value="${today}" maxlength="10"><button type="button" class="cal-btn" onclick="openCal('wtf-date')">📅</button></div></div>
+        <div style="flex:1"><label class="lbl">Note (optional)</label><input type="text" id="wtf-note" placeholder="e.g. fund USD sleeve"></div>
+      </div>
+      <div class="fg" style="gap:8px">
+        <button class="btn btn-p" onclick="saveWalletTransfer()">Record transfer</button>
+        <button class="btn" onclick="closeWalletTransfer()">Cancel</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function updateTransferRateLine(){
+  const line=document.getElementById('wtf-rate-line');if(!line)return;
+  const fromId=document.getElementById('wtf-from')?.value;
+  const toId=document.getElementById('wtf-to')?.value;
+  const out=parseFloat(document.getElementById('wtf-out')?.value);
+  const inn=parseFloat(document.getElementById('wtf-in')?.value);
+  const fromW=walletById(fromId),toW=walletById(toId);
+  if(fromId&&toId&&fromId===toId){line.innerHTML='<span style="color:var(--neg)">Source and target must differ.</span>';return;}
+  if(!(out>0)||!(inn>0)){line.textContent='';return;}
+  const rate=walletImpliedRate(out,inn);
+  const fc=fromW?fromW.currency:'',tc=toW?toW.currency:'';
+  if(fc&&tc&&fc===tc){
+    const diff=Math.round((out-inn)*100)/100;
+    line.innerHTML=diff===0?`Same currency, no conversion.`:`Same currency &middot; cost ${ccyFmt(diff,fc)}`;
+  }else{
+    let pegNote='';
+    if((fc==='SAR'&&tc==='USD')||(fc==='USD'&&tc==='SAR')){
+      const pct=Math.abs((rate/3.75-1)*100);
+      pegNote=` &middot; peg 3.75 &middot; ${pct.toFixed(1)}% spread`;
+    }
+    line.innerHTML=`Implied rate <strong>${rate}</strong> ${h(fc)} per ${h(tc)}${pegNote}`;
+  }
+}
+
+function saveWalletTransfer(){
+  const a=S.accounts.find(x=>x.id===_walletTransferProviderId);
+  if(!a){toast('Provider not found',false);return;}
+  const fromId=document.getElementById('wtf-from')?.value;
+  const toId=document.getElementById('wtf-to')?.value;
+  if(!fromId||!toId||fromId===toId){toast('Pick two different wallets',false);return;}
+  const fromW=accountWallets(a).find(x=>x.id===fromId);
+  const toW=accountWallets(a).find(x=>x.id===toId);
+  if(!fromW||!toW){toast('Wallet not found',false);return;}
+  const out=parseFloat(document.getElementById('wtf-out')?.value);
+  const inn=parseFloat(document.getElementById('wtf-in')?.value);
+  if(!(out>0)){toast('Amount debited required',false);return;}
+  if(!(inn>0)){toast('Amount credited required',false);return;}
+  const dateRaw=(document.getElementById('wtf-date')?.value||'').trim();
+  const date=dateRaw?fromDD(dateRaw):null;
+  if(!date){toast('Date required',false);return;}
+  const note=(document.getElementById('wtf-note')?.value||'').trim();
+  const transferId='wtr_'+randSuffix(8);
+  // SAR-equivalent of each leg, for the S3 round-trip metric.
+  const outLeg={id:'we_'+randSuffix(8),type:'transfer_out',date,amount:out,transferId,note,
+    sarEquiv:fromW.currency==='SAR'?out:(toW.currency==='SAR'?inn:null)};
+  const inLeg={id:'we_'+randSuffix(8),type:'transfer_in',date,amount:inn,transferId,note,
+    sarEquiv:toW.currency==='SAR'?inn:(fromW.currency==='SAR'?out:null)};
+  // Chronological reconciliation: only the OUT leg can drive a balance negative.
+  const rec=walletReconcile(fromW,outLeg);
+  if(!rec.ok){toast(`Transfer rejected: ${fromW.label||fromW.currency} would go negative by ${ccyFmt(rec.shortfall,fromW.currency)} on ${toDD(rec.date)}.`,false);return;}
+  if(!Array.isArray(fromW.events))fromW.events=[];
+  if(!Array.isArray(toW.events))toW.events=[];
+  fromW.events.push(outLeg);
+  toW.events.push(inLeg);
+  sched();closeWalletTransfer();toast('Transfer recorded');
+}
+
+// ─── WALLET ADJUSTMENT MODAL ──────────────────────────────────────────────────
+function openWalletAdjust(walletId){_walletAdjustOpen=true;_walletAdjustWalletId=walletId;render();}
+function closeWalletAdjust(){_walletAdjustOpen=false;_walletAdjustWalletId=null;render();}
+
+function rWalletAdjustModal(){
+  if(!_walletAdjustOpen)return '';
+  const w=walletById(_walletAdjustWalletId);
+  if(!w){_walletAdjustOpen=false;return '';}
+  const today=toDD(localISO(new Date()));
+  return `<div class="modal-backdrop" onclick="if(event.target===this)closeWalletAdjust()" style="position:fixed;inset:0;background:rgba(2,23,81,0.6);z-index:10001;display:flex;align-items:center;justify-content:center;padding:20px">
+    <div class="card" style="background:var(--card);width:100%;max-width:460px;padding:18px;border-radius:var(--r);box-shadow:0 12px 60px rgba(0,0,0,0.4)" onclick="event.stopPropagation()">
+      <div class="fg jb" style="margin-bottom:12px;align-items:center">
+        <div style="font-size:14px;font-weight:600">Adjustment &middot; ${h(w.label||w.currency)}</div>
+        <button class="btn btn-xs" onclick="closeWalletAdjust()">&times;</button>
+      </div>
+      <div class="fr" style="gap:10px;margin-bottom:8px">
+        <div style="flex:1"><label class="lbl">Amount (${h(w.currency)}, use minus to reduce)</label><input type="number" inputmode="decimal" id="waj-amount" step="0.01" placeholder="-50 or 50"></div>
+        <div style="flex:1"><label class="lbl">Date</label><div class="date-inp-wrap"><input type="text" id="waj-date" class="date-inp" value="${today}" maxlength="10"><button type="button" class="cal-btn" onclick="openCal('waj-date')">📅</button></div></div>
+      </div>
+      <div style="margin-bottom:12px"><label class="lbl">Reason (required)</label><input type="text" id="waj-note" placeholder="e.g. platform fee, reconciliation correction"></div>
+      <div class="fg" style="gap:8px">
+        <button class="btn btn-p" onclick="saveWalletAdjust()">Record adjustment</button>
+        <button class="btn" onclick="closeWalletAdjust()">Cancel</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function saveWalletAdjust(){
+  const w=walletById(_walletAdjustWalletId);
+  if(!w){toast('Wallet not found',false);return;}
+  const amount=parseFloat(document.getElementById('waj-amount')?.value);
+  if(amount==null||isNaN(amount)||amount===0){toast('Non-zero amount required',false);return;}
+  const dateRaw=(document.getElementById('waj-date')?.value||'').trim();
+  const date=dateRaw?fromDD(dateRaw):null;
+  if(!date){toast('Date required',false);return;}
+  const note=(document.getElementById('waj-note')?.value||'').trim();
+  if(!note){toast('Reason required for an adjustment',false);return;}
+  const ev={id:'we_'+randSuffix(8),type:'adjust',date,amount,note};
+  const rec=walletReconcile(w,ev);
+  if(!rec.ok){toast(`Adjustment rejected: balance would go negative by ${ccyFmt(rec.shortfall,w.currency)} on ${toDD(rec.date)}.`,false);return;}
+  if(!Array.isArray(w.events))w.events=[];
+  w.events.push(ev);
+  sched();closeWalletAdjust();toast('Adjustment recorded');
+}
+
+// Remove fund/withdraw events tied to a transaction (used when a txn is untagged or deleted),
+// and remove transfer pairs when a wallet is deleted.
+function unlinkWalletFromTransactions(walletId){
+  (S.accounts||[]).forEach(a=>{
+    accountWallets(a).forEach(w=>{
+      if(w.id!==walletId)return;
+      // also clear the reverse pointer on any referenced transactions
+      (w.events||[]).forEach(ev=>{
+        if(ev.txnId)clearTxnWalletTag(ev.txnId);
+      });
+    });
+  });
+}
+
+// Clear walletFunding/walletWithdrawal tags from a transaction by id (across months).
+function clearTxnWalletTag(txnId){
+  Object.keys(S.txnCache||{}).forEach(ym=>{
+    (S.txnCache[ym]||[]).forEach(t=>{
+      if(t.id===txnId){delete t.walletFundingId;delete t.walletWithdrawalId;}
+    });
+  });
 }
 
 // ─── HOLDING CARD (one card per holding inside the account detail) ────────────
@@ -22476,6 +23079,95 @@ function togGoal(id){const g=S.goals.find(x=>x.id===id);if(!g)return;g.status=g.
 function delGoal(id){S.goals=S.goals.filter(x=>x.id!==id);sched();render();}
 
 // --- SETTINGS ---
+// ═══════════════════════════════════════════════════════════════════════════════
+// V10.5.28 PHASE S1 — MARKETS SETTINGS (registry editor)
+// ═══════════════════════════════════════════════════════════════════════════════
+let _marketFormOpen=false;
+let _marketEditCode=null;
+
+function rSettingsMarkets(){
+  const markets=getMarkets();
+  const regionOpts=PHB_REGIONS.map(r=>`<option value="${r.v}">${h(r.l)}</option>`).join('');
+  const ccyOpts=PHB_CURRENCIES.map(c=>`<option value="${c}">${c}</option>`).join('');
+  const rows=markets.map(m=>{
+    const usedBy=(S.accounts||[]).filter(a=>isBrokerageProvider(a)&&a.offerings&&Array.isArray(a.offerings.markets)&&a.offerings.markets.includes(m.code)).length;
+    return `<div class="settings-row" style="align-items:center">
+      <div class="settings-row-label">
+        <div class="settings-row-title">${h(m.code)} ${m.custom?'<span class="status-pill status-info" style="font-size:9px">custom</span>':'<span class="status-pill" style="font-size:9px;background:var(--bg3);color:var(--text3)">built-in</span>'}</div>
+        <div class="settings-row-sub">${h(m.name)} &middot; ${h((PHB_REGIONS.find(r=>r.v===m.region)||{}).l||m.region)} &middot; ${h(m.currency)} &middot; format ${h(m.symbolFormat||'—')}${usedBy>0?` &middot; used by ${usedBy} provider${usedBy===1?'':'s'}`:''}</div>
+      </div>
+      <div class="settings-row-ctrl"><div class="fg" style="gap:4px">
+        <button class="btn btn-xs" onclick="openMarketForm('${h(m.code)}')" title="Edit">&#9998;</button>
+        ${m.custom?`<button class="btn btn-xs btn-d" onclick="deleteMarket('${h(m.code)}')" title="Delete" ${usedBy>0?'disabled':''}>&times;</button>`:''}
+      </div></div>
+    </div>`;
+  }).join('');
+  const form=_marketFormOpen?(()=>{
+    const editing=!!_marketEditCode;
+    const m=editing?marketByCode(_marketEditCode):null;
+    return `<div class="card" style="background:var(--card);padding:14px 16px;margin:12px 0;border:1px solid var(--border)">
+      <div class="fr" style="gap:10px;margin-bottom:8px">
+        <div style="flex:1"><label class="lbl">Code</label><input type="text" id="mkf-code" value="${m?h(m.code):''}" ${editing?'disabled':''} placeholder="e.g. SSE" style="text-transform:uppercase"></div>
+        <div style="flex:2"><label class="lbl">Name</label><input type="text" id="mkf-name" value="${m?h(m.name):''}" placeholder="e.g. Shanghai Stock Exchange"></div>
+      </div>
+      <div class="fr" style="gap:10px;margin-bottom:8px">
+        <div style="flex:1"><label class="lbl">Region</label><select id="mkf-region">${PHB_REGIONS.map(r=>`<option value="${r.v}" ${m&&m.region===r.v?'selected':''}>${h(r.l)}</option>`).join('')}</select></div>
+        <div style="flex:1"><label class="lbl">Currency</label><select id="mkf-ccy">${PHB_CURRENCIES.map(c=>`<option value="${c}" ${m&&m.currency===c?'selected':''}>${c}</option>`).join('')}</select></div>
+        <div style="flex:1"><label class="lbl">Symbol format</label><input type="text" id="mkf-fmt" value="${m?h(m.symbolFormat||''):''}" placeholder="TICKER or TADAWUL:NNNN"></div>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.6">Symbol format and currency are used later by AI price fetching. Code is the unique identifier and cannot change once set.</div>
+      <div class="fg" style="gap:8px">
+        <button class="btn btn-p btn-sm" onclick="saveMarket()">${editing?'Save':'Add market'}</button>
+        <button class="btn btn-sm" onclick="closeMarketForm()">Cancel</button>
+      </div>
+    </div>`;
+  })():'';
+  return `<div class="pg-eyebrow">05 SETTINGS · MARKETS</div><div class="settings-page-title">Markets</div>
+    <div class="settings-section">
+      <div class="settings-section-head" style="display:flex;justify-content:space-between;align-items:center">
+        <h3>Exchanges &amp; Markets</h3>
+        <button class="btn btn-sm btn-p" onclick="openMarketForm(null)">+ Add market</button>
+      </div>
+      <div style="font-size:12px;color:var(--text3);margin:4px 0 10px;line-height:1.6">The markets a stock can be tagged with. Built-in markets ship with Lanki; add your own (for example a China exchange) and they become selectable in any brokerage provider's Offerings.</div>
+      ${form}
+      ${rows}
+    </div>`;
+}
+
+function openMarketForm(code){_marketFormOpen=true;_marketEditCode=code;render();}
+function closeMarketForm(){_marketFormOpen=false;_marketEditCode=null;render();}
+
+function saveMarket(){
+  const codeRaw=(document.getElementById('mkf-code')?.value||'').trim().toUpperCase();
+  const name=(document.getElementById('mkf-name')?.value||'').trim();
+  const region=document.getElementById('mkf-region')?.value||'global';
+  const currency=document.getElementById('mkf-ccy')?.value||'SAR';
+  const symbolFormat=(document.getElementById('mkf-fmt')?.value||'').trim();
+  if(!name){toast('Name required',false);return;}
+  getMarkets(); // ensure seeded
+  if(_marketEditCode){
+    const m=S.markets.find(x=>x.code===_marketEditCode);
+    if(!m){toast('Market not found',false);return;}
+    m.name=name;m.region=region;m.currency=currency;m.symbolFormat=symbolFormat;
+  }else{
+    if(!codeRaw){toast('Code required',false);return;}
+    if(S.markets.some(x=>x.code===codeRaw)){toast('A market with that code already exists',false);return;}
+    S.markets.push({code:codeRaw,name,region,currency,symbolFormat,custom:true});
+  }
+  sched();closeMarketForm();toast(_marketEditCode?'Market saved':'Market added');
+}
+
+function deleteMarket(code){
+  const m=marketByCode(code);
+  if(!m)return;
+  if(!m.custom){toast('Built-in markets cannot be deleted',false);return;}
+  const usedBy=(S.accounts||[]).filter(a=>isBrokerageProvider(a)&&a.offerings&&Array.isArray(a.offerings.markets)&&a.offerings.markets.includes(code)).length;
+  if(usedBy>0){toast(`In use by ${usedBy} provider${usedBy===1?'':'s'}. Remove it from their Offerings first.`,false);return;}
+  if(!confirm(`Delete market ${code}?`))return;
+  S.markets=getMarkets().filter(x=>x.code!==code);
+  sched();render();toast('Market deleted');
+}
+
 function rSettings(){
   const SETTINGS_PAGES=[
     {id:'preferences',label:'Preferences',icon:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>'},
@@ -22483,6 +23175,7 @@ function rSettings(){
     {id:'household',label:'Household',icon:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>'},
     {id:'security',label:'Security',icon:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>'},
     {id:'data',label:'Data',icon:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>'},
+    {id:'markets',label:'Markets',icon:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 14l3-3 3 3 4-5"/></svg>'},
     {id:'diagnostics',label:'Diagnostics',icon:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9c2.39 0 4.68.94 6.36 2.64"/></svg>'},
     {id:'about',label:'About',icon:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>'},
   ];
@@ -22602,6 +23295,8 @@ function rSettings(){
       <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Clear all transactions</div><div class="settings-row-sub">Removes imported data. Vault and settings preserved.</div></div><div class="settings-row-ctrl"><button class="btn btn-sm btn-d" onclick="doReset('txns')">Clear transactions</button></div></div>
       <div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Reset everything</div><div class="settings-row-sub">Deletes all data and the vault. Cannot be undone.</div></div><div class="settings-row-ctrl"><button class="btn btn-sm btn-d" onclick="doReset('all')">Reset vault</button></div></div>
     </div>`;
+  }else if(SP==='markets'){
+    pageContent=rSettingsMarkets();
   }else if(SP==='diagnostics'){
     pageContent=rDiagnostics();
   }else{
@@ -29516,7 +30211,7 @@ initAuth();
     </div>
     <div class="fr" style="margin-bottom:8px">
       <div><label class="lbl">Type</label>
-        <select id="etxn-type" onchange="autoDir(this.value,'etxn-dir');const br=document.getElementById('etxn-beneficiary-row');if(br)br.style.display=(this.value==='investment'||this.value==='income')?'block':'none'">
+        <select id="etxn-type" onchange="autoDir(this.value,'etxn-dir');const br=document.getElementById('etxn-beneficiary-row');if(br)br.style.display=(this.value==='investment'||this.value==='income')?'block':'none';refreshEtxnWalletRow({})">
           <option value="expense">Expense</option>
           <option value="income">Income</option>
           <option value="investment">Investment</option>
@@ -29525,7 +30220,7 @@ initAuth();
         </select>
       </div>
       <div><label class="lbl">Direction</label>
-        <select id="etxn-dir" onchange="">
+        <select id="etxn-dir" onchange="refreshEtxnWalletRow({})">
           <option value="out">Debit</option>
           <option value="in">Credit</option>
         </select>
@@ -29553,6 +30248,7 @@ initAuth();
       <div style="font-size:10px;color:var(--text3);margin-top:4px;margin-left:24px">Flag this transaction so you can revisit it from the Review Queue. Use when you're unsure about the categorization or want a second look.</div>
     </div>
     <div id="etxn-inv-acc-row" style="margin-bottom:8px;display:none"><label class="lbl">Investment Account (link this txn to a specific investment)</label><select id="etxn-inv-acc"><option value="">-- None --</option></select></div>
+    <div id="etxn-wallet-row" style="margin-bottom:8px;display:none"><label class="lbl" id="etxn-wallet-label">Wallet</label><select id="etxn-wallet"><option value="">-- None --</option></select><div style="font-size:var(--fs-xxs);color:var(--text3);margin-top:3px;line-height:1.5" id="etxn-wallet-hint"></div></div>
     <div id="etxn-beneficiary-row" style="margin-bottom:8px;display:none"><label class="lbl">Beneficiary (Family Member)</label><select id="etxn-beneficiary"><option value="">Self</option></select></div>
     <div id="etxn-staff-row" style="margin-bottom:8px;display:none"><label class="lbl">Staff member</label><select id="etxn-staff" onchange="onEditTxnStaffChange()"><option value="">-- None --</option></select><div style="font-size:var(--fs-xxs);color:var(--text3);margin-top:3px;line-height:1.5">Tagging a salary payment auto-records an advance deduction for that month if an active advance exists. Selecting a staff member sets the sub-category to their role automatically.</div></div>
     <div id="etxn-bill-row" style="margin-bottom:8px;display:none"><label class="lbl">Link to bill</label><select id="etxn-bill"><option value="">-- None --</option></select><div style="font-size:var(--fs-xxs);color:var(--text3);margin-top:3px;line-height:1.5">Only available for Housing &amp; Utilities or Subscriptions &amp; Digital categories.</div></div>
