@@ -1399,9 +1399,14 @@ tbody tr:hover td{background:var(--bg2)}
    on blur. This fix applies to ALL inputs/selects/textareas at <=768px breakpoint
    (covers tablets and phones). The .auth-inp already has this fix; this generalizes it. */
 @media (max-width:768px){
-  input,select,textarea{font-size:16px}
-  /* Preserve intentionally tiny inputs for technical fields where 16px would break layout */
-  input.tiny-input,select.tiny-input,textarea.tiny-input{font-size:13px}
+  /* V10.5.26 (AUD-M5/MOB-5): !important so the 16px iOS-zoom guard wins over the many
+     inline font-size:11-13px declarations on inputs across Projections, Rules,
+     Investments, Settings, and the JSON/color fields. Without this, tapping any of
+     those fields triggers iOS auto-zoom. Desktop density is untouched (this rule is
+     scoped to <=768px). Genuinely tiny technical fields can still opt out via
+     .tiny-input, which keeps 13px even on mobile. */
+  input,select,textarea{font-size:16px !important}
+  input.tiny-input,select.tiny-input,textarea.tiny-input{font-size:13px !important}
 }
 
 /* C3: Safe-area-inset for iPhone notch/Dynamic Island.
@@ -4984,7 +4989,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='10.5.25';
+const VERSION='10.5.26';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
@@ -14742,8 +14747,12 @@ function advMigrate(a){
 
 // Compute remaining from ledger — never trust stored remaining
 function advRemaining(a){
+  // V10.5.26 (AUD-M1): single definition. Previously a second `function advRemaining`
+  // was declared ~900 lines below to add the _rateChange filter; function-declaration
+  // hoisting meant the second silently won at all 14 call sites. The filter is folded
+  // here and the duplicate removed — behavior identical, no shadow.
   advMigrate(a);
-  const deducted=(a.ledger||[]).filter(l=>l.type==='deduction'||l.type==='settlement').reduce((s,l)=>s+(l.amount||0),0);
+  const deducted=(a.ledger||[]).filter(l=>!l._rateChange&&(l.type==='deduction'||l.type==='settlement')).reduce((s,l)=>s+(l.amount||0),0);
   return Math.max(0,(a.amount||0)-deducted);
 }
 
@@ -15291,7 +15300,7 @@ function rStaff(){
   const summaryNetMonth=summaryPayroll-summaryDeductions;
   const summaryActiveAdvances=activeStaffList.reduce((s,st)=>s+(st.advances||[]).filter(a=>['active','pending'].includes(advStatus(a))).length,0);
   const summaryOutstanding=activeStaffList.reduce((s,st)=>s+(st.advances||[]).filter(a=>['active','pending'].includes(advStatus(a))).reduce((ss,a)=>ss+advRemaining(a),0),0);
-  const summaryStrip=activeStaffList.length>0?`<div class="kpi-row" style="display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r);margin-bottom:1.25rem;overflow:hidden">
+  const summaryStrip=activeStaffList.length>0?`<div class="kpi-row" style="gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r);margin-bottom:1.25rem;overflow:hidden">
     <div style="padding:.75rem 1rem;background:var(--bg1)"><div class="lbl" style="margin-bottom:4px">Active staff</div><div style="font-size:15px;font-weight:500;color:var(--text1)">${summaryActiveCount}</div></div>
     <div style="padding:.75rem 1rem;background:var(--bg1)"><div class="lbl" style="margin-bottom:4px">Monthly payroll</div><div class="priv-mask" style="font-size:15px;font-weight:500;color:var(--text1);font-variant-numeric:tabular-nums">${fmtP(summaryPayroll)}</div></div>
     <div style="padding:.75rem 1rem;background:var(--bg1)"><div class="lbl" style="margin-bottom:4px">Net this month</div><div class="priv-mask" style="font-size:15px;font-weight:500;color:${summaryDeductions>0?'var(--warn)':'var(--text1)'};font-variant-numeric:tabular-nums">${fmtP(summaryNetMonth)}</div>${summaryDeductions>0?`<div style="font-size:10px;color:var(--text3);margin-top:2px">After −${fmtP(summaryDeductions)} deductions</div>`:''}</div>
@@ -15631,16 +15640,9 @@ function advForgive(sid,ai){
   sched();render();toast('Advance forgiven — balance cleared');
 }
 
-// advRemaining must exclude rate-change log entries (amount:0, _rateChange:true)
-// Override the reduce to skip _rateChange entries — patch advRemaining
-const _advRemainingOrig=advRemaining;
-// advRemaining already handles this since _rateChange entries have amount:0 and type:'deduction'
-// but we want them excluded from totals — fix by filtering _rateChange
-function advRemaining(a){
-  advMigrate(a);
-  const deducted=(a.ledger||[]).filter(l=>!l._rateChange&&(l.type==='deduction'||l.type==='settlement')).reduce((s,l)=>s+(l.amount||0),0);
-  return Math.max(0,(a.amount||0)-deducted);
-}
+// V10.5.26 (AUD-M1): duplicate advRemaining definition removed — the _rateChange
+// filter now lives in the single definition above. (Was a dead shadow plus an
+// unused original-function capture here.)
 let editStaffId=null;
 function openAddStaff(){
   editStaffId=null;
@@ -24661,7 +24663,11 @@ function buildTxHeader(fl, scopedAcc, accountPills, tabLabel, groupPillRow){
       </div>
     </div>`;
   })()}
-  <div class="kpi-row" style="display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r);margin-bottom:1.25rem;overflow:hidden">
+  <!-- V10.5.26 (MOB-4): inline grid-template-columns removed so the responsive .kpi-row
+       rules (3-col @900px, 2-col @540px, 1-col @768px) take effect. The inline style was
+       overriding them, cramming all five cells — Net included — into a 380px viewport
+       unreadably. .kpi-row base is already repeat(5,1fr), so desktop is pixel-identical. -->
+  <div class="kpi-row" style="gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r);margin-bottom:1.25rem;overflow:hidden">
     <div style="padding:.75rem 1rem;background:var(--bg1)"><div class="lbl" style="margin-bottom:4px">Opening</div><div style="font-size:15px;font-weight:500;color:var(--text1)">${openingStr}</div></div>
     <div style="padding:.75rem 1rem;background:var(--bg1)"><div class="lbl" style="margin-bottom:4px">Total In</div><div style="font-size:15px;font-weight:500" class="${inc>0?'c-ok':''}">${inc>0?'+':''}${fmtP(inc)}</div></div>
     <div style="padding:.75rem 1rem;background:var(--bg1)"><div class="lbl" style="margin-bottom:4px">Total Out</div><div style="font-size:15px;font-weight:500" class="${out>0?'c-bad':''}">${out>0?'-':''}${fmtP(out)}</div></div>
@@ -28872,7 +28878,11 @@ async function runAIExtract(){
     if(_aiState._retryDone&&_aiState._firstPassData){
       const seen=new Set();
       const dedup=(arr)=>(arr||[]).filter(t=>{
-        const key=`${t.date}|${Math.round((t.amount||0)*100)}|${(t.raw_description||t.description||'').trim().toLowerCase().slice(0,60)}`;
+        // V10.5.26 (AUD-M3): no 60-char slice. Long bank descriptions with identical
+        // 60-char prefixes (e.g. "Between my same Accounts" beneficiary blocks) collide
+        // under truncation, silently dropping a genuine transaction during retry-merge.
+        // Full normalized description, matching every other dedup key in the file.
+        const key=`${t.date}|${Math.round((t.amount||0)*100)}|${(t.raw_description||t.description||'').trim().toLowerCase()}`;
         if(seen.has(key))return false;
         seen.add(key);return true;
       });
