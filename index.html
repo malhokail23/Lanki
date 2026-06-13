@@ -785,7 +785,7 @@ tbody tr:hover td{background:var(--bg2)}
 /* Prevent text selection while clicking rows in select mode (avoids "blue flash" on drag) */
 .tx-card.tx-select-mode .tx-tbl tbody{user-select:none}
 /* KPI row responsive: 5 cells on desktop, 3+2 on tablet, stacked on mobile */
-.kpi-row{grid-template-columns:repeat(5,1fr)}
+.kpi-row{display:grid;grid-template-columns:repeat(5,1fr)}
 @media (max-width:900px){.kpi-row{grid-template-columns:repeat(3,1fr)}.kpi-row>div:nth-child(n+4){grid-column:span 1}}
 @media (max-width:540px){.kpi-row{grid-template-columns:repeat(2,1fr)}}
 /* Transactions More menu: caret hidden, positioned dropdown */
@@ -4989,7 +4989,7 @@ const SUB_FX_RATE={SAR:1,USD:3.75,AED:1.02,EUR:4.00,GBP:4.70};
 const SB='https://dgefsppkijrrvotggeom.supabase.co';
 const SK='sb_publishable_TDlnbxsztjHHr1mJAnuLMA_2ogH_jMH';
 const VERIFY='BP_V1_1_2026';
-const VERSION='10.5.26';
+const VERSION='10.5.27';
 // V8.25 (Case 9): Standard AI icon — used everywhere AI is invoked. SVG sparkle in Electric Blue.
 // Used in: categorize cluster, AI value fetch buttons, AI insights, AI extraction.
 const CASE9_AI_ICON_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.6 4.8a4 4 0 0 0 2.6 2.6L21 11l-4.8 1.6a4 4 0 0 0-2.6 2.6L12 20l-1.6-4.8a4 4 0 0 0-2.6-2.6L3 11l4.8-1.6a4 4 0 0 0 2.6-2.6L12 2z"/></svg>';
